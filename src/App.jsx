@@ -1,4 +1,3 @@
-//test
 import { useState } from "react";
 
 const STATUSES = ["発注待ち","見積中","着工","進行中","完了","中断"];
