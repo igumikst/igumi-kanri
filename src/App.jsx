@@ -51,6 +51,7 @@ const DEFAULT_TILE_CONF = [
   {key:"estimate",icon:"📝",label:"見積書作成",sub:"CSV出力対応",color:"#BE185D",visible:true},
   {key:"analytics",icon:"📊",label:"分析ダッシュボード",sub:"グラフ・集計",color:"#0F766E",visible:true},
   {key:"ai",icon:"🤖",label:"AIアシスタント",sub:"データに質問",color:"#6D28D9",visible:true},
+  {key:"chatgpt",icon:"💬",label:"ChatGPT",sub:"外部AIを開く",color:"#10A37F",visible:true},
 ];
 const DEFAULT_CUST = {name:"株式会社IGUMI",sys:"案件管理システム",c1:"#1A3A5C",c2:"#2563EB",acc:"#E07B39",bg:"#F0F4F8"};
 
@@ -409,7 +410,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
                     <div style={{marginTop:8,height:3,borderRadius:2,background:t.color,width:"40%"}}/>
                   </div>
                 ):(
-                  <button onClick={()=>nav(t.key)} style={{width:"100%",background:"#fff",border:"none",borderRadius:14,padding:"16px 14px",textAlign:"left",cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}>
+                  <button onClick={()=>{if(t.key==="chatgpt"){window.open("https://chatgpt.com","_blank");return;}nav(t.key);}} style={{width:"100%",background:"#fff",border:"none",borderRadius:14,padding:"16px 14px",textAlign:"left",cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}>
                     <div style={{fontSize:26,marginBottom:8}}>{t.icon}</div>
                     <div style={{fontWeight:800,fontSize:14,color:"#1F2937",marginBottom:2}}>{t.label}</div>
                     <div style={{fontSize:11,color:"#6B7280"}}>{t.sub}</div>
