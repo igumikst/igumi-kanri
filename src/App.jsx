@@ -41,16 +41,6 @@ const DEFAULT_LINKS = [
   {id:"l3",cat:"ツール・サービス",label:"イシグロ",url:"https://www.ishiguro-group.co.jp",icon:"🏗"},
   {id:"l4",cat:"Google",label:"Google ToDo",url:"https://tasks.google.com",icon:"✅"},
 ];
-const DEFAULT_TILE_CONF = [
-  {key:"projects",icon:"📋",label:"案件管理",sub:"件進行中",color:"#1A3A5C",visible:true},
-  {key:"companies",icon:"🏢",label:"取引先・協力業者",sub:"社登録",color:"#E07B39",visible:true},
-  {key:"tasks",icon:"✅",label:"タスク",sub:"未完了",color:"#059669",visible:true},
-  {key:"links",icon:"🔗",label:"リンク集",sub:"外部サービス",color:"#7C3AED",visible:true},
-  {key:"finance",icon:"🗃",label:"財務・書類管理",sub:"書類一覧",color:"#0891B2",visible:true},
-  {key:"templates",icon:"📂",label:"お知らせ・雛形",sub:"テンプレート",color:"#D97706",visible:true},
-  {key:"estimate",icon:"📝",label:"見積書作成",sub:"CSV出力対応",color:"#BE185D",visible:true},
-];
-const DEFAULT_CUST = {name:"株式会社IGUMI",sys:"案件管理システム",c1:"#1A3A5C",c2:"#2563EB",acc:"#E07B39",bg:"#F0F4F8"};
 
 const fmt = n => n?"¥"+Number(n).toLocaleString():"—";
 const pct = (g,a) => a?((g/a)*100).toFixed(1)+"%":"—";
@@ -108,6 +98,7 @@ export default function App() {
   const [schP,setSchP]=useState("");
   const [schC,setSchC]=useState("");
   const [conf,setConf]=useState(null);
+  const [finItems,setFinItems]=useState(DEFAULT_FINANCE_ITEMS);
   const [finFiles,setFinFiles]=useState([]);
   const [finFolders,setFinFolders]=useState([]);
   const [finItem,setFinItem]=useState(null);
@@ -122,15 +113,23 @@ export default function App() {
   const [pwMod,setPwMod]=useState(null);
   const [pwIn,setPwIn]=useState("");
   const [pwErr,setPwErr]=useState("");
+  const [tmplData,setTmplData]=useState({});
   const [tmplCat,setTmplCat]=useState(null);
   const [tmplPrev,setTmplPrev]=useState(null);
-  const [tmplFiles,setTmplFiles]=useState([]);
-  const [cust,setCust]=useState(DEFAULT_CUST);
-  const [ec,setEc]=useState({...DEFAULT_CUST});
+  const [cust,setCust]=useState({name:"株式会社IGUMI",sys:"案件管理システム",c1:"#1A3A5C",c2:"#2563EB",acc:"#E07B39",bg:"#F0F4F8"});
+  const [ec,setEc]=useState({...cust});
   const [editLnk,setEditLnk]=useState(null);
   const [newLnk,setNewLnk]=useState({label:"",url:"",icon:"🔗",cat:"ツール・サービス"});
   const [editCoForm,setEditCoForm]=useState({name:"",branch:"",type:"取引先"});
-  const [tileConf,setTileConf]=useState(DEFAULT_TILE_CONF);
+  const [tileConf,setTileConf]=useState([
+    {key:"projects",icon:"📋",label:"案件管理",sub:"件進行中",color:"#1A3A5C",visible:true},
+    {key:"companies",icon:"🏢",label:"取引先・協力業者",sub:"社登録",color:"#E07B39",visible:true},
+    {key:"tasks",icon:"✅",label:"タスク",sub:"未完了",color:"#059669",visible:true},
+    {key:"links",icon:"🔗",label:"リンク集",sub:"外部サービス",color:"#7C3AED",visible:true},
+    {key:"finance",icon:"🗃",label:"財務・書類管理",sub:"書類一覧",color:"#0891B2",visible:true},
+    {key:"templates",icon:"📂",label:"お知らせ・雛形",sub:"テンプレート",color:"#D97706",visible:true},
+    {key:"estimate",icon:"📝",label:"見積書作成",sub:"CSV出力対応",color:"#BE185D",visible:true},
+  ]);
   const [tileEdit,setTileEdit]=useState(false);
   const [editTile,setEditTile]=useState(null);
   const [est,setEst]=useState({no:"0001",date:new Date().toISOString().split("T")[0],clientId:"",pjName:"",person:"崎岡",items:[],sub:0,tax:0,total:0});
@@ -141,128 +140,69 @@ export default function App() {
   const [nTk,setNTk]=useState({title:"",due:"",prio:"mid"});
 
   useEffect(()=>{loadAll();},[]);
-
   const loadAll = async () => {
     setLoading(true);
-    const [pjRes,coRes,tkRes,ffRes,foldRes,hsRes,linksRes,tmplRes] = await Promise.all([
+    const [pjRes,coRes,tkRes,ffRes,foldRes] = await Promise.all([
       supabase.from("projects").select("*").order("created_at",{ascending:false}),
       supabase.from("companies").select("*").order("created_at",{ascending:true}),
       supabase.from("tasks").select("*").order("created_at",{ascending:false}),
       supabase.from("finance_files").select("id,item_id,year,month,name,type,size,created_at").order("created_at",{ascending:false}),
       supabase.from("finance_folders").select("*").order("sort_order",{ascending:true}),
-      supabase.from("home_settings").select("*"),
-      supabase.from("links").select("*").order("sort_order",{ascending:true}),
-      supabase.from("template_files").select("id,cat_id,name,type,size,created_at").order("created_at",{ascending:false}),
     ]);
     if(pjRes.data) setPjs(pjRes.data.map(p=>({...p,subIds:p.subcontractorIds||[],gp:p.grossProfit||0,qDate:p.quoteDate||""})));
     if(coRes.data) setCos(coRes.data.map(c=>({...c,contacts:c.contacts||[]})));
     if(tkRes.data) setTks(tkRes.data.map(t=>({...t,prio:t.priority||"mid"})));
     if(ffRes.data) setFinFiles(ffRes.data);
     if(foldRes.data) setFinFolders(foldRes.data);
-    if(hsRes.data){
-      const tilesRow=hsRes.data.find(r=>r.id==="tiles");
-      const custRow=hsRes.data.find(r=>r.id==="customize");
-      if(tilesRow?.value && Array.isArray(tilesRow.value) && tilesRow.value.length>0) setTileConf(tilesRow.value);
-      if(custRow?.value && Object.keys(custRow.value).length>0) { setCust(custRow.value); setEc(custRow.value); }
-    }
-    if(linksRes.data && linksRes.data.length>0) setLinks(linksRes.data);
-    if(tmplRes.data) setTmplFiles(tmplRes.data);
     setLoading(false);
   };
 
-  // ── home_settings 保存ヘルパー ──
-  const saveHomeSetting = async (id, value) => {
-    await supabase.from("home_settings").upsert({id, value, updated_at: new Date().toISOString()});
-  };
-
-  // ── タイル設定保存 ──
-  const saveTileConf = async (newConf) => {
-    setTileConf(newConf);
-    await saveHomeSetting("tiles", newConf);
-  };
-
-  // ── カスタマイズ保存 ──
-  const saveCustomize = async (newCust) => {
-    setCust(newCust);
-    await saveHomeSetting("customize", newCust);
-  };
-
-  // ── リンク操作（Supabase） ──
-  const addLink = async (lnk) => {
-    const {data} = await supabase.from("links").insert([{cat:lnk.cat,label:lnk.label,url:lnk.url,icon:lnk.icon,sort_order:links.length}]).select();
-    if(data) setLinks(prev=>[...prev,data[0]]);
-  };
-  const updateLink = async (lnk) => {
-    await supabase.from("links").update({cat:lnk.cat,label:lnk.label,url:lnk.url,icon:lnk.icon}).eq("id",lnk.id);
-    setLinks(prev=>prev.map(l=>l.id===lnk.id?lnk:l));
-  };
-  const deleteLink = async (id) => {
-    await supabase.from("links").delete().eq("id",id);
-    setLinks(prev=>prev.filter(l=>l.id!==id));
-  };
-
-  // ── テンプレートファイル操作（Supabase） ──
-  const uploadTmplFile = async (file, catId) => {
-    return new Promise((resolve) => {
-      const r = new FileReader();
-      r.onload = async (ev) => {
-        const {data} = await supabase.from("template_files").insert([{
-          cat_id:catId, name:file.name, type:file.type, data:ev.target.result, size:file.size
-        }]).select("id,cat_id,name,type,size,created_at");
-        if(data) setTmplFiles(prev=>[...prev,data[0]]);
-        resolve();
-      };
-      r.readAsDataURL(file);
-    });
-  };
-  const loadTmplFile = async (id) => {
-    const {data} = await supabase.from("template_files").select("*").eq("id",id).single();
-    return data;
-  };
-  const deleteTmplFile = async (id) => {
-    await supabase.from("template_files").delete().eq("id",id);
-    setTmplFiles(prev=>prev.filter(f=>f.id!==id));
-    setTmplPrev(null);
-  };
-
-  // ── 財務ファイル操作 ──
+  // ファイルをSupabaseから1件取得（base64付き）
   const loadFinFile = async (id) => {
     const {data} = await supabase.from("finance_files").select("*").eq("id",id).single();
     return data;
   };
+
+  // ファイルアップロード
   const uploadFinFile = async (file, itemId, year, month) => {
     return new Promise((resolve) => {
       const r = new FileReader();
       r.onload = async (ev) => {
         const {data} = await supabase.from("finance_files").insert([{
-          item_id:itemId, year:Number(year), month:Number(month),
-          name:file.name, type:file.type, data:ev.target.result, size:file.size
+          item_id: itemId, year: Number(year), month: Number(month),
+          name: file.name, type: file.type, data: ev.target.result, size: file.size
         }]).select("id,item_id,year,month,name,type,size,created_at");
-        if(data) setFinFiles(prev=>[...prev,data[0]]);
+        if(data) setFinFiles(prev => [...prev, data[0]]);
         resolve();
       };
       r.readAsDataURL(file);
     });
   };
+
+  // ファイル削除
   const deleteFinFile = async (id) => {
     await supabase.from("finance_files").delete().eq("id",id);
-    setFinFiles(prev=>prev.filter(f=>f.id!==id));
+    setFinFiles(prev => prev.filter(f => f.id !== id));
     setFinPrev(null);
   };
 
-  // ── 財務フォルダ操作 ──
+  // フォルダ追加
   const addFinFolder = async () => {
     if(!newFolder.label) return;
     const {data} = await supabase.from("finance_folders").insert([{label:newFolder.label,icon:newFolder.icon,sort_order:finFolders.length}]).select();
     if(data) setFinFolders(prev=>[...prev,data[0]]);
-    setNewFolder({label:"",icon:"📁"}); setFinModal(null);
+    setNewFolder({label:"",icon:"📁"});setFinModal(null);
   };
+
+  // フォルダ更新
   const updateFinFolder = async () => {
     if(!editFolder) return;
     await supabase.from("finance_folders").update({label:editFolder.label,icon:editFolder.icon}).eq("id",editFolder.id);
     setFinFolders(prev=>prev.map(f=>f.id===editFolder.id?{...f,...editFolder}:f));
-    setEditFolder(null); setFinModal(null);
+    setEditFolder(null);setFinModal(null);
   };
+
+  // フォルダ削除
   const deleteFinFolder = async (id) => {
     await supabase.from("finance_folders").delete().eq("id",id);
     setFinFolders(prev=>prev.filter(f=>f.id!==id));
@@ -275,16 +215,16 @@ export default function App() {
 
   const savePj=async()=>{
     if(!nP.name)return;
-    const {data}=await supabase.from("projects").insert([{name:nP.name,status:nP.status,clientId:nP.clientId,salesRep:nP.salesRep,inCharge:nP.inCharge,subcontractorIds:nP.subIds||[],amount:Number(nP.amount)||0,grossProfit:Number(nP.gp)||0,quoteDate:nP.qDate,memo:nP.memo}]).select();
+    const {data,error}=await supabase.from("projects").insert([{name:nP.name,status:nP.status,clientId:nP.clientId,salesRep:nP.salesRep,inCharge:nP.inCharge,subcontractorIds:nP.subIds||[],amount:Number(nP.amount)||0,grossProfit:Number(nP.gp)||0,quoteDate:nP.qDate,memo:nP.memo}]).select();
     if(data) setPjs([{...data[0],subIds:data[0].subcontractorIds||[],gp:data[0].grossProfit||0,qDate:data[0].quoteDate||""},...pjs]);
-    setNP(blankP); setModal(null);
+    setNP(blankP);setModal(null);
   };
   const delPj=async id=>{await supabase.from("projects").delete().eq("id",id);setPjs(pjs.filter(p=>p.id!==id));setSelP(null);};
   const saveCo=async()=>{
     if(!nCo.name)return;
     const {data}=await supabase.from("companies").insert([{name:nCo.name,type:nCo.type,branch:nCo.branch,contacts:[]}]).select();
     if(data) setCos([...cos,{...data[0],contacts:[]}]);
-    setNCo({name:"",type:"協力業者",branch:""}); setModal(null);
+    setNCo({name:"",type:"協力業者",branch:""});setModal(null);
   };
   const updateCo=async(id,updates)=>{
     await supabase.from("companies").update(updates).eq("id",id);
@@ -299,14 +239,14 @@ export default function App() {
     const newContacts=[...(selC.contacts||[]),ct];
     await supabase.from("companies").update({contacts:newContacts}).eq("id",selC.id);
     const upd=cos.map(c=>c.id===selC.id?{...c,contacts:newContacts}:c);
-    setCos(upd); setSelC({...selC,contacts:newContacts});
-    setNCt({name:"",role:"営業",tel:"",email:"",memo:""}); setModal(null);
+    setCos(upd);setSelC({...selC,contacts:newContacts});
+    setNCt({name:"",role:"営業",tel:"",email:"",memo:""});setModal(null);
   };
   const saveTk=async()=>{
     if(!nTk.title)return;
     const {data}=await supabase.from("tasks").insert([{title:nTk.title,done:false,priority:nTk.prio,due:nTk.due}]).select();
     if(data) setTks([{...data[0],prio:data[0].priority||"mid"},...tks]);
-    setNTk({title:"",due:"",prio:"mid"}); setModal(null);
+    setNTk({title:"",due:"",prio:"mid"});setModal(null);
   };
   const delTk=async id=>{await supabase.from("tasks").delete().eq("id",id);setTks(tks.filter(t=>t.id!==id));};
   const togTk=async t=>{await supabase.from("tasks").update({done:!t.done}).eq("id",t.id);setTks(tks.map(x=>x.id===t.id?{...x,done:!x.done}:x));};
@@ -316,12 +256,10 @@ export default function App() {
 
   const genYM=()=>{const now=new Date(),res={};for(let y=2022;y<=now.getFullYear();y++){res[y]=[];const max=y===now.getFullYear()?now.getMonth()+1:12;for(let m=1;m<=max;m++)res[y].push(m);}return res;};
   const ym=genYM();
+  const fk=(id,y,m)=>`${id}-${y}-${m}`;
 
   if(loading) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8"}}><div style={{textAlign:"center"}}><div style={{fontSize:32,marginBottom:12}}>⚡</div><div style={{color:"#1A3A5C",fontWeight:700}}>読み込み中...</div></div></div>;
 
-  // ══════════════════════════════════════════
-  // HOME
-  // ══════════════════════════════════════════
   if(page==="home"){
     const active=pjs.filter(p=>p.status!=="完了"&&p.status!=="中断");
     const tiles=tileConf.filter(t=>t.visible||tileEdit).map(t=>({...t,sub:t.key==="projects"?`${active.length}件進行中`:t.key==="companies"?`${cos.length}社登録`:t.key==="tasks"?`未完了 ${pending.length}件`:t.sub}));
@@ -352,10 +290,10 @@ export default function App() {
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
                       <span style={{fontSize:22}}>{t.icon}</span>
                       <div style={{display:"flex",gap:4}}>
-                        <button onClick={()=>{const pi=tileConf.findIndex(x=>x.key===t.key);if(pi>0){const n=[...tileConf];[n[pi],n[pi-1]]=[n[pi-1],n[pi]];saveTileConf(n);}}} style={{background:"#F3F4F6",border:"none",borderRadius:4,padding:"2px 6px",fontSize:12,cursor:"pointer"}}>↑</button>
-                        <button onClick={()=>{const pi=tileConf.findIndex(x=>x.key===t.key);if(pi<tileConf.length-1){const n=[...tileConf];[n[pi],n[pi+1]]=[n[pi+1],n[pi]];saveTileConf(n);}}} style={{background:"#F3F4F6",border:"none",borderRadius:4,padding:"2px 6px",fontSize:12,cursor:"pointer"}}>↓</button>
+                        <button onClick={()=>{const pi=tileConf.findIndex(x=>x.key===t.key);if(pi>0){const n=[...tileConf];[n[pi],n[pi-1]]=[n[pi-1],n[pi]];setTileConf(n);}}} style={{background:"#F3F4F6",border:"none",borderRadius:4,padding:"2px 6px",fontSize:12,cursor:"pointer"}}>↑</button>
+                        <button onClick={()=>{const pi=tileConf.findIndex(x=>x.key===t.key);if(pi<tileConf.length-1){const n=[...tileConf];[n[pi],n[pi+1]]=[n[pi+1],n[pi]];setTileConf(n);}}} style={{background:"#F3F4F6",border:"none",borderRadius:4,padding:"2px 6px",fontSize:12,cursor:"pointer"}}>↓</button>
                         <button onClick={()=>setEditTile({...t})} style={{background:"#EFF6FF",border:"none",borderRadius:4,padding:"2px 6px",fontSize:11,color:"#1A3A5C",cursor:"pointer"}}>✏️</button>
-                        <button onClick={()=>saveTileConf(tileConf.map(x=>x.key===t.key?{...x,visible:!x.visible}:x))} style={{background:t.visible?"#FEF2F2":"#F0FDF4",border:"none",borderRadius:4,padding:"2px 6px",fontSize:11,cursor:"pointer"}}>{t.visible?"🙈":"👁"}</button>
+                        <button onClick={()=>setTileConf(tileConf.map(x=>x.key===t.key?{...x,visible:!x.visible}:x))} style={{background:t.visible?"#FEF2F2":"#F0FDF4",border:"none",borderRadius:4,padding:"2px 6px",fontSize:11,cursor:"pointer"}}>{t.visible?"🙈":"👁"}</button>
                       </div>
                     </div>
                     <div style={{fontWeight:800,fontSize:13,color:"#1F2937"}}>{t.label}</div>
@@ -385,15 +323,12 @@ export default function App() {
             <button onClick={()=>nav("tasks")} style={{width:"100%",padding:10,background:"#F9FAFB",border:"none",fontSize:12,color:cust.c1,fontWeight:700,cursor:"pointer",borderTop:"1px solid #F3F4F6"}}>すべて見る →</button>
           </div>
         </div>
-        {modal==="cust"&&(<Modal title="⚙ カスタマイズ" onClose={()=>setModal(null)} onSave={()=>{saveCustomize({...ec});setModal(null);}}><Inp label="会社名" value={ec.name} onChange={e=>setEc({...ec,name:e.target.value})}/><Inp label="システム名" value={ec.sys} onChange={e=>setEc({...ec,sys:e.target.value})}/><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6B7280",marginBottom:6}}>バナーカラー</div><div style={{display:"flex",gap:10,alignItems:"center"}}><input type="color" value={ec.c1} onChange={e=>setEc({...ec,c1:e.target.value})} style={{width:48,height:36,borderRadius:8,border:"1.5px solid #E5E7EB",cursor:"pointer",padding:2}}/><span style={{color:"#9CA3AF"}}>→</span><input type="color" value={ec.c2} onChange={e=>setEc({...ec,c2:e.target.value})} style={{width:48,height:36,borderRadius:8,border:"1.5px solid #E5E7EB",cursor:"pointer",padding:2}}/><div style={{flex:1,height:36,borderRadius:8,background:`linear-gradient(135deg,${ec.c1},${ec.c2})`}}/></div></div></Modal>)}
-        {editTile&&(<Modal title="タイルを編集" onClose={()=>setEditTile(null)} onSave={()=>{saveTileConf(tileConf.map(t=>t.key===editTile.key?editTile:t));setEditTile(null);}}><Inp label="アイコン" value={editTile.icon} onChange={e=>setEditTile({...editTile,icon:e.target.value})}/><Inp label="ラベル名" value={editTile.label} onChange={e=>setEditTile({...editTile,label:e.target.value})}/><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6B7280",marginBottom:6}}>カラー</div><div style={{display:"flex",gap:10,alignItems:"center"}}><input type="color" value={editTile.color} onChange={e=>setEditTile({...editTile,color:e.target.value})} style={{width:48,height:36,borderRadius:8,border:"1.5px solid #E5E7EB",cursor:"pointer",padding:2}}/><div style={{flex:1,height:36,borderRadius:8,background:editTile.color}}/></div></div></Modal>)}
+        {modal==="cust"&&(<Modal title="⚙ カスタマイズ" onClose={()=>setModal(null)} onSave={()=>{setCust({...ec});setModal(null);}}><Inp label="会社名" value={ec.name} onChange={e=>setEc({...ec,name:e.target.value})}/><Inp label="システム名" value={ec.sys} onChange={e=>setEc({...ec,sys:e.target.value})}/><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6B7280",marginBottom:6}}>バナーカラー</div><div style={{display:"flex",gap:10,alignItems:"center"}}><input type="color" value={ec.c1} onChange={e=>setEc({...ec,c1:e.target.value})} style={{width:48,height:36,borderRadius:8,border:"1.5px solid #E5E7EB",cursor:"pointer",padding:2}}/><span style={{color:"#9CA3AF"}}>→</span><input type="color" value={ec.c2} onChange={e=>setEc({...ec,c2:e.target.value})} style={{width:48,height:36,borderRadius:8,border:"1.5px solid #E5E7EB",cursor:"pointer",padding:2}}/><div style={{flex:1,height:36,borderRadius:8,background:`linear-gradient(135deg,${ec.c1},${ec.c2})`}}/></div></div></Modal>)}
+        {editTile&&(<Modal title="タイルを編集" onClose={()=>setEditTile(null)} onSave={()=>{setTileConf(tileConf.map(t=>t.key===editTile.key?editTile:t));setEditTile(null);}}><Inp label="アイコン" value={editTile.icon} onChange={e=>setEditTile({...editTile,icon:e.target.value})}/><Inp label="ラベル名" value={editTile.label} onChange={e=>setEditTile({...editTile,label:e.target.value})}/><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6B7280",marginBottom:6}}>カラー</div><div style={{display:"flex",gap:10,alignItems:"center"}}><input type="color" value={editTile.color} onChange={e=>setEditTile({...editTile,color:e.target.value})} style={{width:48,height:36,borderRadius:8,border:"1.5px solid #E5E7EB",cursor:"pointer",padding:2}}/><div style={{flex:1,height:36,borderRadius:8,background:editTile.color}}/></div></div></Modal>)}
       </div>
     );
   }
 
-  // ══════════════════════════════════════════
-  // PROJECTS
-  // ══════════════════════════════════════════
   if(page==="projects"){
     const tA=filtP.reduce((s,p)=>s+(p.amount||0),0);
     const tG=filtP.reduce((s,p)=>s+(p.gp||0),0);
@@ -459,9 +394,6 @@ export default function App() {
     );
   }
 
-  // ══════════════════════════════════════════
-  // COMPANIES
-  // ══════════════════════════════════════════
   if(page==="companies"){
     return(
       <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",maxWidth:"100%",margin:0}}>
@@ -539,9 +471,6 @@ export default function App() {
     );
   }
 
-  // ══════════════════════════════════════════
-  // TASKS
-  // ══════════════════════════════════════════
   if(page==="tasks"){
     const done=tks.filter(t=>t.done);
     return(
@@ -568,9 +497,6 @@ export default function App() {
     );
   }
 
-  // ══════════════════════════════════════════
-  // LINKS（Supabase保存版）
-  // ══════════════════════════════════════════
   if(page==="links"){
     const cats=[...new Set(links.map(l=>l.cat))];
     return(
@@ -588,27 +514,25 @@ export default function App() {
                 </a>
                 <div style={{display:"flex",gap:6,flexShrink:0}}>
                   <button onClick={()=>setEditLnk({...l})} style={{background:"#EFF6FF",border:"none",borderRadius:6,padding:"4px 8px",fontSize:11,color:"#1A3A5C",fontWeight:700,cursor:"pointer"}}>✏️</button>
-                  <button onClick={()=>deleteLink(l.id)} style={{background:"#FEF2F2",border:"none",borderRadius:6,padding:"4px 8px",fontSize:11,color:"#DC2626",fontWeight:700,cursor:"pointer"}}>🗑</button>
+                  <button onClick={()=>setLinks(links.filter(x=>x.id!==l.id))} style={{background:"#FEF2F2",border:"none",borderRadius:6,padding:"4px 8px",fontSize:11,color:"#DC2626",fontWeight:700,cursor:"pointer"}}>🗑</button>
                 </div>
               </div>))}
             </div>
           </div>);})}
         </div>
-        {modal==="addL"&&(<Modal title="🔗 リンクを追加" onClose={()=>setModal(null)} onSave={()=>{if(!newLnk.label||!newLnk.url)return;addLink(newLnk);setNewLnk({label:"",url:"",icon:"🔗",cat:"ツール・サービス"});setModal(null);}}><Inp label="アイコン" value={newLnk.icon} onChange={e=>setNewLnk({...newLnk,icon:e.target.value})}/><Inp label="名前 *" value={newLnk.label} onChange={e=>setNewLnk({...newLnk,label:e.target.value})} placeholder="例: Google Drive"/><Inp label="URL *" value={newLnk.url} onChange={e=>setNewLnk({...newLnk,url:e.target.value})} placeholder="https://..."/><Inp label="カテゴリ" value={newLnk.cat} onChange={e=>setNewLnk({...newLnk,cat:e.target.value})}/></Modal>)}
-        {editLnk&&(<Modal title="🔗 リンクを編集" onClose={()=>setEditLnk(null)} onSave={()=>{updateLink(editLnk);setEditLnk(null);}}><Inp label="アイコン" value={editLnk.icon} onChange={e=>setEditLnk({...editLnk,icon:e.target.value})}/><Inp label="名前" value={editLnk.label} onChange={e=>setEditLnk({...editLnk,label:e.target.value})}/><Inp label="URL" value={editLnk.url} onChange={e=>setEditLnk({...editLnk,url:e.target.value})}/><Inp label="カテゴリ" value={editLnk.cat} onChange={e=>setEditLnk({...editLnk,cat:e.target.value})}/></Modal>)}
+        {modal==="addL"&&(<Modal title="🔗 リンクを追加" onClose={()=>setModal(null)} onSave={()=>{if(!newLnk.label||!newLnk.url)return;setLinks([...links,{...newLnk,id:"l"+Date.now()}]);setNewLnk({label:"",url:"",icon:"🔗",cat:"ツール・サービス"});setModal(null);}}><Inp label="アイコン" value={newLnk.icon} onChange={e=>setNewLnk({...newLnk,icon:e.target.value})}/><Inp label="名前 *" value={newLnk.label} onChange={e=>setNewLnk({...newLnk,label:e.target.value})} placeholder="例: Google Drive"/><Inp label="URL *" value={newLnk.url} onChange={e=>setNewLnk({...newLnk,url:e.target.value})} placeholder="https://..."/><Inp label="カテゴリ" value={newLnk.cat} onChange={e=>setNewLnk({...newLnk,cat:e.target.value})}/></Modal>)}
+        {editLnk&&(<Modal title="🔗 リンクを編集" onClose={()=>setEditLnk(null)} onSave={()=>{setLinks(links.map(l=>l.id===editLnk.id?editLnk:l));setEditLnk(null);}}><Inp label="アイコン" value={editLnk.icon} onChange={e=>setEditLnk({...editLnk,icon:e.target.value})}/><Inp label="名前" value={editLnk.label} onChange={e=>setEditLnk({...editLnk,label:e.target.value})}/><Inp label="URL" value={editLnk.url} onChange={e=>setEditLnk({...editLnk,url:e.target.value})}/><Inp label="カテゴリ" value={editLnk.cat} onChange={e=>setEditLnk({...editLnk,cat:e.target.value})}/></Modal>)}
       </div>
     );
   }
 
-  // ══════════════════════════════════════════
-  // FINANCE
-  // ══════════════════════════════════════════
   if(page==="finance"){
     const now=new Date(),cy=now.getFullYear(),cm=now.getMonth()+1;
     const allItems=[...DEFAULT_FINANCE_ITEMS,...finFolders.map(f=>({id:f.id,label:f.label,icon:f.icon,isCustom:true}))];
 
     const PwUI=()=>{if(!pwMod)return null;const isSC=pwMod.mode==="set"||pwMod.mode==="change";return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:500,display:"flex",alignItems:"flex-end"}}><div style={{background:"#fff",borderRadius:"20px 20px 0 0",padding:24,width:"100%",boxSizing:"border-box"}}><div style={{fontWeight:800,fontSize:16,marginBottom:6,color:"#1F2937"}}>{isSC?"🔐 設定":"🔒 入力"}</div><input type="password" value={pwIn} onChange={e=>{setPwIn(e.target.value);setPwErr("");}} placeholder="パスワード" style={{width:"100%",padding:"12px 14px",borderRadius:10,border:pwErr?"2px solid #DC2626":"1.5px solid #E5E7EB",fontSize:16,boxSizing:"border-box",marginBottom:4,color:"#1F2937"}}/>{pwErr&&<div style={{color:"#DC2626",fontSize:12,marginBottom:8}}>{pwErr}</div>}<div style={{display:"flex",gap:10,marginTop:12}}><button onClick={()=>{setPwMod(null);setPwIn("");setPwErr("");}} style={{flex:1,padding:12,background:"#F3F4F6",border:"none",borderRadius:10,fontWeight:700,cursor:"pointer"}}>キャンセル</button><button onClick={()=>{if(!pwIn){setPwErr("入力してください");return;}if(isSC){setPws(p=>({...p,[pwMod.id]:pwIn}));setPwMod(null);setPwIn("");setPwErr("");}else{if(pwIn===pws[pwMod.id]){setUnl(p=>({...p,[pwMod.id]:true}));setFinItem(allItems.find(f=>f.id===pwMod.id));setPwMod(null);setPwIn("");setPwErr("");}else setPwErr("パスワードが違います");}}} style={{flex:1,padding:12,background:"#1A3A5C",color:"#fff",border:"none",borderRadius:10,fontWeight:800,cursor:"pointer"}}>{isSC?"設定する":"開く"}</button></div></div></div>);};
 
+    // ファイルプレビュー画面
     if(finPrev)return(
       <div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#000",minHeight:"100vh",display:"flex",flexDirection:"column"}}>
         <div style={{background:"#1A3A5C",color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10}}>
@@ -628,6 +552,7 @@ export default function App() {
       </div>
     );
 
+    // ファイル一覧（月）
     if(finM){
       const monthFiles=finFiles.filter(f=>f.item_id===finItem.id&&Number(f.year)===Number(finY)&&Number(f.month)===Number(finM));
       return(
@@ -658,6 +583,7 @@ export default function App() {
       );
     }
 
+    // 年一覧
     if(finY)return(
       <div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh"}}>
         <div style={{background:"#1A3A5C",color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:50}}>
@@ -678,6 +604,7 @@ export default function App() {
       </div>
     );
 
+    // 年一覧（フォルダ選択後）
     if(finItem)return(
       <div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh"}}>
         <div style={{background:"#1A3A5C",color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:50}}>
@@ -699,6 +626,7 @@ export default function App() {
       </div>
     );
 
+    // メイン一覧
     return(
       <div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh"}}>
         <div style={{background:"#1A3A5C",color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:50}}>
@@ -730,97 +658,36 @@ export default function App() {
             })}
           </div>
         </div>
-        {finModal==="addFolder"&&(<Modal title="📁 フォルダを追加" onClose={()=>setFinModal(null)} onSave={addFinFolder}><Inp label="アイコン（絵文字）" value={newFolder.icon} onChange={e=>setNewFolder({...newFolder,icon:e.target.value})}/><Inp label="フォルダ名 *" value={newFolder.label} onChange={e=>setNewFolder({...newFolder,label:e.target.value})} placeholder="例: 保険証書"/></Modal>)}
-        {finModal==="editFolder"&&editFolder&&(<Modal title="📁 フォルダを編集" onClose={()=>{setFinModal(null);setEditFolder(null);}} onSave={updateFinFolder}><Inp label="アイコン（絵文字）" value={editFolder.icon} onChange={e=>setEditFolder({...editFolder,icon:e.target.value})}/><Inp label="フォルダ名 *" value={editFolder.label} onChange={e=>setEditFolder({...editFolder,label:e.target.value})}/></Modal>)}
+
+        {/* フォルダ追加モーダル */}
+        {finModal==="addFolder"&&(
+          <Modal title="📁 フォルダを追加" onClose={()=>setFinModal(null)} onSave={addFinFolder}>
+            <Inp label="アイコン（絵文字）" value={newFolder.icon} onChange={e=>setNewFolder({...newFolder,icon:e.target.value})}/>
+            <Inp label="フォルダ名 *" value={newFolder.label} onChange={e=>setNewFolder({...newFolder,label:e.target.value})} placeholder="例: 保険証書"/>
+          </Modal>
+        )}
+
+        {/* フォルダ編集モーダル */}
+        {finModal==="editFolder"&&editFolder&&(
+          <Modal title="📁 フォルダを編集" onClose={()=>{setFinModal(null);setEditFolder(null);}} onSave={updateFinFolder}>
+            <Inp label="アイコン（絵文字）" value={editFolder.icon} onChange={e=>setEditFolder({...editFolder,icon:e.target.value})}/>
+            <Inp label="フォルダ名 *" value={editFolder.label} onChange={e=>setEditFolder({...editFolder,label:e.target.value})}/>
+          </Modal>
+        )}
+
         <PwUI/>
       </div>
     );
   }
 
-  // ══════════════════════════════════════════
-  // TEMPLATES（Supabase保存版）
-  // ══════════════════════════════════════════
   if(page==="templates"){
-    const fi=f=>f.type?.startsWith("image/")?"🖼":f.name?.endsWith(".pdf")?"📕":f.name?.endsWith(".xlsx")||f.name?.endsWith(".xls")?"📗":f.name?.endsWith(".docx")||f.name?.endsWith(".doc")?"📘":"📄";
-
-    if(tmplPrev)return(
-      <div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#000",minHeight:"100vh",display:"flex",flexDirection:"column"}}>
-        <div style={{background:"#1A3A5C",color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10}}>
-          <button onClick={()=>setTmplPrev(null)} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>←</button>
-          <div style={{flex:1,fontWeight:700,fontSize:14}}>{tmplPrev.name}</div>
-          {tmplPrev.data&&<a href={tmplPrev.data} download={tmplPrev.name} style={{background:"#E07B39",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,textDecoration:"none"}}>⬇ 保存</a>}
-        </div>
-        <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-          {tmplPrev.data?(
-            tmplPrev.type?.startsWith("image/")?<img src={tmplPrev.data} style={{maxWidth:"100%",maxHeight:"80vh",borderRadius:8}} alt={tmplPrev.name}/>
-            :<div style={{color:"#fff",textAlign:"center"}}><div style={{fontSize:48,marginBottom:16}}>📄</div><div style={{fontSize:14,marginBottom:8}}>{tmplPrev.name}</div><a href={tmplPrev.data} download={tmplPrev.name} style={{background:"#E07B39",color:"#fff",padding:"12px 24px",borderRadius:10,textDecoration:"none",fontWeight:700}}>ダウンロード</a></div>
-          ):<div style={{color:"#fff",textAlign:"center"}}><div style={{fontSize:48,marginBottom:16}}>⏳</div><div>読み込み中...</div></div>}
-        </div>
-        <div style={{padding:"12px 16px",background:"rgba(0,0,0,0.5)"}}>
-          <button onClick={()=>deleteTmplFile(tmplPrev.id)} style={{width:"100%",padding:12,background:"#DC2626",color:"#fff",border:"none",borderRadius:10,fontWeight:700,cursor:"pointer"}}>🗑 このファイルを削除</button>
-        </div>
-      </div>
-    );
-
-    if(tmplCat){
-      const files=tmplFiles.filter(f=>f.cat_id===tmplCat.id);
-      return(
-        <div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh"}}>
-          <div style={{background:"#1A3A5C",color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:50}}>
-            <button onClick={()=>setTmplCat(null)} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>←</button>
-            <div style={{flex:1}}><div style={{fontWeight:800,fontSize:15}}>{tmplCat.icon} {tmplCat.label}</div><div style={{fontSize:11,opacity:0.7}}>{files.length}件</div></div>
-            <label style={{background:"#E07B39",color:"#fff",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
-              ＋ 追加
-              <input type="file" accept="image/*,application/pdf,.xlsx,.docx,.xls,.doc" multiple onChange={async e=>{for(const f of Array.from(e.target.files)){await uploadTmplFile(f,tmplCat.id);}}} style={{display:"none"}}/>
-            </label>
-          </div>
-          <div style={{padding:14}}>
-            {files.length===0?<div style={{textAlign:"center",padding:40,color:"#9CA3AF"}}><div style={{fontSize:48,marginBottom:12}}>📂</div><div style={{fontSize:14}}>ファイルがありません</div></div>
-              :files.map(f=>(
-                <div key={f.id} style={{background:"#fff",borderRadius:12,padding:"12px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:12,boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
-                  <span style={{fontSize:28,flexShrink:0}}>{fi(f)}</span>
-                  <div style={{flex:1,overflow:"hidden",cursor:"pointer"}} onClick={async()=>{const full=await loadTmplFile(f.id);setTmplPrev(full);}}>
-                    <div style={{fontWeight:600,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#1F2937"}}>{f.name}</div>
-                    <div style={{fontSize:11,color:"#9CA3AF",marginTop:2}}>{f.size?`${(f.size/1024).toFixed(0)}KB`:""}</div>
-                  </div>
-                  <button onClick={()=>deleteTmplFile(f.id)} style={{background:"#FEF2F2",border:"none",borderRadius:6,padding:"5px 8px",fontSize:11,color:"#DC2626",fontWeight:700,cursor:"pointer"}}>🗑</button>
-                </div>
-              ))}
-          </div>
-        </div>
-      );
-    }
-
-    return(
-      <div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh"}}>
-        <Hdr title="📂 お知らせ・雛形" back={()=>nav("home")}/>
-        <div style={{padding:14}}>
-          <div style={{background:"#fff",borderRadius:14,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.07)",marginBottom:16}}>
-            {TEMPLATE_CATS.map((cat,i)=>{
-              const cnt=tmplFiles.filter(f=>f.cat_id===cat.id).length;
-              return(
-                <div key={cat.id} onClick={()=>setTmplCat(cat)} style={{display:"flex",alignItems:"center",gap:14,padding:"16px 18px",borderBottom:i<TEMPLATE_CATS.length-1?"1px solid #F3F4F6":"none",cursor:"pointer"}}>
-                  <span style={{fontSize:28}}>{cat.icon}</span>
-                  <div style={{flex:1}}>
-                    <div style={{fontWeight:700,fontSize:14,color:"#1F2937"}}>{cat.label}</div>
-                    <div style={{fontSize:11,color:"#9CA3AF",marginTop:2}}>{cnt>0?`${cnt}件のファイル`:"タップして管理"}</div>
-                  </div>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    {cnt>0&&<span style={{background:"#E07B39",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{cnt}</span>}
-                    <span style={{color:"#9CA3AF",fontSize:18}}>›</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    );
+    const upTmpl=e=>{Array.from(e.target.files).forEach(f=>{const r=new FileReader();r.onload=ev=>setTmplData(p=>({...p,[tmplCat.id]:[...(p[tmplCat.id]||[]),{id:Date.now()+Math.random(),name:f.name,type:f.type,data:ev.target.result,size:f.size,date:new Date().toLocaleDateString("ja-JP")}]}));r.readAsDataURL(f);});};
+    const fi=f=>f.type.startsWith("image/")?"🖼":f.name.endsWith(".pdf")?"📕":f.name.endsWith(".xlsx")||f.name.endsWith(".xls")?"📗":f.name.endsWith(".docx")||f.name.endsWith(".doc")?"📘":"📄";
+    if(tmplPrev)return(<div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#000",minHeight:"100vh",display:"flex",flexDirection:"column"}}><div style={{background:"#1A3A5C",color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10}}><button onClick={()=>setTmplPrev(null)} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>←</button><div style={{flex:1,fontWeight:700,fontSize:14}}>{tmplPrev.name}</div><a href={tmplPrev.data} download={tmplPrev.name} style={{background:"#E07B39",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,textDecoration:"none"}}>⬇ 保存</a></div><div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>{tmplPrev.type.startsWith("image/")?<img src={tmplPrev.data} style={{maxWidth:"100%",maxHeight:"80vh",borderRadius:8}} alt={tmplPrev.name}/>:<div style={{color:"#fff",textAlign:"center"}}><div style={{fontSize:48,marginBottom:16}}>📄</div><div style={{fontSize:14,marginBottom:8}}>{tmplPrev.name}</div><a href={tmplPrev.data} download={tmplPrev.name} style={{background:"#E07B39",color:"#fff",padding:"12px 24px",borderRadius:10,textDecoration:"none",fontWeight:700}}>ダウンロード</a></div>}</div></div>);
+    if(tmplCat){const files=tmplData[tmplCat.id]||[];return(<div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh"}}><div style={{background:"#1A3A5C",color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:50}}><button onClick={()=>setTmplCat(null)} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>←</button><div style={{flex:1}}><div style={{fontWeight:800,fontSize:15}}>{tmplCat.icon} {tmplCat.label}</div><div style={{fontSize:11,opacity:0.7}}>{files.length}件</div></div><label style={{background:"#E07B39",color:"#fff",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>＋ 追加<input type="file" accept="image/*,application/pdf,.xlsx,.docx,.xls,.doc" multiple onChange={upTmpl} style={{display:"none"}}/></label></div><div style={{padding:14}}>{files.length===0?<div style={{textAlign:"center",padding:40,color:"#9CA3AF"}}><div style={{fontSize:48,marginBottom:12}}>📂</div><div style={{fontSize:14}}>ファイルがありません</div></div>:files.map(f=>(<div key={f.id} style={{background:"#fff",borderRadius:12,padding:"12px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:12,boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}><span style={{fontSize:28,flexShrink:0}}>{fi(f)}</span><div style={{flex:1,overflow:"hidden",cursor:"pointer"}} onClick={()=>setTmplPrev(f)}><div style={{fontWeight:600,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#1F2937"}}>{f.name}</div><div style={{fontSize:11,color:"#9CA3AF",marginTop:2}}>{(f.size/1024).toFixed(0)}KB　{f.date}</div></div><div style={{display:"flex",gap:6,flexShrink:0}}><a href={f.data} download={f.name} style={{background:"#EFF6FF",border:"none",borderRadius:6,padding:"5px 8px",fontSize:11,color:"#1A3A5C",fontWeight:700,textDecoration:"none"}}>⬇</a><button onClick={()=>setTmplData(p=>({...p,[tmplCat.id]:(p[tmplCat.id]||[]).filter(x=>x.id!==f.id)}))} style={{background:"#FEF2F2",border:"none",borderRadius:6,padding:"5px 8px",fontSize:11,color:"#DC2626",fontWeight:700,cursor:"pointer"}}>🗑</button></div></div>))}</div></div>);}
+    return(<div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh"}}><Hdr title="📂 お知らせ・雛形" back={()=>nav("home")}/><div style={{padding:14}}><div style={{background:"#fff",borderRadius:14,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.07)",marginBottom:16}}>{TEMPLATE_CATS.map((cat,i)=>(<div key={cat.id} onClick={()=>setTmplCat(cat)} style={{display:"flex",alignItems:"center",gap:14,padding:"16px 18px",borderBottom:i<TEMPLATE_CATS.length-1?"1px solid #F3F4F6":"none",cursor:"pointer"}}><span style={{fontSize:28}}>{cat.icon}</span><div style={{flex:1}}><div style={{fontWeight:700,fontSize:14,color:"#1F2937"}}>{cat.label}</div><div style={{fontSize:11,color:"#9CA3AF",marginTop:2}}>{(tmplData[cat.id]||[]).length>0?`${(tmplData[cat.id]||[]).length}件のファイル`:"タップして管理"}</div></div><div style={{display:"flex",alignItems:"center",gap:8}}>{(tmplData[cat.id]||[]).length>0&&<span style={{background:"#E07B39",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{(tmplData[cat.id]||[]).length}</span>}<span style={{color:"#9CA3AF",fontSize:18}}>›</span></div></div>))}</div></div></div>);
   }
 
-  // ══════════════════════════════════════════
-  // ESTIMATE
-  // ══════════════════════════════════════════
   if(page==="estimate"){
     const clCos=cos.filter(c=>c.type==="取引先");
     const selCo=cos.find(c=>c.id===est.clientId);
