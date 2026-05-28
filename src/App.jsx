@@ -295,9 +295,9 @@ ${cos.map(c=>`・${c.name}${c.branch?' '+c.branch:''}（${c.type}）担当者${(
 【未完了タスク】
 ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'期限:'+t.due:''}`).join('\n')||'なし'}
       `;
-      const res = await fetch("https://api.openai.com/v1/chat/completions",{
+      const res = await fetch("/api/chat",{
         method:"POST",
-        headers:{"Content-Type":"application/json","Authorization":`Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`},
+        headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
           model:"gpt-4o-mini",
           messages:[
