@@ -49,6 +49,8 @@ const DEFAULT_TILE_CONF = [
   {key:"finance",icon:"🗃",label:"財務・書類管理",sub:"書類一覧",color:"#0891B2",visible:true},
   {key:"templates",icon:"📂",label:"お知らせ・雛形",sub:"テンプレート",color:"#D97706",visible:true},
   {key:"estimate",icon:"📝",label:"見積書作成",sub:"CSV出力対応",color:"#BE185D",visible:true},
+  {key:"analytics",icon:"📊",label:"分析ダッシュボード",sub:"グラフ・集計",color:"#0F766E",visible:true},
+  {key:"ai",icon:"🤖",label:"AIアシスタント",sub:"データに質問",color:"#6D28D9",visible:true},
 ];
 const DEFAULT_CUST = {name:"株式会社IGUMI",sys:"案件管理システム",c1:"#1A3A5C",c2:"#2563EB",acc:"#E07B39",bg:"#F0F4F8"};
 
@@ -139,6 +141,9 @@ export default function App() {
   const [nCo,setNCo]=useState({name:"",type:"協力業者",branch:""});
   const [nCt,setNCt]=useState({name:"",role:"営業",tel:"",email:"",memo:""});
   const [nTk,setNTk]=useState({title:"",due:"",prio:"mid"});
+  const [aiMsgs,setAiMsgs]=useState([]);
+  const [aiInput,setAiInput]=useState("");
+  const [aiLoading,setAiLoading]=useState(false);
 
   useEffect(()=>{loadAll();},[]);
 
@@ -269,6 +274,48 @@ export default function App() {
   };
 
   const nav=p=>{setPage(p);setSchP("");setSchC("");setFltS("すべて");setFltT("すべて");setSelP(null);setSelC(null);setSelCt(null);setFinItem(null);setFinY(null);setFinM(null);setFinPrev(null);setTmplCat(null);setTmplPrev(null);setPwMod(null);setPwIn("");setPwErr("");setModal(null);};
+  
+  // ── AIチャット ──
+  const sendAI = async () => {
+    if(!aiInput.trim()||aiLoading) return;
+    const userMsg = aiInput.trim();
+    setAiInput("");
+    setAiMsgs(prev=>[...prev,{role:"user",content:userMsg}]);
+    setAiLoading(true);
+    try {
+      const context = `
+あなたはIGUMI管理アプリのAIアシスタントです。以下のデータをもとに質問に答えてください。日本語で簡潔に答えてください。
+
+【案件データ】
+${pjs.map(p=>`・${p.name}（${p.status}）受注:${p.amount?'¥'+Number(p.amount).toLocaleString():'未設定'} 粗利:${p.gp?'¥'+Number(p.gp).toLocaleString():'未設定'} 担当:${p.inCharge||'未設定'}`).join('\n')}
+
+【取引先データ】
+${cos.map(c=>`・${c.name}${c.branch?' '+c.branch:''}（${c.type}）担当者${(c.contacts||[]).length}名`).join('\n')}
+
+【未完了タスク】
+${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'期限:'+t.due:''}`).join('\n')||'なし'}
+      `;
+      const res = await fetch("https://api.openai.com/v1/chat/completions",{
+        method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":`Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`},
+        body:JSON.stringify({
+          model:"gpt-4o-mini",
+          messages:[
+            {role:"system",content:context},
+            ...aiMsgs.slice(-6),
+            {role:"user",content:userMsg}
+          ],
+          max_tokens:800
+        })
+      });
+      const data = await res.json();
+      const reply = data.choices?.[0]?.message?.content || "エラーが発生しました";
+      setAiMsgs(prev=>[...prev,{role:"assistant",content:reply}]);
+    } catch(e) {
+      setAiMsgs(prev=>[...prev,{role:"assistant",content:"エラーが発生しました。APIキーを確認してください。"}]);
+    }
+    setAiLoading(false);
+  };
   const getC=id=>cos.find(c=>c.id===id);
   const getPF=cid=>pjs.filter(p=>p.clientId===cid||(p.subIds||[]).includes(cid));
   const pending=tks.filter(t=>!t.done);
@@ -829,6 +876,185 @@ export default function App() {
     const remIt=i=>setEst(p=>{const its=p.items.filter((_,idx)=>idx!==i);const sub=its.reduce((s,it)=>s+(it.amount||0),0);const tax=Math.floor(sub*0.1);return{...p,items:its,sub,tax,total:sub+tax};});
     const dlCSV=()=>{const cn=selCo?selCo.name+(selCo.branch?" "+selCo.branch:""):"";let csv="\uFEFF見積書\nNo.,"+est.no+"\n日付,"+est.date+"\n宛先,"+cn+"\n工事名,"+est.pjName+"\n\n品名,数量,単位,単価,金額\n";est.items.forEach(it=>{csv+=`${it.name},${it.qty},${it.unit},${it.price},${it.amount}\n`;});csv+=`\n小計,,,, ${est.sub}\n消費税,,,, ${est.tax}\n合計,,,, ${est.total}\n`;const blob=new Blob([csv],{type:"text/csv"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`見積書_${cn}.csv`;a.click();URL.revokeObjectURL(url);};
     return(<div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh"}}><Hdr title="📝 見積書作成" back={()=>nav("home")} right={<button onClick={dlCSV} style={{background:"#059669",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:800}}>⬇ CSV</button>}/><div style={{padding:14}}><div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:12,boxShadow:"0 1px 6px rgba(0,0,0,0.07)"}}><div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:12}}>📋 基本情報</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}><Inp label="見積No." value={est.no} onChange={e=>setEst(p=>({...p,no:e.target.value}))} placeholder="0001"/><Inp label="日付" type="date" value={est.date} onChange={e=>setEst(p=>({...p,date:e.target.value}))}/></div><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6B7280",marginBottom:3}}>取引先</div><select value={est.clientId} onChange={e=>setEst(p=>({...p,clientId:e.target.value}))} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",fontSize:13,background:"#FAFAFA",boxSizing:"border-box",color:"#1F2937"}}><option value="">選択してください</option>{clCos.map(c=><option key={c.id} value={c.id}>{c.name}{c.branch?" "+c.branch:""}</option>)}</select></div>{selCo&&(<div style={{background:"#EFF6FF",borderRadius:10,padding:"10px 14px",marginBottom:10,borderLeft:"3px solid #1A3A5C"}}><div style={{fontSize:11,color:"#1A3A5C",fontWeight:700,marginBottom:4}}>✅ 自動入力</div><div style={{fontSize:12,color:"#374151"}}>宛先: {selCo.name}{selCo.branch?" "+selCo.branch:""}</div></div>)}<Inp label="工事名" value={est.pjName} onChange={e=>setEst(p=>({...p,pjName:e.target.value}))} placeholder="例: ○○マンション排水管更新工事"/><Inp label="担当者" value={est.person} onChange={e=>setEst(p=>({...p,person:e.target.value}))}/></div><div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:12,boxShadow:"0 1px 6px rgba(0,0,0,0.07)"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><div style={{fontWeight:800,fontSize:14,color:"#1A3A5C"}}>🔧 工事項目</div><button onClick={addIt} style={{background:"#E07B39",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:700}}>＋ 追加</button></div>{est.items.map((item,i)=>(<div key={i} style={{background:"#F9FAFB",borderRadius:10,padding:12,marginBottom:8,border:"1px solid #E5E7EB"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div style={{fontSize:12,fontWeight:700,color:"#6B7280"}}>項目 {i+1}</div><button onClick={()=>remIt(i)} style={{background:"none",border:"none",color:"#DC2626",fontSize:16,cursor:"pointer"}}>🗑</button></div><Inp label="品名 *" value={item.name} onChange={e=>updIt(i,"name",e.target.value)}/><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8}}><Inp label="数量" type="number" value={item.qty} onChange={e=>updIt(i,"qty",Number(e.target.value))}/><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6B7280",marginBottom:3}}>単位</div><select value={item.unit} onChange={e=>updIt(i,"unit",e.target.value)} style={{width:"100%",padding:"8px 6px",borderRadius:8,border:"1.5px solid #E5E7EB",fontSize:12,background:"#FAFAFA",color:"#1F2937"}}>{["式","個","本","m","㎡","日","台"].map(u=><option key={u}>{u}</option>)}</select></div><Inp label="単価" type="number" value={item.price} onChange={e=>updIt(i,"price",Number(e.target.value))}/><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#9CA3AF",marginBottom:3}}>金額（自動）</div><div style={{padding:"8px 10px",background:"#F0F4F8",borderRadius:8,fontSize:12,fontWeight:700,color:"#1A3A5C"}}>¥{(item.amount||0).toLocaleString()}</div></div></div></div>))}{est.items.length===0&&<div style={{textAlign:"center",color:"#9CA3AF",fontSize:13,padding:20}}>「＋ 追加」から工事項目を入力</div>}</div><div style={{background:"#fff",borderRadius:14,padding:16,boxShadow:"0 1px 6px rgba(0,0,0,0.07)"}}><div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:12}}>💰 金額</div>{[["小計",est.sub],["消費税（10%）",est.tax]].map(([l,v])=>(<div key={l} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #F3F4F6"}}><div style={{fontSize:13,color:"#6B7280"}}>{l}</div><div style={{fontSize:13,fontWeight:600}}>¥{(v||0).toLocaleString()}</div></div>))}<div style={{display:"flex",justifyContent:"space-between",padding:"12px 0"}}><div style={{fontSize:16,fontWeight:800,color:"#1A3A5C"}}>合計（税込）</div><div style={{fontSize:20,fontWeight:900,color:"#E07B39"}}>¥{(est.total||0).toLocaleString()}</div></div><button onClick={dlCSV} style={{width:"100%",padding:13,background:"#059669",color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:15,cursor:"pointer",marginTop:8}}>⬇ CSVダウンロード</button></div></div></div>);
+  }
+
+  // ══════════════════════════════════════════
+  // ANALYTICS
+  // ══════════════════════════════════════════
+  if(page==="analytics"){
+    const active=pjs.filter(p=>p.status!=="完了"&&p.status!=="中断");
+    const done=pjs.filter(p=>p.status==="完了");
+    const totalAmt=pjs.reduce((s,p)=>s+(p.amount||0),0);
+    const totalGp=pjs.reduce((s,p)=>s+(p.gp||0),0);
+    const avgGpRate=totalAmt?(totalGp/totalAmt*100).toFixed(1):0;
+    const statusCount=STATUSES.map(s=>({s,n:pjs.filter(p=>p.status===s).length}));
+    const maxSC=Math.max(...statusCount.map(x=>x.n),1);
+    // 粗利率TOP5
+    const top5=pjs.filter(p=>p.amount>0).sort((a,b)=>(b.gp/b.amount)-(a.gp/a.amount)).slice(0,5);
+    // 担当者別受注
+    const byCharge={};
+    pjs.forEach(p=>{const k=p.inCharge||"未設定";byCharge[k]=(byCharge[k]||0)+(p.amount||0);});
+    const chargeList=Object.entries(byCharge).sort((a,b)=>b[1]-a[1]);
+    const maxCharge=Math.max(...chargeList.map(x=>x[1]),1);
+
+    return(
+      <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh"}}>
+        <Hdr title="📊 分析ダッシュボード" back={()=>nav("home")}/>
+        <div style={{padding:14}}>
+
+          {/* KPIカード */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+            {[
+              {label:"総案件数",value:`${pjs.length}件`,sub:`進行中 ${active.length}件`,color:"#1A3A5C",icon:"📋"},
+              {label:"完了案件",value:`${done.length}件`,sub:`完了率 ${pjs.length?(done.length/pjs.length*100).toFixed(0):0}%`,color:"#059669",icon:"✅"},
+              {label:"受注合計",value:`¥${(totalAmt/10000).toFixed(0)}万`,sub:pjs.length?`平均 ¥${(totalAmt/pjs.length/10000).toFixed(0)}万`:"",color:"#E07B39",icon:"💰"},
+              {label:"平均粗利率",value:`${avgGpRate}%`,sub:`粗利計 ¥${(totalGp/10000).toFixed(0)}万`,color:"#7C3AED",icon:"📈"},
+            ].map(k=>(
+              <div key={k.label} style={{background:"#fff",borderRadius:14,padding:"14px 14px",boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}>
+                <div style={{fontSize:22,marginBottom:6}}>{k.icon}</div>
+                <div style={{fontSize:11,color:"#9CA3AF",marginBottom:2}}>{k.label}</div>
+                <div style={{fontSize:18,fontWeight:900,color:k.color}}>{k.value}</div>
+                <div style={{fontSize:11,color:"#9CA3AF",marginTop:2}}>{k.sub}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* ステータス別件数 */}
+          <div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:16,boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}>
+            <div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:14}}>📋 ステータス別件数</div>
+            {statusCount.map(({s,n})=>{
+              const st=STATUS_STYLE[s];
+              return(
+                <div key={s} style={{marginBottom:10}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                    <span style={{fontSize:12,fontWeight:700,color:st.text}}>{s}</span>
+                    <span style={{fontSize:12,fontWeight:700,color:"#374151"}}>{n}件</span>
+                  </div>
+                  <div style={{background:"#F3F4F6",borderRadius:4,height:8,overflow:"hidden"}}>
+                    <div style={{width:`${(n/maxSC)*100}%`,height:"100%",background:st.border,borderRadius:4,transition:"width 0.5s"}}/>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 粗利率TOP5 */}
+          {top5.length>0&&(
+            <div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:16,boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}>
+              <div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:14}}>🏆 粗利率TOP5</div>
+              {top5.map((p,i)=>{
+                const rate=(p.gp/p.amount*100).toFixed(1);
+                return(
+                  <div key={p.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 0",borderBottom:i<top5.length-1?"1px solid #F3F4F6":"none"}}>
+                    <div style={{width:24,height:24,borderRadius:"50%",background:i===0?"#F59E0B":i===1?"#9CA3AF":i===2?"#B45309":"#E5E7EB",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:i<3?"#fff":"#6B7280",flexShrink:0}}>{i+1}</div>
+                    <div style={{flex:1,overflow:"hidden"}}>
+                      <div style={{fontSize:13,fontWeight:700,color:"#1F2937",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</div>
+                      <div style={{fontSize:11,color:"#9CA3AF"}}>{fmt(p.amount)}</div>
+                    </div>
+                    <div style={{fontSize:15,fontWeight:900,color:"#059669"}}>{rate}%</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* 担当者別受注 */}
+          {chargeList.length>0&&(
+            <div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:16,boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}>
+              <div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:14}}>👤 担当者別受注金額</div>
+              {chargeList.map(([name,amt])=>(
+                <div key={name} style={{marginBottom:10}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                    <span style={{fontSize:12,fontWeight:700,color:"#374151"}}>{name}</span>
+                    <span style={{fontSize:12,fontWeight:700,color:"#E07B39"}}>{fmt(amt)}</span>
+                  </div>
+                  <div style={{background:"#F3F4F6",borderRadius:4,height:8,overflow:"hidden"}}>
+                    <div style={{width:`${(amt/maxCharge)*100}%`,height:"100%",background:"#E07B39",borderRadius:4}}/>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 未完了タスク集計 */}
+          <div style={{background:"#fff",borderRadius:14,padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}>
+            <div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:14}}>✅ タスク状況</div>
+            <div style={{display:"flex",gap:10}}>
+              {[
+                {label:"未完了",value:tks.filter(t=>!t.done).length,color:"#EF4444"},
+                {label:"完了済み",value:tks.filter(t=>t.done).length,color:"#10B981"},
+                {label:"高優先度",value:tks.filter(t=>!t.done&&t.prio==="high").length,color:"#F59E0B"},
+              ].map(x=>(
+                <div key={x.label} style={{flex:1,background:"#F9FAFB",borderRadius:10,padding:"10px 8px",textAlign:"center"}}>
+                  <div style={{fontSize:20,fontWeight:900,color:x.color}}>{x.value}</div>
+                  <div style={{fontSize:10,color:"#9CA3AF",marginTop:2}}>{x.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ══════════════════════════════════════════
+  // AI ASSISTANT
+  // ══════════════════════════════════════════
+  if(page==="ai"){
+    const suggestions=["今月完了した案件は？","粗利率が一番高い案件は？","未完了タスクを優先度順に教えて","受注金額の合計を教えて","進行中の案件一覧を教えて"];
+    return(
+      <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",display:"flex",flexDirection:"column"}}>
+        <Hdr title="🤖 AIアシスタント" back={()=>nav("home")}/>
+        <div style={{flex:1,overflowY:"auto",padding:"14px 14px 0"}}>
+          {aiMsgs.length===0&&(
+            <div>
+              <div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.07)",textAlign:"center"}}>
+                <div style={{fontSize:40,marginBottom:8}}>🤖</div>
+                <div style={{fontWeight:800,fontSize:15,color:"#1F2937",marginBottom:4}}>AIアシスタント</div>
+                <div style={{fontSize:12,color:"#6B7280",lineHeight:1.6}}>IGUMIのデータについて何でも聞いてください。案件・取引先・タスクの情報をもとに回答します。</div>
+              </div>
+              <div style={{fontSize:11,fontWeight:700,color:"#9CA3AF",marginBottom:8}}>💡 質問例</div>
+              {suggestions.map(s=>(
+                <button key={s} onClick={()=>{setAiInput(s);}} style={{width:"100%",background:"#fff",border:"1.5px solid #E5E7EB",borderRadius:10,padding:"10px 14px",textAlign:"left",fontSize:13,color:"#374151",marginBottom:6,cursor:"pointer",fontWeight:500}}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+          {aiMsgs.map((m,i)=>(
+            <div key={i} style={{marginBottom:12,display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
+              {m.role==="assistant"&&<div style={{width:28,height:28,borderRadius:"50%",background:"#6D28D9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,marginRight:8,flexShrink:0,marginTop:2}}>🤖</div>}
+              <div style={{
+                maxWidth:"80%",padding:"10px 14px",borderRadius:m.role==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",
+                background:m.role==="user"?"#1A3A5C":"#fff",
+                color:m.role==="user"?"#fff":"#1F2937",
+                fontSize:13,lineHeight:1.7,
+                boxShadow:m.role==="assistant"?"0 1px 4px rgba(0,0,0,0.08)":"none",
+                whiteSpace:"pre-wrap"
+              }}>{m.content}</div>
+            </div>
+          ))}
+          {aiLoading&&(
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+              <div style={{width:28,height:28,borderRadius:"50%",background:"#6D28D9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🤖</div>
+              <div style={{background:"#fff",borderRadius:"16px 16px 16px 4px",padding:"10px 16px",boxShadow:"0 1px 4px rgba(0,0,0,0.08)"}}>
+                <div style={{display:"flex",gap:4}}>
+                  {[0,1,2].map(i=><div key={i} style={{width:6,height:6,borderRadius:"50%",background:"#9CA3AF",animation:`bounce 1s infinite ${i*0.2}s`}}/>)}
+                </div>
+              </div>
+            </div>
+          )}
+          <div style={{height:14}}/>
+        </div>
+        <div style={{padding:"12px 14px 24px",background:"#fff",borderTop:"1px solid #F3F4F6"}}>
+          {aiMsgs.length>0&&<button onClick={()=>setAiMsgs([])} style={{fontSize:11,color:"#9CA3AF",background:"none",border:"none",cursor:"pointer",marginBottom:8}}>🗑 会話をリセット</button>}
+          <div style={{display:"flex",gap:8}}>
+            <input value={aiInput} onChange={e=>setAiInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&sendAI()} placeholder="質問を入力..." style={{flex:1,padding:"10px 14px",borderRadius:10,border:"1.5px solid #E5E7EB",fontSize:13,outline:"none",color:"#1F2937"}}/>
+            <button onClick={sendAI} disabled={!aiInput.trim()||aiLoading} style={{background:aiInput.trim()&&!aiLoading?"#6D28D9":"#E5E7EB",color:aiInput.trim()&&!aiLoading?"#fff":"#9CA3AF",border:"none",borderRadius:10,padding:"10px 16px",fontSize:13,fontWeight:700,cursor:aiInput.trim()&&!aiLoading?"pointer":"default"}}>送信</button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return null;
