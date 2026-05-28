@@ -1049,7 +1049,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
         <div style={{padding:"12px 14px 24px",background:"#fff",borderTop:"1px solid #F3F4F6"}}>
           {aiMsgs.length>0&&<button onClick={()=>setAiMsgs([])} style={{fontSize:11,color:"#9CA3AF",background:"none",border:"none",cursor:"pointer",marginBottom:8}}>🗑 会話をリセット</button>}
           <div style={{display:"flex",gap:8}}>
-            <input value={aiInput} onChange={e=>setAiInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&sendAI()} placeholder="質問を入力..." style={{flex:1,padding:"10px 14px",borderRadius:10,border:"1.5px solid #E5E7EB",fontSize:13,outline:"none",color:"#1F2937"}}/>
+            <input value={aiInput} onChange={e=>setAiInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&sendAI()} placeholder="質問を入力..." style={{flex:1,padding:"10px 14px",borderRadius:10,border:"1.5px solid #E5E7EB",fontSize:13,outline:"none",color:"#1F2937",background:"#fff"}}/>
             <button onClick={sendAI} disabled={!aiInput.trim()||aiLoading} style={{background:aiInput.trim()&&!aiLoading?"#6D28D9":"#E5E7EB",color:aiInput.trim()&&!aiLoading?"#fff":"#9CA3AF",border:"none",borderRadius:10,padding:"10px 16px",fontSize:13,fontWeight:700,cursor:aiInput.trim()&&!aiLoading?"pointer":"default"}}>送信</button>
           </div>
         </div>
