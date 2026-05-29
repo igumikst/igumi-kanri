@@ -485,7 +485,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
     const active=pjs.filter(p=>p.status!=="完了"&&p.status!=="中断");
     const tiles=tileConf.filter(t=>t.visible||tileEdit).map(t=>({...t,sub:t.key==="projects"?`${active.length}件進行中`:t.key==="companies"?`${cos.length}社登録`:t.key==="tasks"?`未完了 ${pending.length}件`:t.sub}));
     return(
-      <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:cust.bg,minHeight:"100vh",maxWidth:"100%",margin:0,...pp}}>
+      <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:cust.bg,minHeight:"100vh",...pp}}>
         {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
         {!isPC&&<div style={{background:cust.c1,color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:50}}>
           <div style={{background:cust.acc,borderRadius:8,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:16}}>I</div>
@@ -497,7 +497,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
           <div style={{fontSize:22,fontWeight:900,color:"#fff"}}>{cust.sys}</div>
           <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",marginTop:4}}>案件 {pjs.length}件 ｜ 取引先 {cos.length}社</div>
         </div>
-        <div style={{padding:isPC?"12px 12px 20px":"28px 14px 30px"}}>
+        <div style={{padding:isPC?"12px 0 20px":"28px 14px 30px"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
             <div style={{fontSize:11,fontWeight:700,color:"#9CA3AF"}}>DB一覧</div>
             <button onClick={()=>{if(tileEdit){saveTileConf(tileConf);}setTileEdit(!tileEdit);}} style={{fontSize:11,fontWeight:700,color:tileEdit?"#E07B39":"#9CA3AF",background:"none",border:"none",cursor:"pointer"}}>
@@ -599,12 +599,12 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
     const tA=filtP.reduce((s,p)=>s+(p.amount||0),0);
     const tG=filtP.reduce((s,p)=>s+(p.gp||0),0);
     return(
-      <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",maxWidth:"100%",margin:0,...pp}}>
+      <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
         {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
         <Hdr title={selP?selP.name:"📋 案件管理"} back={selP?()=>setSelP(null):()=>nav("home")}
           right={<div style={{display:"flex",gap:6}}>{!selP&&<button onClick={()=>setModal("addP")} style={{background:"#E07B39",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:800}}>＋ 新規</button>}</div>}/>
         {selP?(
-          <div style={{padding:isPC?"14px 8px":14}}>
+          <div style={{padding:isPC?"14px 0":14}}>
             <div style={{background:"#fff",borderRadius:14,padding:18,boxShadow:"0 2px 10px rgba(0,0,0,0.08)"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
                 <div style={{fontWeight:800,fontSize:17,flex:1,marginRight:8,color:"#1F2937"}}>{selP.name}</div>
@@ -630,7 +630,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
             </div>
           </div>
         ):(
-          <div style={{padding:isPC?"14px 8px":14}}>
+          <div style={{padding:isPC?"14px 0":14}}>
             <input value={schP} onChange={e=>setSchP(e.target.value)} placeholder="🔍 案件名・取引先で検索" style={{width:"100%",padding:"9px 14px",borderRadius:10,border:"1.5px solid #E5E7EB",fontSize:13,background:"#fff",boxSizing:"border-box",marginBottom:10,color:"#1F2937"}}/>
             <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:8,marginBottom:8}}>
               {["すべて",...STATUSES].map(s=>(<button key={s} onClick={()=>setFltS(s)} style={{padding:"4px 12px",borderRadius:16,border:"1.5px solid",whiteSpace:"nowrap",borderColor:fltS===s?"#1A3A5C":"#D1D5DB",background:fltS===s?"#1A3A5C":"#fff",color:fltS===s?"#fff":"#374151",fontSize:11,fontWeight:700,cursor:"pointer"}}>{s}</button>))}
@@ -666,12 +666,12 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
   // ══════════════════════════════════════════
   if(page==="companies"){
     return(
-      <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",maxWidth:"100%",margin:0,...pp}}>
+      <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
         {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
         <Hdr title={selCt?selCt.name:selC?selC.name:"🏢 取引先・協力業者"} back={selCt?()=>setSelCt(null):selC?()=>setSelC(null):()=>nav("home")}
           right={<div style={{display:"flex",gap:6}}>{!selC&&!selCt&&<button onClick={()=>setModal("addCo")} style={{background:"#E07B39",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:800}}>＋ 新規</button>}</div>}/>
         {selCt?(
-          <div style={{padding:isPC?"14px 8px":14}}>
+          <div style={{padding:isPC?"14px 0":14}}>
             <div style={{background:"#fff",borderRadius:14,padding:18,boxShadow:"0 2px 10px rgba(0,0,0,0.08)"}}>
               <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16}}>
                 <div style={{width:52,height:52,borderRadius:"50%",background:"#1A3A5C",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,color:"#fff",fontWeight:800}}>{selCt.name.charAt(0)}</div>
@@ -682,7 +682,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
             </div>
           </div>
         ):selC?(
-          <div style={{padding:isPC?"14px 8px":14}}>
+          <div style={{padding:isPC?"14px 0":14}}>
             <div style={{background:"#fff",borderRadius:14,padding:18,boxShadow:"0 2px 10px rgba(0,0,0,0.08)"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:2}}>
                 <div style={{fontWeight:800,fontSize:18,color:"#1F2937"}}>{selC.name}{selC.branch?` ${selC.branch}`:""}</div>
@@ -714,7 +714,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
             </div>
           </div>
         ):(
-          <div style={{padding:isPC?"14px 8px":14}}>
+          <div style={{padding:isPC?"14px 0":14}}>
             <input value={schC} onChange={e=>setSchC(e.target.value)} placeholder="🔍 会社名で検索" style={{width:"100%",padding:"9px 14px",borderRadius:10,border:"1.5px solid #E5E7EB",fontSize:13,background:"#fff",boxSizing:"border-box",marginBottom:10,color:"#1F2937"}}/>
             <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:8,marginBottom:8}}>
               {["すべて",...COMPANY_TYPES].map(t=>(<button key={t} onClick={()=>setFltT(t)} style={{padding:"4px 12px",borderRadius:16,border:"1.5px solid",whiteSpace:"nowrap",borderColor:fltT===t?"#1A3A5C":"#D1D5DB",background:fltT===t?"#1A3A5C":"#fff",color:fltT===t?"#fff":"#374151",fontSize:11,fontWeight:700,cursor:"pointer"}}>{t}</button>))}
@@ -748,10 +748,10 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
   if(page==="tasks"){
     const done=tks.filter(t=>t.done);
     return(
-      <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",maxWidth:"100%",margin:0,...pp}}>
+      <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
         {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
         <Hdr title="✅ タスク" back={()=>nav("home")} right={<button onClick={()=>setModal("addT")} style={{background:"#E07B39",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:800}}>＋ 新規</button>}/>
-        <div style={{padding:isPC?"14px 8px":14}}>
+        <div style={{padding:isPC?"14px 0":14}}>
           <div style={{fontSize:11,fontWeight:700,color:"#9CA3AF",marginBottom:8}}>未完了 ({pending.length})</div>
           {pending.map(t=>(<div key={t.id} style={{background:"#fff",borderRadius:12,padding:"12px 14px",marginBottom:8,boxShadow:"0 1px 6px rgba(0,0,0,0.07)",display:"flex",alignItems:"center",gap:12}}>
             <button onClick={()=>togTk(t)} style={{width:22,height:22,borderRadius:"50%",border:"2px solid #D1D5DB",background:"#fff",cursor:"pointer",flexShrink:0}}/>
@@ -778,10 +778,10 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
   if(page==="links"){
     const cats=[...new Set(links.map(l=>l.cat))];
     return(
-      <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",maxWidth:"100%",margin:0,...pp}}>
+      <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
         {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
         <Hdr title="🔗 リンク集" back={()=>nav("home")} right={<button onClick={()=>setModal("addL")} style={{background:"#E07B39",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:800}}>＋ 新規</button>}/>
-        <div style={{padding:isPC?"14px 8px":14}}>
+        <div style={{padding:isPC?"14px 0":14}}>
           {cats.map(cat=>{const cl=links.filter(l=>l.cat===cat);return(<div key={cat} style={{marginBottom:20}}>
             <div style={{fontSize:12,fontWeight:800,color:"#6B7280",marginBottom:8}}>🔗 {cat}</div>
             <div style={{background:"#fff",borderRadius:14,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}>
@@ -868,7 +868,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
               <input type="file" accept="image/*,application/pdf,.xlsx,.docx,.xls,.doc" multiple onChange={async e=>{for(const f of Array.from(e.target.files)){await uploadFinFile(f,finItem.id,finY,finM);}}} style={{display:"none"}}/>
             </label>
           </div>
-          <div style={{padding:isPC?"14px 8px":14}}>
+          <div style={{padding:isPC?"14px 0":14}}>
             {monthFiles.length===0?<div style={{textAlign:"center",padding:40,color:"#9CA3AF"}}><div style={{fontSize:48,marginBottom:12}}>📂</div><div style={{fontSize:14}}>ファイルがありません</div><div style={{fontSize:12,marginTop:4,color:"#9CA3AF"}}>右上の「＋ 追加」からアップロード</div></div>
               :monthFiles.map(f=>(
                 <div key={f.id} style={{background:"#fff",borderRadius:12,padding:"12px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:12,boxShadow:"0 1px 4px rgba(0,0,0,0.06)",cursor:"pointer"}}
@@ -893,7 +893,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
           <button onClick={()=>setFinY(null)} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>←</button>
           <div style={{flex:1}}><div style={{fontWeight:800,fontSize:15}}>{finItem.icon} {finItem.label}</div><div style={{fontSize:11,opacity:0.7}}>{finY}年</div></div>
         </div>
-        <div style={{padding:isPC?"14px 8px":14}}>
+        <div style={{padding:isPC?"14px 0":14}}>
           {(ym[finY]||[]).slice().reverse().map(m=>{
             const cnt=finFiles.filter(f=>f.item_id===finItem.id&&Number(f.year)===Number(finY)&&Number(f.month)===m).length;
             const isN=Number(finY)===cy&&m===cm;
@@ -914,7 +914,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
           <button onClick={()=>setFinItem(null)} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>←</button>
           <div style={{flex:1,fontWeight:800,fontSize:15}}>{finItem.icon} {finItem.label}</div>
         </div>
-        <div style={{padding:isPC?"14px 8px":14}}>
+        <div style={{padding:isPC?"14px 0":14}}>
           {Object.keys(ym).sort((a,b)=>b-a).map(y=>{
             const tot=Object.values(ym[y]||[]).reduce((s,m)=>s+finFiles.filter(f=>f.item_id===finItem.id&&Number(f.year)===Number(y)&&Number(f.month)===m).length,0);
             const isN=Number(y)===cy;
@@ -937,7 +937,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
           <div style={{flex:1,fontWeight:800,fontSize:16}}>🗃 財務・書類管理</div>
           <button onClick={()=>setFinModal("addFolder")} style={{background:"#E07B39",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:800}}>＋ フォルダ</button>
         </div>
-        <div style={{padding:isPC?"14px 8px":14}}>
+        <div style={{padding:isPC?"14px 0":14}}>
           <div style={{background:"#fff",borderRadius:14,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}>
             {allItems.map((item,i)=>{
               const hp=!!pws[item.id],iu=unl[item.id];
@@ -1019,7 +1019,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
               <input type="file" accept="image/*,application/pdf,.xlsx,.docx,.xls,.doc" multiple onChange={async e=>{for(const f of Array.from(e.target.files)){await uploadTmplFile(f,tmplCat.id);}}} style={{display:"none"}}/>
             </label>
           </div>
-          <div style={{padding:isPC?"14px 8px":14}}>
+          <div style={{padding:isPC?"14px 0":14}}>
             {files.length===0?<div style={{textAlign:"center",padding:40,color:"#9CA3AF"}}><div style={{fontSize:48,marginBottom:12}}>📂</div><div style={{fontSize:14}}>ファイルがありません</div></div>
               :files.map(f=>(
                 <div key={f.id} style={{background:"#fff",borderRadius:12,padding:"12px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:12,boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
@@ -1040,7 +1040,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
       <div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
         {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
         <Hdr title="📂 お知らせ・雛形" back={()=>nav("home")}/>
-        <div style={{padding:isPC?"14px 8px":14}}>
+        <div style={{padding:isPC?"14px 0":14}}>
           <div style={{background:"#fff",borderRadius:14,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.07)",marginBottom:16}}>
             {TEMPLATE_CATS.map((cat,i)=>{
               const cnt=tmplFiles.filter(f=>f.cat_id===cat.id).length;
@@ -1074,7 +1074,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
     const updIt=(i,f,v)=>setEst(p=>{const its=[...p.items];its[i]={...its[i],[f]:v};if(f==="qty"||f==="price")its[i].amount=Number(its[i].qty||0)*Number(its[i].price||0);const sub=its.reduce((s,it)=>s+(it.amount||0),0);const tax=Math.floor(sub*0.1);return{...p,items:its,sub,tax,total:sub+tax};});
     const remIt=i=>setEst(p=>{const its=p.items.filter((_,idx)=>idx!==i);const sub=its.reduce((s,it)=>s+(it.amount||0),0);const tax=Math.floor(sub*0.1);return{...p,items:its,sub,tax,total:sub+tax};});
     const dlCSV=()=>{const cn=selCo?selCo.name+(selCo.branch?" "+selCo.branch:""):"";let csv="\uFEFF見積書\nNo.,"+est.no+"\n日付,"+est.date+"\n宛先,"+cn+"\n工事名,"+est.pjName+"\n\n品名,数量,単位,単価,金額\n";est.items.forEach(it=>{csv+=`${it.name},${it.qty},${it.unit},${it.price},${it.amount}\n`;});csv+=`\n小計,,,, ${est.sub}\n消費税,,,, ${est.tax}\n合計,,,, ${est.total}\n`;const blob=new Blob([csv],{type:"text/csv"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`見積書_${cn}.csv`;a.click();URL.revokeObjectURL(url);};
-    return(<div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>{isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}<Hdr title="📝 見積書作成" back={()=>nav("home")} right={<button onClick={dlCSV} style={{background:"#059669",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:800}}>⬇ CSV</button>}/><div style={{padding:isPC?"14px 8px":14}}><div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:12,boxShadow:"0 1px 6px rgba(0,0,0,0.07)"}}><div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:12}}>📋 基本情報</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}><Inp label="見積No." value={est.no} onChange={e=>setEst(p=>({...p,no:e.target.value}))} placeholder="0001"/><Inp label="日付" type="date" value={est.date} onChange={e=>setEst(p=>({...p,date:e.target.value}))}/></div><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6B7280",marginBottom:3}}>取引先</div><select value={est.clientId} onChange={e=>setEst(p=>({...p,clientId:e.target.value}))} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",fontSize:13,background:"#FAFAFA",boxSizing:"border-box",color:"#1F2937"}}><option value="">選択してください</option>{clCos.map(c=><option key={c.id} value={c.id}>{c.name}{c.branch?" "+c.branch:""}</option>)}</select></div>{selCo&&(<div style={{background:"#EFF6FF",borderRadius:10,padding:"10px 14px",marginBottom:10,borderLeft:"3px solid #1A3A5C"}}><div style={{fontSize:11,color:"#1A3A5C",fontWeight:700,marginBottom:4}}>✅ 自動入力</div><div style={{fontSize:12,color:"#374151"}}>宛先: {selCo.name}{selCo.branch?" "+selCo.branch:""}</div></div>)}<Inp label="工事名" value={est.pjName} onChange={e=>setEst(p=>({...p,pjName:e.target.value}))} placeholder="例: ○○マンション排水管更新工事"/><Inp label="担当者" value={est.person} onChange={e=>setEst(p=>({...p,person:e.target.value}))}/></div><div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:12,boxShadow:"0 1px 6px rgba(0,0,0,0.07)"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><div style={{fontWeight:800,fontSize:14,color:"#1A3A5C"}}>🔧 工事項目</div><button onClick={addIt} style={{background:"#E07B39",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:700}}>＋ 追加</button></div>{est.items.map((item,i)=>(<div key={i} style={{background:"#F9FAFB",borderRadius:10,padding:12,marginBottom:8,border:"1px solid #E5E7EB"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div style={{fontSize:12,fontWeight:700,color:"#6B7280"}}>項目 {i+1}</div><button onClick={()=>remIt(i)} style={{background:"none",border:"none",color:"#DC2626",fontSize:16,cursor:"pointer"}}>🗑</button></div><Inp label="品名 *" value={item.name} onChange={e=>updIt(i,"name",e.target.value)}/><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8}}><Inp label="数量" type="number" value={item.qty} onChange={e=>updIt(i,"qty",Number(e.target.value))}/><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6B7280",marginBottom:3}}>単位</div><select value={item.unit} onChange={e=>updIt(i,"unit",e.target.value)} style={{width:"100%",padding:"8px 6px",borderRadius:8,border:"1.5px solid #E5E7EB",fontSize:12,background:"#FAFAFA",color:"#1F2937"}}>{["式","個","本","m","㎡","日","台"].map(u=><option key={u}>{u}</option>)}</select></div><Inp label="単価" type="number" value={item.price} onChange={e=>updIt(i,"price",Number(e.target.value))}/><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#9CA3AF",marginBottom:3}}>金額（自動）</div><div style={{padding:"8px 10px",background:"#F0F4F8",borderRadius:8,fontSize:12,fontWeight:700,color:"#1A3A5C"}}>¥{(item.amount||0).toLocaleString()}</div></div></div></div>))}{est.items.length===0&&<div style={{textAlign:"center",color:"#9CA3AF",fontSize:13,padding:20}}>「＋ 追加」から工事項目を入力</div>}</div><div style={{background:"#fff",borderRadius:14,padding:16,boxShadow:"0 1px 6px rgba(0,0,0,0.07)"}}><div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:12}}>💰 金額</div>{[["小計",est.sub],["消費税（10%）",est.tax]].map(([l,v])=>(<div key={l} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #F3F4F6"}}><div style={{fontSize:13,color:"#6B7280"}}>{l}</div><div style={{fontSize:13,fontWeight:600}}>¥{(v||0).toLocaleString()}</div></div>))}<div style={{display:"flex",justifyContent:"space-between",padding:"12px 0"}}><div style={{fontSize:16,fontWeight:800,color:"#1A3A5C"}}>合計（税込）</div><div style={{fontSize:20,fontWeight:900,color:"#E07B39"}}>¥{(est.total||0).toLocaleString()}</div></div><button onClick={dlCSV} style={{width:"100%",padding:13,background:"#059669",color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:15,cursor:"pointer",marginTop:8}}>⬇ CSVダウンロード</button></div></div></div>);
+    return(<div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>{isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}<Hdr title="📝 見積書作成" back={()=>nav("home")} right={<button onClick={dlCSV} style={{background:"#059669",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:800}}>⬇ CSV</button>}/><div style={{padding:isPC?"14px 0":14}}><div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:12,boxShadow:"0 1px 6px rgba(0,0,0,0.07)"}}><div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:12}}>📋 基本情報</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}><Inp label="見積No." value={est.no} onChange={e=>setEst(p=>({...p,no:e.target.value}))} placeholder="0001"/><Inp label="日付" type="date" value={est.date} onChange={e=>setEst(p=>({...p,date:e.target.value}))}/></div><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6B7280",marginBottom:3}}>取引先</div><select value={est.clientId} onChange={e=>setEst(p=>({...p,clientId:e.target.value}))} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",fontSize:13,background:"#FAFAFA",boxSizing:"border-box",color:"#1F2937"}}><option value="">選択してください</option>{clCos.map(c=><option key={c.id} value={c.id}>{c.name}{c.branch?" "+c.branch:""}</option>)}</select></div>{selCo&&(<div style={{background:"#EFF6FF",borderRadius:10,padding:"10px 14px",marginBottom:10,borderLeft:"3px solid #1A3A5C"}}><div style={{fontSize:11,color:"#1A3A5C",fontWeight:700,marginBottom:4}}>✅ 自動入力</div><div style={{fontSize:12,color:"#374151"}}>宛先: {selCo.name}{selCo.branch?" "+selCo.branch:""}</div></div>)}<Inp label="工事名" value={est.pjName} onChange={e=>setEst(p=>({...p,pjName:e.target.value}))} placeholder="例: ○○マンション排水管更新工事"/><Inp label="担当者" value={est.person} onChange={e=>setEst(p=>({...p,person:e.target.value}))}/></div><div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:12,boxShadow:"0 1px 6px rgba(0,0,0,0.07)"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><div style={{fontWeight:800,fontSize:14,color:"#1A3A5C"}}>🔧 工事項目</div><button onClick={addIt} style={{background:"#E07B39",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:700}}>＋ 追加</button></div>{est.items.map((item,i)=>(<div key={i} style={{background:"#F9FAFB",borderRadius:10,padding:12,marginBottom:8,border:"1px solid #E5E7EB"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div style={{fontSize:12,fontWeight:700,color:"#6B7280"}}>項目 {i+1}</div><button onClick={()=>remIt(i)} style={{background:"none",border:"none",color:"#DC2626",fontSize:16,cursor:"pointer"}}>🗑</button></div><Inp label="品名 *" value={item.name} onChange={e=>updIt(i,"name",e.target.value)}/><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8}}><Inp label="数量" type="number" value={item.qty} onChange={e=>updIt(i,"qty",Number(e.target.value))}/><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6B7280",marginBottom:3}}>単位</div><select value={item.unit} onChange={e=>updIt(i,"unit",e.target.value)} style={{width:"100%",padding:"8px 6px",borderRadius:8,border:"1.5px solid #E5E7EB",fontSize:12,background:"#FAFAFA",color:"#1F2937"}}>{["式","個","本","m","㎡","日","台"].map(u=><option key={u}>{u}</option>)}</select></div><Inp label="単価" type="number" value={item.price} onChange={e=>updIt(i,"price",Number(e.target.value))}/><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#9CA3AF",marginBottom:3}}>金額（自動）</div><div style={{padding:"8px 10px",background:"#F0F4F8",borderRadius:8,fontSize:12,fontWeight:700,color:"#1A3A5C"}}>¥{(item.amount||0).toLocaleString()}</div></div></div></div>))}{est.items.length===0&&<div style={{textAlign:"center",color:"#9CA3AF",fontSize:13,padding:20}}>「＋ 追加」から工事項目を入力</div>}</div><div style={{background:"#fff",borderRadius:14,padding:16,boxShadow:"0 1px 6px rgba(0,0,0,0.07)"}}><div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:12}}>💰 金額</div>{[["小計",est.sub],["消費税（10%）",est.tax]].map(([l,v])=>(<div key={l} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #F3F4F6"}}><div style={{fontSize:13,color:"#6B7280"}}>{l}</div><div style={{fontSize:13,fontWeight:600}}>¥{(v||0).toLocaleString()}</div></div>))}<div style={{display:"flex",justifyContent:"space-between",padding:"12px 0"}}><div style={{fontSize:16,fontWeight:800,color:"#1A3A5C"}}>合計（税込）</div><div style={{fontSize:20,fontWeight:900,color:"#E07B39"}}>¥{(est.total||0).toLocaleString()}</div></div><button onClick={dlCSV} style={{width:"100%",padding:13,background:"#059669",color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:15,cursor:"pointer",marginTop:8}}>⬇ CSVダウンロード</button></div></div></div>);
   }
 
   // ══════════════════════════════════════════
@@ -1100,7 +1100,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
       <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
         {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
         <Hdr title="📊 分析ダッシュボード" back={()=>nav("home")}/>
-        <div style={{padding:isPC?"14px 8px":14}}>
+        <div style={{padding:isPC?"14px 0":14}}>
 
           {/* KPIカード */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
