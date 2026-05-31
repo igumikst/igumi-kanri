@@ -545,6 +545,42 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
 
   if(loading) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8"}}><div style={{textAlign:"center"}}><div style={{fontSize:32,marginBottom:12}}>⚡</div><div style={{color:"#1A3A5C",fontWeight:700}}>読み込み中...</div></div></div>;
 
+  // ══ グローバルモーダル（どのページからでも使える）══
+  if(modal==="cust") return(
+    <Modal title="⚙ カスタマイズ" onClose={()=>setModal(null)} onSave={()=>{saveCustomize({...ec});setModal(null);}}>
+      <Inp label="会社名" value={ec.name} onChange={e=>setEc({...ec,name:e.target.value})}/>
+      <Inp label="システム名" value={ec.sys} onChange={e=>setEc({...ec,sys:e.target.value})}/>
+      <div style={{marginBottom:10}}>
+        <div style={{fontSize:11,color:"#6B7280",marginBottom:6}}>バナーカラー</div>
+        <div style={{display:"flex",gap:10,alignItems:"center"}}>
+          <input type="color" value={ec.c1} onChange={e=>setEc({...ec,c1:e.target.value})} style={{width:48,height:36,borderRadius:8,border:"1.5px solid #E5E7EB",cursor:"pointer",padding:2}}/>
+          <span style={{color:"#9CA3AF"}}>→</span>
+          <input type="color" value={ec.c2} onChange={e=>setEc({...ec,c2:e.target.value})} style={{width:48,height:36,borderRadius:8,border:"1.5px solid #E5E7EB",cursor:"pointer",padding:2}}/>
+          <div style={{flex:1,height:36,borderRadius:8,background:`linear-gradient(135deg,${ec.c1},${ec.c2})`}}/>
+        </div>
+      </div>
+      <div style={{marginBottom:6}}>
+        <div style={{fontSize:11,color:"#6B7280",marginBottom:8}}>パネル表示設定（PC）</div>
+        {[
+          {key:"showSidebar",label:"左サイドバー",icon:"◀"},
+          {key:"showRightPanel",label:"右パネル（KPI・タスク）",icon:"▶"},
+          {key:"showLauncher",label:"🚀 ランチャーボタン",icon:"🚀"},
+        ].map(item=>{
+          const on=ec[item.key]!==false;
+          return(
+            <div key={item.key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",background:on?"#F0F9FF":"#F9FAFB",borderRadius:10,marginBottom:8,border:`1.5px solid ${on?"#BFDBFE":"#E5E7EB"}`}}>
+              <div style={{fontSize:13,fontWeight:600,color:"#1F2937"}}>{item.icon} {item.label}</div>
+              <button onClick={()=>setEc({...ec,[item.key]:!on})}
+                style={{width:44,height:24,borderRadius:12,border:"none",cursor:"pointer",background:on?"#1A3A5C":"#D1D5DB",position:"relative",transition:"background 0.2s",flexShrink:0}}>
+                <div style={{width:18,height:18,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:on?23:3,transition:"left 0.2s"}}/>
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </Modal>
+  );
+
   // ══════════════════════════════════════════
   // HOME
   // ══════════════════════════════════════════
@@ -964,7 +1000,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
             :isPDF(finPrev)
               ?finPrev.url
                 ?<iframe src={finPrev.url} style={{flex:1,width:"100%",border:"none",background:"#fff"}} title={finPrev.name}/>
-                :<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{color:"#fff",textAlign:"center",padding:32}}><div style={{fontSize:72,marginBottom:16}}>📕</div><div style={{fontSize:15,fontWeight:700,marginBottom:6}}>{finPrev.name}</div><div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:24}}>古い形式のPDFです</div><button onClick={()=>{const b64=finPrev.data.split(",")[1];const bin=atob(b64);const arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);const blob=new Blob([arr],{type:"application/pdf"});window.open(URL.createObjectURL(blob),"_blank");}} style={{width:"100%",padding:"16px 0",background:"#E07B39",color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:16,cursor:"pointer"}}>📄 PDFを開く</button></div></div>
+                :<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{color:"#fff",textAlign:"center",padding:32}}><div style={{fontSize:72,marginBottom:16}}>📕</div><div style={{fontSize:15,fontWeight:700,marginBottom:6}}>{finPrev.name}</div><div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:24}}>古い形式のPDFです</div><a href={finPrev.data} download={finPrev.name} style={{display:"block",width:"100%",padding:"16px 0",background:"#E07B39",color:"#fff",borderRadius:12,fontWeight:800,fontSize:16,cursor:"pointer",textDecoration:"none",textAlign:"center",boxSizing:"border-box"}}>⬇ PDFをダウンロード</a></div></div>
             :<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}>
               <div style={{color:"#fff",textAlign:"center",padding:32}}>
                 <div style={{fontSize:72,marginBottom:16}}>{fileIcon(finPrev)}</div>
@@ -1393,42 +1429,6 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
       </div>
     );
   }
-
-  // ══ グローバルモーダル（どのページからでも使える）══
-  if(modal==="cust") return(
-    <Modal title="⚙ カスタマイズ" onClose={()=>setModal(null)} onSave={()=>{saveCustomize({...ec});setModal(null);}}>
-      <Inp label="会社名" value={ec.name} onChange={e=>setEc({...ec,name:e.target.value})}/>
-      <Inp label="システム名" value={ec.sys} onChange={e=>setEc({...ec,sys:e.target.value})}/>
-      <div style={{marginBottom:10}}>
-        <div style={{fontSize:11,color:"#6B7280",marginBottom:6}}>バナーカラー</div>
-        <div style={{display:"flex",gap:10,alignItems:"center"}}>
-          <input type="color" value={ec.c1} onChange={e=>setEc({...ec,c1:e.target.value})} style={{width:48,height:36,borderRadius:8,border:"1.5px solid #E5E7EB",cursor:"pointer",padding:2}}/>
-          <span style={{color:"#9CA3AF"}}>→</span>
-          <input type="color" value={ec.c2} onChange={e=>setEc({...ec,c2:e.target.value})} style={{width:48,height:36,borderRadius:8,border:"1.5px solid #E5E7EB",cursor:"pointer",padding:2}}/>
-          <div style={{flex:1,height:36,borderRadius:8,background:`linear-gradient(135deg,${ec.c1},${ec.c2})`}}/>
-        </div>
-      </div>
-      <div style={{marginBottom:6}}>
-        <div style={{fontSize:11,color:"#6B7280",marginBottom:8}}>パネル表示設定（PC）</div>
-        {[
-          {key:"showSidebar",label:"左サイドバー",icon:"◀"},
-          {key:"showRightPanel",label:"右パネル（KPI・タスク）",icon:"▶"},
-          {key:"showLauncher",label:"🚀 ランチャーボタン",icon:"🚀"},
-        ].map(item=>{
-          const on = ec[item.key]!==false;
-          return(
-            <div key={item.key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",background:on?"#F0F9FF":"#F9FAFB",borderRadius:10,marginBottom:8,border:`1.5px solid ${on?"#BFDBFE":"#E5E7EB"}`}}>
-              <div style={{fontSize:13,fontWeight:600,color:"#1F2937"}}>{item.icon} {item.label}</div>
-              <button onClick={()=>setEc({...ec,[item.key]:!on})}
-                style={{width:44,height:24,borderRadius:12,border:"none",cursor:"pointer",background:on?"#1A3A5C":"#D1D5DB",position:"relative",transition:"background 0.2s",flexShrink:0}}>
-                <div style={{width:18,height:18,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:on?23:3,transition:"left 0.2s"}}/>
-              </button>
-            </div>
-          );
-        })}
-      </div>
-    </Modal>
-  );
 
   return null;
 }
