@@ -145,9 +145,6 @@ export default function App() {
   const [aiMsgs,setAiMsgs]=useState([]);
   const [aiInput,setAiInput]=useState("");
   const [aiLoading,setAiLoading]=useState(false);
-  // ✅ フローティングランチャー
-  const [launchOpen,setLaunchOpen]=useState(false);
-  const [launchCat,setLaunchCat]=useState(null);
   // ✅ PCレイアウト判定
   const [isPC,setIsPC]=useState(()=>window.innerWidth>=768);
 
@@ -187,20 +184,24 @@ export default function App() {
     setLoading(false);
   };
 
+  // ── home_settings 保存ヘルパー ──
   const saveHomeSetting = async (id, value) => {
     await supabase.from("home_settings").upsert({id, value, updated_at: new Date().toISOString()});
   };
 
+  // ── タイル設定保存 ──
   const saveTileConf = async (newConf) => {
     setTileConf(newConf);
     await saveHomeSetting("tiles", newConf);
   };
 
+  // ── カスタマイズ保存 ──
   const saveCustomize = async (newCust) => {
     setCust(newCust);
     await saveHomeSetting("customize", newCust);
   };
 
+  // ── リンク操作（Supabase） ──
   const addLink = async (lnk) => {
     const {data} = await supabase.from("links").insert([{cat:lnk.cat,label:lnk.label,url:lnk.url,icon:lnk.icon,sort_order:links.length}]).select();
     if(data) setLinks(prev=>[...prev,data[0]]);
@@ -214,10 +215,16 @@ export default function App() {
     setLinks(prev=>prev.filter(l=>l.id!==id));
   };
 
+  // ── テンプレートファイル操作（Supabase Storage） ──
   const uploadTmplFile = async (file, catId) => {
-    const path = `templates/${catId}/${Date.now()}_${file.name}`;
+    const safeName = file.name.replace(/[^\w.\-]/g, '_');
+    const path = `templates/${catId}/${Date.now()}_${safeName}`;
     const { error } = await supabase.storage.from("files").upload(path, file);
-    if(error){ console.error("Storage upload error:", error); return; }
+    if(error){
+      console.error("Storage upload error:", error);
+      alert(`アップロードエラー: ${error.message}`);
+      return;
+    }
     const { data: urlData } = supabase.storage.from("files").getPublicUrl(path);
     const { data } = await supabase.from("template_files").insert([{
       cat_id:catId, name:file.name, type:file.type, size:file.size, url:urlData.publicUrl, path
@@ -232,15 +239,27 @@ export default function App() {
     setTmplPrev(null);
   };
 
+  // ── 財務ファイル操作（Supabase Storage） ──
   const uploadFinFile = async (file, itemId, year, month) => {
-    const path = `finance/${itemId}/${year}/${month}/${Date.now()}_${file.name}`;
+    // ✅ ファイル名を安全な文字列に変換（日本語・スペース対応）
+    const safeName = file.name.replace(/[^\w.\-]/g, '_');
+    const path = `finance/${itemId}/${year}/${month}/${Date.now()}_${safeName}`;
     const { error } = await supabase.storage.from("files").upload(path, file);
-    if(error){ console.error("Storage upload error:", error); return; }
+    if(error){
+      console.error("Storage upload error:", error);
+      alert(`アップロードエラー: ${error.message}\n\nSupabaseのStorageバケット設定を確認してください。`);
+      return;
+    }
     const { data: urlData } = supabase.storage.from("files").getPublicUrl(path);
-    const { data } = await supabase.from("finance_files").insert([{
+    const { data, error: dbError } = await supabase.from("finance_files").insert([{
       item_id:itemId, year:Number(year), month:Number(month),
       name:file.name, type:file.type, size:file.size, url:urlData.publicUrl, path
     }]).select("id,item_id,year,month,name,type,size,url,path,created_at");
+    if(dbError){
+      console.error("DB insert error:", dbError);
+      alert(`DB保存エラー: ${dbError.message}`);
+      return;
+    }
     if(data) setFinFiles(prev=>[...prev, data[0]]);
   };
   const deleteFinFile = async (id) => {
@@ -251,6 +270,7 @@ export default function App() {
     setFinPrev(null);
   };
 
+  // ── 財務フォルダ操作 ──
   const addFinFolder = async () => {
     if(!newFolder.label) return;
     const {data} = await supabase.from("finance_folders").insert([{label:newFolder.label,icon:newFolder.icon,sort_order:finFolders.length}]).select();
@@ -268,8 +288,10 @@ export default function App() {
     setFinFolders(prev=>prev.filter(f=>f.id!==id));
   };
 
-  const nav=p=>{setPage(p);setSchP("");setSchC("");setFltS("すべて");setFltT("すべて");setSelP(null);setSelC(null);setSelCt(null);setFinItem(null);setFinY(null);setFinM(null);setFinPrev(null);setTmplCat(null);setTmplPrev(null);setPwMod(null);setPwIn("");setPwErr("");setModal(null);};
 
+  const nav=p=>{setPage(p);setSchP("");setSchC("");setFltS("すべて");setFltT("すべて");setSelP(null);setSelC(null);setSelCt(null);setFinItem(null);setFinY(null);setFinM(null);setFinPrev(null);setTmplCat(null);setTmplPrev(null);setPwMod(null);setPwIn("");setPwErr("");setModal(null);};
+  
+  // ── AIチャット ──
   const sendAI = async () => {
     if(!aiInput.trim()||aiLoading) return;
     const userMsg = aiInput.trim();
@@ -310,16 +332,24 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
     }
     setAiLoading(false);
   };
-
   const getC=id=>cos.find(c=>c.id===id);
   const getPF=cid=>pjs.filter(p=>p.clientId===cid||(p.subIds||[]).includes(cid));
   const pending=tks.filter(t=>!t.done);
+
+  const [editP,setEditP]=useState(null);
 
   const savePj=async()=>{
     if(!nP.name)return;
     const {data}=await supabase.from("projects").insert([{name:nP.name,status:nP.status,clientId:nP.clientId,salesRep:nP.salesRep,inCharge:nP.inCharge,subcontractorIds:nP.subIds||[],amount:Number(nP.amount)||0,grossProfit:Number(nP.gp)||0,quoteDate:nP.qDate,memo:nP.memo}]).select();
     if(data) setPjs([{...data[0],subIds:data[0].subcontractorIds||[],gp:data[0].grossProfit||0,qDate:data[0].quoteDate||""},...pjs]);
     setNP(blankP); setModal(null);
+  };
+  const updatePj=async()=>{
+    if(!editP||!editP.name)return;
+    await supabase.from("projects").update({name:editP.name,status:editP.status,clientId:editP.clientId,salesRep:editP.salesRep,inCharge:editP.inCharge,subcontractorIds:editP.subIds||[],amount:Number(editP.amount)||0,grossProfit:Number(editP.gp)||0,quoteDate:editP.qDate,memo:editP.memo}).eq("id",editP.id);
+    const updated={...editP,gp:Number(editP.gp)||0,amount:Number(editP.amount)||0};
+    setPjs(pjs.map(p=>p.id===editP.id?updated:p));
+    setSelP(updated); setEditP(null);
   };
   const delPj=async id=>{await supabase.from("projects").delete().eq("id",id);setPjs(pjs.filter(p=>p.id!==id));setSelP(null);};
   const saveCo=async()=>{
@@ -359,93 +389,12 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
   const genYM=()=>{const now=new Date(),res={};for(let y=2022;y<=now.getFullYear();y++){res[y]=[];const max=y===now.getFullYear()?now.getMonth()+1:12;for(let m=1;m<=max;m++)res[y].push(m);}return res;};
   const ym=genYM();
 
+  // ✅ PCレイアウト定数
   const SB_W=180,RP_W=220;
   const [rpOpen,setRpOpen]=useState(true);
   const pp=isPC?{marginLeft:SB_W,marginRight:rpOpen?RP_W:32}:{};
 
-  // ✅ フローティングランチャー
-  const FloatLauncher = () => {
-    const launchCats=[...new Set(links.map(l=>l.cat))];
-    return(
-      <>
-        {launchOpen&&(
-          <div onClick={()=>setLaunchOpen(false)}
-            style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:200}}/>
-        )}
-        {launchOpen&&(
-          <div style={{
-            position:"fixed",
-            bottom:isPC?24:80,
-            right:isPC?80:16,
-            background:"#fff",
-            borderRadius:16,
-            boxShadow:"0 8px 32px rgba(0,0,0,0.18)",
-            zIndex:201,
-            width:270,
-            overflow:"hidden"
-          }}>
-            <div style={{background:"#1A3A5C",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div style={{color:"#fff",fontWeight:800,fontSize:14}}>🚀 アプリを開く</div>
-              <button onClick={()=>setLaunchOpen(false)} style={{background:"none",border:"none",color:"rgba(255,255,255,0.7)",fontSize:18,cursor:"pointer",lineHeight:1}}>✕</button>
-            </div>
-            <div style={{display:"flex",gap:6,overflowX:"auto",padding:"8px 12px",borderBottom:"1px solid #F3F4F6"}}>
-              <button onClick={()=>setLaunchCat(null)}
-                style={{padding:"4px 10px",borderRadius:12,border:"none",background:!launchCat?"#1A3A5C":"#F3F4F6",color:!launchCat?"#fff":"#6B7280",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>
-                すべて
-              </button>
-              {launchCats.map(cat=>(
-                <button key={cat} onClick={()=>setLaunchCat(c=>c===cat?null:cat)}
-                  style={{padding:"4px 10px",borderRadius:12,border:"none",background:launchCat===cat?"#1A3A5C":"#F3F4F6",color:launchCat===cat?"#fff":"#6B7280",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>
-                  {cat}
-                </button>
-              ))}
-            </div>
-            <div style={{maxHeight:320,overflowY:"auto"}}>
-              {links
-                .filter(l=>!launchCat||l.cat===launchCat)
-                .map((l,i,arr)=>(
-                  <a key={l.id} href={l.url} target="_blank" rel="noopener noreferrer"
-                    style={{display:"flex",alignItems:"center",gap:12,padding:"11px 16px",textDecoration:"none",color:"#1F2937",borderBottom:i<arr.length-1?"1px solid #F9FAFB":"none",background:"#fff",transition:"background 0.1s"}}
-                    onMouseOver={e=>e.currentTarget.style.background="#F9FAFB"}
-                    onMouseOut={e=>e.currentTarget.style.background="#fff"}>
-                    <span style={{fontSize:22,flexShrink:0}}>{l.icon}</span>
-                    <div style={{flex:1}}>
-                      <div style={{fontWeight:700,fontSize:13,color:"#1F2937"}}>{l.label}</div>
-                      <div style={{fontSize:10,color:"#9CA3AF"}}>{l.cat}</div>
-                    </div>
-                    <span style={{fontSize:12,color:"#9CA3AF"}}>↗</span>
-                  </a>
-                ))}
-            </div>
-            <div style={{borderTop:"1px solid #F3F4F6",padding:"10px 16px"}}>
-              <button onClick={()=>{setLaunchOpen(false);nav("links");}}
-                style={{width:"100%",padding:"8px 0",background:"#F0F4F8",border:"none",borderRadius:8,fontSize:12,color:"#1A3A5C",fontWeight:700,cursor:"pointer"}}>
-                ⚙ リンクを管理する
-              </button>
-            </div>
-          </div>
-        )}
-        <button onClick={()=>setLaunchOpen(p=>!p)}
-          style={{
-            position:"fixed",
-            bottom:isPC?24:24,
-            right:16,
-            width:52,height:52,
-            borderRadius:"50%",
-            background:launchOpen?"#E07B39":"#1A3A5C",
-            color:"#fff",border:"none",
-            fontSize:22,
-            boxShadow:"0 4px 16px rgba(0,0,0,0.25)",
-            cursor:"pointer",zIndex:202,
-            display:"flex",alignItems:"center",justifyContent:"center",
-            transition:"background 0.2s"
-          }}>
-          {launchOpen?"✕":"🚀"}
-        </button>
-      </>
-    );
-  };
-
+  // ✅ PCサイドバー
   const PCSidebar=()=>{
     const active=pjs.filter(p=>p.status!=="完了"&&p.status!=="中断");
     return(<div style={{position:"fixed",left:0,top:0,bottom:0,width:SB_W,background:"#1A3A5C",zIndex:100,display:"flex",flexDirection:"column",overflowY:"auto"}}>
@@ -474,6 +423,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
     </div>);
   };
 
+  // ✅ PC右パネル（折りたたみ対応）
   const PCRightPanel=()=>{
     const [qi,setQi]=useState("");
     const [open,setOpen]=useState({kpi:true,tasks:true,ai:true});
@@ -487,6 +437,8 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
         <div style={{fontSize:11,color:"#9CA3AF",background:"#F3F4F6",borderRadius:6,padding:"2px 8px",fontWeight:700,transform:open[id]?"rotate(0deg)":"rotate(-90deg)",transition:"transform 0.2s"}}>▼</div>
       </button>
     );
+
+    // ── 折りたたみ時：細いタブだけ ──
     if(!rpOpen) return(
       <div style={{position:"fixed",right:0,top:0,bottom:0,width:32,background:"#fff",borderLeft:"1px solid #E5E7EB",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center"}}>
         <button onClick={()=>setRpOpen(true)}
@@ -496,14 +448,20 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
         </button>
       </div>
     );
+
+    // ── 展開時 ──
     return(<div style={{position:"fixed",right:0,top:0,bottom:0,width:RP_W,background:"#fff",borderLeft:"1px solid #E5E7EB",overflowY:"auto",zIndex:100}}>
       <div style={{padding:"12px 16px 16px"}}>
+
+        {/* 閉じるボタン */}
         <div style={{display:"flex",justifyContent:"flex-end",marginBottom:6}}>
           <button onClick={()=>setRpOpen(false)}
             style={{background:"#F3F4F6",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,color:"#6B7280",cursor:"pointer",fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
             閉じる ▶
           </button>
         </div>
+
+        {/* ── KPI ── */}
         <SectionHdr id="kpi" label="📊 今日の状況"/>
         {open.kpi&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
           {[{l:"進行中案件",v:`${active.length}件`,c:"#1A3A5C",bg:"#EFF6FF"},{l:"未完了タスク",v:`${pending.length}件`,c:"#EF4444",bg:"#FEF2F2"},{l:"受注合計",v:`¥${(totalAmt/10000).toFixed(0)}万`,c:"#E07B39",bg:"#FFF7ED"},{l:"粗利率",v:totalAmt?`${(totalGp/totalAmt*100).toFixed(1)}%`:"—",c:"#059669",bg:"#F0FDF4"}].map(x=>(
@@ -514,6 +472,8 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
           ))}
         </div>}
         <div style={{height:1,background:"#F3F4F6",margin:"4px 0"}}/>
+
+        {/* ── タスク ── */}
         <SectionHdr id="tasks" label="⏰ 直近タスク"/>
         {open.tasks&&<div style={{background:"#F9FAFB",borderRadius:10,padding:"4px 0",marginBottom:14}}>
           {pending.slice(0,5).map((t,i)=>(
@@ -526,6 +486,8 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
           {pending.length===0&&<div style={{padding:"12px",fontSize:12,color:"#9CA3AF",textAlign:"center"}}>タスクなし 🎉</div>}
         </div>}
         <div style={{height:1,background:"#F3F4F6",margin:"4px 0"}}/>
+
+        {/* ── AI ── */}
         <SectionHdr id="ai" label="🤖 AIに質問"/>
         {open.ai&&<div>
           <div style={{display:"flex",gap:6,marginBottom:4}}>
@@ -534,19 +496,22 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
           </div>
           <div style={{fontSize:10,color:"#9CA3AF"}}>Enterキーで送信・AIページへ</div>
         </div>}
+
       </div>
     </div>);
   };
 
   if(loading) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8"}}><div style={{textAlign:"center"}}><div style={{fontSize:32,marginBottom:12}}>⚡</div><div style={{color:"#1A3A5C",fontWeight:700}}>読み込み中...</div></div></div>;
 
+  // ══════════════════════════════════════════
+  // HOME
+  // ══════════════════════════════════════════
   if(page==="home"){
     const active=pjs.filter(p=>p.status!=="完了"&&p.status!=="中断");
     const tiles=tileConf.filter(t=>t.visible||tileEdit).map(t=>({...t,sub:t.key==="projects"?`${active.length}件進行中`:t.key==="companies"?`${cos.length}社登録`:t.key==="tasks"?`未完了 ${pending.length}件`:t.sub}));
     return(
       <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:cust.bg,minHeight:"100vh",...pp}}>
         {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
-        <FloatLauncher/>
         {!isPC&&<div style={{background:cust.c1,color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:50}}>
           <div style={{background:cust.acc,borderRadius:8,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:16}}>I</div>
           <div style={{flex:1}}><div style={{fontWeight:800,fontSize:16}}>{cust.sys}</div><div style={{fontSize:10,opacity:0.65}}>{cust.name}</div></div>
@@ -564,6 +529,8 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
               {tileEdit?"✅ 完了":"✏️ 並び替え・編集"}
             </button>
           </div>
+
+          {/* ── PC：行リスト表示 ── */}
           {isPC&&!tileEdit&&(
             <div style={{background:"#fff",borderRadius:14,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.07)",marginBottom:20}}>
               {tiles.filter(t=>t.visible).map((t,i,arr)=>(
@@ -582,6 +549,8 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
               ))}
             </div>
           )}
+
+          {/* ── PC：編集モードのリスト ── */}
           {isPC&&tileEdit&&(
             <div style={{background:"#fff",borderRadius:14,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.07)",marginBottom:20}}>
               {tiles.map((t,i)=>(
@@ -599,6 +568,8 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
               ))}
             </div>
           )}
+
+          {/* ── スマホ：カードグリッド（従来通り）── */}
           {!isPC&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>
             {tiles.map((t)=>(
               <div key={t.key}>
@@ -646,40 +617,92 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
     );
   }
 
+  // ══════════════════════════════════════════
+  // PROJECTS
+  // ══════════════════════════════════════════
   if(page==="projects"){
     const tA=filtP.reduce((s,p)=>s+(p.amount||0),0);
     const tG=filtP.reduce((s,p)=>s+(p.gp||0),0);
     return(
       <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
         {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
-        <FloatLauncher/>
         <Hdr title={selP?selP.name:"📋 案件管理"} back={selP?()=>setSelP(null):()=>nav("home")}
           right={<div style={{display:"flex",gap:6}}>{!selP&&<button onClick={()=>setModal("addP")} style={{background:"#E07B39",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:800}}>＋ 新規</button>}</div>}/>
         {selP?(
           <div style={{padding:isPC?"14px 0":14}}>
-            <div style={{background:"#fff",borderRadius:14,padding:18,boxShadow:"0 2px 10px rgba(0,0,0,0.08)"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
-                <div style={{fontWeight:800,fontSize:17,flex:1,marginRight:8,color:"#1F2937"}}>{selP.name}</div>
-                <Badge s={selP.status}/>
+            {editP?(
+              /* ── 編集モード ── */
+              <div style={{background:"#fff",borderRadius:14,padding:18,boxShadow:"0 2px 10px rgba(0,0,0,0.08)"}}>
+                <div style={{fontWeight:800,fontSize:15,color:"#1A3A5C",marginBottom:14}}>✏️ 案件を編集</div>
+                <Inp label="案件名 *" value={editP.name} onChange={e=>setEditP({...editP,name:e.target.value})}/>
+                <Sel label="ステータス" opts={STATUSES} value={editP.status} onChange={e=>setEditP({...editP,status:e.target.value})}/>
+                <div style={{marginBottom:10}}>
+                  <div style={{fontSize:11,color:"#6B7280",marginBottom:3}}>取引先</div>
+                  <select value={editP.clientId||""} onChange={e=>setEditP({...editP,clientId:e.target.value})} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",fontSize:13,background:"#FAFAFA",boxSizing:"border-box",color:"#1F2937"}}>
+                    <option value="">未設定</option>
+                    {cos.filter(c=>c.type==="取引先").map(c=><option key={c.id} value={c.id}>{c.name}{c.branch?" "+c.branch:""}</option>)}
+                  </select>
+                </div>
+                <div style={{marginBottom:10}}>
+                  <div style={{fontSize:11,color:"#6B7280",marginBottom:3}}>協力業者（複数選択可）</div>
+                  <div style={{background:"#F9FAFB",borderRadius:8,border:"1.5px solid #E5E7EB",padding:"6px 8px",maxHeight:160,overflowY:"auto"}}>
+                    {cos.filter(c=>c.type==="協力業者").map(c=>{
+                      const sel=(editP.subIds||[]).includes(c.id);
+                      return(<label key={c.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 6px",cursor:"pointer",borderRadius:6,background:sel?"#EFF6FF":"transparent"}}>
+                        <input type="checkbox" checked={sel} onChange={()=>setEditP({...editP,subIds:sel?(editP.subIds||[]).filter(id=>id!==c.id):[...(editP.subIds||[]),c.id]})} style={{width:16,height:16,accentColor:"#1A3A5C",cursor:"pointer"}}/>
+                        <span style={{fontSize:13,color:"#1F2937",fontWeight:sel?700:400}}>{c.name}{c.branch?" "+c.branch:""}</span>
+                      </label>);
+                    })}
+                    {cos.filter(c=>c.type==="協力業者").length===0&&<div style={{fontSize:12,color:"#9CA3AF",padding:"4px 6px"}}>協力業者が登録されていません</div>}
+                  </div>
+                </div>
+                <Inp label="社内担当" value={editP.inCharge||""} onChange={e=>setEditP({...editP,inCharge:e.target.value})}/>
+                <Inp label="営業担当" value={editP.salesRep||""} onChange={e=>setEditP({...editP,salesRep:e.target.value})}/>
+                <Inp label="受注金額" type="number" value={editP.amount||""} onChange={e=>setEditP({...editP,amount:e.target.value})}/>
+                <Inp label="粗利" type="number" value={editP.gp||""} onChange={e=>setEditP({...editP,gp:e.target.value})}/>
+                <Inp label="見積提出日" type="date" value={editP.qDate||""} onChange={e=>setEditP({...editP,qDate:e.target.value})}/>
+                <div style={{marginBottom:14}}>
+                  <div style={{fontSize:11,color:"#6B7280",marginBottom:3}}>備考</div>
+                  <textarea value={editP.memo||""} onChange={e=>setEditP({...editP,memo:e.target.value})} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",fontSize:13,resize:"vertical",minHeight:60,boxSizing:"border-box",background:"#FAFAFA",color:"#1F2937"}}/>
+                </div>
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={()=>setEditP(null)} style={{flex:1,padding:"12px 0",background:"#F3F4F6",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer",color:"#374151"}}>キャンセル</button>
+                  <button onClick={updatePj} style={{flex:2,padding:"12px 0",background:"#1A3A5C",color:"#fff",border:"none",borderRadius:10,fontWeight:800,fontSize:14,cursor:"pointer"}}>💾 保存する</button>
+                </div>
               </div>
-              <div style={{display:"flex",gap:8,marginBottom:14}}>
-                <button onClick={()=>setConf({msg:`「${selP.name}」を削除しますか？`,onOk:()=>{delPj(selP.id);setConf(null);}})} style={{flex:1,padding:"8px 0",background:"#FEF2F2",color:"#DC2626",border:"1.5px solid #FECACA",borderRadius:8,fontWeight:700,fontSize:13,cursor:"pointer"}}>🗑 削除</button>
+            ):(
+              /* ── 閲覧モード ── */
+              <div style={{background:"#fff",borderRadius:14,padding:18,boxShadow:"0 2px 10px rgba(0,0,0,0.08)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+                  <div style={{fontWeight:800,fontSize:17,flex:1,marginRight:8,color:"#1F2937"}}>{selP.name}</div>
+                  <Badge s={selP.status}/>
+                </div>
+                <div style={{display:"flex",gap:8,marginBottom:14}}>
+                  <button onClick={()=>setEditP({...selP})} style={{flex:2,padding:"8px 0",background:"#EFF6FF",color:"#1A3A5C",border:"1.5px solid #BFDBFE",borderRadius:8,fontWeight:700,fontSize:13,cursor:"pointer"}}>✏️ 編集</button>
+                  <button onClick={()=>setConf({msg:`「${selP.name}」を削除しますか？`,onOk:()=>{delPj(selP.id);setConf(null);}})} style={{flex:1,padding:"8px 0",background:"#FEF2F2",color:"#DC2626",border:"1.5px solid #FECACA",borderRadius:8,fontWeight:700,fontSize:13,cursor:"pointer"}}>🗑 削除</button>
+                </div>
+                <div style={{display:"flex",gap:8,marginBottom:14}}>
+                  <div style={{flex:1,background:"#FFF7ED",borderRadius:10,padding:"10px 12px"}}><div style={{fontSize:10,color:"#9CA3AF"}}>受注金額</div><div style={{fontSize:16,fontWeight:800,color:"#E07B39"}}>{fmt(selP.amount)}</div></div>
+                  <div style={{flex:1,background:"#F0FDF4",borderRadius:10,padding:"10px 12px"}}><div style={{fontSize:10,color:"#9CA3AF"}}>粗利 / 粗利率</div><div style={{fontSize:14,fontWeight:800,color:"#059669"}}>{fmt(selP.gp)}</div><div style={{fontSize:11,color:"#059669"}}>{pct(selP.gp,selP.amount)}</div></div>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4,marginBottom:12}}>
+                  {[["ステータス",selP.status],["社内担当",selP.inCharge],["営業担当",selP.salesRep],["見積提出日",selP.qDate]].map(([l,v])=>(
+                    <div key={l} style={{marginBottom:8}}><div style={{fontSize:10,color:"#9CA3AF",marginBottom:2}}>{l}</div><div style={{fontSize:13,fontWeight:600,color:"#1F2937"}}>{v||"—"}</div></div>
+                  ))}
+                </div>
+                {selP.memo&&<div style={{background:"#F9FAFB",borderRadius:8,padding:"8px 12px",fontSize:13,color:"#374151",marginBottom:12}}>📝 {selP.memo}</div>}
+                <div style={{borderTop:"1px solid #F3F4F6",paddingTop:14,marginBottom:12}}>
+                  <div style={{fontWeight:700,fontSize:13,color:"#1A3A5C",marginBottom:8}}>🏢 取引先</div>
+                  {getC(selP.clientId)?(<div style={{background:"#F0F4F8",borderRadius:10,padding:"10px 12px"}}><div style={{fontWeight:700,color:"#1F2937"}}>{getC(selP.clientId).name}{getC(selP.clientId).branch?` ${getC(selP.clientId).branch}`:""}</div></div>):<div style={{color:"#9CA3AF",fontSize:13}}>未設定</div>}
+                </div>
+                {(selP.subIds||[]).length>0&&(
+                  <div style={{borderTop:"1px solid #F3F4F6",paddingTop:14}}>
+                    <div style={{fontWeight:700,fontSize:13,color:"#1A3A5C",marginBottom:8}}>🔧 協力業者</div>
+                    {(selP.subIds||[]).map(id=>{const c=getC(id);return c?(<div key={id} style={{background:"#F0F4F8",borderRadius:10,padding:"10px 12px",marginBottom:6}}><div style={{fontWeight:700,fontSize:13,color:"#1F2937"}}>{c.name}{c.branch?` ${c.branch}`:""}</div><div style={{fontSize:11,color:"#6B7280",marginTop:2}}>{c.type}</div></div>):null;})}
+                  </div>
+                )}
               </div>
-              <div style={{display:"flex",gap:8,marginBottom:14}}>
-                <div style={{flex:1,background:"#FFF7ED",borderRadius:10,padding:"10px 12px"}}><div style={{fontSize:10,color:"#9CA3AF"}}>受注金額</div><div style={{fontSize:16,fontWeight:800,color:"#E07B39"}}>{fmt(selP.amount)}</div></div>
-                <div style={{flex:1,background:"#F0FDF4",borderRadius:10,padding:"10px 12px"}}><div style={{fontSize:10,color:"#9CA3AF"}}>粗利 / 粗利率</div><div style={{fontSize:14,fontWeight:800,color:"#059669"}}>{fmt(selP.gp)}</div><div style={{fontSize:11,color:"#059669"}}>{pct(selP.gp,selP.amount)}</div></div>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4,marginBottom:8}}>
-                {[["社内担当",selP.inCharge],["営業担当",selP.salesRep],["見積提出日",selP.qDate]].map(([l,v])=>(
-                  <div key={l} style={{marginBottom:8}}><div style={{fontSize:10,color:"#9CA3AF",marginBottom:2}}>{l}</div><div style={{fontSize:14,fontWeight:600,color:"#1F2937"}}>{v||"—"}</div></div>
-                ))}
-              </div>
-              {selP.memo&&<div style={{background:"#F9FAFB",borderRadius:8,padding:"8px 12px",fontSize:13,color:"#374151",marginBottom:12}}>📝 {selP.memo}</div>}
-              <div style={{borderTop:"1px solid #F3F4F6",paddingTop:14}}>
-                <div style={{fontWeight:700,fontSize:13,color:"#1A3A5C",marginBottom:8}}>🏢 取引先</div>
-                {getC(selP.clientId)?(<div style={{background:"#F0F4F8",borderRadius:10,padding:"10px 12px"}}><div style={{fontWeight:700,color:"#1F2937"}}>{getC(selP.clientId).name}{getC(selP.clientId).branch?` ${getC(selP.clientId).branch}`:""}</div></div>):<div style={{color:"#9CA3AF",fontSize:13}}>未設定</div>}
-              </div>
-            </div>
+            )}
           </div>
         ):(
           <div style={{padding:isPC?"14px 0":14}}>
@@ -707,17 +730,19 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
             </div>
           </div>
         )}
-        {modal==="addP"&&(<Modal title="新規案件を追加" onClose={()=>setModal(null)} onSave={savePj}><Inp label="案件名 *" value={nP.name} onChange={e=>setNP({...nP,name:e.target.value})} placeholder="例: ○○マンション改修工事"/><Sel label="ステータス" opts={STATUSES} value={nP.status} onChange={e=>setNP({...nP,status:e.target.value})}/><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6B7280",marginBottom:3}}>取引先</div><select value={nP.clientId} onChange={e=>setNP({...nP,clientId:e.target.value})} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",fontSize:13,background:"#FAFAFA",boxSizing:"border-box",color:"#1F2937"}}><option value="">選択してください</option>{cos.map(c=><option key={c.id} value={c.id}>{c.name}{c.branch?" "+c.branch:""}</option>)}</select></div><Inp label="社内担当" value={nP.inCharge} onChange={e=>setNP({...nP,inCharge:e.target.value})}/><Inp label="営業担当" value={nP.salesRep} onChange={e=>setNP({...nP,salesRep:e.target.value})}/><Inp label="受注金額" type="number" value={nP.amount} onChange={e=>setNP({...nP,amount:e.target.value})}/><Inp label="粗利" type="number" value={nP.gp} onChange={e=>setNP({...nP,gp:e.target.value})}/><Inp label="見積提出日" type="date" value={nP.qDate} onChange={e=>setNP({...nP,qDate:e.target.value})}/><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6B7280",marginBottom:3}}>備考</div><textarea value={nP.memo} onChange={e=>setNP({...nP,memo:e.target.value})} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",fontSize:13,resize:"vertical",minHeight:60,boxSizing:"border-box",background:"#FAFAFA",color:"#1F2937"}}/></div></Modal>)}
+        {modal==="addP"&&(<Modal title="新規案件を追加" onClose={()=>setModal(null)} onSave={savePj}><Inp label="案件名 *" value={nP.name} onChange={e=>setNP({...nP,name:e.target.value})} placeholder="例: ○○マンション改修工事"/><Sel label="ステータス" opts={STATUSES} value={nP.status} onChange={e=>setNP({...nP,status:e.target.value})}/><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6B7280",marginBottom:3}}>取引先</div><select value={nP.clientId} onChange={e=>setNP({...nP,clientId:e.target.value})} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",fontSize:13,background:"#FAFAFA",boxSizing:"border-box",color:"#1F2937"}}><option value="">選択してください</option>{cos.filter(c=>c.type==="取引先").map(c=><option key={c.id} value={c.id}>{c.name}{c.branch?" "+c.branch:""}</option>)}</select></div><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6B7280",marginBottom:3}}>協力業者（複数選択可）</div><div style={{background:"#F9FAFB",borderRadius:8,border:"1.5px solid #E5E7EB",padding:"6px 8px",maxHeight:140,overflowY:"auto"}}>{cos.filter(c=>c.type==="協力業者").map(c=>{const sel=(nP.subIds||[]).includes(c.id);return(<label key={c.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 6px",cursor:"pointer",borderRadius:6,background:sel?"#EFF6FF":"transparent"}}><input type="checkbox" checked={sel} onChange={()=>setNP({...nP,subIds:sel?(nP.subIds||[]).filter(id=>id!==c.id):[...(nP.subIds||[]),c.id]})} style={{width:16,height:16,accentColor:"#1A3A5C",cursor:"pointer"}}/><span style={{fontSize:13,color:"#1F2937",fontWeight:sel?700:400}}>{c.name}{c.branch?" "+c.branch:""}</span></label>);})} {cos.filter(c=>c.type==="協力業者").length===0&&<div style={{fontSize:12,color:"#9CA3AF",padding:"4px 6px"}}>協力業者が未登録です</div>}</div></div><Inp label="社内担当" value={nP.inCharge} onChange={e=>setNP({...nP,inCharge:e.target.value})}/><Inp label="営業担当" value={nP.salesRep} onChange={e=>setNP({...nP,salesRep:e.target.value})}/><Inp label="受注金額" type="number" value={nP.amount} onChange={e=>setNP({...nP,amount:e.target.value})}/><Inp label="粗利" type="number" value={nP.gp} onChange={e=>setNP({...nP,gp:e.target.value})}/><Inp label="見積提出日" type="date" value={nP.qDate} onChange={e=>setNP({...nP,qDate:e.target.value})}/><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6B7280",marginBottom:3}}>備考</div><textarea value={nP.memo} onChange={e=>setNP({...nP,memo:e.target.value})} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",fontSize:13,resize:"vertical",minHeight:60,boxSizing:"border-box",background:"#FAFAFA",color:"#1F2937"}}/></div></Modal>)}
         {conf&&<Confirm msg={conf.msg} onCancel={()=>setConf(null)} onOk={conf.onOk}/>}
       </div>
     );
   }
 
+  // ══════════════════════════════════════════
+  // COMPANIES
+  // ══════════════════════════════════════════
   if(page==="companies"){
     return(
       <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
         {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
-        <FloatLauncher/>
         <Hdr title={selCt?selCt.name:selC?selC.name:"🏢 取引先・協力業者"} back={selCt?()=>setSelCt(null):selC?()=>setSelC(null):()=>nav("home")}
           right={<div style={{display:"flex",gap:6}}>{!selC&&!selCt&&<button onClick={()=>setModal("addCo")} style={{background:"#E07B39",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:800}}>＋ 新規</button>}</div>}/>
         {selCt?(
@@ -792,12 +817,14 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
     );
   }
 
+  // ══════════════════════════════════════════
+  // TASKS
+  // ══════════════════════════════════════════
   if(page==="tasks"){
     const done=tks.filter(t=>t.done);
     return(
       <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
         {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
-        <FloatLauncher/>
         <Hdr title="✅ タスク" back={()=>nav("home")} right={<button onClick={()=>setModal("addT")} style={{background:"#E07B39",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:800}}>＋ 新規</button>}/>
         <div style={{padding:isPC?"14px 0":14}}>
           <div style={{fontSize:11,fontWeight:700,color:"#9CA3AF",marginBottom:8}}>未完了 ({pending.length})</div>
@@ -820,12 +847,14 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
     );
   }
 
+  // ══════════════════════════════════════════
+  // LINKS（Supabase保存版）
+  // ══════════════════════════════════════════
   if(page==="links"){
     const cats=[...new Set(links.map(l=>l.cat))];
     return(
       <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
         {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
-        <FloatLauncher/>
         <Hdr title="🔗 リンク集" back={()=>nav("home")} right={<button onClick={()=>setModal("addL")} style={{background:"#E07B39",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:800}}>＋ 新規</button>}/>
         <div style={{padding:isPC?"14px 0":14}}>
           {cats.map(cat=>{const cl=links.filter(l=>l.cat===cat);return(<div key={cat} style={{marginBottom:20}}>
@@ -851,10 +880,15 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
     );
   }
 
+  // ══════════════════════════════════════════
+  // FINANCE
+  // ══════════════════════════════════════════
   if(page==="finance"){
     const now=new Date(),cy=now.getFullYear(),cm=now.getMonth()+1;
     const allItems=[...DEFAULT_FINANCE_ITEMS,...finFolders.map(f=>({id:f.id,label:f.label,icon:f.icon,isCustom:true}))];
+
     const PwUI=()=>{if(!pwMod)return null;const isSC=pwMod.mode==="set"||pwMod.mode==="change";return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:500,display:"flex",alignItems:"flex-end"}}><div style={{background:"#fff",borderRadius:"20px 20px 0 0",padding:24,width:"100%",boxSizing:"border-box"}}><div style={{fontWeight:800,fontSize:16,marginBottom:6,color:"#1F2937"}}>{isSC?"🔐 設定":"🔒 入力"}</div><input type="password" value={pwIn} onChange={e=>{setPwIn(e.target.value);setPwErr("");}} placeholder="パスワード" style={{width:"100%",padding:"12px 14px",borderRadius:10,border:pwErr?"2px solid #DC2626":"1.5px solid #E5E7EB",fontSize:16,boxSizing:"border-box",marginBottom:4,color:"#1F2937"}}/>{pwErr&&<div style={{color:"#DC2626",fontSize:12,marginBottom:8}}>{pwErr}</div>}<div style={{display:"flex",gap:10,marginTop:12}}><button onClick={()=>{setPwMod(null);setPwIn("");setPwErr("");}} style={{flex:1,padding:12,background:"#F3F4F6",border:"none",borderRadius:10,fontWeight:700,cursor:"pointer"}}>キャンセル</button><button onClick={()=>{if(!pwIn){setPwErr("入力してください");return;}if(isSC){setPws(p=>({...p,[pwMod.id]:pwIn}));setPwMod(null);setPwIn("");setPwErr("");}else{if(pwIn===pws[pwMod.id]){setUnl(p=>({...p,[pwMod.id]:true}));setFinItem(allItems.find(f=>f.id===pwMod.id));setPwMod(null);setPwIn("");setPwErr("");}else setPwErr("パスワードが違います");}}} style={{flex:1,padding:12,background:"#1A3A5C",color:"#fff",border:"none",borderRadius:10,fontWeight:800,cursor:"pointer"}}>{isSC?"設定する":"開く"}</button></div></div></div>);};
+
     const isPDF=f=>f.type==="application/pdf"||f.name?.toLowerCase().endsWith(".pdf");
     const isImg=f=>f.type?.startsWith("image/");
     const isExcel=f=>f.name?.match(/\.(xlsx|xls)$/i);
@@ -864,7 +898,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
     if(finPrev)return(
       <div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#1A1A2E",minHeight:"100vh",display:"flex",flexDirection:"column",...pp}}>
         {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
-        <FloatLauncher/>
+        {/* ヘッダー */}
         <div style={{background:"#1A3A5C",color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
           <button onClick={()=>setFinPrev(null)} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>←</button>
           <div style={{flex:1,fontWeight:700,fontSize:14,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{finPrev.name}</div>
@@ -873,10 +907,28 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
             <button onClick={()=>setConf({msg:`「${finPrev.name}」を削除しますか？`,onOk:()=>{deleteFinFile(finPrev.id);setConf(null);}})} style={{background:"rgba(220,38,38,0.8)",color:"#fff",borderRadius:8,padding:"5px 10px",fontSize:12,fontWeight:700,border:"none",cursor:"pointer"}}>🗑</button>
           </div>
         </div>
+        {/* プレビュー本体 */}
         <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-          {finPrev.url?(isImg(finPrev)?<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}><img src={finPrev.url} style={{maxWidth:"100%",maxHeight:"100%",borderRadius:8,objectFit:"contain"}} alt={finPrev.name}/></div>:isPDF(finPrev)?<iframe src={finPrev.url} style={{flex:1,width:"100%",border:"none",background:"#fff"}} title={finPrev.name}/>:<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{color:"#fff",textAlign:"center",padding:32}}><div style={{fontSize:72,marginBottom:16}}>{fileIcon(finPrev)}</div><div style={{fontSize:15,fontWeight:700,marginBottom:6}}>{finPrev.name}</div><div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:24}}>{finPrev.size?`${(finPrev.size/1024).toFixed(0)}KB`:""}</div><a href={finPrev.url} download={finPrev.name} target="_blank" rel="noopener noreferrer" style={{display:"inline-block",background:"#E07B39",color:"#fff",padding:"14px 32px",borderRadius:12,fontWeight:800,fontSize:15,textDecoration:"none",marginBottom:12}}>⬇ ダウンロード</a><div style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>ブラウザでは直接プレビューできないファイル形式です</div></div></div>):<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}><div style={{textAlign:"center"}}><div style={{fontSize:48,marginBottom:12}}>⏳</div><div>読み込み中...</div></div></div>}
+          {(finPrev.url||finPrev.data)?(
+            isImg(finPrev)
+              ?<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+                <img src={finPrev.url||finPrev.data} style={{maxWidth:"100%",maxHeight:"100%",borderRadius:8,objectFit:"contain"}} alt={finPrev.name}/>
+              </div>
+            :isPDF(finPrev)
+              ?finPrev.url
+                ?<iframe src={finPrev.url} style={{flex:1,width:"100%",border:"none",background:"#fff"}} title={finPrev.name}/>
+                :<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{color:"#fff",textAlign:"center",padding:32}}><div style={{fontSize:72,marginBottom:16}}>📕</div><div style={{fontSize:15,fontWeight:700,marginBottom:6}}>{finPrev.name}</div><div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:24}}>古い形式のPDFです</div><button onClick={()=>{const b64=finPrev.data.split(",")[1];const bin=atob(b64);const arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);const blob=new Blob([arr],{type:"application/pdf"});window.open(URL.createObjectURL(blob),"_blank");}} style={{width:"100%",padding:"16px 0",background:"#E07B39",color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:16,cursor:"pointer"}}>📄 PDFを開く</button></div></div>
+            :<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <div style={{color:"#fff",textAlign:"center",padding:32}}>
+                <div style={{fontSize:72,marginBottom:16}}>{fileIcon(finPrev)}</div>
+                <div style={{fontSize:15,fontWeight:700,marginBottom:6}}>{finPrev.name}</div>
+                <div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:24}}>{finPrev.size?`${(finPrev.size/1024).toFixed(0)}KB`:""}</div>
+                <a href={finPrev.url} download={finPrev.name} target="_blank" rel="noopener noreferrer" style={{display:"inline-block",background:"#E07B39",color:"#fff",padding:"14px 32px",borderRadius:12,fontWeight:800,fontSize:15,textDecoration:"none",marginBottom:12}}>⬇ ダウンロード</a>
+                <div style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>ブラウザでは直接プレビューできないファイル形式です</div>
+              </div>
+            </div>
+          ):<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}><div style={{textAlign:"center"}}><div style={{fontSize:48,marginBottom:12}}>⏳</div><div>読み込み中...</div></div></div>}
         </div>
-        {conf&&<Confirm msg={conf.msg} onCancel={()=>setConf(null)} onOk={conf.onOk}/>}
       </div>
     );
 
@@ -885,7 +937,6 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
       return(
         <div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
           {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
-          <FloatLauncher/>
           <div style={{background:"#1A3A5C",color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:50}}>
             <button onClick={()=>setFinM(null)} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>←</button>
             <div style={{flex:1}}><div style={{fontWeight:800,fontSize:15}}>{finItem.icon} {finItem.label}</div><div style={{fontSize:11,opacity:0.7}}>{finY}年{finM}月</div></div>
@@ -896,7 +947,20 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
           </div>
           <div style={{padding:isPC?"14px 0":14}}>
             {monthFiles.length===0?<div style={{textAlign:"center",padding:40,color:"#9CA3AF"}}><div style={{fontSize:48,marginBottom:12}}>📂</div><div style={{fontSize:14}}>ファイルがありません</div><div style={{fontSize:12,marginTop:4,color:"#9CA3AF"}}>右上の「＋ 追加」からアップロード</div></div>
-              :monthFiles.map(f=>(<div key={f.id} style={{background:"#fff",borderRadius:12,padding:"12px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:12,boxShadow:"0 1px 4px rgba(0,0,0,0.06)",cursor:"pointer"}} onClick={()=>setFinPrev(f)}><span style={{fontSize:28}}>{fileIcon(f)}</span><div style={{flex:1,overflow:"hidden"}}><div style={{fontWeight:600,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#1F2937"}}>{f.name}</div><div style={{fontSize:11,color:"#9CA3AF"}}>{f.size?`${(f.size/1024).toFixed(0)}KB`:""}</div></div><span style={{color:"#9CA3AF",fontSize:14}}>›</span></div>))}
+              :monthFiles.map(f=>(
+                <div key={f.id} style={{background:"#fff",borderRadius:12,padding:"12px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:12,boxShadow:"0 1px 4px rgba(0,0,0,0.06)",cursor:"pointer"}}
+                  onClick={async()=>{
+                    if(f.url){setFinPrev(f);}
+                    else{const {data}=await supabase.from("finance_files").select("*").eq("id",f.id).single();if(data)setFinPrev(data);}
+                  }}>
+                  <span style={{fontSize:28}}>{fileIcon(f)}</span>
+                  <div style={{flex:1,overflow:"hidden"}}>
+                    <div style={{fontWeight:600,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#1F2937"}}>{f.name}</div>
+                    <div style={{fontSize:11,color:"#9CA3AF"}}>{f.size?`${(f.size/1024).toFixed(0)}KB`:""}</div>
+                  </div>
+                  <span style={{color:"#9CA3AF",fontSize:14}}>›</span>
+                </div>
+              ))}
           </div>
         </div>
       );
@@ -905,7 +969,6 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
     if(finY)return(
       <div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
         {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
-        <FloatLauncher/>
         <div style={{background:"#1A3A5C",color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:50}}>
           <button onClick={()=>setFinY(null)} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>←</button>
           <div style={{flex:1}}><div style={{fontWeight:800,fontSize:15}}>{finItem.icon} {finItem.label}</div><div style={{fontSize:11,opacity:0.7}}>{finY}年</div></div>
@@ -914,7 +977,11 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
           {(ym[finY]||[]).slice().reverse().map(m=>{
             const cnt=finFiles.filter(f=>f.item_id===finItem.id&&Number(f.year)===Number(finY)&&Number(f.month)===m).length;
             const isN=Number(finY)===cy&&m===cm;
-            return(<div key={m} onClick={()=>setFinM(m)} style={{background:"#fff",borderRadius:12,padding:"14px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:12,boxShadow:"0 1px 4px rgba(0,0,0,0.06)",cursor:"pointer",borderLeft:isN?"4px solid #E07B39":"4px solid transparent"}}><span style={{fontSize:24}}>📅</span><div style={{flex:1}}><div style={{fontWeight:700,fontSize:14,display:"flex",alignItems:"center",gap:6,color:"#1F2937"}}>{m}月{isN&&<span style={{fontSize:10,background:"#E07B39",color:"#fff",borderRadius:4,padding:"1px 6px",fontWeight:700}}>今月</span>}</div><div style={{fontSize:11,color:"#9CA3AF"}}>{cnt}件</div></div><span style={{color:"#9CA3AF"}}>›</span></div>);
+            return(<div key={m} onClick={()=>setFinM(m)} style={{background:"#fff",borderRadius:12,padding:"14px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:12,boxShadow:"0 1px 4px rgba(0,0,0,0.06)",cursor:"pointer",borderLeft:isN?"4px solid #E07B39":"4px solid transparent"}}>
+              <span style={{fontSize:24}}>📅</span>
+              <div style={{flex:1}}><div style={{fontWeight:700,fontSize:14,display:"flex",alignItems:"center",gap:6,color:"#1F2937"}}>{m}月{isN&&<span style={{fontSize:10,background:"#E07B39",color:"#fff",borderRadius:4,padding:"1px 6px",fontWeight:700}}>今月</span>}</div><div style={{fontSize:11,color:"#9CA3AF"}}>{cnt}件</div></div>
+              <span style={{color:"#9CA3AF"}}>›</span>
+            </div>);
           })}
         </div>
       </div>
@@ -923,7 +990,6 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
     if(finItem)return(
       <div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
         {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
-        <FloatLauncher/>
         <div style={{background:"#1A3A5C",color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:50}}>
           <button onClick={()=>setFinItem(null)} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>←</button>
           <div style={{flex:1,fontWeight:800,fontSize:15}}>{finItem.icon} {finItem.label}</div>
@@ -932,7 +998,11 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
           {Object.keys(ym).sort((a,b)=>b-a).map(y=>{
             const tot=Object.values(ym[y]||[]).reduce((s,m)=>s+finFiles.filter(f=>f.item_id===finItem.id&&Number(f.year)===Number(y)&&Number(f.month)===m).length,0);
             const isN=Number(y)===cy;
-            return(<div key={y} onClick={()=>setFinY(y)} style={{background:"#fff",borderRadius:12,padding:"14px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:12,boxShadow:"0 1px 4px rgba(0,0,0,0.06)",cursor:"pointer",borderLeft:isN?"4px solid #1A3A5C":"4px solid transparent"}}><span style={{fontSize:26}}>📁</span><div style={{flex:1}}><div style={{fontWeight:700,fontSize:15,display:"flex",alignItems:"center",gap:6,color:"#1F2937"}}>{y}年{isN&&<span style={{fontSize:10,background:"#1A3A5C",color:"#fff",borderRadius:4,padding:"1px 6px",fontWeight:700}}>今年</span>}</div><div style={{fontSize:11,color:"#9CA3AF"}}>{tot}件</div></div><span style={{color:"#9CA3AF"}}>›</span></div>);
+            return(<div key={y} onClick={()=>setFinY(y)} style={{background:"#fff",borderRadius:12,padding:"14px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:12,boxShadow:"0 1px 4px rgba(0,0,0,0.06)",cursor:"pointer",borderLeft:isN?"4px solid #1A3A5C":"4px solid transparent"}}>
+              <span style={{fontSize:26}}>📁</span>
+              <div style={{flex:1}}><div style={{fontWeight:700,fontSize:15,display:"flex",alignItems:"center",gap:6,color:"#1F2937"}}>{y}年{isN&&<span style={{fontSize:10,background:"#1A3A5C",color:"#fff",borderRadius:4,padding:"1px 6px",fontWeight:700}}>今年</span>}</div><div style={{fontSize:11,color:"#9CA3AF"}}>{tot}件</div></div>
+              <span style={{color:"#9CA3AF"}}>›</span>
+            </div>);
           })}
         </div>
         <PwUI/>
@@ -942,7 +1012,6 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
     return(
       <div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
         {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
-        <FloatLauncher/>
         <div style={{background:"#1A3A5C",color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:50}}>
           <button onClick={()=>nav("home")} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:8,padding:"4px 10px",fontSize:13,cursor:"pointer",fontWeight:700}}>←</button>
           <div style={{flex:1,fontWeight:800,fontSize:16}}>🗃 財務・書類管理</div>
@@ -979,15 +1048,15 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
     );
   }
 
+  // ══════════════════════════════════════════
+  // TEMPLATES（Supabase保存版）
+  // ══════════════════════════════════════════
   if(page==="templates"){
     const fi=f=>f.type?.startsWith("image/")?"🖼":f.name?.endsWith(".pdf")?"📕":f.name?.endsWith(".xlsx")||f.name?.endsWith(".xls")?"📗":f.name?.endsWith(".docx")||f.name?.endsWith(".doc")?"📘":"📄";
-    const isPDF=f=>f.type==="application/pdf"||f.name?.toLowerCase().endsWith(".pdf");
-    const isImg=f=>f.type?.startsWith("image/");
 
     if(tmplPrev)return(
       <div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#1A1A2E",minHeight:"100vh",display:"flex",flexDirection:"column",...pp}}>
         {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
-        <FloatLauncher/>
         <div style={{background:"#1A3A5C",color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
           <button onClick={()=>setTmplPrev(null)} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>←</button>
           <div style={{flex:1,fontWeight:700,fontSize:14}}>{tmplPrev.name}</div>
@@ -997,9 +1066,23 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
           </div>
         </div>
         <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-          {tmplPrev.url?(isImg(tmplPrev)?<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}><img src={tmplPrev.url} style={{maxWidth:"100%",maxHeight:"100%",borderRadius:8,objectFit:"contain"}} alt={tmplPrev.name}/></div>:isPDF(tmplPrev)?<iframe src={tmplPrev.url} style={{flex:1,width:"100%",border:"none",background:"#fff"}} title={tmplPrev.name}/>:<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{color:"#fff",textAlign:"center",padding:32}}><div style={{fontSize:72,marginBottom:16}}>{fi(tmplPrev)}</div><div style={{fontSize:15,fontWeight:700,marginBottom:6}}>{tmplPrev.name}</div><div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:24}}>{tmplPrev.size?`${(tmplPrev.size/1024).toFixed(0)}KB`:""}</div><a href={tmplPrev.url} download={tmplPrev.name} target="_blank" rel="noopener noreferrer" style={{display:"inline-block",background:"#E07B39",color:"#fff",padding:"14px 32px",borderRadius:12,fontWeight:800,fontSize:15,textDecoration:"none"}}>⬇ ダウンロード</a></div></div>):<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}><div style={{textAlign:"center"}}><div style={{fontSize:48,marginBottom:12}}>⏳</div><div>読み込み中...</div></div></div>}
+          {tmplPrev.url?(
+            isImg(tmplPrev)
+              ?<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+                <img src={tmplPrev.url} style={{maxWidth:"100%",maxHeight:"100%",borderRadius:8,objectFit:"contain"}} alt={tmplPrev.name}/>
+              </div>
+            :isPDF(tmplPrev)
+              ?<iframe src={tmplPrev.url} style={{flex:1,width:"100%",border:"none",background:"#fff"}} title={tmplPrev.name}/>
+            :<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <div style={{color:"#fff",textAlign:"center",padding:32}}>
+                <div style={{fontSize:72,marginBottom:16}}>{fi(tmplPrev)}</div>
+                <div style={{fontSize:15,fontWeight:700,marginBottom:6}}>{tmplPrev.name}</div>
+                <div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:24}}>{tmplPrev.size?`${(tmplPrev.size/1024).toFixed(0)}KB`:""}</div>
+                <a href={tmplPrev.url} download={tmplPrev.name} target="_blank" rel="noopener noreferrer" style={{display:"inline-block",background:"#E07B39",color:"#fff",padding:"14px 32px",borderRadius:12,fontWeight:800,fontSize:15,textDecoration:"none"}}>⬇ ダウンロード</a>
+              </div>
+            </div>
+          ):<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}><div style={{textAlign:"center"}}><div style={{fontSize:48,marginBottom:12}}>⏳</div><div>読み込み中...</div></div></div>}
         </div>
-        {conf&&<Confirm msg={conf.msg} onCancel={()=>setConf(null)} onOk={conf.onOk}/>}
       </div>
     );
 
@@ -1008,7 +1091,6 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
       return(
         <div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
           {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
-          <FloatLauncher/>
           <div style={{background:"#1A3A5C",color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:50}}>
             <button onClick={()=>setTmplCat(null)} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>←</button>
             <div style={{flex:1}}><div style={{fontWeight:800,fontSize:15}}>{tmplCat.icon} {tmplCat.label}</div><div style={{fontSize:11,opacity:0.7}}>{files.length}件</div></div>
@@ -1019,7 +1101,16 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
           </div>
           <div style={{padding:isPC?"14px 0":14}}>
             {files.length===0?<div style={{textAlign:"center",padding:40,color:"#9CA3AF"}}><div style={{fontSize:48,marginBottom:12}}>📂</div><div style={{fontSize:14}}>ファイルがありません</div></div>
-              :files.map(f=>(<div key={f.id} style={{background:"#fff",borderRadius:12,padding:"12px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:12,boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}><span style={{fontSize:28,flexShrink:0}}>{fi(f)}</span><div style={{flex:1,overflow:"hidden",cursor:"pointer"}} onClick={()=>setTmplPrev(f)}><div style={{fontWeight:600,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#1F2937"}}>{f.name}</div><div style={{fontSize:11,color:"#9CA3AF",marginTop:2}}>{f.size?`${(f.size/1024).toFixed(0)}KB`:""}</div></div><button onClick={()=>deleteTmplFile(f.id)} style={{background:"#FEF2F2",border:"none",borderRadius:6,padding:"5px 8px",fontSize:11,color:"#DC2626",fontWeight:700,cursor:"pointer"}}>🗑</button></div>))}
+              :files.map(f=>(
+                <div key={f.id} style={{background:"#fff",borderRadius:12,padding:"12px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:12,boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
+                  <span style={{fontSize:28,flexShrink:0}}>{fi(f)}</span>
+                  <div style={{flex:1,overflow:"hidden",cursor:"pointer"}} onClick={()=>setTmplPrev(f)}>
+                    <div style={{fontWeight:600,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#1F2937"}}>{f.name}</div>
+                    <div style={{fontSize:11,color:"#9CA3AF",marginTop:2}}>{f.size?`${(f.size/1024).toFixed(0)}KB`:""}</div>
+                  </div>
+                  <button onClick={()=>deleteTmplFile(f.id)} style={{background:"#FEF2F2",border:"none",borderRadius:6,padding:"5px 8px",fontSize:11,color:"#DC2626",fontWeight:700,cursor:"pointer"}}>🗑</button>
+                </div>
+              ))}
           </div>
         </div>
       );
@@ -1028,13 +1119,24 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
     return(
       <div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
         {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
-        <FloatLauncher/>
         <Hdr title="📂 お知らせ・雛形" back={()=>nav("home")}/>
         <div style={{padding:isPC?"14px 0":14}}>
           <div style={{background:"#fff",borderRadius:14,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.07)",marginBottom:16}}>
             {TEMPLATE_CATS.map((cat,i)=>{
               const cnt=tmplFiles.filter(f=>f.cat_id===cat.id).length;
-              return(<div key={cat.id} onClick={()=>setTmplCat(cat)} style={{display:"flex",alignItems:"center",gap:14,padding:"16px 18px",borderBottom:i<TEMPLATE_CATS.length-1?"1px solid #F3F4F6":"none",cursor:"pointer"}}><span style={{fontSize:28}}>{cat.icon}</span><div style={{flex:1}}><div style={{fontWeight:700,fontSize:14,color:"#1F2937"}}>{cat.label}</div><div style={{fontSize:11,color:"#9CA3AF",marginTop:2}}>{cnt>0?`${cnt}件のファイル`:"タップして管理"}</div></div><div style={{display:"flex",alignItems:"center",gap:8}}>{cnt>0&&<span style={{background:"#E07B39",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{cnt}</span>}<span style={{color:"#9CA3AF",fontSize:18}}>›</span></div></div>);
+              return(
+                <div key={cat.id} onClick={()=>setTmplCat(cat)} style={{display:"flex",alignItems:"center",gap:14,padding:"16px 18px",borderBottom:i<TEMPLATE_CATS.length-1?"1px solid #F3F4F6":"none",cursor:"pointer"}}>
+                  <span style={{fontSize:28}}>{cat.icon}</span>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:700,fontSize:14,color:"#1F2937"}}>{cat.label}</div>
+                    <div style={{fontSize:11,color:"#9CA3AF",marginTop:2}}>{cnt>0?`${cnt}件のファイル`:"タップして管理"}</div>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    {cnt>0&&<span style={{background:"#E07B39",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{cnt}</span>}
+                    <span style={{color:"#9CA3AF",fontSize:18}}>›</span>
+                  </div>
+                </div>
+              );
             })}
           </div>
         </div>
@@ -1042,6 +1144,9 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
     );
   }
 
+  // ══════════════════════════════════════════
+  // ESTIMATE
+  // ══════════════════════════════════════════
   if(page==="estimate"){
     const clCos=cos.filter(c=>c.type==="取引先");
     const selCo=cos.find(c=>c.id===est.clientId);
@@ -1049,9 +1154,12 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
     const updIt=(i,f,v)=>setEst(p=>{const its=[...p.items];its[i]={...its[i],[f]:v};if(f==="qty"||f==="price")its[i].amount=Number(its[i].qty||0)*Number(its[i].price||0);const sub=its.reduce((s,it)=>s+(it.amount||0),0);const tax=Math.floor(sub*0.1);return{...p,items:its,sub,tax,total:sub+tax};});
     const remIt=i=>setEst(p=>{const its=p.items.filter((_,idx)=>idx!==i);const sub=its.reduce((s,it)=>s+(it.amount||0),0);const tax=Math.floor(sub*0.1);return{...p,items:its,sub,tax,total:sub+tax};});
     const dlCSV=()=>{const cn=selCo?selCo.name+(selCo.branch?" "+selCo.branch:""):"";let csv="\uFEFF見積書\nNo.,"+est.no+"\n日付,"+est.date+"\n宛先,"+cn+"\n工事名,"+est.pjName+"\n\n品名,数量,単位,単価,金額\n";est.items.forEach(it=>{csv+=`${it.name},${it.qty},${it.unit},${it.price},${it.amount}\n`;});csv+=`\n小計,,,, ${est.sub}\n消費税,,,, ${est.tax}\n合計,,,, ${est.total}\n`;const blob=new Blob([csv],{type:"text/csv"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`見積書_${cn}.csv`;a.click();URL.revokeObjectURL(url);};
-    return(<div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>{isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}<FloatLauncher/><Hdr title="📝 見積書作成" back={()=>nav("home")} right={<button onClick={dlCSV} style={{background:"#059669",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:800}}>⬇ CSV</button>}/><div style={{padding:isPC?"14px 0":14}}><div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:12,boxShadow:"0 1px 6px rgba(0,0,0,0.07)"}}><div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:12}}>📋 基本情報</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}><Inp label="見積No." value={est.no} onChange={e=>setEst(p=>({...p,no:e.target.value}))} placeholder="0001"/><Inp label="日付" type="date" value={est.date} onChange={e=>setEst(p=>({...p,date:e.target.value}))}/></div><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6B7280",marginBottom:3}}>取引先</div><select value={est.clientId} onChange={e=>setEst(p=>({...p,clientId:e.target.value}))} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",fontSize:13,background:"#FAFAFA",boxSizing:"border-box",color:"#1F2937"}}><option value="">選択してください</option>{clCos.map(c=><option key={c.id} value={c.id}>{c.name}{c.branch?" "+c.branch:""}</option>)}</select></div>{selCo&&(<div style={{background:"#EFF6FF",borderRadius:10,padding:"10px 14px",marginBottom:10,borderLeft:"3px solid #1A3A5C"}}><div style={{fontSize:11,color:"#1A3A5C",fontWeight:700,marginBottom:4}}>✅ 自動入力</div><div style={{fontSize:12,color:"#374151"}}>宛先: {selCo.name}{selCo.branch?" "+selCo.branch:""}</div></div>)}<Inp label="工事名" value={est.pjName} onChange={e=>setEst(p=>({...p,pjName:e.target.value}))} placeholder="例: ○○マンション排水管更新工事"/><Inp label="担当者" value={est.person} onChange={e=>setEst(p=>({...p,person:e.target.value}))}/></div><div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:12,boxShadow:"0 1px 6px rgba(0,0,0,0.07)"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><div style={{fontWeight:800,fontSize:14,color:"#1A3A5C"}}>🔧 工事項目</div><button onClick={addIt} style={{background:"#E07B39",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:700}}>＋ 追加</button></div>{est.items.map((item,i)=>(<div key={i} style={{background:"#F9FAFB",borderRadius:10,padding:12,marginBottom:8,border:"1px solid #E5E7EB"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div style={{fontSize:12,fontWeight:700,color:"#6B7280"}}>項目 {i+1}</div><button onClick={()=>remIt(i)} style={{background:"none",border:"none",color:"#DC2626",fontSize:16,cursor:"pointer"}}>🗑</button></div><Inp label="品名 *" value={item.name} onChange={e=>updIt(i,"name",e.target.value)}/><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8}}><Inp label="数量" type="number" value={item.qty} onChange={e=>updIt(i,"qty",Number(e.target.value))}/><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6B7280",marginBottom:3}}>単位</div><select value={item.unit} onChange={e=>updIt(i,"unit",e.target.value)} style={{width:"100%",padding:"8px 6px",borderRadius:8,border:"1.5px solid #E5E7EB",fontSize:12,background:"#FAFAFA",color:"#1F2937"}}>{["式","個","本","m","㎡","日","台"].map(u=><option key={u}>{u}</option>)}</select></div><Inp label="単価" type="number" value={item.price} onChange={e=>updIt(i,"price",Number(e.target.value))}/><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#9CA3AF",marginBottom:3}}>金額（自動）</div><div style={{padding:"8px 10px",background:"#F0F4F8",borderRadius:8,fontSize:12,fontWeight:700,color:"#1A3A5C"}}>¥{(item.amount||0).toLocaleString()}</div></div></div></div>))}{est.items.length===0&&<div style={{textAlign:"center",color:"#9CA3AF",fontSize:13,padding:20}}>「＋ 追加」から工事項目を入力</div>}</div><div style={{background:"#fff",borderRadius:14,padding:16,boxShadow:"0 1px 6px rgba(0,0,0,0.07)"}}><div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:12}}>💰 金額</div>{[["小計",est.sub],["消費税（10%）",est.tax]].map(([l,v])=>(<div key={l} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #F3F4F6"}}><div style={{fontSize:13,color:"#6B7280"}}>{l}</div><div style={{fontSize:13,fontWeight:600}}>¥{(v||0).toLocaleString()}</div></div>))}<div style={{display:"flex",justifyContent:"space-between",padding:"12px 0"}}><div style={{fontSize:16,fontWeight:800,color:"#1A3A5C"}}>合計（税込）</div><div style={{fontSize:20,fontWeight:900,color:"#E07B39"}}>¥{(est.total||0).toLocaleString()}</div></div><button onClick={dlCSV} style={{width:"100%",padding:13,background:"#059669",color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:15,cursor:"pointer",marginTop:8}}>⬇ CSVダウンロード</button></div></div></div>);
+    return(<div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>{isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}<Hdr title="📝 見積書作成" back={()=>nav("home")} right={<button onClick={dlCSV} style={{background:"#059669",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:800}}>⬇ CSV</button>}/><div style={{padding:isPC?"14px 0":14}}><div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:12,boxShadow:"0 1px 6px rgba(0,0,0,0.07)"}}><div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:12}}>📋 基本情報</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}><Inp label="見積No." value={est.no} onChange={e=>setEst(p=>({...p,no:e.target.value}))} placeholder="0001"/><Inp label="日付" type="date" value={est.date} onChange={e=>setEst(p=>({...p,date:e.target.value}))}/></div><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6B7280",marginBottom:3}}>取引先</div><select value={est.clientId} onChange={e=>setEst(p=>({...p,clientId:e.target.value}))} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",fontSize:13,background:"#FAFAFA",boxSizing:"border-box",color:"#1F2937"}}><option value="">選択してください</option>{clCos.map(c=><option key={c.id} value={c.id}>{c.name}{c.branch?" "+c.branch:""}</option>)}</select></div>{selCo&&(<div style={{background:"#EFF6FF",borderRadius:10,padding:"10px 14px",marginBottom:10,borderLeft:"3px solid #1A3A5C"}}><div style={{fontSize:11,color:"#1A3A5C",fontWeight:700,marginBottom:4}}>✅ 自動入力</div><div style={{fontSize:12,color:"#374151"}}>宛先: {selCo.name}{selCo.branch?" "+selCo.branch:""}</div></div>)}<Inp label="工事名" value={est.pjName} onChange={e=>setEst(p=>({...p,pjName:e.target.value}))} placeholder="例: ○○マンション排水管更新工事"/><Inp label="担当者" value={est.person} onChange={e=>setEst(p=>({...p,person:e.target.value}))}/></div><div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:12,boxShadow:"0 1px 6px rgba(0,0,0,0.07)"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><div style={{fontWeight:800,fontSize:14,color:"#1A3A5C"}}>🔧 工事項目</div><button onClick={addIt} style={{background:"#E07B39",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:700}}>＋ 追加</button></div>{est.items.map((item,i)=>(<div key={i} style={{background:"#F9FAFB",borderRadius:10,padding:12,marginBottom:8,border:"1px solid #E5E7EB"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div style={{fontSize:12,fontWeight:700,color:"#6B7280"}}>項目 {i+1}</div><button onClick={()=>remIt(i)} style={{background:"none",border:"none",color:"#DC2626",fontSize:16,cursor:"pointer"}}>🗑</button></div><Inp label="品名 *" value={item.name} onChange={e=>updIt(i,"name",e.target.value)}/><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8}}><Inp label="数量" type="number" value={item.qty} onChange={e=>updIt(i,"qty",Number(e.target.value))}/><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6B7280",marginBottom:3}}>単位</div><select value={item.unit} onChange={e=>updIt(i,"unit",e.target.value)} style={{width:"100%",padding:"8px 6px",borderRadius:8,border:"1.5px solid #E5E7EB",fontSize:12,background:"#FAFAFA",color:"#1F2937"}}>{["式","個","本","m","㎡","日","台"].map(u=><option key={u}>{u}</option>)}</select></div><Inp label="単価" type="number" value={item.price} onChange={e=>updIt(i,"price",Number(e.target.value))}/><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#9CA3AF",marginBottom:3}}>金額（自動）</div><div style={{padding:"8px 10px",background:"#F0F4F8",borderRadius:8,fontSize:12,fontWeight:700,color:"#1A3A5C"}}>¥{(item.amount||0).toLocaleString()}</div></div></div></div>))}{est.items.length===0&&<div style={{textAlign:"center",color:"#9CA3AF",fontSize:13,padding:20}}>「＋ 追加」から工事項目を入力</div>}</div><div style={{background:"#fff",borderRadius:14,padding:16,boxShadow:"0 1px 6px rgba(0,0,0,0.07)"}}><div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:12}}>💰 金額</div>{[["小計",est.sub],["消費税（10%）",est.tax]].map(([l,v])=>(<div key={l} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #F3F4F6"}}><div style={{fontSize:13,color:"#6B7280"}}>{l}</div><div style={{fontSize:13,fontWeight:600}}>¥{(v||0).toLocaleString()}</div></div>))}<div style={{display:"flex",justifyContent:"space-between",padding:"12px 0"}}><div style={{fontSize:16,fontWeight:800,color:"#1A3A5C"}}>合計（税込）</div><div style={{fontSize:20,fontWeight:900,color:"#E07B39"}}>¥{(est.total||0).toLocaleString()}</div></div><button onClick={dlCSV} style={{width:"100%",padding:13,background:"#059669",color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:15,cursor:"pointer",marginTop:8}}>⬇ CSVダウンロード</button></div></div></div>);
   }
 
+  // ══════════════════════════════════════════
+  // ANALYTICS
+  // ══════════════════════════════════════════
   if(page==="analytics"){
     const active=pjs.filter(p=>p.status!=="完了"&&p.status!=="中断");
     const done=pjs.filter(p=>p.status==="完了");
@@ -1060,43 +1168,163 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
     const avgGpRate=totalAmt?(totalGp/totalAmt*100).toFixed(1):0;
     const statusCount=STATUSES.map(s=>({s,n:pjs.filter(p=>p.status===s).length}));
     const maxSC=Math.max(...statusCount.map(x=>x.n),1);
+    // 粗利率TOP5
     const top5=pjs.filter(p=>p.amount>0).sort((a,b)=>(b.gp/b.amount)-(a.gp/a.amount)).slice(0,5);
+    // 担当者別受注
     const byCharge={};
     pjs.forEach(p=>{const k=p.inCharge||"未設定";byCharge[k]=(byCharge[k]||0)+(p.amount||0);});
     const chargeList=Object.entries(byCharge).sort((a,b)=>b[1]-a[1]);
     const maxCharge=Math.max(...chargeList.map(x=>x[1]),1);
+
     return(
       <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
         {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
-        <FloatLauncher/>
         <Hdr title="📊 分析ダッシュボード" back={()=>nav("home")}/>
         <div style={{padding:isPC?"14px 0":14}}>
+
+          {/* KPIカード */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
-            {[{label:"総案件数",value:`${pjs.length}件`,sub:`進行中 ${active.length}件`,color:"#1A3A5C",icon:"📋"},{label:"完了案件",value:`${done.length}件`,sub:`完了率 ${pjs.length?(done.length/pjs.length*100).toFixed(0):0}%`,color:"#059669",icon:"✅"},{label:"受注合計",value:`¥${(totalAmt/10000).toFixed(0)}万`,sub:pjs.length?`平均 ¥${(totalAmt/pjs.length/10000).toFixed(0)}万`:"",color:"#E07B39",icon:"💰"},{label:"平均粗利率",value:`${avgGpRate}%`,sub:`粗利計 ¥${(totalGp/10000).toFixed(0)}万`,color:"#7C3AED",icon:"📈"}].map(k=>(<div key={k.label} style={{background:"#fff",borderRadius:14,padding:"14px 14px",boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}><div style={{fontSize:22,marginBottom:6}}>{k.icon}</div><div style={{fontSize:11,color:"#9CA3AF",marginBottom:2}}>{k.label}</div><div style={{fontSize:18,fontWeight:900,color:k.color}}>{k.value}</div><div style={{fontSize:11,color:"#9CA3AF",marginTop:2}}>{k.sub}</div></div>))}
+            {[
+              {label:"総案件数",value:`${pjs.length}件`,sub:`進行中 ${active.length}件`,color:"#1A3A5C",icon:"📋"},
+              {label:"完了案件",value:`${done.length}件`,sub:`完了率 ${pjs.length?(done.length/pjs.length*100).toFixed(0):0}%`,color:"#059669",icon:"✅"},
+              {label:"受注合計",value:`¥${(totalAmt/10000).toFixed(0)}万`,sub:pjs.length?`平均 ¥${(totalAmt/pjs.length/10000).toFixed(0)}万`:"",color:"#E07B39",icon:"💰"},
+              {label:"平均粗利率",value:`${avgGpRate}%`,sub:`粗利計 ¥${(totalGp/10000).toFixed(0)}万`,color:"#7C3AED",icon:"📈"},
+            ].map(k=>(
+              <div key={k.label} style={{background:"#fff",borderRadius:14,padding:"14px 14px",boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}>
+                <div style={{fontSize:22,marginBottom:6}}>{k.icon}</div>
+                <div style={{fontSize:11,color:"#9CA3AF",marginBottom:2}}>{k.label}</div>
+                <div style={{fontSize:18,fontWeight:900,color:k.color}}>{k.value}</div>
+                <div style={{fontSize:11,color:"#9CA3AF",marginTop:2}}>{k.sub}</div>
+              </div>
+            ))}
           </div>
+
+          {/* ステータス別件数 */}
           <div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:16,boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}>
             <div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:14}}>📋 ステータス別件数</div>
-            {statusCount.map(({s,n})=>{const st=STATUS_STYLE[s];return(<div key={s} style={{marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:12,fontWeight:700,color:st.text}}>{s}</span><span style={{fontSize:12,fontWeight:700,color:"#374151"}}>{n}件</span></div><div style={{background:"#F3F4F6",borderRadius:4,height:8,overflow:"hidden"}}><div style={{width:`${(n/maxSC)*100}%`,height:"100%",background:st.border,borderRadius:4,transition:"width 0.5s"}}/></div></div>);})}
+            {statusCount.map(({s,n})=>{
+              const st=STATUS_STYLE[s];
+              return(
+                <div key={s} style={{marginBottom:10}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                    <span style={{fontSize:12,fontWeight:700,color:st.text}}>{s}</span>
+                    <span style={{fontSize:12,fontWeight:700,color:"#374151"}}>{n}件</span>
+                  </div>
+                  <div style={{background:"#F3F4F6",borderRadius:4,height:8,overflow:"hidden"}}>
+                    <div style={{width:`${(n/maxSC)*100}%`,height:"100%",background:st.border,borderRadius:4,transition:"width 0.5s"}}/>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          {top5.length>0&&(<div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:16,boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}><div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:14}}>🏆 粗利率TOP5</div>{top5.map((p,i)=>{const rate=(p.gp/p.amount*100).toFixed(1);return(<div key={p.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 0",borderBottom:i<top5.length-1?"1px solid #F3F4F6":"none"}}><div style={{width:24,height:24,borderRadius:"50%",background:i===0?"#F59E0B":i===1?"#9CA3AF":i===2?"#B45309":"#E5E7EB",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:i<3?"#fff":"#6B7280",flexShrink:0}}>{i+1}</div><div style={{flex:1,overflow:"hidden"}}><div style={{fontSize:13,fontWeight:700,color:"#1F2937",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</div><div style={{fontSize:11,color:"#9CA3AF"}}>{fmt(p.amount)}</div></div><div style={{fontSize:15,fontWeight:900,color:"#059669"}}>{rate}%</div></div>);})}</div>)}
-          {chargeList.length>0&&(<div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:16,boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}><div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:14}}>👤 担当者別受注金額</div>{chargeList.map(([name,amt])=>(<div key={name} style={{marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:12,fontWeight:700,color:"#374151"}}>{name}</span><span style={{fontSize:12,fontWeight:700,color:"#E07B39"}}>{fmt(amt)}</span></div><div style={{background:"#F3F4F6",borderRadius:4,height:8,overflow:"hidden"}}><div style={{width:`${(amt/maxCharge)*100}%`,height:"100%",background:"#E07B39",borderRadius:4}}/></div></div>))}</div>)}
-          <div style={{background:"#fff",borderRadius:14,padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}><div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:14}}>✅ タスク状況</div><div style={{display:"flex",gap:10}}>{[{label:"未完了",value:tks.filter(t=>!t.done).length,color:"#EF4444"},{label:"完了済み",value:tks.filter(t=>t.done).length,color:"#10B981"},{label:"高優先度",value:tks.filter(t=>!t.done&&t.prio==="high").length,color:"#F59E0B"}].map(x=>(<div key={x.label} style={{flex:1,background:"#F9FAFB",borderRadius:10,padding:"10px 8px",textAlign:"center"}}><div style={{fontSize:20,fontWeight:900,color:x.color}}>{x.value}</div><div style={{fontSize:10,color:"#9CA3AF",marginTop:2}}>{x.label}</div></div>))}</div></div>
+
+          {/* 粗利率TOP5 */}
+          {top5.length>0&&(
+            <div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:16,boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}>
+              <div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:14}}>🏆 粗利率TOP5</div>
+              {top5.map((p,i)=>{
+                const rate=(p.gp/p.amount*100).toFixed(1);
+                return(
+                  <div key={p.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 0",borderBottom:i<top5.length-1?"1px solid #F3F4F6":"none"}}>
+                    <div style={{width:24,height:24,borderRadius:"50%",background:i===0?"#F59E0B":i===1?"#9CA3AF":i===2?"#B45309":"#E5E7EB",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:i<3?"#fff":"#6B7280",flexShrink:0}}>{i+1}</div>
+                    <div style={{flex:1,overflow:"hidden"}}>
+                      <div style={{fontSize:13,fontWeight:700,color:"#1F2937",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</div>
+                      <div style={{fontSize:11,color:"#9CA3AF"}}>{fmt(p.amount)}</div>
+                    </div>
+                    <div style={{fontSize:15,fontWeight:900,color:"#059669"}}>{rate}%</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* 担当者別受注 */}
+          {chargeList.length>0&&(
+            <div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:16,boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}>
+              <div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:14}}>👤 担当者別受注金額</div>
+              {chargeList.map(([name,amt])=>(
+                <div key={name} style={{marginBottom:10}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                    <span style={{fontSize:12,fontWeight:700,color:"#374151"}}>{name}</span>
+                    <span style={{fontSize:12,fontWeight:700,color:"#E07B39"}}>{fmt(amt)}</span>
+                  </div>
+                  <div style={{background:"#F3F4F6",borderRadius:4,height:8,overflow:"hidden"}}>
+                    <div style={{width:`${(amt/maxCharge)*100}%`,height:"100%",background:"#E07B39",borderRadius:4}}/>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 未完了タスク集計 */}
+          <div style={{background:"#fff",borderRadius:14,padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}>
+            <div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:14}}>✅ タスク状況</div>
+            <div style={{display:"flex",gap:10}}>
+              {[
+                {label:"未完了",value:tks.filter(t=>!t.done).length,color:"#EF4444"},
+                {label:"完了済み",value:tks.filter(t=>t.done).length,color:"#10B981"},
+                {label:"高優先度",value:tks.filter(t=>!t.done&&t.prio==="high").length,color:"#F59E0B"},
+              ].map(x=>(
+                <div key={x.label} style={{flex:1,background:"#F9FAFB",borderRadius:10,padding:"10px 8px",textAlign:"center"}}>
+                  <div style={{fontSize:20,fontWeight:900,color:x.color}}>{x.value}</div>
+                  <div style={{fontSize:10,color:"#9CA3AF",marginTop:2}}>{x.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
+  // ══════════════════════════════════════════
+  // AI ASSISTANT
+  // ══════════════════════════════════════════
   if(page==="ai"){
     const suggestions=["今月完了した案件は？","粗利率が一番高い案件は？","未完了タスクを優先度順に教えて","受注金額の合計を教えて","進行中の案件一覧を教えて"];
     return(
       <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",display:"flex",flexDirection:"column",...pp}}>
         {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
-        <FloatLauncher/>
         <Hdr title="🤖 AIアシスタント" back={()=>nav("home")}/>
         <div style={{flex:1,overflowY:"auto",padding:"14px 14px 0"}}>
-          {aiMsgs.length===0&&(<div><div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.07)",textAlign:"center"}}><div style={{fontSize:40,marginBottom:8}}>🤖</div><div style={{fontWeight:800,fontSize:15,color:"#1F2937",marginBottom:4}}>AIアシスタント</div><div style={{fontSize:12,color:"#6B7280",lineHeight:1.6}}>IGUMIのデータについて何でも聞いてください。案件・取引先・タスクの情報をもとに回答します。</div></div><div style={{fontSize:11,fontWeight:700,color:"#9CA3AF",marginBottom:8}}>💡 質問例</div>{suggestions.map(s=>(<button key={s} onClick={()=>{setAiInput(s);}} style={{width:"100%",background:"#fff",border:"1.5px solid #E5E7EB",borderRadius:10,padding:"10px 14px",textAlign:"left",fontSize:13,color:"#374151",marginBottom:6,cursor:"pointer",fontWeight:500}}>{s}</button>))}</div>)}
-          {aiMsgs.map((m,i)=>(<div key={i} style={{marginBottom:12,display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>{m.role==="assistant"&&<div style={{width:28,height:28,borderRadius:"50%",background:"#6D28D9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,marginRight:8,flexShrink:0,marginTop:2}}>🤖</div>}<div style={{maxWidth:"80%",padding:"10px 14px",borderRadius:m.role==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:m.role==="user"?"#1A3A5C":"#fff",color:m.role==="user"?"#fff":"#1F2937",fontSize:13,lineHeight:1.7,boxShadow:m.role==="assistant"?"0 1px 4px rgba(0,0,0,0.08)":"none",whiteSpace:"pre-wrap"}}>{m.content}</div></div>))}
-          {aiLoading&&(<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}><div style={{width:28,height:28,borderRadius:"50%",background:"#6D28D9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🤖</div><div style={{background:"#fff",borderRadius:"16px 16px 16px 4px",padding:"10px 16px",boxShadow:"0 1px 4px rgba(0,0,0,0.08)"}}><div style={{display:"flex",gap:4}}>{[0,1,2].map(i=><div key={i} style={{width:6,height:6,borderRadius:"50%",background:"#9CA3AF"}}/>)}</div></div></div>)}
+          {aiMsgs.length===0&&(
+            <div>
+              <div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.07)",textAlign:"center"}}>
+                <div style={{fontSize:40,marginBottom:8}}>🤖</div>
+                <div style={{fontWeight:800,fontSize:15,color:"#1F2937",marginBottom:4}}>AIアシスタント</div>
+                <div style={{fontSize:12,color:"#6B7280",lineHeight:1.6}}>IGUMIのデータについて何でも聞いてください。案件・取引先・タスクの情報をもとに回答します。</div>
+              </div>
+              <div style={{fontSize:11,fontWeight:700,color:"#9CA3AF",marginBottom:8}}>💡 質問例</div>
+              {suggestions.map(s=>(
+                <button key={s} onClick={()=>{setAiInput(s);}} style={{width:"100%",background:"#fff",border:"1.5px solid #E5E7EB",borderRadius:10,padding:"10px 14px",textAlign:"left",fontSize:13,color:"#374151",marginBottom:6,cursor:"pointer",fontWeight:500}}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+          {aiMsgs.map((m,i)=>(
+            <div key={i} style={{marginBottom:12,display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
+              {m.role==="assistant"&&<div style={{width:28,height:28,borderRadius:"50%",background:"#6D28D9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,marginRight:8,flexShrink:0,marginTop:2}}>🤖</div>}
+              <div style={{
+                maxWidth:"80%",padding:"10px 14px",borderRadius:m.role==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",
+                background:m.role==="user"?"#1A3A5C":"#fff",
+                color:m.role==="user"?"#fff":"#1F2937",
+                fontSize:13,lineHeight:1.7,
+                boxShadow:m.role==="assistant"?"0 1px 4px rgba(0,0,0,0.08)":"none",
+                whiteSpace:"pre-wrap"
+              }}>{m.content}</div>
+            </div>
+          ))}
+          {aiLoading&&(
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+              <div style={{width:28,height:28,borderRadius:"50%",background:"#6D28D9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🤖</div>
+              <div style={{background:"#fff",borderRadius:"16px 16px 16px 4px",padding:"10px 16px",boxShadow:"0 1px 4px rgba(0,0,0,0.08)"}}>
+                <div style={{display:"flex",gap:4}}>
+                  {[0,1,2].map(i=><div key={i} style={{width:6,height:6,borderRadius:"50%",background:"#9CA3AF",animation:`bounce 1s infinite ${i*0.2}s`}}/>)}
+                </div>
+              </div>
+            </div>
+          )}
           <div style={{height:14}}/>
         </div>
         <div style={{padding:"12px 14px 24px",background:"#fff",borderTop:"1px solid #F3F4F6"}}>
