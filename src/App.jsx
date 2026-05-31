@@ -53,7 +53,7 @@ const DEFAULT_TILE_CONF = [
   {key:"ai",icon:"🤖",label:"AIアシスタント",sub:"データに質問",color:"#6D28D9",visible:true},
   {key:"chatgpt",icon:"💬",label:"ChatGPT",sub:"外部AIを開く",color:"#10A37F",visible:true},
 ];
-const DEFAULT_CUST = {name:"株式会社IGUMI",sys:"案件管理システム",c1:"#1A3A5C",c2:"#2563EB",acc:"#E07B39",bg:"#F0F4F8"};
+const DEFAULT_CUST = {name:"株式会社IGUMI",sys:"案件管理システム",c1:"#1A3A5C",c2:"#2563EB",acc:"#E07B39",bg:"#F0F4F8",showSidebar:true,showRightPanel:true,showLauncher:true};
 
 const fmt = n => n?"¥"+Number(n).toLocaleString():"—";
 const pct = (g,a) => a?((g/a)*100).toFixed(1)+"%":"—";
@@ -394,6 +394,48 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
   const [rpOpen,setRpOpen]=useState(true);
   const pp=isPC?{marginLeft:SB_W,marginRight:rpOpen?RP_W:32}:{};
 
+  // ✅ フローティングランチャー
+  const [launchOpen,setLaunchOpen]=useState(false);
+  const [launchCat,setLaunchCat]=useState(null);
+  const FloatLauncher=()=>{
+    const cats=[...new Set(links.map(l=>l.cat))];
+    return(
+      <>
+        {launchOpen&&<div onClick={()=>setLaunchOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:200}}/>}
+        {launchOpen&&(
+          <div style={{position:"fixed",bottom:isPC?24:80,right:isPC?80:16,background:"#fff",borderRadius:16,boxShadow:"0 8px 32px rgba(0,0,0,0.18)",zIndex:201,width:270,overflow:"hidden"}}>
+            <div style={{background:"#1A3A5C",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{color:"#fff",fontWeight:800,fontSize:14}}>🚀 アプリを開く</div>
+              <button onClick={()=>setLaunchOpen(false)} style={{background:"none",border:"none",color:"rgba(255,255,255,0.7)",fontSize:18,cursor:"pointer",lineHeight:1}}>✕</button>
+            </div>
+            <div style={{display:"flex",gap:6,overflowX:"auto",padding:"8px 12px",borderBottom:"1px solid #F3F4F6"}}>
+              <button onClick={()=>setLaunchCat(null)} style={{padding:"4px 10px",borderRadius:12,border:"none",background:!launchCat?"#1A3A5C":"#F3F4F6",color:!launchCat?"#fff":"#6B7280",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>すべて</button>
+              {cats.map(cat=>(<button key={cat} onClick={()=>setLaunchCat(c=>c===cat?null:cat)} style={{padding:"4px 10px",borderRadius:12,border:"none",background:launchCat===cat?"#1A3A5C":"#F3F4F6",color:launchCat===cat?"#fff":"#6B7280",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>{cat}</button>))}
+            </div>
+            <div style={{maxHeight:320,overflowY:"auto"}}>
+              {links.filter(l=>!launchCat||l.cat===launchCat).map((l,i,arr)=>(
+                <a key={l.id} href={l.url} target="_blank" rel="noopener noreferrer"
+                  style={{display:"flex",alignItems:"center",gap:12,padding:"11px 16px",textDecoration:"none",color:"#1F2937",borderBottom:i<arr.length-1?"1px solid #F9FAFB":"none",background:"#fff"}}
+                  onMouseOver={e=>e.currentTarget.style.background="#F9FAFB"}
+                  onMouseOut={e=>e.currentTarget.style.background="#fff"}>
+                  <span style={{fontSize:22,flexShrink:0}}>{l.icon}</span>
+                  <div style={{flex:1}}><div style={{fontWeight:700,fontSize:13,color:"#1F2937"}}>{l.label}</div><div style={{fontSize:10,color:"#9CA3AF"}}>{l.cat}</div></div>
+                  <span style={{fontSize:12,color:"#9CA3AF"}}>↗</span>
+                </a>
+              ))}
+            </div>
+            <div style={{borderTop:"1px solid #F3F4F6",padding:"10px 16px"}}>
+              <button onClick={()=>{setLaunchOpen(false);nav("links");}} style={{width:"100%",padding:"8px 0",background:"#F0F4F8",border:"none",borderRadius:8,fontSize:12,color:"#1A3A5C",fontWeight:700,cursor:"pointer"}}>⚙ リンクを管理する</button>
+            </div>
+          </div>
+        )}
+        <button onClick={()=>setLaunchOpen(p=>!p)} style={{position:"fixed",bottom:24,right:16,width:52,height:52,borderRadius:"50%",background:launchOpen?"#E07B39":"#1A3A5C",color:"#fff",border:"none",fontSize:22,boxShadow:"0 4px 16px rgba(0,0,0,0.25)",cursor:"pointer",zIndex:202,display:"flex",alignItems:"center",justifyContent:"center",transition:"background 0.2s"}}>
+          {launchOpen?"✕":"🚀"}
+        </button>
+      </>
+    );
+  };
+
   // ✅ PCサイドバー
   const PCSidebar=()=>{
     const active=pjs.filter(p=>p.status!=="完了"&&p.status!=="中断");
@@ -511,7 +553,8 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
     const tiles=tileConf.filter(t=>t.visible||tileEdit).map(t=>({...t,sub:t.key==="projects"?`${active.length}件進行中`:t.key==="companies"?`${cos.length}社登録`:t.key==="tasks"?`未完了 ${pending.length}件`:t.sub}));
     return(
       <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:cust.bg,minHeight:"100vh",...pp}}>
-        {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
+        {isPC&&(cust.showSidebar!==false)&&<PCSidebar/>}{isPC&&(cust.showRightPanel!==false)&&<PCRightPanel/>}
+        {(cust.showLauncher!==false)&&<FloatLauncher/> }
         {!isPC&&<div style={{background:cust.c1,color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:50}}>
           <div style={{background:cust.acc,borderRadius:8,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:16}}>I</div>
           <div style={{flex:1}}><div style={{fontWeight:800,fontSize:16}}>{cust.sys}</div><div style={{fontSize:10,opacity:0.65}}>{cust.name}</div></div>
@@ -611,7 +654,6 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
             <button onClick={()=>nav("tasks")} style={{width:"100%",padding:10,background:"#F9FAFB",border:"none",fontSize:12,color:cust.c1,fontWeight:700,cursor:"pointer",borderTop:"1px solid #F3F4F6"}}>すべて見る →</button>
           </div>
         </div>
-        {modal==="cust"&&(<Modal title="⚙ カスタマイズ" onClose={()=>setModal(null)} onSave={()=>{saveCustomize({...ec});setModal(null);}}><Inp label="会社名" value={ec.name} onChange={e=>setEc({...ec,name:e.target.value})}/><Inp label="システム名" value={ec.sys} onChange={e=>setEc({...ec,sys:e.target.value})}/><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6B7280",marginBottom:6}}>バナーカラー</div><div style={{display:"flex",gap:10,alignItems:"center"}}><input type="color" value={ec.c1} onChange={e=>setEc({...ec,c1:e.target.value})} style={{width:48,height:36,borderRadius:8,border:"1.5px solid #E5E7EB",cursor:"pointer",padding:2}}/><span style={{color:"#9CA3AF"}}>→</span><input type="color" value={ec.c2} onChange={e=>setEc({...ec,c2:e.target.value})} style={{width:48,height:36,borderRadius:8,border:"1.5px solid #E5E7EB",cursor:"pointer",padding:2}}/><div style={{flex:1,height:36,borderRadius:8,background:`linear-gradient(135deg,${ec.c1},${ec.c2})`}}/></div></div></Modal>)}
         {editTile&&(<Modal title="タイルを編集" onClose={()=>setEditTile(null)} onSave={()=>{saveTileConf(tileConf.map(t=>t.key===editTile.key?editTile:t));setEditTile(null);}}><Inp label="アイコン" value={editTile.icon} onChange={e=>setEditTile({...editTile,icon:e.target.value})}/><Inp label="ラベル名" value={editTile.label} onChange={e=>setEditTile({...editTile,label:e.target.value})}/><div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6B7280",marginBottom:6}}>カラー</div><div style={{display:"flex",gap:10,alignItems:"center"}}><input type="color" value={editTile.color} onChange={e=>setEditTile({...editTile,color:e.target.value})} style={{width:48,height:36,borderRadius:8,border:"1.5px solid #E5E7EB",cursor:"pointer",padding:2}}/><div style={{flex:1,height:36,borderRadius:8,background:editTile.color}}/></div></div></Modal>)}
       </div>
     );
@@ -625,7 +667,8 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
     const tG=filtP.reduce((s,p)=>s+(p.gp||0),0);
     return(
       <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
-        {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
+        {isPC&&(cust.showSidebar!==false)&&<PCSidebar/>}{isPC&&(cust.showRightPanel!==false)&&<PCRightPanel/>}
+        {(cust.showLauncher!==false)&&<FloatLauncher/> }
         <Hdr title={selP?selP.name:"📋 案件管理"} back={selP?()=>setSelP(null):()=>nav("home")}
           right={<div style={{display:"flex",gap:6}}>{!selP&&<button onClick={()=>setModal("addP")} style={{background:"#E07B39",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:800}}>＋ 新規</button>}</div>}/>
         {selP?(
@@ -742,7 +785,8 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
   if(page==="companies"){
     return(
       <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
-        {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
+        {isPC&&(cust.showSidebar!==false)&&<PCSidebar/>}{isPC&&(cust.showRightPanel!==false)&&<PCRightPanel/>}
+        {(cust.showLauncher!==false)&&<FloatLauncher/> }
         <Hdr title={selCt?selCt.name:selC?selC.name:"🏢 取引先・協力業者"} back={selCt?()=>setSelCt(null):selC?()=>setSelC(null):()=>nav("home")}
           right={<div style={{display:"flex",gap:6}}>{!selC&&!selCt&&<button onClick={()=>setModal("addCo")} style={{background:"#E07B39",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:800}}>＋ 新規</button>}</div>}/>
         {selCt?(
@@ -824,7 +868,8 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
     const done=tks.filter(t=>t.done);
     return(
       <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
-        {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
+        {isPC&&(cust.showSidebar!==false)&&<PCSidebar/>}{isPC&&(cust.showRightPanel!==false)&&<PCRightPanel/>}
+        {(cust.showLauncher!==false)&&<FloatLauncher/> }
         <Hdr title="✅ タスク" back={()=>nav("home")} right={<button onClick={()=>setModal("addT")} style={{background:"#E07B39",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:800}}>＋ 新規</button>}/>
         <div style={{padding:isPC?"14px 0":14}}>
           <div style={{fontSize:11,fontWeight:700,color:"#9CA3AF",marginBottom:8}}>未完了 ({pending.length})</div>
@@ -854,7 +899,8 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
     const cats=[...new Set(links.map(l=>l.cat))];
     return(
       <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
-        {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
+        {isPC&&(cust.showSidebar!==false)&&<PCSidebar/>}{isPC&&(cust.showRightPanel!==false)&&<PCRightPanel/>}
+        {(cust.showLauncher!==false)&&<FloatLauncher/> }
         <Hdr title="🔗 リンク集" back={()=>nav("home")} right={<button onClick={()=>setModal("addL")} style={{background:"#E07B39",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:800}}>＋ 新規</button>}/>
         <div style={{padding:isPC?"14px 0":14}}>
           {cats.map(cat=>{const cl=links.filter(l=>l.cat===cat);return(<div key={cat} style={{marginBottom:20}}>
@@ -897,7 +943,8 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
 
     if(finPrev)return(
       <div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#1A1A2E",minHeight:"100vh",display:"flex",flexDirection:"column",...pp}}>
-        {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
+        {isPC&&(cust.showSidebar!==false)&&<PCSidebar/>}{isPC&&(cust.showRightPanel!==false)&&<PCRightPanel/>}
+        {(cust.showLauncher!==false)&&<FloatLauncher/> }
         {/* ヘッダー */}
         <div style={{background:"#1A3A5C",color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
           <button onClick={()=>setFinPrev(null)} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>←</button>
@@ -936,7 +983,8 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
       const monthFiles=finFiles.filter(f=>f.item_id===finItem.id&&Number(f.year)===Number(finY)&&Number(f.month)===Number(finM));
       return(
         <div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
-          {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
+          {isPC&&(cust.showSidebar!==false)&&<PCSidebar/>}{isPC&&(cust.showRightPanel!==false)&&<PCRightPanel/>}
+        {(cust.showLauncher!==false)&&<FloatLauncher/> }
           <div style={{background:"#1A3A5C",color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:50}}>
             <button onClick={()=>setFinM(null)} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>←</button>
             <div style={{flex:1}}><div style={{fontWeight:800,fontSize:15}}>{finItem.icon} {finItem.label}</div><div style={{fontSize:11,opacity:0.7}}>{finY}年{finM}月</div></div>
@@ -968,7 +1016,8 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
 
     if(finY)return(
       <div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
-        {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
+        {isPC&&(cust.showSidebar!==false)&&<PCSidebar/>}{isPC&&(cust.showRightPanel!==false)&&<PCRightPanel/>}
+        {(cust.showLauncher!==false)&&<FloatLauncher/> }
         <div style={{background:"#1A3A5C",color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:50}}>
           <button onClick={()=>setFinY(null)} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>←</button>
           <div style={{flex:1}}><div style={{fontWeight:800,fontSize:15}}>{finItem.icon} {finItem.label}</div><div style={{fontSize:11,opacity:0.7}}>{finY}年</div></div>
@@ -989,7 +1038,8 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
 
     if(finItem)return(
       <div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
-        {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
+        {isPC&&(cust.showSidebar!==false)&&<PCSidebar/>}{isPC&&(cust.showRightPanel!==false)&&<PCRightPanel/>}
+        {(cust.showLauncher!==false)&&<FloatLauncher/> }
         <div style={{background:"#1A3A5C",color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:50}}>
           <button onClick={()=>setFinItem(null)} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>←</button>
           <div style={{flex:1,fontWeight:800,fontSize:15}}>{finItem.icon} {finItem.label}</div>
@@ -1011,7 +1061,8 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
 
     return(
       <div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
-        {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
+        {isPC&&(cust.showSidebar!==false)&&<PCSidebar/>}{isPC&&(cust.showRightPanel!==false)&&<PCRightPanel/>}
+        {(cust.showLauncher!==false)&&<FloatLauncher/> }
         <div style={{background:"#1A3A5C",color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:50}}>
           <button onClick={()=>nav("home")} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:8,padding:"4px 10px",fontSize:13,cursor:"pointer",fontWeight:700}}>←</button>
           <div style={{flex:1,fontWeight:800,fontSize:16}}>🗃 財務・書類管理</div>
@@ -1056,7 +1107,8 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
 
     if(tmplPrev)return(
       <div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#1A1A2E",minHeight:"100vh",display:"flex",flexDirection:"column",...pp}}>
-        {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
+        {isPC&&(cust.showSidebar!==false)&&<PCSidebar/>}{isPC&&(cust.showRightPanel!==false)&&<PCRightPanel/>}
+        {(cust.showLauncher!==false)&&<FloatLauncher/> }
         <div style={{background:"#1A3A5C",color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
           <button onClick={()=>setTmplPrev(null)} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>←</button>
           <div style={{flex:1,fontWeight:700,fontSize:14}}>{tmplPrev.name}</div>
@@ -1090,7 +1142,8 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
       const files=tmplFiles.filter(f=>f.cat_id===tmplCat.id);
       return(
         <div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
-          {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
+          {isPC&&(cust.showSidebar!==false)&&<PCSidebar/>}{isPC&&(cust.showRightPanel!==false)&&<PCRightPanel/>}
+        {(cust.showLauncher!==false)&&<FloatLauncher/> }
           <div style={{background:"#1A3A5C",color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:50}}>
             <button onClick={()=>setTmplCat(null)} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>←</button>
             <div style={{flex:1}}><div style={{fontWeight:800,fontSize:15}}>{tmplCat.icon} {tmplCat.label}</div><div style={{fontSize:11,opacity:0.7}}>{files.length}件</div></div>
@@ -1118,7 +1171,8 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
 
     return(
       <div style={{fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
-        {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
+        {isPC&&(cust.showSidebar!==false)&&<PCSidebar/>}{isPC&&(cust.showRightPanel!==false)&&<PCRightPanel/>}
+        {(cust.showLauncher!==false)&&<FloatLauncher/> }
         <Hdr title="📂 お知らせ・雛形" back={()=>nav("home")}/>
         <div style={{padding:isPC?"14px 0":14}}>
           <div style={{background:"#fff",borderRadius:14,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.07)",marginBottom:16}}>
@@ -1178,7 +1232,8 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
 
     return(
       <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
-        {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
+        {isPC&&(cust.showSidebar!==false)&&<PCSidebar/>}{isPC&&(cust.showRightPanel!==false)&&<PCRightPanel/>}
+        {(cust.showLauncher!==false)&&<FloatLauncher/> }
         <Hdr title="📊 分析ダッシュボード" back={()=>nav("home")}/>
         <div style={{padding:isPC?"14px 0":14}}>
 
@@ -1284,7 +1339,8 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
     const suggestions=["今月完了した案件は？","粗利率が一番高い案件は？","未完了タスクを優先度順に教えて","受注金額の合計を教えて","進行中の案件一覧を教えて"];
     return(
       <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",display:"flex",flexDirection:"column",...pp}}>
-        {isPC&&<PCSidebar/>}{isPC&&<PCRightPanel/>}
+        {isPC&&(cust.showSidebar!==false)&&<PCSidebar/>}{isPC&&(cust.showRightPanel!==false)&&<PCRightPanel/>}
+        {(cust.showLauncher!==false)&&<FloatLauncher/> }
         <Hdr title="🤖 AIアシスタント" back={()=>nav("home")}/>
         <div style={{flex:1,overflowY:"auto",padding:"14px 14px 0"}}>
           {aiMsgs.length===0&&(
@@ -1337,6 +1393,42 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
       </div>
     );
   }
+
+  // ══ グローバルモーダル（どのページからでも使える）══
+  if(modal==="cust") return(
+    <Modal title="⚙ カスタマイズ" onClose={()=>setModal(null)} onSave={()=>{saveCustomize({...ec});setModal(null);}}>
+      <Inp label="会社名" value={ec.name} onChange={e=>setEc({...ec,name:e.target.value})}/>
+      <Inp label="システム名" value={ec.sys} onChange={e=>setEc({...ec,sys:e.target.value})}/>
+      <div style={{marginBottom:10}}>
+        <div style={{fontSize:11,color:"#6B7280",marginBottom:6}}>バナーカラー</div>
+        <div style={{display:"flex",gap:10,alignItems:"center"}}>
+          <input type="color" value={ec.c1} onChange={e=>setEc({...ec,c1:e.target.value})} style={{width:48,height:36,borderRadius:8,border:"1.5px solid #E5E7EB",cursor:"pointer",padding:2}}/>
+          <span style={{color:"#9CA3AF"}}>→</span>
+          <input type="color" value={ec.c2} onChange={e=>setEc({...ec,c2:e.target.value})} style={{width:48,height:36,borderRadius:8,border:"1.5px solid #E5E7EB",cursor:"pointer",padding:2}}/>
+          <div style={{flex:1,height:36,borderRadius:8,background:`linear-gradient(135deg,${ec.c1},${ec.c2})`}}/>
+        </div>
+      </div>
+      <div style={{marginBottom:6}}>
+        <div style={{fontSize:11,color:"#6B7280",marginBottom:8}}>パネル表示設定（PC）</div>
+        {[
+          {key:"showSidebar",label:"左サイドバー",icon:"◀"},
+          {key:"showRightPanel",label:"右パネル（KPI・タスク）",icon:"▶"},
+          {key:"showLauncher",label:"🚀 ランチャーボタン",icon:"🚀"},
+        ].map(item=>{
+          const on = ec[item.key]!==false;
+          return(
+            <div key={item.key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",background:on?"#F0F9FF":"#F9FAFB",borderRadius:10,marginBottom:8,border:`1.5px solid ${on?"#BFDBFE":"#E5E7EB"}`}}>
+              <div style={{fontSize:13,fontWeight:600,color:"#1F2937"}}>{item.icon} {item.label}</div>
+              <button onClick={()=>setEc({...ec,[item.key]:!on})}
+                style={{width:44,height:24,borderRadius:12,border:"none",cursor:"pointer",background:on?"#1A3A5C":"#D1D5DB",position:"relative",transition:"background 0.2s",flexShrink:0}}>
+                <div style={{width:18,height:18,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:on?23:3,transition:"left 0.2s"}}/>
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </Modal>
+  );
 
   return null;
 }
