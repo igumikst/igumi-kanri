@@ -233,8 +233,12 @@ export default function App() {
   };
   const deleteTmplFile = async (id) => {
     const f = tmplFiles.find(f=>f.id===id);
-    if(f?.path) await supabase.storage.from("files").remove([f.path]);
-    await supabase.from("template_files").delete().eq("id",id);
+    if(f?.path){
+      try { await supabase.storage.from("files").remove([f.path]); }
+      catch(e){ console.warn("Storage削除エラー（無視）:", e); }
+    }
+    const { error } = await supabase.from("template_files").delete().eq("id",id);
+    if(error){ alert(`削除エラー: ${error.message}`); return; }
     setTmplFiles(prev=>prev.filter(f=>f.id!==id));
     setTmplPrev(null);
   };
@@ -264,8 +268,12 @@ export default function App() {
   };
   const deleteFinFile = async (id) => {
     const f = finFiles.find(f=>f.id===id);
-    if(f?.path) await supabase.storage.from("files").remove([f.path]);
-    await supabase.from("finance_files").delete().eq("id",id);
+    if(f?.path){
+      try { await supabase.storage.from("files").remove([f.path]); }
+      catch(e){ console.warn("Storage削除エラー（無視）:", e); }
+    }
+    const { error } = await supabase.from("finance_files").delete().eq("id",id);
+    if(error){ alert(`削除エラー: ${error.message}`); return; }
     setFinFiles(prev=>prev.filter(f=>f.id!==id));
     setFinPrev(null);
   };
