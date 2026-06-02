@@ -86,7 +86,10 @@ const Hdr = ({title,back,right}) => (
 const Confirm = ({msg,onCancel,onOk}) => (
   <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 24px"}}>
     <div style={{background:"#fff",borderRadius:16,padding:24,width:"100%",maxWidth:320}}>
-      <div style={{fontSize:15,color:"#374151",marginBottom:20,lineHeight:1.6}}>{msg}</div>
+      <div style={{fontSize:24,textAlign:"center",marginBottom:12}}>⚠️</div>
+      {msg.split('\n').map((line,i)=>(
+        <div key={i} style={{fontSize:line.includes('元に戻せません')?12:14,color:line.includes('元に戻せません')?'#EF4444':'#374151',marginBottom:line.includes('元に戻せません')?16:4,lineHeight:1.6,textAlign:"center",fontWeight:line.includes('元に戻せません')?700:400}}>{line}</div>
+      ))}
       <div style={{display:"flex",gap:10}}>
         <button onClick={onCancel} style={{flex:1,padding:12,background:"#F3F4F6",border:"none",borderRadius:10,fontWeight:700,cursor:"pointer"}}>キャンセル</button>
         <button onClick={onOk} style={{flex:1,padding:12,background:"#DC2626",color:"#fff",border:"none",borderRadius:10,fontWeight:800,cursor:"pointer"}}>削除する</button>
@@ -111,7 +114,6 @@ export default function App() {
   const [schP,setSchP]=useState("");
   const [schC,setSchC]=useState("");
   const [conf,setConf]=useState(null);
-  const [fileDel,setFileDel]=useState(null);
   const [finFiles,setFinFiles]=useState([]);
   const [finFolders,setFinFolders]=useState([]);
   const [finItem,setFinItem]=useState(null);
@@ -554,21 +556,6 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
 
   if(loading) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8"}}><div style={{textAlign:"center"}}><div style={{fontSize:32,marginBottom:12}}>⚡</div><div style={{color:"#1A3A5C",fontWeight:700}}>読み込み中...</div></div></div>;
 
-  // ══ ファイル削除確認（グローバル）══
-  if(fileDel) return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 24px"}}>
-      <div style={{background:"#fff",borderRadius:16,padding:24,width:"100%",maxWidth:320,boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
-        <div style={{fontSize:22,textAlign:"center",marginBottom:12}}>🗑</div>
-        <div style={{fontSize:15,color:"#374151",marginBottom:6,fontWeight:700,textAlign:"center"}}>削除しますか？</div>
-        <div style={{fontSize:13,color:"#6B7280",marginBottom:20,textAlign:"center",wordBreak:"break-all"}}>「{fileDel.name}」</div>
-        <div style={{display:"flex",gap:10}}>
-          <button onClick={()=>setFileDel(null)} style={{flex:1,padding:13,background:"#F3F4F6",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer",color:"#374151"}}>キャンセル</button>
-          <button onClick={()=>{fileDel.onDelete();setFileDel(null);}} style={{flex:1,padding:13,background:"#DC2626",color:"#fff",border:"none",borderRadius:10,fontWeight:800,fontSize:14,cursor:"pointer"}}>削除する</button>
-        </div>
-      </div>
-    </div>
-  );
-
   // ══ グローバルモーダル（どのページからでも使える）══
   if(modal==="cust") return(
     <Modal title="⚙ カスタマイズ" onClose={()=>setModal(null)} onSave={()=>{saveCustomize({...ec});setModal(null);}}>
@@ -797,7 +784,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
                 </div>
                 <div style={{display:"flex",gap:8,marginBottom:14}}>
                   <button onClick={()=>setEditP({...selP})} style={{flex:2,padding:"8px 0",background:"#EFF6FF",color:"#1A3A5C",border:"1.5px solid #BFDBFE",borderRadius:8,fontWeight:700,fontSize:13,cursor:"pointer"}}>✏️ 編集</button>
-                  <button onClick={()=>setConf({msg:`「${selP.name}」を削除しますか？`,onOk:()=>{delPj(selP.id);setConf(null);}})} style={{flex:1,padding:"8px 0",background:"#FEF2F2",color:"#DC2626",border:"1.5px solid #FECACA",borderRadius:8,fontWeight:700,fontSize:13,cursor:"pointer"}}>🗑 削除</button>
+                  <button onClick={()=>setConf({msg:`「${selP.name}」\n\nこの操作は元に戻せません。\n削除しますか？`,onOk:()=>{delPj(selP.id);setConf(null);}})} style={{flex:1,padding:"8px 0",background:"#FEF2F2",color:"#DC2626",border:"1.5px solid #FECACA",borderRadius:8,fontWeight:700,fontSize:13,cursor:"pointer"}}>🗑 削除</button>
                 </div>
                 <div style={{display:"flex",gap:8,marginBottom:14}}>
                   <div style={{flex:1,background:"#FFF7ED",borderRadius:10,padding:"10px 12px"}}><div style={{fontSize:10,color:"#9CA3AF"}}>受注金額</div><div style={{fontSize:16,fontWeight:800,color:"#E07B39"}}>{fmt(selP.amount)}</div></div>
@@ -841,7 +828,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
                   </div>
                   <div style={{display:"flex",borderTop:"1px solid #F3F4F6"}}>
                     <button onClick={()=>setSelP(p)} style={{flex:1,padding:"8px 0",background:"none",border:"none",borderRight:"1px solid #F3F4F6",fontSize:12,color:"#1A3A5C",fontWeight:700,cursor:"pointer"}}>詳細 →</button>
-                    <button onClick={()=>setConf({msg:`「${p.name}」を削除しますか？`,onOk:()=>{delPj(p.id);setConf(null);}})} style={{padding:"8px 16px",background:"none",border:"none",fontSize:12,color:"#DC2626",fontWeight:700,cursor:"pointer"}}>🗑</button>
+                    <button onClick={()=>setConf({msg:`「${p.name}」\n\nこの操作は元に戻せません。\n削除しますか？`,onOk:()=>{delPj(p.id);setConf(null);}})} style={{padding:"8px 16px",background:"none",border:"none",fontSize:12,color:"#DC2626",fontWeight:700,cursor:"pointer"}}>🗑</button>
                   </div>
                 </div>
               );})}
@@ -922,7 +909,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
                 </div>
                 <div style={{display:"flex",borderTop:"1px solid #F3F4F6"}}>
                   <button onClick={()=>setSelC(c)} style={{flex:1,padding:"8px 0",background:"none",border:"none",borderRight:"1px solid #F3F4F6",fontSize:12,color:"#1A3A5C",fontWeight:700,cursor:"pointer"}}>詳細 →</button>
-                  <button onClick={()=>setConf({msg:`「${c.name}」を削除しますか？`,onOk:()=>{delCo(c.id);setConf(null);}})} style={{padding:"8px 16px",background:"none",border:"none",fontSize:12,color:"#DC2626",fontWeight:700,cursor:"pointer"}}>🗑</button>
+                  <button onClick={()=>setConf({msg:`「${c.name}」\n\nこの操作は元に戻せません。\n削除しますか？`,onOk:()=>{delCo(c.id);setConf(null);}})} style={{padding:"8px 16px",background:"none",border:"none",fontSize:12,color:"#DC2626",fontWeight:700,cursor:"pointer"}}>🗑</button>
                 </div>
               </div>))}
             </div>
@@ -952,13 +939,13 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
             <button onClick={()=>togTk(t)} style={{width:22,height:22,borderRadius:"50%",border:"2px solid #D1D5DB",background:"#fff",cursor:"pointer",flexShrink:0}}/>
             <div style={{flex:1}}><div style={{fontWeight:700,fontSize:13,color:"#1F2937"}}>{t.title}</div>{t.due&&<div style={{fontSize:11,color:"#9CA3AF",marginTop:2}}>📅 {t.due}</div>}</div>
             <div style={{fontSize:11,fontWeight:700,color:PRIO[t.prio]?.c}}>{PRIO[t.prio]?.l}</div>
-            <button onClick={()=>setConf({msg:`「${t.title}」を削除しますか？`,onOk:()=>{delTk(t.id);setConf(null);}})} style={{background:"none",border:"none",color:"#DC2626",fontSize:14,cursor:"pointer"}}>🗑</button>
+            <button onClick={()=>setConf({msg:`「${t.title}」\n\nこの操作は元に戻せません。\n削除しますか？`,onOk:()=>{delTk(t.id);setConf(null);}})} style={{background:"none",border:"none",color:"#DC2626",fontSize:14,cursor:"pointer"}}>🗑</button>
           </div>))}
           {done.length>0&&<><div style={{fontSize:11,fontWeight:700,color:"#9CA3AF",marginBottom:8,marginTop:16}}>完了済み ({done.length})</div>
           {done.map(t=>(<div key={t.id} style={{background:"#F9FAFB",borderRadius:12,padding:"12px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:12,opacity:0.6}}>
             <button onClick={()=>togTk(t)} style={{width:22,height:22,borderRadius:"50%",border:"none",background:"#10B981",cursor:"pointer",flexShrink:0,color:"#fff",fontSize:13}}>✓</button>
             <div style={{flex:1,textDecoration:"line-through",fontSize:13,color:"#6B7280"}}>{t.title}</div>
-            <button onClick={()=>setConf({msg:`「${t.title}」を削除しますか？`,onOk:()=>{delTk(t.id);setConf(null);}})} style={{background:"none",border:"none",color:"#DC2626",fontSize:14,cursor:"pointer"}}>🗑</button>
+            <button onClick={()=>setConf({msg:`「${t.title}」\n\nこの操作は元に戻せません。\n削除しますか？`,onOk:()=>{delTk(t.id);setConf(null);}})} style={{background:"none",border:"none",color:"#DC2626",fontSize:14,cursor:"pointer"}}>🗑</button>
           </div>))}</>}
         </div>
         {modal==="addT"&&(<Modal title="タスクを追加" onClose={()=>setModal(null)} onSave={saveTk}><Inp label="タスク名 *" value={nTk.title} onChange={e=>setNTk({...nTk,title:e.target.value})} placeholder="例: 東洋住宅へ見積提出"/><Inp label="期限" type="date" value={nTk.due} onChange={e=>setNTk({...nTk,due:e.target.value})}/><Sel label="優先度" opts={["high","mid","low"]} value={nTk.prio} onChange={e=>setNTk({...nTk,prio:e.target.value})}/></Modal>)}
@@ -1049,7 +1036,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
         </div>
         {/* 削除ボタン（画面下部・iframeの外なので確実に押せる）*/}
         <div style={{flexShrink:0,padding:"12px 16px",background:"rgba(0,0,0,0.8)"}}>
-          <button onClick={()=>setFileDel({name:finPrev.name,onDelete:()=>deleteFinFile(finPrev.id)})}
+          <button onClick={()=>setConf({msg:`「${finPrev.name}」\n\nこの操作は元に戻せません。\n削除しますか？`,onOk:()=>{deleteFinFile(finPrev.id);setConf(null);}})}
             style={{width:"100%",padding:"14px 0",background:"#DC2626",color:"#fff",border:"none",borderRadius:10,fontWeight:800,fontSize:15,cursor:"pointer"}}>
             🗑 このファイルを削除
           </button>
@@ -1089,7 +1076,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
                   </div>
                   <div style={{display:"flex",borderTop:"1px solid #F3F4F6"}}>
                     {f.url&&<a href={f.url} download={f.name} target="_blank" rel="noopener noreferrer" style={{flex:1,padding:"8px 0",display:"flex",alignItems:"center",justifyContent:"center",borderRight:"1px solid #F3F4F6",fontSize:12,color:"#059669",fontWeight:700,textDecoration:"none"}}>⬇ 保存</a>}
-                    <button onClick={()=>setFileDel({name:f.name,onDelete:()=>deleteFinFile(f.id)})} style={{flex:1,padding:"8px 0",background:"none",border:"none",fontSize:12,color:"#DC2626",fontWeight:700,cursor:"pointer"}}>🗑 削除</button>
+                    <button onClick={()=>setConf({msg:`「${f.name}」\n\nこの操作は元に戻せません。\n削除しますか？`,onOk:()=>{deleteFinFile(f.id);setConf(null);}})} style={{flex:1,padding:"8px 0",background:"none",border:"none",fontSize:12,color:"#DC2626",fontWeight:700,cursor:"pointer"}}>🗑 削除</button>
                   </div>
                 </div>
               ))}
@@ -1199,7 +1186,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
           <div style={{flex:1,fontWeight:700,fontSize:14}}>{tmplPrev.name}</div>
           <div style={{display:"flex",gap:6,flexShrink:0}}>
             {tmplPrev.url&&<a href={tmplPrev.url} download={tmplPrev.name} target="_blank" rel="noopener noreferrer" style={{background:"#E07B39",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,textDecoration:"none"}}>⬇ 保存</a>}
-            <button onClick={()=>setFileDel({name:tmplPrev.name,onDelete:()=>deleteTmplFile(tmplPrev.id)})} style={{background:"rgba(220,38,38,0.8)",color:"#fff",borderRadius:8,padding:"5px 10px",fontSize:12,fontWeight:700,border:"none",cursor:"pointer"}}>🗑 削除</button>
+            <button onClick={()=>setConf({msg:`「${tmplPrev.name}」\n\nこの操作は元に戻せません。\n削除しますか？`,onOk:()=>{deleteTmplFile(tmplPrev.id);setConf(null);}})} style={{background:"rgba(220,38,38,0.8)",color:"#fff",borderRadius:8,padding:"5px 10px",fontSize:12,fontWeight:700,border:"none",cursor:"pointer"}}>🗑 削除</button>
           </div>
         </div>
         <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
@@ -1246,7 +1233,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
                     <div style={{fontWeight:600,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#1F2937"}}>{f.name}</div>
                     <div style={{fontSize:11,color:"#9CA3AF",marginTop:2}}>{f.size?`${(f.size/1024).toFixed(0)}KB`:""}</div>
                   </div>
-                  <button onClick={()=>setFileDel({name:f.name,onDelete:()=>deleteTmplFile(f.id)})} style={{background:"#FEF2F2",border:"none",borderRadius:6,padding:"5px 8px",fontSize:11,color:"#DC2626",fontWeight:700,cursor:"pointer"}}>🗑</button>
+                  <button onClick={()=>setConf({msg:`「${f.name}」\n\nこの操作は元に戻せません。\n削除しますか？`,onOk:()=>{deleteTmplFile(f.id);setConf(null);}})} style={{background:"#FEF2F2",border:"none",borderRadius:6,padding:"5px 8px",fontSize:11,color:"#DC2626",fontWeight:700,cursor:"pointer"}}>🗑</button>
                 </div>
               ))}
           </div>
