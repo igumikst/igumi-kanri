@@ -1103,8 +1103,8 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
                 </div>
               ))}
           </div>
+          {conf&&<Confirm msg={conf.msg} onCancel={()=>setConf(null)} onOk={conf.onOk}/>}
         </div>
-        {conf&&<Confirm msg={conf.msg} onCancel={()=>setConf(null)} onOk={conf.onOk}/>}
       );
     }
 
