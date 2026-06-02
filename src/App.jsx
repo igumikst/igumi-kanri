@@ -52,6 +52,7 @@ const DEFAULT_TILE_CONF = [
   {key:"analytics",icon:"📊",label:"分析ダッシュボード",sub:"グラフ・集計",color:"#0F766E",visible:true},
   {key:"ai",icon:"🤖",label:"AIアシスタント",sub:"データに質問",color:"#6D28D9",visible:true},
   {key:"chatgpt",icon:"💬",label:"ChatGPT",sub:"外部AIを開く",color:"#10A37F",visible:true},
+  {key:"report",icon:"📋",label:"報告書作成",sub:"工事写真報告書",color:"#7C3AED",visible:true},
 ];
 const DEFAULT_CUST = {name:"株式会社IGUMI",sys:"案件管理システム",c1:"#1A3A5C",c2:"#2563EB",acc:"#E07B39",bg:"#F0F4F8",showSidebar:true,showRightPanel:true,showLauncher:true};
 
@@ -485,7 +486,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
         {tileConf.filter(t=>t.visible).map(t=>{
           const isAct=page===t.key;
           const sub=t.key==="projects"?`${active.length}件進行中`:t.key==="companies"?`${cos.length}社`:t.key==="tasks"?`未完了 ${pending.length}件`:t.sub;
-          return(<button key={t.key} onClick={()=>{if(t.key==="chatgpt"){window.open("https://chatgpt.com","_blank");}else nav(t.key);}} style={{width:"100%",padding:"9px 16px",background:isAct?"rgba(255,255,255,0.13)":"transparent",border:"none",color:"#fff",textAlign:"left",cursor:"pointer",display:"flex",alignItems:"center",gap:10,borderLeft:`3px solid ${isAct?t.color:"transparent"}`}}>
+          return(<button key={t.key} onClick={()=>{if(t.key==="chatgpt"){window.open("https://chatgpt.com","_blank");}else if(t.key==="report"){window.open("/report.html","_blank");}else nav(t.key);}} style={{width:"100%",padding:"9px 16px",background:isAct?"rgba(255,255,255,0.13)":"transparent",border:"none",color:"#fff",textAlign:"left",cursor:"pointer",display:"flex",alignItems:"center",gap:10,borderLeft:`3px solid ${isAct?t.color:"transparent"}`}}>
             <span style={{fontSize:18,flexShrink:0}}>{t.icon}</span>
             <div style={{overflow:"hidden"}}>
               <div style={{fontSize:12,fontWeight:isAct?800:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.label}</div>
@@ -674,7 +675,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
           {isPC&&!tileEdit&&(
             <div style={{background:"#fff",borderRadius:14,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.07)",marginBottom:20}}>
               {tiles.filter(t=>t.visible).map((t,i,arr)=>(
-                <button key={t.key} onClick={()=>{if(t.key==="chatgpt"){window.open("https://chatgpt.com","_blank");return;}nav(t.key);}}
+                <button key={t.key} onClick={()=>{if(t.key==="chatgpt"){window.open("https://chatgpt.com","_blank");return;}if(t.key==="report"){window.open("/report.html","_blank");return;}nav(t.key);}}
                   style={{width:"100%",display:"flex",alignItems:"center",gap:14,padding:"13px 18px",background:"none",border:"none",borderBottom:i<arr.length-1?"1px solid #F3F4F6":"none",cursor:"pointer",textAlign:"left",transition:"background 0.1s"}}
                   onMouseOver={e=>e.currentTarget.style.background="#F9FAFB"}
                   onMouseOut={e=>e.currentTarget.style.background="none"}>
@@ -728,7 +729,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
                     <div style={{marginTop:8,height:3,borderRadius:2,background:t.color,width:"40%"}}/>
                   </div>
                 ):(
-                  <button onClick={()=>{if(t.key==="chatgpt"){window.open("https://chatgpt.com","_blank");return;}nav(t.key);}} style={{width:"100%",background:"#fff",border:"none",borderRadius:14,padding:"16px 14px",textAlign:"left",cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}>
+                  <button onClick={()=>{if(t.key==="chatgpt"){window.open("https://chatgpt.com","_blank");return;}if(t.key==="report"){window.open("/report.html","_blank");return;}nav(t.key);}} style={{width:"100%",background:"#fff",border:"none",borderRadius:14,padding:"16px 14px",textAlign:"left",cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}>
                     <div style={{fontSize:26,marginBottom:8}}>{t.icon}</div>
                     <div style={{fontWeight:800,fontSize:14,color:"#1F2937",marginBottom:2}}>{t.label}</div>
                     <div style={{fontSize:11,color:"#6B7280"}}>{t.sub}</div>
