@@ -198,7 +198,13 @@ export default function App() {
     if(hsRes.data){
       const tilesRow=hsRes.data.find(r=>r.id==="tiles");
       const custRow=hsRes.data.find(r=>r.id==="customize");
-      if(tilesRow?.value && Array.isArray(tilesRow.value) && tilesRow.value.length>0) setTileConf(tilesRow.value);
+      if(tilesRow?.value && Array.isArray(tilesRow.value) && tilesRow.value.length>0){
+        const saved=tilesRow.value;
+        const savedKeys=new Set(saved.map(t=>t.key));
+        // 新しいタイルがDEFAULTにあれば末尾に追加
+        const merged=[...saved,...DEFAULT_TILE_CONF.filter(t=>!savedKeys.has(t.key))];
+        setTileConf(merged);
+      }
       if(custRow?.value && Object.keys(custRow.value).length>0) { setCust(custRow.value); setEc(custRow.value); }
     }
     if(linksRes.data && linksRes.data.length>0) setLinks(linksRes.data);
