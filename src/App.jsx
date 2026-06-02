@@ -1024,10 +1024,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
         <div style={{background:"#1A3A5C",color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
           <button onClick={()=>setFinPrev(null)} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>←</button>
           <div style={{flex:1,fontWeight:700,fontSize:14,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{finPrev.name}</div>
-          <div style={{display:"flex",gap:6,flexShrink:0}}>
-            {finPrev.url&&<a href={finPrev.url} download={finPrev.name} target="_blank" rel="noopener noreferrer" style={{background:"#E07B39",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,textDecoration:"none"}}>⬇ 保存</a>}
-            <button onClick={()=>setFileDel({name:finPrev.name,onDelete:()=>deleteFinFile(finPrev.id)})} style={{background:"rgba(220,38,38,0.8)",color:"#fff",borderRadius:8,padding:"5px 10px",fontSize:12,fontWeight:700,border:"none",cursor:"pointer"}}>🗑 削除</button>
-          </div>
+          {finPrev.url&&<a href={finPrev.url} download={finPrev.name} target="_blank" rel="noopener noreferrer" style={{background:"#E07B39",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,textDecoration:"none",flexShrink:0}}>⬇ 保存</a>}
         </div>
         {/* プレビュー本体 */}
         <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
@@ -1046,12 +1043,17 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
                 <div style={{fontSize:15,fontWeight:700,marginBottom:6}}>{finPrev.name}</div>
                 <div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:24}}>{finPrev.size?`${(finPrev.size/1024).toFixed(0)}KB`:""}</div>
                 <a href={finPrev.url} download={finPrev.name} target="_blank" rel="noopener noreferrer" style={{display:"inline-block",background:"#E07B39",color:"#fff",padding:"14px 32px",borderRadius:12,fontWeight:800,fontSize:15,textDecoration:"none",marginBottom:12}}>⬇ ダウンロード</a>
-                <div style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>ブラウザでは直接プレビューできないファイル形式です</div>
               </div>
             </div>
           ):<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}><div style={{textAlign:"center"}}><div style={{fontSize:48,marginBottom:12}}>⏳</div><div>読み込み中...</div></div></div>}
         </div>
-        {conf&&<Confirm msg={conf.msg} onCancel={()=>setConf(null)} onOk={conf.onOk}/>}
+        {/* 削除ボタン（画面下部・iframeの外なので確実に押せる）*/}
+        <div style={{flexShrink:0,padding:"12px 16px",background:"rgba(0,0,0,0.8)"}}>
+          <button onClick={()=>setFileDel({name:finPrev.name,onDelete:()=>deleteFinFile(finPrev.id)})}
+            style={{width:"100%",padding:"14px 0",background:"#DC2626",color:"#fff",border:"none",borderRadius:10,fontWeight:800,fontSize:15,cursor:"pointer"}}>
+            🗑 このファイルを削除
+          </button>
+        </div>
       </div>
     );
 
