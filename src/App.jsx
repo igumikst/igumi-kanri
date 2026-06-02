@@ -1035,6 +1035,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
             </div>
           ):<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}><div style={{textAlign:"center"}}><div style={{fontSize:48,marginBottom:12}}>⏳</div><div>読み込み中...</div></div></div>}
         </div>
+        {conf&&<Confirm msg={conf.msg} onCancel={()=>setConf(null)} onOk={conf.onOk}/>}
       </div>
     );
 
@@ -1055,21 +1056,28 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
           <div style={{padding:isPC?"14px 0":14}}>
             {monthFiles.length===0?<div style={{textAlign:"center",padding:40,color:"#9CA3AF"}}><div style={{fontSize:48,marginBottom:12}}>📂</div><div style={{fontSize:14}}>ファイルがありません</div><div style={{fontSize:12,marginTop:4,color:"#9CA3AF"}}>右上の「＋ 追加」からアップロード</div></div>
               :monthFiles.map(f=>(
-                <div key={f.id} style={{background:"#fff",borderRadius:12,padding:"12px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:12,boxShadow:"0 1px 4px rgba(0,0,0,0.06)",cursor:"pointer"}}
-                  onClick={async()=>{
-                    if(f.url){setFinPrev(f);}
-                    else{const {data}=await supabase.from("finance_files").select("*").eq("id",f.id).single();if(data)setFinPrev(data);}
-                  }}>
-                  <span style={{fontSize:28}}>{fileIcon(f)}</span>
-                  <div style={{flex:1,overflow:"hidden"}}>
-                    <div style={{fontWeight:600,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#1F2937"}}>{f.name}</div>
-                    <div style={{fontSize:11,color:"#9CA3AF"}}>{f.size?`${(f.size/1024).toFixed(0)}KB`:""}</div>
+                <div key={f.id} style={{background:"#fff",borderRadius:12,marginBottom:8,boxShadow:"0 1px 4px rgba(0,0,0,0.06)",overflow:"hidden"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",cursor:"pointer"}}
+                    onClick={async()=>{
+                      if(f.url){setFinPrev(f);}
+                      else{const {data}=await supabase.from("finance_files").select("*").eq("id",f.id).single();if(data)setFinPrev(data);}
+                    }}>
+                    <span style={{fontSize:28,flexShrink:0}}>{fileIcon(f)}</span>
+                    <div style={{flex:1,overflow:"hidden"}}>
+                      <div style={{fontWeight:600,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#1F2937"}}>{f.name}</div>
+                      <div style={{fontSize:11,color:"#9CA3AF"}}>{f.size?`${(f.size/1024).toFixed(0)}KB`:""}</div>
+                    </div>
+                    <span style={{color:"#9CA3AF",fontSize:14,flexShrink:0}}>›</span>
                   </div>
-                  <span style={{color:"#9CA3AF",fontSize:14}}>›</span>
+                  <div style={{display:"flex",borderTop:"1px solid #F3F4F6"}}>
+                    {f.url&&<a href={f.url} download={f.name} target="_blank" rel="noopener noreferrer" style={{flex:1,padding:"8px 0",display:"flex",alignItems:"center",justifyContent:"center",borderRight:"1px solid #F3F4F6",fontSize:12,color:"#059669",fontWeight:700,textDecoration:"none"}}>⬇ 保存</a>}
+                    <button onClick={()=>setConf({msg:`「${f.name}」を削除しますか？`,onOk:()=>{deleteFinFile(f.id);setConf(null);}})} style={{flex:1,padding:"8px 0",background:"none",border:"none",fontSize:12,color:"#DC2626",fontWeight:700,cursor:"pointer"}}>🗑 削除</button>
+                  </div>
                 </div>
               ))}
           </div>
         </div>
+        {conf&&<Confirm msg={conf.msg} onCancel={()=>setConf(null)} onOk={conf.onOk}/>}
       );
     }
 
