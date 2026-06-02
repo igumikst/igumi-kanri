@@ -17,6 +17,7 @@
 html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background:var(--bg);color:var(--text)}
 
 .hdr{background:var(--navy);color:#fff;padding:13px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:200;box-shadow:0 2px 12px rgba(0,0,0,.3)}
+.hdr-back{background:rgba(255,255,255,0.15);border:none;color:#fff;border-radius:8px;padding:6px 12px;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0;font-family:inherit}
 .hdr-logo{background:var(--orange);border-radius:8px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:15px;flex-shrink:0}
 .hdr-title{font-weight:800;font-size:16px}
 .hdr-sub{font-size:10px;opacity:.5}
@@ -176,7 +177,7 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
 <body>
 
 <div class="hdr">
-  <div class="hdr-logo">工</div>
+  <button class="hdr-back" onclick="window.location.href='https://igumi-kanri.vercel.app'">← ホーム</button>
   <div style="flex:1">
     <div class="hdr-title">工事写真報告書作成</div>
     <div class="hdr-sub">IGUMI 工事管理システム</div>
