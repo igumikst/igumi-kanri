@@ -111,6 +111,7 @@ export default function App() {
   const [schP,setSchP]=useState("");
   const [schC,setSchC]=useState("");
   const [conf,setConf]=useState(null);
+  const [fileDel,setFileDel]=useState(null);
   const [finFiles,setFinFiles]=useState([]);
   const [finFolders,setFinFolders]=useState([]);
   const [finItem,setFinItem]=useState(null);
@@ -552,6 +553,21 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
   };
 
   if(loading) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",fontFamily:"'Hiragino Sans',sans-serif",background:"#F0F4F8"}}><div style={{textAlign:"center"}}><div style={{fontSize:32,marginBottom:12}}>⚡</div><div style={{color:"#1A3A5C",fontWeight:700}}>読み込み中...</div></div></div>;
+
+  // ══ ファイル削除確認（グローバル）══
+  if(fileDel) return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 24px"}}>
+      <div style={{background:"#fff",borderRadius:16,padding:24,width:"100%",maxWidth:320,boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+        <div style={{fontSize:22,textAlign:"center",marginBottom:12}}>🗑</div>
+        <div style={{fontSize:15,color:"#374151",marginBottom:6,fontWeight:700,textAlign:"center"}}>削除しますか？</div>
+        <div style={{fontSize:13,color:"#6B7280",marginBottom:20,textAlign:"center",wordBreak:"break-all"}}>「{fileDel.name}」</div>
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={()=>setFileDel(null)} style={{flex:1,padding:13,background:"#F3F4F6",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer",color:"#374151"}}>キャンセル</button>
+          <button onClick={()=>{fileDel.onDelete();setFileDel(null);}} style={{flex:1,padding:13,background:"#DC2626",color:"#fff",border:"none",borderRadius:10,fontWeight:800,fontSize:14,cursor:"pointer"}}>削除する</button>
+        </div>
+      </div>
+    </div>
+  );
 
   // ══ グローバルモーダル（どのページからでも使える）══
   if(modal==="cust") return(
@@ -1010,7 +1026,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
           <div style={{flex:1,fontWeight:700,fontSize:14,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{finPrev.name}</div>
           <div style={{display:"flex",gap:6,flexShrink:0}}>
             {finPrev.url&&<a href={finPrev.url} download={finPrev.name} target="_blank" rel="noopener noreferrer" style={{background:"#E07B39",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,textDecoration:"none"}}>⬇ 保存</a>}
-            <button onClick={()=>{if(window.confirm(`「${finPrev.name}」を削除しますか？`)){deleteFinFile(finPrev.id);}}} style={{background:"rgba(220,38,38,0.8)",color:"#fff",borderRadius:8,padding:"5px 10px",fontSize:12,fontWeight:700,border:"none",cursor:"pointer"}}>🗑 削除</button>
+            <button onClick={()=>setFileDel({name:finPrev.name,onDelete:()=>deleteFinFile(finPrev.id)})} style={{background:"rgba(220,38,38,0.8)",color:"#fff",borderRadius:8,padding:"5px 10px",fontSize:12,fontWeight:700,border:"none",cursor:"pointer"}}>🗑 削除</button>
           </div>
         </div>
         {/* プレビュー本体 */}
@@ -1071,7 +1087,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
                   </div>
                   <div style={{display:"flex",borderTop:"1px solid #F3F4F6"}}>
                     {f.url&&<a href={f.url} download={f.name} target="_blank" rel="noopener noreferrer" style={{flex:1,padding:"8px 0",display:"flex",alignItems:"center",justifyContent:"center",borderRight:"1px solid #F3F4F6",fontSize:12,color:"#059669",fontWeight:700,textDecoration:"none"}}>⬇ 保存</a>}
-                    <button onClick={()=>{if(window.confirm(`「${f.name}」を削除しますか？`)){deleteFinFile(f.id);}}} style={{flex:1,padding:"8px 0",background:"none",border:"none",fontSize:12,color:"#DC2626",fontWeight:700,cursor:"pointer"}}>🗑 削除</button>
+                    <button onClick={()=>setFileDel({name:f.name,onDelete:()=>deleteFinFile(f.id)})} style={{flex:1,padding:"8px 0",background:"none",border:"none",fontSize:12,color:"#DC2626",fontWeight:700,cursor:"pointer"}}>🗑 削除</button>
                   </div>
                 </div>
               ))}
@@ -1181,7 +1197,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
           <div style={{flex:1,fontWeight:700,fontSize:14}}>{tmplPrev.name}</div>
           <div style={{display:"flex",gap:6,flexShrink:0}}>
             {tmplPrev.url&&<a href={tmplPrev.url} download={tmplPrev.name} target="_blank" rel="noopener noreferrer" style={{background:"#E07B39",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,textDecoration:"none"}}>⬇ 保存</a>}
-            <button onClick={()=>{if(window.confirm(`「${tmplPrev.name}」を削除しますか？`)){deleteTmplFile(tmplPrev.id);}}} style={{background:"rgba(220,38,38,0.8)",color:"#fff",borderRadius:8,padding:"5px 10px",fontSize:12,fontWeight:700,border:"none",cursor:"pointer"}}>🗑 削除</button>
+            <button onClick={()=>setFileDel({name:tmplPrev.name,onDelete:()=>deleteTmplFile(tmplPrev.id)})} style={{background:"rgba(220,38,38,0.8)",color:"#fff",borderRadius:8,padding:"5px 10px",fontSize:12,fontWeight:700,border:"none",cursor:"pointer"}}>🗑 削除</button>
           </div>
         </div>
         <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
@@ -1228,7 +1244,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
                     <div style={{fontWeight:600,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#1F2937"}}>{f.name}</div>
                     <div style={{fontSize:11,color:"#9CA3AF",marginTop:2}}>{f.size?`${(f.size/1024).toFixed(0)}KB`:""}</div>
                   </div>
-                  <button onClick={()=>{if(window.confirm(`「${f.name}」を削除しますか？`)){deleteTmplFile(f.id);}}} style={{background:"#FEF2F2",border:"none",borderRadius:6,padding:"5px 8px",fontSize:11,color:"#DC2626",fontWeight:700,cursor:"pointer"}}>🗑</button>
+                  <button onClick={()=>setFileDel({name:f.name,onDelete:()=>deleteTmplFile(f.id)})} style={{background:"#FEF2F2",border:"none",borderRadius:6,padding:"5px 8px",fontSize:11,color:"#DC2626",fontWeight:700,cursor:"pointer"}}>🗑</button>
                 </div>
               ))}
           </div>
