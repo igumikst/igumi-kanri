@@ -113,6 +113,9 @@ export default function App() {
   const [fltT,setFltT]=useState("すべて");
   const [schP,setSchP]=useState("");
   const [schC,setSchC]=useState("");
+  const [fltInCharge,setFltInCharge]=useState("すべて");
+  const [fltPrio,setFltPrio]=useState("すべて");
+  const [quickStatus,setQuickStatus]=useState(null);
   const [conf,setConf]=useState(null);
   const [pendingDelete,setPendingDelete]=useState(false);
   const [finFiles,setFinFiles]=useState([]);
@@ -301,7 +304,7 @@ export default function App() {
   };
 
 
-  const nav=p=>{setPage(p);setSchP("");setSchC("");setFltS("すべて");setFltT("すべて");setSelP(null);setSelC(null);setSelCt(null);setFinItem(null);setFinY(null);setFinM(null);setFinPrev(null);setTmplCat(null);setTmplPrev(null);setPwMod(null);setPwIn("");setPwErr("");setModal(null);setPendingDelete(false);};
+  const nav=p=>{setPage(p);setSchP("");setSchC("");setFltS("すべて");setFltT("すべて");setFltInCharge("すべて");setFltPrio("すべて");setQuickStatus(null);setSelP(null);setSelC(null);setSelCt(null);setFinItem(null);setFinY(null);setFinM(null);setFinPrev(null);setTmplCat(null);setTmplPrev(null);setPwMod(null);setPwIn("");setPwErr("");setModal(null);setPendingDelete(false);};
   
   // ── AIチャット ──
   const sendAI = async () => {
@@ -395,8 +398,14 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
   const delTk=async id=>{await supabase.from("tasks").delete().eq("id",id);setTks(tks.filter(t=>t.id!==id));};
   const togTk=async t=>{await supabase.from("tasks").update({done:!t.done}).eq("id",t.id);setTks(tks.map(x=>x.id===t.id?{...x,done:!x.done}:x));};
 
-  const filtP=pjs.filter(p=>{if(fltS!=="すべて"&&p.status!==fltS)return false;if(schP&&!p.name.includes(schP)&&!(getC(p.clientId)?.name||"").includes(schP))return false;return true;});
+  const filtP=pjs.filter(p=>{
+    if(fltS!=="すべて"&&p.status!==fltS)return false;
+    if(fltInCharge!=="すべて"&&p.inCharge!==fltInCharge)return false;
+    if(schP&&!p.name.includes(schP)&&!(getC(p.clientId)?.name||"").includes(schP)&&!(p.inCharge||"").includes(schP))return false;
+    return true;
+  });
   const filtC=cos.filter(c=>{if(fltT!=="すべて"&&c.type!==fltT)return false;if(schC&&!c.name.includes(schC))return false;return true;});
+  const inChargeList=["すべて",...new Set(pjs.map(p=>p.inCharge).filter(Boolean))];
 
   const genYM=()=>{const now=new Date(),res={};for(let y=2022;y<=now.getFullYear();y++){res[y]=[];const max=y===now.getFullYear()?now.getMonth()+1:12;for(let m=1;m<=max;m++)res[y].push(m);}return res;};
   const ym=genYM();
@@ -624,6 +633,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
           <button onClick={()=>{setEc({...cust});setModal("cust");}} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:8,padding:"5px 10px",fontSize:12,cursor:"pointer",fontWeight:700}}>⚙ 編集</button>
         </div>}
         <div style={{background:`linear-gradient(135deg,${cust.c1},${cust.c2})`,padding:"20px 20px 28px",margin:"0 0 -16px"}}>
+          <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",marginBottom:2}}>{new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric',weekday:'short'})}</div>
           <div style={{fontSize:13,color:"rgba(255,255,255,0.85)",marginBottom:4}}>{cust.name}</div>
           <div style={{fontSize:22,fontWeight:900,color:"#fff"}}>{cust.sys}</div>
           <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",marginTop:4}}>案件 {pjs.length}件 ｜ 取引先 {cos.length}社</div>
@@ -812,10 +822,11 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
           </div>
         ):(
           <div style={{padding:isPC?"14px 0":14}}>
-            <input value={schP} onChange={e=>setSchP(e.target.value)} placeholder="🔍 案件名・取引先で検索" style={{width:"100%",padding:"9px 14px",borderRadius:10,border:"1.5px solid #E5E7EB",fontSize:13,background:"#fff",boxSizing:"border-box",marginBottom:10,color:"#1F2937"}}/>
-            <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:8,marginBottom:8}}>
+            <input value={schP} onChange={e=>setSchP(e.target.value)} placeholder="🔍 案件名・取引先・担当者で検索" style={{width:"100%",padding:"9px 14px",borderRadius:10,border:"1.5px solid #E5E7EB",fontSize:13,background:"#fff",boxSizing:"border-box",marginBottom:10,color:"#1F2937"}}/>
+            <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:6,marginBottom:6}}>
               {["すべて",...STATUSES].map(s=>(<button key={s} onClick={()=>setFltS(s)} style={{padding:"4px 12px",borderRadius:16,border:"1.5px solid",whiteSpace:"nowrap",borderColor:fltS===s?"#1A3A5C":"#D1D5DB",background:fltS===s?"#1A3A5C":"#fff",color:fltS===s?"#fff":"#374151",fontSize:11,fontWeight:700,cursor:"pointer"}}>{s}</button>))}
             </div>
+            {inChargeList.length>2&&<div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:8,marginBottom:8}}>{inChargeList.map(n=>(<button key={n} onClick={()=>setFltInCharge(n)} style={{padding:"4px 12px",borderRadius:16,border:"1.5px solid",whiteSpace:"nowrap",borderColor:fltInCharge===n?"#E07B39":"#D1D5DB",background:fltInCharge===n?"#E07B39":"#fff",color:fltInCharge===n?"#fff":"#374151",fontSize:11,fontWeight:700,cursor:"pointer"}}>{n==="すべて"?"👤 全員":"👤 "+n}</button>))}</div>}
             <div style={{display:"flex",gap:8,marginBottom:12}}>
               {[["件数",`${filtP.length}件`],["受注合計",fmt(tA)],["粗利合計",fmt(tG)]].map(([l,v])=>(<div key={l} style={{flex:1,background:"#fff",borderRadius:10,padding:"8px 10px",textAlign:"center",boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}><div style={{fontSize:10,color:"#9CA3AF"}}>{l}</div><div style={{fontSize:12,fontWeight:800,color:"#1A3A5C",marginTop:1}}>{v}</div></div>))}
             </div>
@@ -823,8 +834,13 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
               {filtP.map(p=>{const cl=getC(p.clientId);const gp=p.amount?((p.gp/p.amount)*100).toFixed(1):null;return(
                 <div key={p.id} style={{background:"#fff",borderRadius:12,boxShadow:"0 1px 6px rgba(0,0,0,0.07)",borderLeft:"4px solid #1A3A5C",overflow:"hidden"}}>
                   <div onClick={()=>setSelP(p)} style={{padding:"13px 14px",cursor:"pointer"}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:5}}><div style={{fontWeight:700,fontSize:14,flex:1,marginRight:8,color:"#1F2937"}}>{p.name}</div><Badge s={p.status}/></div>
-                    <div style={{fontSize:12,color:"#6B7280",marginBottom:4}}>{cl?`🏢 ${cl.name}${cl.branch?" "+cl.branch:""}` :"取引先未設定"}</div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:5}}><div style={{fontWeight:700,fontSize:14,flex:1,marginRight:8,color:"#1F2937"}}>{p.name}</div>
+                      <div onClick={e=>{e.stopPropagation();setQuickStatus(quickStatus===p.id?null:p.id);}}>
+                        <Badge s={p.status}/>
+                      </div>
+                    </div>
+                    {quickStatus===p.id&&<div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:6}}>{STATUSES.map(s=><button key={s} onClick={e=>{e.stopPropagation();updatePj&&supabase.from("projects").update({status:s}).eq("id",p.id).then(()=>{setPjs(prev=>prev.map(x=>x.id===p.id?{...x,status:s}:x));setQuickStatus(null);});}} style={{padding:"3px 8px",borderRadius:10,border:"1px solid",fontSize:10,fontWeight:700,cursor:"pointer",borderColor:STATUS_STYLE[s]?.border||"#ccc",background:p.status===s?STATUS_STYLE[s]?.bg:"#fff",color:STATUS_STYLE[s]?.text||"#374151"}}>{s}</button>)}</div>}
+                    <div style={{fontSize:12,color:"#6B7280",marginBottom:4}}>{cl?`🏢 ${cl.name}${cl.branch?" "+cl.branch:""}` :"取引先未設定"}{p.inCharge&&<span style={{marginLeft:8,color:"#9CA3AF"}}>👤 {p.inCharge}</span>}</div>
                     <div style={{display:"flex",justifyContent:"space-between"}}><div style={{fontSize:14,fontWeight:800,color:"#E07B39"}}>{fmt(p.amount)}</div>{gp&&<div style={{fontSize:11,color:"#059669",fontWeight:700}}>粗利率 {gp}%</div>}</div>
                   </div>
                   <div style={{display:"flex",borderTop:"1px solid #F3F4F6"}}>
@@ -1491,3 +1507,4 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
 
   return null;
 }
+
