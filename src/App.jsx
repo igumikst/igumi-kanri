@@ -154,6 +154,20 @@ export default function App() {
   const [aiLoading,setAiLoading]=useState(false);
   // ✅ PCレイアウト判定
   const [isPC,setIsPC]=useState(()=>window.innerWidth>=768);
+  const [weather,setWeather]=useState(null);
+
+  useEffect(()=>{
+    // 横浜の天気（Open-Meteo・APIキー不要）
+    fetch("https://api.open-meteo.com/v1/forecast?latitude=35.4437&longitude=139.6380&current=temperature_2m,weather_code&timezone=Asia%2FTokyo")
+      .then(r=>r.json())
+      .then(d=>{
+        const code=d.current?.weather_code;
+        const temp=Math.round(d.current?.temperature_2m);
+        const icon=code===0?"☀️":code<=2?"🌤":code===3?"☁️":code<=48?"🌫":code<=55?"🌦":code<=65?"🌧":code<=75?"🌨":code<=82?"🌦":code<=99?"⛈":"🌡";
+        const desc=code===0?"快晴":code<=2?"晴れ":code===3?"曇り":code<=48?"霧":code<=55?"小雨":code<=65?"雨":code<=75?"雪":code<=82?"にわか雨":code<=99?"雷雨":"不明";
+        setWeather({icon,temp,desc});
+      }).catch(()=>{});
+  },[]);
 
   useEffect(()=>{
     const h=()=>setIsPC(window.innerWidth>=768);
@@ -633,10 +647,20 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
           <button onClick={()=>{setEc({...cust});setModal("cust");}} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:8,padding:"5px 10px",fontSize:12,cursor:"pointer",fontWeight:700}}>⚙ 編集</button>
         </div>}
         <div style={{background:`linear-gradient(135deg,${cust.c1},${cust.c2})`,padding:"20px 20px 28px",margin:"0 0 -16px"}}>
-          <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",marginBottom:2}}>{new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric',weekday:'short'})}</div>
-          <div style={{fontSize:13,color:"rgba(255,255,255,0.85)",marginBottom:4}}>{cust.name}</div>
-          <div style={{fontSize:22,fontWeight:900,color:"#fff"}}>{cust.sys}</div>
-          <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",marginTop:4}}>案件 {pjs.length}件 ｜ 取引先 {cos.length}社</div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div>
+              <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",marginBottom:2}}>{new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric',weekday:'short'})}</div>
+              <div style={{fontSize:13,color:"rgba(255,255,255,0.85)",marginBottom:4}}>{cust.name}</div>
+              <div style={{fontSize:22,fontWeight:900,color:"#fff"}}>{cust.sys}</div>
+              <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",marginTop:4}}>案件 {pjs.length}件 ｜ 取引先 {cos.length}社</div>
+            </div>
+            {weather&&<div style={{textAlign:"right",background:"rgba(255,255,255,0.15)",borderRadius:12,padding:"10px 14px",flexShrink:0}}>
+              <div style={{fontSize:28,lineHeight:1}}>{weather.icon}</div>
+              <div style={{fontSize:20,fontWeight:900,color:"#fff",marginTop:4}}>{weather.temp}°C</div>
+              <div style={{fontSize:11,color:"rgba(255,255,255,0.8)"}}>{weather.desc}</div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginTop:2}}>横浜</div>
+            </div>}
+          </div>
         </div>
         <div style={{padding:isPC?"12px 0 20px":"28px 14px 30px"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -1507,4 +1531,3 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
 
   return null;
 }
-
