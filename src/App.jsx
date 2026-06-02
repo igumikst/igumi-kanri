@@ -114,6 +114,7 @@ export default function App() {
   const [schP,setSchP]=useState("");
   const [schC,setSchC]=useState("");
   const [conf,setConf]=useState(null);
+  const [pendingDelete,setPendingDelete]=useState(false);
   const [finFiles,setFinFiles]=useState([]);
   const [finFolders,setFinFolders]=useState([]);
   const [finItem,setFinItem]=useState(null);
@@ -300,7 +301,7 @@ export default function App() {
   };
 
 
-  const nav=p=>{setPage(p);setSchP("");setSchC("");setFltS("すべて");setFltT("すべて");setSelP(null);setSelC(null);setSelCt(null);setFinItem(null);setFinY(null);setFinM(null);setFinPrev(null);setTmplCat(null);setTmplPrev(null);setPwMod(null);setPwIn("");setPwErr("");setModal(null);};
+  const nav=p=>{setPage(p);setSchP("");setSchC("");setFltS("すべて");setFltT("すべて");setSelP(null);setSelC(null);setSelCt(null);setFinItem(null);setFinY(null);setFinM(null);setFinPrev(null);setTmplCat(null);setTmplPrev(null);setPwMod(null);setPwIn("");setPwErr("");setModal(null);setPendingDelete(false);};
   
   // ── AIチャット ──
   const sendAI = async () => {
@@ -1009,7 +1010,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
         {(cust.showLauncher!==false)&&<FloatLauncher/> }
         {/* ヘッダー */}
         <div style={{background:"#1A3A5C",color:"#fff",padding:"14px 18px",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
-          <button onClick={()=>setFinPrev(null)} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>←</button>
+          <button onClick={()=>{setFinPrev(null);setPendingDelete(false);}} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>←</button>
           <div style={{flex:1,fontWeight:700,fontSize:14,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{finPrev.name}</div>
           {finPrev.url&&<a href={finPrev.url} download={finPrev.name} target="_blank" rel="noopener noreferrer" style={{background:"#E07B39",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,textDecoration:"none",flexShrink:0}}>⬇ 保存</a>}
         </div>
@@ -1034,12 +1035,32 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
             </div>
           ):<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}><div style={{textAlign:"center"}}><div style={{fontSize:48,marginBottom:12}}>⏳</div><div>読み込み中...</div></div></div>}
         </div>
-        {/* 削除ボタン（画面下部・iframeの外なので確実に押せる）*/}
-        <div style={{flexShrink:0,padding:"12px 16px",background:"rgba(0,0,0,0.8)"}}>
-          <button onClick={()=>setConf({msg:`「${finPrev.name}」\n\nこの操作は元に戻せません。\n削除しますか？`,onOk:()=>{deleteFinFile(finPrev.id);setConf(null);}})}
-            style={{width:"100%",padding:"14px 0",background:"#DC2626",color:"#fff",border:"none",borderRadius:10,fontWeight:800,fontSize:15,cursor:"pointer"}}>
-            🗑 このファイルを削除
-          </button>
+        {/* 削除エリア（インライン2ステップ確認）*/}
+        <div style={{flexShrink:0,padding:"14px 16px 20px",background:"rgba(0,0,0,0.85)"}}>
+          {!pendingDelete?(
+            <button onClick={()=>setPendingDelete(true)}
+              style={{width:"100%",padding:"13px 0",background:"#374151",color:"#fff",border:"1.5px solid #6B7280",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer"}}>
+              🗑 このファイルを削除
+            </button>
+          ):(
+            <div>
+              <div style={{color:"#fff",textAlign:"center",marginBottom:12}}>
+                <div style={{fontSize:20,marginBottom:6}}>⚠️</div>
+                <div style={{fontSize:13,fontWeight:700,marginBottom:4}}>{finPrev.name}</div>
+                <div style={{fontSize:12,color:"#EF4444",fontWeight:700}}>元に戻せません。本当に削除しますか？</div>
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>setPendingDelete(false)}
+                  style={{flex:1,padding:"12px 0",background:"#4B5563",color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer"}}>
+                  キャンセル
+                </button>
+                <button onClick={()=>{deleteFinFile(finPrev.id);setPendingDelete(false);}}
+                  style={{flex:1,padding:"12px 0",background:"#DC2626",color:"#fff",border:"none",borderRadius:10,fontWeight:800,fontSize:14,cursor:"pointer"}}>
+                  削除する
+                </button>
+              </div>
+            </div>
+          )}
         </div>
         {conf&&<Confirm msg={conf.msg} onCancel={()=>setConf(null)} onOk={conf.onOk}/>}
       </div>
