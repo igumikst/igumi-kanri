@@ -1041,6 +1041,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
             🗑 このファイルを削除
           </button>
         </div>
+        {conf&&<Confirm msg={conf.msg} onCancel={()=>setConf(null)} onOk={conf.onOk}/>}
       </div>
     );
 
@@ -1156,7 +1157,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
                     {totalFiles>0&&<span style={{background:"#E07B39",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{totalFiles}</span>}
                     {hp&&<span style={{fontSize:14}}>{iu?"🔓":"🔒"}</span>}
                     {item.isCustom&&<button onClick={()=>{setEditFolder({...item});setFinModal("editFolder");}} style={{background:"#EFF6FF",border:"none",borderRadius:6,padding:"4px 8px",fontSize:11,color:"#1A3A5C",cursor:"pointer"}}>✏️</button>}
-                    {item.isCustom&&<button onClick={()=>deleteFinFolder(item.id)} style={{background:"#FEF2F2",border:"none",borderRadius:6,padding:"4px 8px",fontSize:11,color:"#DC2626",cursor:"pointer"}}>🗑</button>}
+                    {item.isCustom&&<button onClick={()=>setConf({msg:`「${item.label}」フォルダ\n\nこの操作は元に戻せません。\n削除しますか？`,onOk:()=>{deleteFinFolder(item.id);setConf(null);}})} style={{background:"#FEF2F2",border:"none",borderRadius:6,padding:"4px 8px",fontSize:11,color:"#DC2626",cursor:"pointer"}}>🗑</button>}
                     {!item.isCustom&&<button onClick={()=>{setPwMod({mode:hp?"change":"set",id:item.id,label:item.label});setPwIn("");setPwErr("");}} style={{background:"#F3F4F6",border:"none",borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:"#374151"}}>{hp?"変更":"設定"}</button>}
                   </div>
                 </div>
@@ -1164,6 +1165,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
             })}
           </div>
         </div>
+        {conf&&<Confirm msg={conf.msg} onCancel={()=>setConf(null)} onOk={conf.onOk}/>}
         {finModal==="addFolder"&&(<Modal title="📁 フォルダを追加" onClose={()=>setFinModal(null)} onSave={addFinFolder}><Inp label="アイコン（絵文字）" value={newFolder.icon} onChange={e=>setNewFolder({...newFolder,icon:e.target.value})}/><Inp label="フォルダ名 *" value={newFolder.label} onChange={e=>setNewFolder({...newFolder,label:e.target.value})} placeholder="例: 保険証書"/></Modal>)}
         {finModal==="editFolder"&&editFolder&&(<Modal title="📁 フォルダを編集" onClose={()=>{setFinModal(null);setEditFolder(null);}} onSave={updateFinFolder}><Inp label="アイコン（絵文字）" value={editFolder.icon} onChange={e=>setEditFolder({...editFolder,icon:e.target.value})}/><Inp label="フォルダ名 *" value={editFolder.label} onChange={e=>setEditFolder({...editFolder,label:e.target.value})}/></Modal>)}
         <PwUI/>
