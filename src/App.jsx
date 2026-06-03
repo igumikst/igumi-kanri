@@ -174,6 +174,14 @@ export default function App() {
   const [isPC,setIsPC]=useState(()=>window.innerWidth>=768);
   const [weather,setWeather]=useState(null);
   const [fishWeather,setFishWeather]=useState(null);
+  const [fishBoats,setFishBoats]=useState([
+    {id:"b1",name:"新勝丸",port:"外房・勝浦川津港",icon:"⚓",chowari:"https://www.chowari.jp/ship/01167/catch/",blog:"https://ameblo.jp/sinsho1963/",color:"#0284C7"},
+    {id:"b2",name:"第三新生合同丸",port:"外房・鴨川漁港",icon:"🚢",chowari:"https://www.chowari.jp/ship/01329/catch/",blog:"https://godomaru.com/blog.php",color:"#059669"},
+  ]);
+  const [fishBoatModal,setFishBoatModal]=useState(null);
+  const [editBoat,setEditBoat]=useState(null);
+  const blankBoat={id:"",name:"",port:"",icon:"🚢",chowari:"",blog:"",color:"#0284C7"};
+  const [newBoat,setNewBoat]=useState(blankBoat);
 
   useEffect(()=>{
     // 横浜の天気（Open-Meteo・APIキー不要）
@@ -255,6 +263,8 @@ export default function App() {
     if(linksRes.data && linksRes.data.length>0) setLinks(linksRes.data);
     if(tmplRes.data) setTmplFiles(tmplRes.data);
     if(bpRes.data) setBoardPosts(bpRes.data);
+    const boatsRow=hsRes.data?.find(r=>r.id==="fishing_boats");
+    if(boatsRow?.value && Array.isArray(boatsRow.value) && boatsRow.value.length>0) setFishBoats(boatsRow.value);
     if(bcRes.data) setBoardComments(bcRes.data);
     setLoading(false);
   };
@@ -274,6 +284,26 @@ export default function App() {
   const saveCustomize = async (newCust) => {
     setCust(newCust);
     await saveHomeSetting("customize", newCust);
+  };
+
+  // ── 釣り船CRUD ──
+  const saveFishBoats = async (boats) => {
+    setFishBoats(boats);
+    await saveHomeSetting("fishing_boats", boats);
+  };
+  const addFishBoat = async () => {
+    if(!newBoat.name.trim()) return;
+    const boat={...newBoat, id:"b"+Date.now()};
+    await saveFishBoats([...fishBoats, boat]);
+    setNewBoat(blankBoat); setFishBoatModal(null);
+  };
+  const updateFishBoat = async () => {
+    if(!editBoat?.name.trim()) return;
+    await saveFishBoats(fishBoats.map(b=>b.id===editBoat.id?editBoat:b));
+    setEditBoat(null); setFishBoatModal(null);
+  };
+  const deleteFishBoat = async (id) => {
+    await saveFishBoats(fishBoats.filter(b=>b.id!==id));
   };
 
   // ── 掲示板CRUD ──
@@ -1897,28 +1927,30 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
 
           {/* 釣果情報 */}
           <div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}>
-            <div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:12}}>🐟 釣果情報</div>
-            {BOATS.map(b=>(
-              <div key={b.name} style={{background:"#F9FAFB",borderRadius:12,padding:"12px 14px",marginBottom:10,border:"1.5px solid #E5E7EB"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <div style={{fontWeight:800,fontSize:14,color:"#1A3A5C"}}>🐟 釣果情報</div>
+              <button onClick={()=>{setNewBoat(blankBoat);setFishBoatModal("add");}} style={{background:"#E07B39",border:"none",color:"#fff",borderRadius:8,padding:"4px 12px",fontSize:12,fontWeight:700,cursor:"pointer"}}>＋ 追加</button>
+            </div>
+            {fishBoats.map(b=>(
+              <div key={b.id} style={{background:"#F9FAFB",borderRadius:12,padding:"12px 14px",marginBottom:10,border:"1.5px solid #E5E7EB"}}>
                 <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
                   <div style={{width:40,height:40,borderRadius:10,background:b.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{b.icon}</div>
-                  <div>
+                  <div style={{flex:1}}>
                     <div style={{fontWeight:800,fontSize:14,color:"#1F2937"}}>{b.name}</div>
                     <div style={{fontSize:11,color:"#6B7280"}}>{b.port}</div>
                   </div>
+                  <div style={{display:"flex",gap:6}}>
+                    <button onClick={()=>{setEditBoat({...b});setFishBoatModal("edit");}} style={{background:"#EFF6FF",border:"none",borderRadius:6,padding:"4px 8px",fontSize:11,color:"#1A3A5C",cursor:"pointer"}}>✏️</button>
+                    <button onClick={()=>setConf({msg:`「${b.name}」を削除しますか？\n\nこの操作は元に戻せません。\n削除しますか？`,onOk:()=>{deleteFishBoat(b.id);setConf(null);}})} style={{background:"#FEF2F2",border:"none",borderRadius:6,padding:"4px 8px",fontSize:11,color:"#DC2626",cursor:"pointer"}}>🗑</button>
+                  </div>
                 </div>
                 <div style={{display:"flex",gap:8}}>
-                  <a href={b.chowari} target="_blank" rel="noopener noreferrer"
-                    style={{flex:1,background:b.color,color:"#fff",borderRadius:8,padding:"9px 0",textAlign:"center",textDecoration:"none",fontSize:12,fontWeight:800,display:"block"}}>
-                    📊 釣割で釣果を見る
-                  </a>
-                  <a href={b.blog} target="_blank" rel="noopener noreferrer"
-                    style={{flex:1,background:"#F3F4F6",color:"#374151",borderRadius:8,padding:"9px 0",textAlign:"center",textDecoration:"none",fontSize:12,fontWeight:700,display:"block",border:"1.5px solid #E5E7EB"}}>
-                    📝 公式ブログ
-                  </a>
+                  {b.chowari&&<a href={b.chowari} target="_blank" rel="noopener noreferrer" style={{flex:1,background:b.color,color:"#fff",borderRadius:8,padding:"9px 0",textAlign:"center",textDecoration:"none",fontSize:12,fontWeight:800,display:"block"}}>📊 釣割で釣果を見る</a>}
+                  {b.blog&&<a href={b.blog} target="_blank" rel="noopener noreferrer" style={{flex:1,background:"#F3F4F6",color:"#374151",borderRadius:8,padding:"9px 0",textAlign:"center",textDecoration:"none",fontSize:12,fontWeight:700,display:"block",border:"1.5px solid #E5E7EB"}}>📝 公式ブログ</a>}
                 </div>
               </div>
             ))}
+            {fishBoats.length===0&&<div style={{textAlign:"center",padding:20,color:"#9CA3AF",fontSize:13}}>「＋ 追加」から釣り船を登録してください</div>}
           </div>
 
           {/* クイックリンク */}
@@ -1936,6 +1968,23 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
             </div>
           </div>
         </div>
+        {fishBoatModal==="add"&&<Modal title="🚢 釣り船を追加" onClose={()=>setFishBoatModal(null)} onSave={addFishBoat}>
+          <Inp label="アイコン" value={newBoat.icon} onChange={e=>setNewBoat({...newBoat,icon:e.target.value})}/>
+          <Inp label="船名 *" value={newBoat.name} onChange={e=>setNewBoat({...newBoat,name:e.target.value})} placeholder="例：新勝丸"/>
+          <Inp label="港" value={newBoat.port} onChange={e=>setNewBoat({...newBoat,port:e.target.value})} placeholder="例：外房・勝浦川津港"/>
+          <Inp label="釣割URL" value={newBoat.chowari} onChange={e=>setNewBoat({...newBoat,chowari:e.target.value})} placeholder="https://www.chowari.jp/ship/..."/>
+          <Inp label="公式ブログURL" value={newBoat.blog} onChange={e=>setNewBoat({...newBoat,blog:e.target.value})} placeholder="https://..."/>
+          <div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6B7280",marginBottom:4}}>カラー</div><div style={{display:"flex",gap:10,alignItems:"center"}}><input type="color" value={newBoat.color} onChange={e=>setNewBoat({...newBoat,color:e.target.value})} style={{width:48,height:36,borderRadius:8,border:"1.5px solid #E5E7EB",cursor:"pointer",padding:2}}/><div style={{flex:1,height:36,borderRadius:8,background:newBoat.color}}/></div></div>
+        </Modal>}
+        {fishBoatModal==="edit"&&editBoat&&<Modal title="🚢 釣り船を編集" onClose={()=>{setFishBoatModal(null);setEditBoat(null);}} onSave={updateFishBoat}>
+          <Inp label="アイコン" value={editBoat.icon} onChange={e=>setEditBoat({...editBoat,icon:e.target.value})}/>
+          <Inp label="船名 *" value={editBoat.name} onChange={e=>setEditBoat({...editBoat,name:e.target.value})}/>
+          <Inp label="港" value={editBoat.port} onChange={e=>setEditBoat({...editBoat,port:e.target.value})}/>
+          <Inp label="釣割URL" value={editBoat.chowari} onChange={e=>setEditBoat({...editBoat,chowari:e.target.value})}/>
+          <Inp label="公式ブログURL" value={editBoat.blog} onChange={e=>setEditBoat({...editBoat,blog:e.target.value})}/>
+          <div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6B7280",marginBottom:4}}>カラー</div><div style={{display:"flex",gap:10,alignItems:"center"}}><input type="color" value={editBoat.color} onChange={e=>setEditBoat({...editBoat,color:e.target.value})} style={{width:48,height:36,borderRadius:8,border:"1.5px solid #E5E7EB",cursor:"pointer",padding:2}}/><div style={{flex:1,height:36,borderRadius:8,background:editBoat.color}}/></div></div>
+        </Modal>}
+        {conf&&<Confirm msg={conf.msg} onCancel={()=>setConf(null)} onOk={conf.onOk}/>}
       </div>
     );
   }
