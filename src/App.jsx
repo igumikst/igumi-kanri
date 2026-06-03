@@ -53,6 +53,8 @@ const DEFAULT_TILE_CONF = [
   {key:"ai",icon:"🤖",label:"AIアシスタント",sub:"データに質問",color:"#6D28D9",visible:true},
   {key:"chatgpt",icon:"💬",label:"ChatGPT",sub:"外部AIを開く",color:"#10A37F",visible:true},
   {key:"report",icon:"📋",label:"報告書作成",sub:"工事写真報告書",color:"#7C3AED",visible:true},
+  {key:"board",icon:"📌",label:"社内掲示板",sub:"お知らせ・連絡",color:"#DC2626",visible:true},
+  {key:"fishing",icon:"🎣",label:"釣り情報",sub:"天気・釣果・リンク",color:"#0284C7",visible:true},
 ];
 const DEFAULT_CUST = {name:"株式会社IGUMI",sys:"案件管理システム",c1:"#1A3A5C",c2:"#2563EB",acc:"#E07B39",bg:"#F0F4F8",showSidebar:true,showRightPanel:true,showLauncher:true};
 
@@ -134,6 +136,13 @@ export default function App() {
   const [pwIn,setPwIn]=useState("");
   const [pwErr,setPwErr]=useState("");
   const [tmplCat,setTmplCat]=useState(null);
+  const [boardPosts,setBoardPosts]=useState([]);
+  const [boardComments,setBoardComments]=useState([]);
+  const [selPost,setSelPost]=useState(null);
+  const [boardAuthor,setBoardAuthor]=useState(()=>localStorage.getItem('igumi_author')||'');
+  const [newPost,setNewPost]=useState({category:'業務連絡',content:'',author:''});
+  const [newComment,setNewComment]=useState('');
+  const [boardFlt,setBoardFlt]=useState('すべて');
   const [tmplPrev,setTmplPrev]=useState(null);
   const [tmplFiles,setTmplFiles]=useState([]);
   const [cust,setCust]=useState(DEFAULT_CUST);
@@ -151,11 +160,18 @@ export default function App() {
   const [nCt,setNCt]=useState({name:"",role:"営業",tel:"",email:"",memo:""});
   const [nTk,setNTk]=useState({title:"",due:"",prio:"mid"});
   const [aiMsgs,setAiMsgs]=useState([]);
+  const [boardPosts,setBoardPosts]=useState([]);
+  const [boardComments,setBoardComments]=useState([]);
+  const [boardCat,setBoardCat]=useState("すべて");
+  const [boardNew,setBoardNew]=useState({category:"業務連絡",content:"",author:""});
+  const [boardComment,setBoardComment]=useState({postId:null,content:"",author:""});
+  const [boardOpen,setBoardOpen]=useState(null);
   const [aiInput,setAiInput]=useState("");
   const [aiLoading,setAiLoading]=useState(false);
   // ✅ PCレイアウト判定
   const [isPC,setIsPC]=useState(()=>window.innerWidth>=768);
   const [weather,setWeather]=useState(null);
+  const [fishWeather,setFishWeather]=useState(null);
 
   useEffect(()=>{
     // 横浜の天気（Open-Meteo・APIキー不要）
@@ -178,9 +194,34 @@ export default function App() {
 
   useEffect(()=>{loadAll();},[]);
 
+  // 釣り天気を取得（釣りページを開いたとき）
+  useEffect(()=>{
+    if(page!=="fishing"||fishWeather) return;
+    const degToDir=d=>{const dirs=["北","北北東","北東","東北東","東","東南東","南東","南南東","南","南南西","南西","西南西","西","西北西","北西","北北西"];return dirs[Math.round(d/22.5)%16];};
+    const wIcon=c=>c===0?"☀️":c<=2?"🌤":c===3?"☁️":c<=48?"🌫":c<=55?"🌦":c<=65?"🌧":c<=75?"🌨":c<=82?"🌦":c<=99?"⛈":"🌡";
+    const locs=[{key:"yokosuka",name:"横須賀",lat:35.28,lon:139.67},{key:"sotobo",name:"外房（勝浦）",lat:35.15,lon:140.30}];
+    Promise.all(locs.map(async loc=>{
+      const [w,m]=await Promise.all([
+        fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m&timezone=Asia%2FTokyo`).then(r=>r.json()).catch(()=>({})),
+        fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${loc.lat}&longitude=${loc.lon}&hourly=wave_height&timezone=Asia%2FTokyo&forecast_days=1`).then(r=>r.json()).catch(()=>({})),
+      ]);
+      const h=new Date().getHours();
+      return {...loc,
+        temp:Math.round(w.current?.temperature_2m??'--'),
+        windSpeed:w.current?.wind_speed_10m?.toFixed(1)??'--',
+        windDir:degToDir(w.current?.wind_direction_10m??0),
+        icon:wIcon(w.current?.weather_code??0),
+        wave:m.hourly?.wave_height?.[h]?.toFixed(1)??'--',
+      };
+    })).then(results=>{
+      const obj={};results.forEach(r=>{obj[r.key]=r;});
+      setFishWeather(obj);
+    });
+  },[page]);
+
   const loadAll = async () => {
     setLoading(true);
-    const [pjRes,coRes,tkRes,ffRes,foldRes,hsRes,linksRes,tmplRes] = await Promise.all([
+    const [pjRes,coRes,tkRes,ffRes,foldRes,hsRes,linksRes,tmplRes,bpRes,bcRes] = await Promise.all([
       supabase.from("projects").select("*").order("created_at",{ascending:false}),
       supabase.from("companies").select("*").order("created_at",{ascending:true}),
       supabase.from("tasks").select("*").order("created_at",{ascending:false}),
@@ -189,6 +230,8 @@ export default function App() {
       supabase.from("home_settings").select("*"),
       supabase.from("links").select("*").order("sort_order",{ascending:true}),
       supabase.from("template_files").select("id,cat_id,name,type,size,url,path,created_at").order("created_at",{ascending:false}),
+      supabase.from("board_posts").select("*").order("created_at",{ascending:false}),
+      supabase.from("board_comments").select("*").order("created_at",{ascending:true}),
     ]);
     if(pjRes.data) setPjs(pjRes.data.map(p=>({...p,subIds:p.subcontractorIds||[],gp:p.grossProfit||0,qDate:p.quoteDate||""})));
     if(coRes.data) setCos(coRes.data.map(c=>({...c,contacts:c.contacts||[]})));
@@ -209,6 +252,8 @@ export default function App() {
     }
     if(linksRes.data && linksRes.data.length>0) setLinks(linksRes.data);
     if(tmplRes.data) setTmplFiles(tmplRes.data);
+    if(bpRes.data) setBoardPosts(bpRes.data);
+    if(bcRes.data) setBoardComments(bcRes.data);
     setLoading(false);
   };
 
@@ -227,6 +272,47 @@ export default function App() {
   const saveCustomize = async (newCust) => {
     setCust(newCust);
     await saveHomeSetting("customize", newCust);
+  };
+
+  // ── 掲示板CRUD ──
+  const BOARD_CATS = ["業務連絡","スケジュール","緊急連絡","その他"];
+  const BOARD_CAT_STYLE = {
+    "業務連絡":{bg:"#EFF6FF",text:"#1D4ED8",border:"#BFDBFE"},
+    "スケジュール":{bg:"#F0FDF4",text:"#166534",border:"#BBF7D0"},
+    "緊急連絡":{bg:"#FEF2F2",text:"#DC2626",border:"#FECACA"},
+    "その他":{bg:"#F9FAFB",text:"#374151",border:"#E5E7EB"},
+  };
+  const addBoardPost = async () => {
+    if(!boardNew.content.trim()||!boardNew.author.trim()) return;
+    const {data} = await supabase.from("board_posts").insert([{
+      category:boardNew.category, content:boardNew.content.trim(),
+      author:boardNew.author.trim(), likes:[]
+    }]).select();
+    if(data){ setBoardPosts(prev=>[data[0],...prev]); setBoardNew({category:"業務連絡",content:"",author:""}); setModal(null); }
+  };
+  const deleteBoardPost = async (id) => {
+    await supabase.from("board_posts").delete().eq("id",id);
+    setBoardPosts(prev=>prev.filter(p=>p.id!==id));
+    setBoardComments(prev=>prev.filter(c=>c.post_id!==id));
+    if(boardOpen===id) setBoardOpen(null);
+  };
+  const toggleLike = async (post) => {
+    const name = boardNew.author || "匿名";
+    const liked = (post.likes||[]).includes(name);
+    const newLikes = liked ? post.likes.filter(l=>l!==name) : [...(post.likes||[]), name];
+    await supabase.from("board_posts").update({likes:newLikes}).eq("id",post.id);
+    setBoardPosts(prev=>prev.map(p=>p.id===post.id?{...p,likes:newLikes}:p));
+  };
+  const addBoardComment = async (postId) => {
+    if(!boardComment.content.trim()||!boardComment.author.trim()) return;
+    const {data} = await supabase.from("board_comments").insert([{
+      post_id:postId, content:boardComment.content.trim(), author:boardComment.author.trim()
+    }]).select();
+    if(data){ setBoardComments(prev=>[...prev,data[0]]); setBoardComment({postId:null,content:"",author:""}); }
+  };
+  const deleteBoardComment = async (id) => {
+    await supabase.from("board_comments").delete().eq("id",id);
+    setBoardComments(prev=>prev.filter(c=>c.id!==id));
   };
 
   // ── リンク操作（Supabase） ──
@@ -325,7 +411,7 @@ export default function App() {
   };
 
 
-  const nav=p=>{setPage(p);setSchP("");setSchC("");setFltS("すべて");setFltT("すべて");setFltInCharge("すべて");setFltPrio("すべて");setQuickStatus(null);setSelP(null);setSelC(null);setSelCt(null);setFinItem(null);setFinY(null);setFinM(null);setFinPrev(null);setTmplCat(null);setTmplPrev(null);setPwMod(null);setPwIn("");setPwErr("");setModal(null);setPendingDelete(false);};
+  const nav=p=>{setPage(p);setSchP("");setSchC("");setFltS("すべて");setFltT("すべて");setFltInCharge("すべて");setFltPrio("すべて");setQuickStatus(null);setSelP(null);setSelC(null);setSelCt(null);setFinItem(null);setFinY(null);setFinM(null);setFinPrev(null);setTmplCat(null);setTmplPrev(null);setPwMod(null);setPwIn("");setPwErr("");setModal(null);setPendingDelete(false);setSelPost(null);setBoardFlt("すべて");};
   
   // ── AIチャット ──
   const sendAI = async () => {
@@ -510,7 +596,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
   // ✅ PC右パネル（折りたたみ対応）
   const PCRightPanel=()=>{
     const [qi,setQi]=useState("");
-    const [open,setOpen]=useState({kpi:true,tasks:true,ai:true});
+    const [open,setOpen]=useState({kpi:true,tasks:true,fishing:true,ai:true});
     const tog=k=>setOpen(p=>({...p,[k]:!p[k]}));
     const totalAmt=pjs.reduce((s,p)=>s+(p.amount||0),0);
     const totalGp=pjs.reduce((s,p)=>s+(p.gp||0),0);
@@ -547,7 +633,7 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
 
         {/* ── KPI ── */}
         <SectionHdr id="kpi" label="📊 今日の状況"/>
-        {open.kpi&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+        {open.kpi&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
           {[{l:"進行中案件",v:`${active.length}件`,c:"#1A3A5C",bg:"#EFF6FF"},{l:"未完了タスク",v:`${pending.length}件`,c:"#EF4444",bg:"#FEF2F2"},{l:"受注合計",v:`¥${(totalAmt/10000).toFixed(0)}万`,c:"#E07B39",bg:"#FFF7ED"},{l:"粗利率",v:totalAmt?`${(totalGp/totalAmt*100).toFixed(1)}%`:"—",c:"#059669",bg:"#F0FDF4"}].map(x=>(
             <div key={x.l} style={{background:x.bg,borderRadius:10,padding:"10px"}}>
               <div style={{fontSize:10,color:"#9CA3AF",marginBottom:3}}>{x.l}</div>
@@ -555,6 +641,29 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
             </div>
           ))}
         </div>}
+        {open.kpi&&(()=>{
+          const finMB=finFiles.reduce((s,f)=>s+(f.size||0),0)/1024/1024;
+          const tmplMB=tmplFiles.reduce((s,f)=>s+(f.size||0),0)/1024/1024;
+          const totalMB=finMB+tmplMB;
+          const limitMB=1024;
+          const pct=Math.min((totalMB/limitMB)*100,100);
+          const col=pct>80?"#EF4444":pct>50?"#F59E0B":"#059669";
+          return(
+            <div style={{background:"#F9FAFB",borderRadius:10,padding:"10px 12px",marginBottom:10}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                <div style={{fontSize:11,fontWeight:700,color:"#374151"}}>📦 Storage</div>
+                <div style={{fontSize:11,fontWeight:700,color:col}}>{totalMB<1?`${(totalMB*1024).toFixed(0)}KB`:`${totalMB.toFixed(0)}MB`} / 1GB</div>
+              </div>
+              <div style={{background:"#E5E7EB",borderRadius:4,height:6,overflow:"hidden"}}>
+                <div style={{width:`${pct}%`,height:"100%",background:col,borderRadius:4,transition:"width 0.5s"}}/>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:5,fontSize:10,color:"#9CA3AF"}}>
+                <span>財務 {finMB<1?`${(finMB*1024).toFixed(0)}KB`:`${finMB.toFixed(0)}MB`}</span>
+                <span>雛形 {tmplMB<1?`${(tmplMB*1024).toFixed(0)}KB`:`${tmplMB.toFixed(0)}MB`}</span>
+              </div>
+            </div>
+          );
+        })()}
         <div style={{height:1,background:"#F3F4F6",margin:"4px 0"}}/>
 
         {/* ── タスク ── */}
@@ -568,6 +677,25 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
             </div>
           ))}
           {pending.length===0&&<div style={{padding:"12px",fontSize:12,color:"#9CA3AF",textAlign:"center"}}>タスクなし 🎉</div>}
+        </div>}
+        <div style={{height:1,background:"#F3F4F6",margin:"4px 0"}}/>
+
+        {/* ── 釣り天気 ── */}
+        <SectionHdr id="fishing" label="🎣 釣り天気"/>
+        {open.fishing&&<div style={{marginBottom:14}}>
+          {fishWeather?[fishWeather.yokosuka,fishWeather.sotobo].map(d=>d&&(
+            <div key={d.name} style={{background:"#F0F9FF",borderRadius:10,padding:"8px 10px",marginBottom:8,display:"flex",alignItems:"center",gap:10}}>
+              <div style={{fontSize:22}}>{d.icon}</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:11,fontWeight:800,color:"#0284C7"}}>{d.name}</div>
+                <div style={{fontSize:11,color:"#374151"}}>💨 {d.windDir} {d.windSpeed}m/s　🌊 {d.wave}m</div>
+              </div>
+              <div style={{fontSize:16,fontWeight:900,color:"#1F2937"}}>{d.temp}°</div>
+            </div>
+          )):<div style={{fontSize:11,color:"#9CA3AF",textAlign:"center",padding:8}}>
+            <button onClick={()=>nav("fishing")} style={{background:"#0284C7",color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",fontSize:11,fontWeight:700,cursor:"pointer"}}>🎣 釣り情報ページを開く</button>
+          </div>}
+          <button onClick={()=>nav("fishing")} style={{width:"100%",background:"#F0F9FF",border:"1.5px solid #BAE6FD",borderRadius:8,padding:"6px 0",fontSize:11,color:"#0284C7",fontWeight:700,cursor:"pointer",marginTop:4}}>詳細を見る →</button>
         </div>}
         <div style={{height:1,background:"#F3F4F6",margin:"4px 0"}}/>
 
@@ -1469,6 +1597,54 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
               ))}
             </div>
           </div>
+
+          {/* Storage使用量 */}
+          {(()=>{
+            const finMB=finFiles.reduce((s,f)=>s+(f.size||0),0)/1024/1024;
+            const tmplMB=tmplFiles.reduce((s,f)=>s+(f.size||0),0)/1024/1024;
+            const totalMB=finMB+tmplMB;
+            const limitMB=1024;
+            const usedPct=Math.min((totalMB/limitMB)*100,100);
+            const barColor=usedPct>80?"#EF4444":usedPct>50?"#F59E0B":"#059669";
+            const fmtSize=mb=>mb<1?`${(mb*1024).toFixed(0)}KB`:`${mb.toFixed(1)}MB`;
+            const categories=[
+              {label:"財務・書類",mb:finMB,count:finFiles.length,color:"#0891B2"},
+              {label:"お知らせ・雛形",mb:tmplMB,count:tmplFiles.length,color:"#D97706"},
+            ];
+            return(
+              <div style={{background:"#fff",borderRadius:14,padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}>
+                <div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:14}}>📦 Storage使用量</div>
+                {/* メインバー */}
+                <div style={{marginBottom:16}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+                    <div style={{fontSize:13,fontWeight:700,color:"#374151"}}>合計使用量</div>
+                    <div style={{fontSize:13,fontWeight:900,color:barColor}}>{fmtSize(totalMB)} <span style={{fontSize:11,color:"#9CA3AF",fontWeight:400}}>/ 1GB（無料枠）</span></div>
+                  </div>
+                  <div style={{background:"#E5E7EB",borderRadius:6,height:12,overflow:"hidden"}}>
+                    <div style={{width:`${usedPct}%`,height:"100%",background:barColor,borderRadius:6,transition:"width 0.5s"}}/>
+                  </div>
+                  <div style={{fontSize:11,color:"#9CA3AF",marginTop:4,textAlign:"right"}}>{usedPct.toFixed(1)}% 使用中</div>
+                </div>
+                {/* カテゴリ別 */}
+                {categories.map(c=>{
+                  const pct=Math.min((c.mb/limitMB)*100,100);
+                  return(
+                    <div key={c.label} style={{marginBottom:12}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                        <span style={{fontSize:12,color:"#374151",fontWeight:600}}>{c.label}</span>
+                        <span style={{fontSize:12,color:"#6B7280"}}>{fmtSize(c.mb)}　{c.count}件</span>
+                      </div>
+                      <div style={{background:"#F3F4F6",borderRadius:4,height:7,overflow:"hidden"}}>
+                        <div style={{width:`${pct}%`,height:"100%",background:c.color,borderRadius:4}}/>
+                      </div>
+                    </div>
+                  );
+                })}
+                {usedPct>80&&<div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:10,padding:"10px 12px",marginTop:8,fontSize:12,color:"#DC2626",fontWeight:700}}>⚠️ 残り{fmtSize(limitMB-totalMB)}です。Proプランへのアップグレードをご検討ください。</div>}
+                {usedPct<=80&&<div style={{background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:10,padding:"10px 12px",marginTop:8,fontSize:12,color:"#059669",fontWeight:600}}>✅ 残り{fmtSize(limitMB-totalMB)}あります</div>}
+              </div>
+            );
+          })()}
         </div>
       </div>
     );
@@ -1530,6 +1706,380 @@ ${tks.filter(t=>!t.done).map(t=>`・${t.title}（優先度:${t.prio}）${t.due?'
           <div style={{display:"flex",gap:8}}>
             <input value={aiInput} onChange={e=>setAiInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&sendAI()} placeholder="質問を入力..." style={{flex:1,padding:"10px 14px",borderRadius:10,border:"1.5px solid #E5E7EB",fontSize:13,outline:"none",color:"#1F2937",background:"#ffffff",WebkitTextFillColor:"#1F2937"}}/>
             <button onClick={sendAI} disabled={!aiInput.trim()||aiLoading} style={{background:aiInput.trim()&&!aiLoading?"#6D28D9":"#E5E7EB",color:aiInput.trim()&&!aiLoading?"#fff":"#9CA3AF",border:"none",borderRadius:10,padding:"10px 16px",fontSize:13,fontWeight:700,cursor:aiInput.trim()&&!aiLoading?"pointer":"default"}}>送信</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ══ 社内掲示板 ══
+  if(page==="board"){
+    const BOARD_CATS=["すべて","📅 今週の予定","🚨 緊急連絡","📋 業務連絡","💬 その他"];
+    const CAT_COLORS={"📅 今週の予定":"#0891B2","🚨 緊急連絡":"#DC2626","📋 業務連絡":"#059669","💬 その他":"#7C3AED"};
+    const filtPosts=boardPosts.filter(p=>boardFlt==="すべて"||p.category===boardFlt);
+
+    const addPost=async()=>{
+      if(!newPost.content.trim()||!newPost.author.trim())return;
+      localStorage.setItem('igumi_author',newPost.author);
+      setBoardAuthor(newPost.author);
+      const {data}=await supabase.from("board_posts").insert([{category:newPost.category,content:newPost.content,author:newPost.author,likes:[]}]).select();
+      if(data){setBoardPosts(p=>[data[0],...p]);setNewPost({category:'業務連絡',content:'',author:newPost.author});setModal(null);}
+    };
+    const toggleLike=async(post)=>{
+      if(!boardAuthor)return;
+      const liked=post.likes?.includes(boardAuthor);
+      const newLikes=liked?(post.likes||[]).filter(l=>l!==boardAuthor):[...(post.likes||[]),boardAuthor];
+      await supabase.from("board_posts").update({likes:newLikes}).eq("id",post.id);
+      setBoardPosts(p=>p.map(x=>x.id===post.id?{...x,likes:newLikes}:x));
+      if(selPost?.id===post.id)setSelPost({...selPost,likes:newLikes});
+    };
+    const addComment=async(postId)=>{
+      if(!newComment.trim()||!boardAuthor)return;
+      const {data}=await supabase.from("board_comments").insert([{post_id:postId,content:newComment,author:boardAuthor}]).select();
+      if(data){setBoardComments(p=>[...p,data[0]]);setNewComment('');}
+    };
+    const delPost=async(id)=>{
+      await supabase.from("board_posts").delete().eq("id",id);
+      setBoardPosts(p=>p.filter(x=>x.id!==id));
+      setSelPost(null);
+    };
+    const delComment=async(id)=>{
+      await supabase.from("board_comments").delete().eq("id",id);
+      setBoardComments(p=>p.filter(x=>x.id!==id));
+    };
+    const fmtTime=ts=>{const d=new Date(ts),now=new Date(),diff=now-d,m=Math.floor(diff/60000),h=Math.floor(diff/3600000),day=Math.floor(diff/86400000);return day>0?`${day}日前`:h>0?`${h}時間前`:m>0?`${m}分前`:'たった今';};
+
+    if(selPost){
+      const postComments=boardComments.filter(c=>c.post_id===selPost.id);
+      const catColor=CAT_COLORS[selPost.category]||"#374151";
+      return(
+        <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
+          {isPC&&(cust.showSidebar!==false)&&<PCSidebar/>}{isPC&&(cust.showRightPanel!==false)&&<PCRightPanel/>}
+          {(cust.showLauncher!==false)&&<FloatLauncher/>}
+          <Hdr title="📌 掲示板" back={()=>setSelPost(null)}
+            right={<button onClick={()=>setConf({msg:`この投稿を削除しますか？\n\n元に戻せません。`,onOk:()=>{delPost(selPost.id);setConf(null);}})} style={{background:"rgba(220,38,38,0.8)",border:"none",color:"#fff",borderRadius:8,padding:"5px 10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>🗑</button>}/>
+          <div style={{padding:isPC?"14px 0":14}}>
+            <div style={{background:"#fff",borderRadius:14,padding:18,boxShadow:"0 2px 8px rgba(0,0,0,0.07)",marginBottom:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                <span style={{background:catColor,color:"#fff",borderRadius:8,padding:"3px 10px",fontSize:11,fontWeight:700}}>{selPost.category}</span>
+                <span style={{fontSize:11,color:"#9CA3AF"}}>{fmtTime(selPost.created_at)}</span>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                <div style={{width:36,height:36,borderRadius:"50%",background:catColor,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:15,flexShrink:0}}>{selPost.author?.charAt(0)}</div>
+                <div style={{fontWeight:700,fontSize:14,color:"#1F2937"}}>{selPost.author}</div>
+              </div>
+              <div style={{fontSize:14,color:"#374151",lineHeight:1.8,whiteSpace:"pre-wrap",marginBottom:14}}>{selPost.content}</div>
+              <button onClick={()=>toggleLike(selPost)} style={{display:"flex",alignItems:"center",gap:6,background:(selPost.likes||[]).includes(boardAuthor)?"#FEF2F2":"#F9FAFB",border:`1.5px solid ${(selPost.likes||[]).includes(boardAuthor)?"#FECACA":"#E5E7EB"}`,borderRadius:20,padding:"6px 14px",cursor:"pointer",fontSize:13,fontWeight:700,color:(selPost.likes||[]).includes(boardAuthor)?"#DC2626":"#6B7280"}}>
+                ❤️ {(selPost.likes||[]).length}
+              </button>
+            </div>
+            <div style={{fontSize:12,fontWeight:700,color:"#6B7280",marginBottom:8}}>💬 コメント（{postComments.length}件）</div>
+            {postComments.map(c=>(
+              <div key={c.id} style={{background:"#fff",borderRadius:12,padding:"12px 14px",marginBottom:8,boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <div style={{width:28,height:28,borderRadius:"50%",background:"#1A3A5C",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:12}}>{c.author?.charAt(0)}</div>
+                    <div style={{fontWeight:700,fontSize:13,color:"#1F2937"}}>{c.author}</div>
+                    <div style={{fontSize:11,color:"#9CA3AF"}}>{fmtTime(c.created_at)}</div>
+                  </div>
+                  {c.author===boardAuthor&&<button onClick={()=>delComment(c.id)} style={{background:"none",border:"none",color:"#EF4444",fontSize:12,cursor:"pointer",fontWeight:700}}>✕</button>}
+                </div>
+                <div style={{fontSize:13,color:"#374151",lineHeight:1.6,paddingLeft:36}}>{c.content}</div>
+              </div>
+            ))}
+            {boardAuthor?(
+              <div style={{background:"#fff",borderRadius:12,padding:14,boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
+                <textarea value={newComment} onChange={e=>setNewComment(e.target.value)} placeholder="コメントを入力..." style={{width:"100%",padding:"10px 12px",border:"1.5px solid #E5E7EB",borderRadius:8,fontSize:13,resize:"none",minHeight:70,boxSizing:"border-box",fontFamily:"inherit",color:"#1F2937",marginBottom:8}}/>
+                <button onClick={()=>addComment(selPost.id)} disabled={!newComment.trim()} style={{width:"100%",padding:"11px 0",background:newComment.trim()?"#1A3A5C":"#E5E7EB",color:newComment.trim()?"#fff":"#9CA3AF",border:"none",borderRadius:10,fontWeight:800,fontSize:14,cursor:newComment.trim()?"pointer":"default"}}>送信</button>
+              </div>
+            ):(
+              <div style={{background:"#FFF7ED",borderRadius:12,padding:14,textAlign:"center",fontSize:13,color:"#E07B39",fontWeight:700}}>投稿するには名前の設定が必要です</div>
+            )}
+          </div>
+          {conf&&<Confirm msg={conf.msg} onCancel={()=>setConf(null)} onOk={conf.onOk}/>}
+        </div>
+      );
+    }
+
+    return(
+      <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
+        {isPC&&(cust.showSidebar!==false)&&<PCSidebar/>}{isPC&&(cust.showRightPanel!==false)&&<PCRightPanel/>}
+        {(cust.showLauncher!==false)&&<FloatLauncher/>}
+        <Hdr title="📌 社内掲示板" back={()=>nav("home")}
+          right={<button onClick={()=>{setNewPost({category:'業務連絡',content:'',author:boardAuthor});setModal("addPost");}} style={{background:"#E07B39",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:800}}>＋ 投稿</button>}/>
+        <div style={{padding:isPC?"14px 0":14}}>
+          <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:8,marginBottom:12}}>
+            {BOARD_CATS.map(c=>(<button key={c} onClick={()=>setBoardFlt(c)} style={{padding:"5px 12px",borderRadius:16,border:"1.5px solid",whiteSpace:"nowrap",borderColor:boardFlt===c?"#DC2626":"#D1D5DB",background:boardFlt===c?"#DC2626":"#fff",color:boardFlt===c?"#fff":"#374151",fontSize:11,fontWeight:700,cursor:"pointer"}}>{c}</button>))}
+          </div>
+          {filtPosts.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF"}}><div style={{fontSize:48,marginBottom:12}}>📌</div><div style={{fontSize:14}}>投稿がありません</div></div>}
+          {filtPosts.map(post=>{
+            const catColor=CAT_COLORS[post.category]||"#374151";
+            const postComments=boardComments.filter(c=>c.post_id===post.id);
+            const liked=(post.likes||[]).includes(boardAuthor);
+            return(
+              <div key={post.id} style={{background:"#fff",borderRadius:14,padding:16,marginBottom:10,boxShadow:"0 2px 8px rgba(0,0,0,0.07)",cursor:"pointer"}} onClick={()=>setSelPost(post)}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                  <span style={{background:catColor,color:"#fff",borderRadius:8,padding:"3px 10px",fontSize:11,fontWeight:700}}>{post.category}</span>
+                  <span style={{fontSize:11,color:"#9CA3AF",marginLeft:"auto"}}>{fmtTime(post.created_at)}</span>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                  <div style={{width:32,height:32,borderRadius:"50%",background:catColor,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:14,flexShrink:0}}>{post.author?.charAt(0)}</div>
+                  <div style={{fontWeight:700,fontSize:13,color:"#1F2937"}}>{post.author}</div>
+                </div>
+                <div style={{fontSize:13,color:"#374151",lineHeight:1.7,marginBottom:10,display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{post.content}</div>
+                <div style={{display:"flex",gap:12,alignItems:"center"}}>
+                  <button onClick={e=>{e.stopPropagation();toggleLike(post);}} style={{display:"flex",alignItems:"center",gap:4,background:liked?"#FEF2F2":"#F9FAFB",border:`1px solid ${liked?"#FECACA":"#E5E7EB"}`,borderRadius:16,padding:"4px 12px",cursor:"pointer",fontSize:12,fontWeight:700,color:liked?"#DC2626":"#6B7280"}}>❤️ {(post.likes||[]).length}</button>
+                  <div style={{display:"flex",alignItems:"center",gap:4,fontSize:12,color:"#6B7280"}}>💬 {postComments.length}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {modal==="addPost"&&(
+          <Modal title="📌 新規投稿" onClose={()=>setModal(null)} onSave={addPost}>
+            <div style={{marginBottom:10}}>
+              <div style={{fontSize:11,color:"#6B7280",marginBottom:3}}>名前 *</div>
+              <input value={newPost.author} onChange={e=>setNewPost({...newPost,author:e.target.value})} placeholder="あなたの名前" style={{width:"100%",padding:"9px 12px",border:"1.5px solid #E5E7EB",borderRadius:8,fontSize:14,color:"#1F2937",background:"#FAFAFA",boxSizing:"border-box"}}/>
+            </div>
+            <div style={{marginBottom:10}}>
+              <div style={{fontSize:11,color:"#6B7280",marginBottom:3}}>カテゴリ</div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {["📅 今週の予定","🚨 緊急連絡","📋 業務連絡","💬 その他"].map(c=>(
+                  <button key={c} onClick={()=>setNewPost({...newPost,category:c})} style={{padding:"5px 12px",borderRadius:10,border:"1.5px solid",borderColor:newPost.category===c?"#1A3A5C":"#E5E7EB",background:newPost.category===c?"#1A3A5C":"#fff",color:newPost.category===c?"#fff":"#374151",fontSize:12,fontWeight:700,cursor:"pointer"}}>{c}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div style={{fontSize:11,color:"#6B7280",marginBottom:3}}>内容 *</div>
+              <textarea value={newPost.content} onChange={e=>setNewPost({...newPost,content:e.target.value})} placeholder="内容を入力..." style={{width:"100%",padding:"10px 12px",border:"1.5px solid #E5E7EB",borderRadius:8,fontSize:13,resize:"vertical",minHeight:100,boxSizing:"border-box",fontFamily:"inherit",color:"#1F2937"}}/>
+            </div>
+          </Modal>
+        )}
+        {conf&&<Confirm msg={conf.msg} onCancel={()=>setConf(null)} onOk={conf.onOk}/>}
+      </div>
+    );
+  }
+
+  // ══ 社内掲示板 ══
+  if(page==="board"){
+    const filtPosts = boardCat==="すべて" ? boardPosts : boardPosts.filter(p=>p.category===boardCat);
+    const fmtTime = ts => {
+      const d=new Date(ts), now=new Date();
+      const diff=Math.floor((now-d)/1000);
+      if(diff<60) return "たった今";
+      if(diff<3600) return `${Math.floor(diff/60)}分前`;
+      if(diff<86400) return `${Math.floor(diff/3600)}時間前`;
+      return `${d.getMonth()+1}/${d.getDate()}`;
+    };
+    return(
+      <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
+        {isPC&&(cust.showSidebar!==false)&&<PCSidebar/>}
+        {isPC&&(cust.showRightPanel!==false)&&<PCRightPanel/>}
+        {(cust.showLauncher!==false)&&<FloatLauncher/>}
+        <Hdr title="📣 社内掲示板" back={()=>nav("home")}
+          right={<button onClick={()=>setModal("addPost")} style={{background:"#E07B39",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:800}}>＋ 投稿</button>}/>
+
+        {/* カテゴリフィルター */}
+        <div style={{padding:"12px 14px 0",display:"flex",gap:6,overflowX:"auto",paddingBottom:8}}>
+          {["すべて",...BOARD_CATS].map(c=>{
+            const st=BOARD_CAT_STYLE[c]||{bg:"#1A3A5C",text:"#fff",border:"#1A3A5C"};
+            const isA=boardCat===c;
+            return(<button key={c} onClick={()=>setBoardCat(c)}
+              style={{padding:"5px 14px",borderRadius:16,border:`1.5px solid ${isA?(c==="すべて"?"#1A3A5C":st.border):st.border}`,
+              whiteSpace:"nowrap",background:isA?(c==="すべて"?"#1A3A5C":st.bg):"#fff",
+              color:isA?(c==="すべて"?"#fff":st.text):(c==="すべて"?"#374151":st.text),
+              fontSize:12,fontWeight:700,cursor:"pointer"}}>{c}</button>);
+          })}
+        </div>
+
+        <div style={{padding:"10px 14px 80px"}}>
+          {filtPosts.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF"}}>
+            <div style={{fontSize:40,marginBottom:12}}>📭</div>
+            <div>まだ投稿がありません</div>
+            <div style={{fontSize:12,marginTop:4}}>右上の「＋ 投稿」から書いてみましょう</div>
+          </div>}
+          {filtPosts.map(post=>{
+            const st=BOARD_CAT_STYLE[post.category]||BOARD_CAT_STYLE["その他"];
+            const postComments=boardComments.filter(c=>c.post_id===post.id);
+            const isOpen=boardOpen===post.id;
+            const likeCount=(post.likes||[]).length;
+            const myName=boardNew.author;
+            const liked=myName&&(post.likes||[]).includes(myName);
+            return(
+              <div key={post.id} style={{background:"#fff",borderRadius:14,marginBottom:12,boxShadow:"0 2px 8px rgba(0,0,0,0.07)",overflow:"hidden"}}>
+                {/* 投稿ヘッダー */}
+                <div style={{padding:"14px 16px 10px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <div style={{width:36,height:36,borderRadius:"50%",background:"#1A3A5C",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:15,flexShrink:0}}>
+                        {post.author.charAt(0)}
+                      </div>
+                      <div>
+                        <div style={{fontWeight:700,fontSize:13,color:"#1F2937"}}>{post.author}</div>
+                        <div style={{fontSize:11,color:"#9CA3AF"}}>{fmtTime(post.created_at)}</div>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <span style={{background:st.bg,color:st.text,border:`1px solid ${st.border}`,borderRadius:8,padding:"2px 8px",fontSize:11,fontWeight:700}}>{post.category}</span>
+                      <button onClick={()=>setConf({msg:`この投稿を削除しますか？\n\nこの操作は元に戻せません。\n削除しますか？`,onOk:()=>{deleteBoardPost(post.id);setConf(null);}})} style={{background:"none",border:"none",color:"#D1D5DB",cursor:"pointer",fontSize:14,padding:"2px 4px"}}>✕</button>
+                    </div>
+                  </div>
+                  <div style={{fontSize:14,color:"#1F2937",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{post.content}</div>
+                </div>
+
+                {/* アクションバー */}
+                <div style={{display:"flex",gap:0,borderTop:"1px solid #F3F4F6"}}>
+                  <button onClick={()=>toggleLike(post)}
+                    style={{flex:1,padding:"10px 0",background:"none",border:"none",borderRight:"1px solid #F3F4F6",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,fontSize:13,color:liked?"#E07B39":"#9CA3AF",fontWeight:liked?800:400}}>
+                    👍 {likeCount>0&&<span style={{fontWeight:800,color:liked?"#E07B39":"#6B7280"}}>{likeCount}</span>}
+                    {likeCount===0&&"いいね"}
+                  </button>
+                  <button onClick={()=>setBoardOpen(isOpen?null:post.id)}
+                    style={{flex:1,padding:"10px 0",background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,fontSize:13,color:"#6B7280",fontWeight:400}}>
+                    💬 {postComments.length>0?`${postComments.length}件`:"コメント"}
+                  </button>
+                </div>
+
+                {/* コメント欄 */}
+                {isOpen&&<div style={{borderTop:"1px solid #F3F4F6",background:"#F9FAFB",padding:"12px 14px"}}>
+                  {postComments.map((c,i)=>(
+                    <div key={c.id} style={{display:"flex",gap:8,marginBottom:10,alignItems:"flex-start"}}>
+                      <div style={{width:28,height:28,borderRadius:"50%",background:"#E07B39",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:12,flexShrink:0}}>
+                        {c.author.charAt(0)}
+                      </div>
+                      <div style={{flex:1,background:"#fff",borderRadius:10,padding:"8px 12px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                          <span style={{fontSize:12,fontWeight:700,color:"#1F2937"}}>{c.author}</span>
+                          <div style={{display:"flex",alignItems:"center",gap:6}}>
+                            <span style={{fontSize:11,color:"#9CA3AF"}}>{fmtTime(c.created_at)}</span>
+                            <button onClick={()=>deleteBoardComment(c.id)} style={{background:"none",border:"none",color:"#D1D5DB",cursor:"pointer",fontSize:12}}>✕</button>
+                          </div>
+                        </div>
+                        <div style={{fontSize:13,color:"#374151",lineHeight:1.6}}>{c.content}</div>
+                      </div>
+                    </div>
+                  ))}
+                  {/* コメント入力 */}
+                  <div style={{display:"flex",gap:8,marginTop:4}}>
+                    <input value={boardComment.author} onChange={e=>setBoardComment({...boardComment,author:e.target.value,postId:post.id})}
+                      placeholder="名前" style={{width:72,padding:"8px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",fontSize:12,color:"#1F2937",background:"#fff",flexShrink:0}}/>
+                    <input value={boardComment.postId===post.id?boardComment.content:""} onChange={e=>setBoardComment({...boardComment,content:e.target.value,postId:post.id})}
+                      onKeyDown={e=>e.key==="Enter"&&boardComment.author&&addBoardComment(post.id)}
+                      placeholder="コメントを入力..." style={{flex:1,padding:"8px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",fontSize:12,color:"#1F2937",background:"#fff"}}/>
+                    <button onClick={()=>addBoardComment(post.id)}
+                      style={{background:"#1A3A5C",color:"#fff",border:"none",borderRadius:8,padding:"8px 12px",fontSize:12,fontWeight:700,cursor:"pointer",flexShrink:0}}>送信</button>
+                  </div>
+                </div>}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* 投稿モーダル */}
+        {modal==="addPost"&&<Modal title="📣 新規投稿" onClose={()=>setModal(null)} onSave={addBoardPost}>
+          <Sel label="カテゴリ" opts={BOARD_CATS} value={boardNew.category} onChange={e=>setBoardNew({...boardNew,category:e.target.value})}/>
+          <Inp label="名前 *" value={boardNew.author} onChange={e=>setBoardNew({...boardNew,author:e.target.value})} placeholder="例：崎岡"/>
+          <div style={{marginBottom:10}}>
+            <div style={{fontSize:11,color:"#6B7280",marginBottom:3}}>内容 *</div>
+            <textarea value={boardNew.content} onChange={e=>setBoardNew({...boardNew,content:e.target.value})}
+              placeholder="内容を入力..." rows={5}
+              style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",fontSize:13,resize:"vertical",boxSizing:"border-box",background:"#FAFAFA",color:"#1F2937",fontFamily:"inherit"}}/>
+          </div>
+        </Modal>}
+        {conf&&<Confirm msg={conf.msg} onCancel={()=>setConf(null)} onOk={conf.onOk}/>}
+      </div>
+    );
+  }
+
+  // ══ 釣り情報ページ ══
+  if(page==="fishing"){
+    const QUICK_LINKS=[
+      {icon:"🎫",label:"釣割",sub:"予約・釣果サイト",url:"https://www.chowari.jp/",color:"#E07B39"},
+      {icon:"📋",label:"乗船名簿クラウド",sub:"デジタル名簿記入",url:"https://meibo.chowari.jp/store/",color:"#1A3A5C"},
+      {icon:"🌊",label:"タイドグラフ",sub:"潮位・潮汐情報",url:"https://tide736.net/",color:"#0284C7"},
+      {icon:"🌬",label:"Windy",sub:"風・波予報",url:"https://www.windy.com/?35.15,140.30,10",color:"#059669"},
+    ];
+    const BOATS=[
+      {name:"新勝丸",port:"外房・勝浦川津港",icon:"⚓",
+        chowari:"https://www.chowari.jp/ship/01167/catch/",
+        blog:"https://ameblo.jp/sinsho1963/",
+        color:"#0284C7"},
+      {name:"第三新生合同丸",port:"外房・鴨川漁港",icon:"🚢",
+        chowari:"https://www.chowari.jp/ship/01329/catch/",
+        blog:"https://godomaru.com/blog.php",
+        color:"#059669"},
+    ];
+    const WeatherCard=({d})=>{
+      if(!d) return <div style={{flex:1,background:"#F9FAFB",borderRadius:12,padding:"12px",textAlign:"center",color:"#9CA3AF",fontSize:12}}>取得中...</div>;
+      return(
+        <div style={{flex:1,background:"#F0F9FF",borderRadius:12,padding:"12px",border:"1.5px solid #BAE6FD"}}>
+          <div style={{fontSize:12,fontWeight:800,color:"#0284C7",marginBottom:6}}>{d.name}</div>
+          <div style={{fontSize:28,marginBottom:4}}>{d.icon}</div>
+          <div style={{fontSize:18,fontWeight:900,color:"#1F2937",marginBottom:6}}>{d.temp}°C</div>
+          <div style={{display:"flex",flexDirection:"column",gap:3}}>
+            <div style={{fontSize:11,color:"#374151"}}>💨 {d.windDir} {d.windSpeed}m/s</div>
+            <div style={{fontSize:11,color:"#374151"}}>🌊 波高 {d.wave}m</div>
+          </div>
+        </div>
+      );
+    };
+    return(
+      <div style={{fontFamily:"'Hiragino Sans','Yu Gothic',sans-serif",background:"#F0F4F8",minHeight:"100vh",...pp}}>
+        {isPC&&(cust.showSidebar!==false)&&<PCSidebar/>}
+        {isPC&&(cust.showRightPanel!==false)&&<PCRightPanel/>}
+        {(cust.showLauncher!==false)&&<FloatLauncher/>}
+        <Hdr title="🎣 釣り情報" back={()=>nav("home")}/>
+        <div style={{padding:isPC?"14px 0":14}}>
+
+          {/* 天気・海況 */}
+          <div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}>
+            <div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:12}}>🌤 天気・海況（現在）</div>
+            <div style={{display:"flex",gap:10}}>
+              <WeatherCard d={fishWeather?.yokosuka}/>
+              <WeatherCard d={fishWeather?.sotobo}/>
+            </div>
+            {!fishWeather&&<div style={{fontSize:11,color:"#9CA3AF",textAlign:"center",marginTop:8}}>データ取得中...</div>}
+          </div>
+
+          {/* 釣果情報 */}
+          <div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}>
+            <div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:12}}>🐟 釣果情報</div>
+            {BOATS.map(b=>(
+              <div key={b.name} style={{background:"#F9FAFB",borderRadius:12,padding:"12px 14px",marginBottom:10,border:"1.5px solid #E5E7EB"}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+                  <div style={{width:40,height:40,borderRadius:10,background:b.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{b.icon}</div>
+                  <div>
+                    <div style={{fontWeight:800,fontSize:14,color:"#1F2937"}}>{b.name}</div>
+                    <div style={{fontSize:11,color:"#6B7280"}}>{b.port}</div>
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:8}}>
+                  <a href={b.chowari} target="_blank" rel="noopener noreferrer"
+                    style={{flex:1,background:b.color,color:"#fff",borderRadius:8,padding:"9px 0",textAlign:"center",textDecoration:"none",fontSize:12,fontWeight:800,display:"block"}}>
+                    📊 釣割で釣果を見る
+                  </a>
+                  <a href={b.blog} target="_blank" rel="noopener noreferrer"
+                    style={{flex:1,background:"#F3F4F6",color:"#374151",borderRadius:8,padding:"9px 0",textAlign:"center",textDecoration:"none",fontSize:12,fontWeight:700,display:"block",border:"1.5px solid #E5E7EB"}}>
+                    📝 公式ブログ
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* クイックリンク */}
+          <div style={{background:"#fff",borderRadius:14,padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.07)"}}>
+            <div style={{fontWeight:800,fontSize:14,color:"#1A3A5C",marginBottom:12}}>🔗 クイックリンク</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              {QUICK_LINKS.map(l=>(
+                <a key={l.label} href={l.url} target="_blank" rel="noopener noreferrer"
+                  style={{background:`${l.color}15`,border:`1.5px solid ${l.color}40`,borderRadius:12,padding:"14px 12px",textDecoration:"none",display:"block"}}>
+                  <div style={{fontSize:24,marginBottom:6}}>{l.icon}</div>
+                  <div style={{fontWeight:800,fontSize:13,color:"#1F2937",marginBottom:2}}>{l.label}</div>
+                  <div style={{fontSize:11,color:"#6B7280"}}>{l.sub}</div>
+                </a>
+              ))}
+            </div>
           </div>
         </div>
       </div>
