@@ -1,0 +1,146 @@
+import { useState } from "react";
+import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
+import { Modal, Inp } from "../components/UI";
+import { DEFAULT_TILE_CONF } from "../lib/constants";
+import { PRIO } from "../lib/constants";
+
+export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, setTileEdit, saveTileConf, saveCustomize, weather, fishWeather, isPC, pp, nav, setModal, setEc, ec, rpOpen, setRpOpen, finFiles, tmplFiles, SB_W, RP_W }) {
+  const [editTile, setEditTile] = useState(null);
+  const pending = tks.filter(t => !t.done);
+  const active = pjs.filter(p => p.status !== "完了" && p.status !== "中断");
+  const tiles = tileConf.filter(t => t.visible || tileEdit).map(t => ({
+    ...t,
+    sub: t.key === "projects" ? `${active.length}件進行中` : t.key === "companies" ? `${cos.length}社登録` : t.key === "tasks" ? `未完了 ${pending.length}件` : t.sub
+  }));
+
+  return (
+    <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: cust.bg, minHeight: "100vh", ...pp }}>
+      {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="home" nav={nav} setModal={setModal} setEc={setEc} SB_W={SB_W} />}
+      {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} />}
+      {(cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
+
+      {!isPC && <div style={{ background: cust.c1, color: "#fff", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 50 }}>
+        <div style={{ background: cust.acc, borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 16 }}>I</div>
+        <div style={{ flex: 1 }}><div style={{ fontWeight: 800, fontSize: 16 }}>{cust.sys}</div><div style={{ fontSize: 10, opacity: 0.65 }}>{cust.name}</div></div>
+        <button onClick={() => { setEc({ ...cust }); setModal("cust"); }} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer", fontWeight: 700 }}>⚙ 編集</button>
+      </div>}
+
+      <div style={{ background: `linear-gradient(135deg,${cust.c1},${cust.c2})`, padding: "20px 20px 28px", margin: "0 0 -16px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", marginBottom: 2 }}>{new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })}</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", marginBottom: 4 }}>{cust.name}</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: "#fff" }}>{cust.sys}</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 4 }}>案件 {pjs.length}件 ｜ 取引先 {cos.length}社</div>
+          </div>
+          {weather && <div style={{ textAlign: "right", background: "rgba(255,255,255,0.15)", borderRadius: 12, padding: "10px 14px", flexShrink: 0 }}>
+            <div style={{ fontSize: 28, lineHeight: 1 }}>{weather.icon}</div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: "#fff", marginTop: 4 }}>{weather.temp}°C</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.8)" }}>{weather.desc}</div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>横浜</div>
+          </div>}
+        </div>
+      </div>
+
+      <div style={{ padding: isPC ? "12px 0 20px" : "28px 14px 30px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF" }}>DB一覧</div>
+          <button onClick={() => { if (tileEdit) { saveTileConf(tileConf); } setTileEdit(!tileEdit); }} style={{ fontSize: 11, fontWeight: 700, color: tileEdit ? "#E07B39" : "#9CA3AF", background: "none", border: "none", cursor: "pointer" }}>
+            {tileEdit ? "✅ 完了" : "✏️ 並び替え・編集"}
+          </button>
+        </div>
+
+        {isPC && !tileEdit && (
+          <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", marginBottom: 20 }}>
+            {tiles.filter(t => t.visible).map((t, i, arr) => (
+              <button key={t.key} onClick={() => { if (t.key === "chatgpt") { window.open("https://chatgpt.com", "_blank"); return; } if (t.key === "report") { window.open("/report.html", "_blank"); return; } nav(t.key); }}
+                style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "13px 18px", background: "none", border: "none", borderBottom: i < arr.length - 1 ? "1px solid #F3F4F6" : "none", cursor: "pointer", textAlign: "left", transition: "background 0.1s" }}
+                onMouseOver={e => e.currentTarget.style.background = "#F9FAFB"}
+                onMouseOut={e => e.currentTarget.style.background = "none"}>
+                <div style={{ width: 4, height: 36, borderRadius: 2, background: t.color, flexShrink: 0 }} />
+                <span style={{ fontSize: 22, flexShrink: 0 }}>{t.icon}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#1F2937" }}>{t.label}</div>
+                  <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1 }}>{t.sub}</div>
+                </div>
+                <div style={{ fontSize: 14, color: "#D1D5DB" }}>›</div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {isPC && tileEdit && (
+          <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", marginBottom: 20 }}>
+            {tiles.map((t, i) => (
+              <div key={t.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderBottom: i < tiles.length - 1 ? "1px solid #F3F4F6" : "none", opacity: t.visible ? 1 : 0.45 }}>
+                <div style={{ width: 4, height: 32, borderRadius: 2, background: t.color, flexShrink: 0 }} />
+                <span style={{ fontSize: 20, flexShrink: 0 }}>{t.icon}</span>
+                <div style={{ flex: 1, fontWeight: 700, fontSize: 13, color: "#1F2937" }}>{t.label}</div>
+                <div style={{ display: "flex", gap: 4 }}>
+                  <button onClick={() => { const pi = tileConf.findIndex(x => x.key === t.key); if (pi > 0) { const n = [...tileConf]; [n[pi], n[pi - 1]] = [n[pi - 1], n[pi]]; saveTileConf(n); } }} style={{ background: "#F3F4F6", border: "none", borderRadius: 4, padding: "3px 8px", fontSize: 12, cursor: "pointer" }}>↑</button>
+                  <button onClick={() => { const pi = tileConf.findIndex(x => x.key === t.key); if (pi < tileConf.length - 1) { const n = [...tileConf]; [n[pi], n[pi + 1]] = [n[pi + 1], n[pi]]; saveTileConf(n); } }} style={{ background: "#F3F4F6", border: "none", borderRadius: 4, padding: "3px 8px", fontSize: 12, cursor: "pointer" }}>↓</button>
+                  <button onClick={() => setEditTile({ ...t })} style={{ background: "#EFF6FF", border: "none", borderRadius: 4, padding: "3px 8px", fontSize: 11, color: "#1A3A5C", cursor: "pointer" }}>✏️</button>
+                  <button onClick={() => saveTileConf(tileConf.map(x => x.key === t.key ? { ...x, visible: !x.visible } : x))} style={{ background: t.visible ? "#FEF2F2" : "#F0FDF4", border: "none", borderRadius: 4, padding: "3px 8px", fontSize: 11, cursor: "pointer" }}>{t.visible ? "🙈" : "👁"}</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!isPC && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
+          {tiles.map((t) => (
+            <div key={t.key}>
+              {tileEdit ? (
+                <div style={{ background: "#fff", border: `2px solid ${t.visible ? "#E07B39" : "#E5E7EB"}`, borderRadius: 14, padding: "12px 14px", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", opacity: t.visible ? 1 : 0.5 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                    <span style={{ fontSize: 22 }}>{t.icon}</span>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button onClick={() => { const pi = tileConf.findIndex(x => x.key === t.key); if (pi > 0) { const n = [...tileConf]; [n[pi], n[pi - 1]] = [n[pi - 1], n[pi]]; saveTileConf(n); } }} style={{ background: "#F3F4F6", border: "none", borderRadius: 4, padding: "2px 6px", fontSize: 12, cursor: "pointer" }}>↑</button>
+                      <button onClick={() => { const pi = tileConf.findIndex(x => x.key === t.key); if (pi < tileConf.length - 1) { const n = [...tileConf]; [n[pi], n[pi + 1]] = [n[pi + 1], n[pi]]; saveTileConf(n); } }} style={{ background: "#F3F4F6", border: "none", borderRadius: 4, padding: "2px 6px", fontSize: 12, cursor: "pointer" }}>↓</button>
+                      <button onClick={() => setEditTile({ ...t })} style={{ background: "#EFF6FF", border: "none", borderRadius: 4, padding: "2px 6px", fontSize: 11, color: "#1A3A5C", cursor: "pointer" }}>✏️</button>
+                      <button onClick={() => saveTileConf(tileConf.map(x => x.key === t.key ? { ...x, visible: !x.visible } : x))} style={{ background: t.visible ? "#FEF2F2" : "#F0FDF4", border: "none", borderRadius: 4, padding: "2px 6px", fontSize: 11, cursor: "pointer" }}>{t.visible ? "🙈" : "👁"}</button>
+                    </div>
+                  </div>
+                  <div style={{ fontWeight: 800, fontSize: 13, color: "#1F2937" }}>{t.label}</div>
+                  <div style={{ marginTop: 8, height: 3, borderRadius: 2, background: t.color, width: "40%" }} />
+                </div>
+              ) : (
+                <button onClick={() => { if (t.key === "chatgpt") { window.open("https://chatgpt.com", "_blank"); return; } if (t.key === "report") { window.open("/report.html", "_blank"); return; } nav(t.key); }} style={{ width: "100%", background: "#fff", border: "none", borderRadius: 14, padding: "16px 14px", textAlign: "left", cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
+                  <div style={{ fontSize: 26, marginBottom: 8 }}>{t.icon}</div>
+                  <div style={{ fontWeight: 800, fontSize: 14, color: "#1F2937", marginBottom: 2 }}>{t.label}</div>
+                  <div style={{ fontSize: 11, color: "#6B7280" }}>{t.sub}</div>
+                  <div style={{ marginTop: 10, height: 3, borderRadius: 2, background: t.color, width: "40%" }} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>}
+
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", marginBottom: 10 }}>直近のタスク</div>
+        <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
+          {pending.slice(0, 3).map((t, i) => (
+            <div key={t.id} style={{ padding: "12px 16px", borderBottom: i < Math.min(pending.length, 3) - 1 ? "1px solid #F3F4F6" : "none", display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: PRIO[t.prio]?.c || "#9CA3AF", flexShrink: 0 }} />
+              <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#1F2937" }}>{t.title}</div>
+              {t.due && <div style={{ fontSize: 11, color: "#9CA3AF" }}>{t.due}</div>}
+            </div>
+          ))}
+          {pending.length === 0 && <div style={{ padding: 16, color: "#9CA3AF", fontSize: 13, textAlign: "center" }}>タスクはありません</div>}
+          <button onClick={() => nav("tasks")} style={{ width: "100%", padding: 10, background: "#F9FAFB", border: "none", fontSize: 12, color: cust.c1, fontWeight: 700, cursor: "pointer", borderTop: "1px solid #F3F4F6" }}>すべて見る →</button>
+        </div>
+      </div>
+
+      {editTile && (<Modal title="タイルを編集" onClose={() => setEditTile(null)} onSave={() => { saveTileConf(tileConf.map(t => t.key === editTile.key ? editTile : t)); setEditTile(null); }}>
+        <Inp label="アイコン" value={editTile.icon} onChange={e => setEditTile({ ...editTile, icon: e.target.value })} />
+        <Inp label="ラベル名" value={editTile.label} onChange={e => setEditTile({ ...editTile, label: e.target.value })} />
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 6 }}>カラー</div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <input type="color" value={editTile.color} onChange={e => setEditTile({ ...editTile, color: e.target.value })} style={{ width: 48, height: 36, borderRadius: 8, border: "1.5px solid #E5E7EB", cursor: "pointer", padding: 2 }} />
+            <div style={{ flex: 1, height: 36, borderRadius: 8, background: editTile.color }} />
+          </div>
+        </div>
+      </Modal>)}
+    </div>
+  );
+}
