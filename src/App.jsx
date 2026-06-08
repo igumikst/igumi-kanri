@@ -16,6 +16,7 @@ import AI from "./pages/AI";
 import Board from "./pages/Board";
 import Fishing from "./pages/Fishing";
 import AutoEdit from "./pages/AutoEdit";
+
 export default function App() {
   const [page, setPage] = useState("home");
   const [cos, setCos] = useState([]);
@@ -34,6 +35,7 @@ export default function App() {
   const [tileEdit, setTileEdit] = useState(false);
   const [modal, setModal] = useState(null);
   const [weather, setWeather] = useState(null);
+  const [weekWeather, setWeekWeather] = useState(null);
   const [fishWeather, setFishWeather] = useState(null);
   const [fishBoats, setFishBoats] = useState([
     { id: "b1", name: "新勝丸", port: "外房・勝浦川津港", icon: "⚓", chowari: "https://www.chowari.jp/ship/01167/catch/", blog: "https://ameblo.jp/sinsho1963/", color: "#0284C7" },
@@ -46,13 +48,25 @@ export default function App() {
   const SB_W = 180, RP_W = 220;
 
   useEffect(() => {
-    fetch("https://api.open-meteo.com/v1/forecast?latitude=35.4437&longitude=139.6380&current=temperature_2m,weather_code&timezone=Asia%2FTokyo")
-      .then(r => r.json()).then(d => {
+    fetch("https://api.open-meteo.com/v1/forecast?latitude=35.4437&longitude=139.6380&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=Asia%2FTokyo&forecast_days=7")
+      .then(r => r.json())
+      .then(d => {
         const code = d.current?.weather_code;
         const temp = Math.round(d.current?.temperature_2m);
         const icon = code === 0 ? "☀️" : code <= 2 ? "🌤" : code === 3 ? "☁️" : code <= 48 ? "🌫" : code <= 55 ? "🌦" : code <= 65 ? "🌧" : code <= 75 ? "🌨" : code <= 82 ? "🌦" : code <= 99 ? "⛈" : "🌡";
         const desc = code === 0 ? "快晴" : code <= 2 ? "晴れ" : code === 3 ? "曇り" : code <= 48 ? "霧" : code <= 55 ? "小雨" : code <= 65 ? "雨" : code <= 75 ? "雪" : code <= 82 ? "にわか雨" : code <= 99 ? "雷雨" : "不明";
         setWeather({ icon, temp, desc });
+        if (d.daily) {
+          const days = d.daily.time.map((t, i) => ({
+            date: t,
+            weekday: new Date(t).getDay(),
+            code: d.daily.weather_code[i],
+            max: Math.round(d.daily.temperature_2m_max[i]),
+            min: Math.round(d.daily.temperature_2m_min[i]),
+            rain: Math.round(d.daily.precipitation_sum[i] || 0),
+          }));
+          setWeekWeather(days);
+        }
       }).catch(() => {});
   }, []);
 
@@ -126,9 +140,7 @@ export default function App() {
   const saveFishBoats = async (boats) => { setFishBoats(boats); await saveHomeSetting("fishing_boats", boats); };
 
   const nav = p => { setPage(p); setModal(null); };
-
   const pp = isPC ? { marginLeft: SB_W, marginRight: rpOpen ? RP_W : 32 } : {};
-
   const commonProps = { pjs, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, tileConf, SB_W, RP_W };
 
   if (loading) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", fontFamily: "'Hiragino Sans',sans-serif", background: "#F0F4F8" }}><div style={{ textAlign: "center" }}><div style={{ fontSize: 32, marginBottom: 12 }}>⚡</div><div style={{ color: "#1A3A5C", fontWeight: 700 }}>読み込み中...</div></div></div>;
@@ -140,13 +152,12 @@ export default function App() {
     </Modal>
   );
 
-  if (page === "home") return <Home {...commonProps} setPjs={setPjs} setCos={setCos} setTks={setTks} setLinks={setLinks} weather={weather} tileEdit={tileEdit} setTileEdit={setTileEdit} saveTileConf={saveTileConf} saveCustomize={saveCustomize} modal={modal} setModal={setModal} ec={ec} setEc={setEc} />;
+  if (page === "home") return <Home {...commonProps} setPjs={setPjs} setCos={setCos} setTks={setTks} setLinks={setLinks} weather={weather} weekWeather={weekWeather} tileEdit={tileEdit} setTileEdit={setTileEdit} saveTileConf={saveTileConf} saveCustomize={saveCustomize} modal={modal} setModal={setModal} ec={ec} setEc={setEc} boardPosts={boardPosts} />;
   if (page === "projects") return <Projects {...commonProps} setPjs={setPjs} />;
   if (page === "companies") return <Companies {...commonProps} setCos={setCos} />;
   if (page === "tasks") return <Tasks {...commonProps} setTks={setTks} />;
   if (page === "links") return <Links {...commonProps} setLinks={setLinks} />;
-
- if (page === "finance") return <Finance {...commonProps} setFinFiles={setFinFiles} finFolders={finFolders} setFinFolders={setFinFolders} />;
+  if (page === "finance") return <Finance {...commonProps} setFinFiles={setFinFiles} finFolders={finFolders} setFinFolders={setFinFolders} />;
   if (page === "templates") return <Templates {...commonProps} setTmplFiles={setTmplFiles} />;
   if (page === "estimate") return <Estimate {...commonProps} />;
   if (page === "analytics") return <Analytics {...commonProps} />;

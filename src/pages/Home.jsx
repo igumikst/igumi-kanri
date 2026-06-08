@@ -1,17 +1,20 @@
 import { useState } from "react";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { Modal, Inp } from "../components/UI";
-import { DEFAULT_TILE_CONF } from "../lib/constants";
 import { PRIO } from "../lib/constants";
 
-export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, setTileEdit, saveTileConf, saveCustomize, weather, fishWeather, isPC, pp, nav, setModal, setEc, ec, rpOpen, setRpOpen, finFiles, tmplFiles, SB_W, RP_W }) {
+export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, setTileEdit, saveTileConf, saveCustomize, weather, weekWeather, fishWeather, isPC, pp, nav, setModal, setEc, ec, rpOpen, setRpOpen, finFiles, tmplFiles, SB_W, RP_W, boardPosts }) {
   const [editTile, setEditTile] = useState(null);
+  const [showWeekWeather, setShowWeekWeather] = useState(false);
   const pending = tks.filter(t => !t.done);
   const active = pjs.filter(p => p.status !== "完了" && p.status !== "中断");
   const tiles = tileConf.filter(t => t.visible || tileEdit).map(t => ({
     ...t,
     sub: t.key === "projects" ? `${active.length}件進行中` : t.key === "companies" ? `${cos.length}社登録` : t.key === "tasks" ? `未完了 ${pending.length}件` : t.sub
   }));
+
+  const WD = ["日", "月", "火", "水", "木", "金", "土"];
+  const weatherIcon = code => code === 0 ? "☀️" : code <= 2 ? "🌤" : code === 3 ? "☁️" : code <= 48 ? "🌫" : code <= 55 ? "🌦" : code <= 65 ? "🌧" : code <= 75 ? "🌨" : code <= 82 ? "🌦" : code <= 99 ? "⛈" : "🌡";
 
   return (
     <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: cust.bg, minHeight: "100vh", ...pp }}>
@@ -25,6 +28,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
         <button onClick={() => { setEc({ ...cust }); setModal("cust"); }} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer", fontWeight: 700 }}>⚙ 編集</button>
       </div>}
 
+      {/* バナー */}
       <div style={{ background: `linear-gradient(135deg,${cust.c1},${cust.c2})`, padding: "20px 20px 28px", margin: "0 0 -16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
@@ -33,16 +37,61 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
             <div style={{ fontSize: 22, fontWeight: 900, color: "#fff" }}>{cust.sys}</div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 4 }}>案件 {pjs.length}件 ｜ 取引先 {cos.length}社</div>
           </div>
-          {weather && <div style={{ textAlign: "right", background: "rgba(255,255,255,0.15)", borderRadius: 12, padding: "10px 14px", flexShrink: 0 }}>
-            <div style={{ fontSize: 28, lineHeight: 1 }}>{weather.icon}</div>
-            <div style={{ fontSize: 20, fontWeight: 900, color: "#fff", marginTop: 4 }}>{weather.temp}°C</div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.8)" }}>{weather.desc}</div>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>横浜</div>
-          </div>}
+          {/* 天気ウィジェット */}
+          {weather && (
+            <div onClick={() => setShowWeekWeather(p => !p)}
+              style={{ textAlign: "right", background: "rgba(255,255,255,0.15)", borderRadius: 12, padding: "10px 14px", flexShrink: 0, cursor: "pointer" }}>
+              <div style={{ fontSize: 28, lineHeight: 1 }}>{weather.icon}</div>
+              <div style={{ fontSize: 20, fontWeight: 900, color: "#fff", marginTop: 4 }}>{weather.temp}°C</div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.8)" }}>{weather.desc}</div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>横浜 タップで週間</div>
+            </div>
+          )}
         </div>
+
+        {/* 週間天気 */}
+        {showWeekWeather && weekWeather && (
+          <div style={{ marginTop: 14, background: "rgba(255,255,255,0.12)", borderRadius: 12, padding: "12px 8px", display: "flex", gap: 4, overflowX: "auto" }}>
+            {weekWeather.map((d, i) => (
+              <div key={i} style={{ flex: 1, minWidth: 44, textAlign: "center" }}>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.7)", marginBottom: 4 }}>{i === 0 ? "今日" : WD[d.weekday]}</div>
+                <div style={{ fontSize: 20 }}>{weatherIcon(d.code)}</div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: "#fff", marginTop: 2 }}>{d.max}°</div>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}>{d.min}°</div>
+                {d.rain > 0 && <div style={{ fontSize: 9, color: "#BAE6FD", marginTop: 1 }}>{d.rain}mm</div>}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={{ padding: isPC ? "12px 0 20px" : "28px 14px 30px" }}>
+
+        {/* 掲示板の最新投稿 */}
+        {boardPosts.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF" }}>📣 社内掲示板</div>
+              <button onClick={() => nav("board")} style={{ fontSize: 11, color: cust.c1, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>すべて見る →</button>
+            </div>
+            <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
+              {boardPosts.slice(0, 3).map((post, i) => {
+                const CAT_COLOR = { "業務連絡": "#1D4ED8", "スケジュール": "#166534", "緊急連絡": "#DC2626", "その他": "#374151" };
+                const CAT_BG = { "業務連絡": "#EFF6FF", "スケジュール": "#F0FDF4", "緊急連絡": "#FEF2F2", "その他": "#F9FAFB" };
+                return (
+                  <div key={post.id} onClick={() => nav("board")} style={{ padding: "12px 16px", borderBottom: i < Math.min(boardPosts.length, 3) - 1 ? "1px solid #F3F4F6" : "none", cursor: "pointer" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                      <span style={{ background: CAT_BG[post.category] || "#F9FAFB", color: CAT_COLOR[post.category] || "#374151", borderRadius: 6, padding: "1px 7px", fontSize: 10, fontWeight: 700 }}>{post.category}</span>
+                      <span style={{ fontSize: 11, color: "#9CA3AF" }}>{post.author}</span>
+                    </div>
+                    <div style={{ fontSize: 13, color: "#1F2937", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{post.content}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF" }}>DB一覧</div>
           <button onClick={() => { if (tileEdit) { saveTileConf(tileConf); } setTileEdit(!tileEdit); }} style={{ fontSize: 11, fontWeight: 700, color: tileEdit ? "#E07B39" : "#9CA3AF", background: "none", border: "none", cursor: "pointer" }}>
@@ -54,7 +103,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", marginBottom: 20 }}>
             {tiles.filter(t => t.visible).map((t, i, arr) => (
               <button key={t.key} onClick={() => { if (t.key === "chatgpt") { window.open("https://chatgpt.com", "_blank"); return; } if (t.key === "report") { window.open("/report.html", "_blank"); return; } nav(t.key); }}
-                style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "13px 18px", background: "none", border: "none", borderBottom: i < arr.length - 1 ? "1px solid #F3F4F6" : "none", cursor: "pointer", textAlign: "left", transition: "background 0.1s" }}
+                style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "13px 18px", background: "none", border: "none", borderBottom: i < arr.length - 1 ? "1px solid #F3F4F6" : "none", cursor: "pointer", textAlign: "left" }}
                 onMouseOver={e => e.currentTarget.style.background = "#F9FAFB"}
                 onMouseOut={e => e.currentTarget.style.background = "none"}>
                 <div style={{ width: 4, height: 36, borderRadius: 2, background: t.color, flexShrink: 0 }} />
