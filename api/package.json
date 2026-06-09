@@ -1,0 +1,10 @@
+{
+  "name": "igumi-api",
+  "version": "1.0.0",
+  "description": "IGUMI AI電話受付 バックエンドAPI",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "form-data": "^4.0.0",
+    "twilio": "^5.3.0"
+  }
+}
