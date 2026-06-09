@@ -132,8 +132,7 @@ export default function App() {
     if (tmplRes.data) setTmplFiles(tmplRes.data);
     if (bpRes.data) setBoardPosts(bpRes.data);
     if (bcRes.data) setBoardComments(bcRes.data);
-    console.log('calls data:', callsRes);
-if (callsRes.data) setCalls(callsRes.data); // ★追加
+    if (callsRes.data) setCalls(callsRes.data); // ★追加
     setLoading(false);
   };
 
@@ -170,7 +169,7 @@ if (callsRes.data) setCalls(callsRes.data); // ★追加
   if (page === "board") return <Board {...commonProps} boardPosts={boardPosts} setBoardPosts={setBoardPosts} boardComments={boardComments} setBoardComments={setBoardComments} />;
   if (page === "fishing") return <Fishing {...commonProps} fishBoats={fishBoats} saveFishBoats={saveFishBoats} />;
   if (page === "autoedit") return <AutoEdit {...commonProps} />;
-  if (page === "calls") return <Calls {...commonProps} calls={calls} setCalls={setCalls} />; // ★追加
+  if (page === "calls") return <CallsPage {...commonProps} calls={calls} setCalls={setCalls} />; // ★追加
 
   return null;
 }
