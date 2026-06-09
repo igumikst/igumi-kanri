@@ -2,10 +2,12 @@ import { useState } from "react";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { Modal, Inp } from "../components/UI";
 import { PRIO } from "../lib/constants";
+import { supabase } from "../lib/supabase";
 
-export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, setTileEdit, saveTileConf, saveCustomize, weather, weekWeather, fishWeather, isPC, pp, nav, setModal, setEc, ec, rpOpen, setRpOpen, finFiles, tmplFiles, SB_W, RP_W, boardPosts, calls }) {
+export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, setTileEdit, saveTileConf, saveCustomize, weather, weekWeather, fishWeather, isPC, pp, nav, setModal, setEc, ec, rpOpen, setRpOpen, finFiles, tmplFiles, SB_W, RP_W, boardPosts, calls, setCalls }) {
   const [editTile, setEditTile] = useState(null);
   const [showWeekWeather, setShowWeekWeather] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const pending = tks.filter(t => !t.done);
   const active = pjs.filter(p => p.status !== "完了" && p.status !== "中断");
   const tiles = tileConf.filter(t => t.visible || tileEdit).map(t => ({
@@ -16,6 +18,13 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const WD = ["日", "月", "火", "水", "木", "金", "土"];
   const weatherIcon = code => code === 0 ? "☀️" : code <= 2 ? "🌤" : code === 3 ? "☁️" : code <= 48 ? "🌫" : code <= 55 ? "🌦" : code <= 65 ? "🌧" : code <= 75 ? "🌨" : code <= 82 ? "🌦" : code <= 99 ? "⛈" : "🌡";
 
+  const refreshCalls = async () => {
+    setRefreshing(true);
+    const { data } = await supabase.from("calls").select("*").order("received_at", { ascending: false });
+    if (data) setCalls(data);
+    setRefreshing(false);
+  };
+
   return (
     <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: cust.bg, minHeight: "100vh", ...pp }}>
       {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="home" nav={nav} setModal={setModal} setEc={setEc} SB_W={SB_W} />}
@@ -25,6 +34,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
       {!isPC && <div style={{ background: cust.c1, color: "#fff", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 50 }}>
         <div style={{ background: cust.acc, borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 16 }}>I</div>
         <div style={{ flex: 1 }}><div style={{ fontWeight: 800, fontSize: 16 }}>{cust.sys}</div><div style={{ fontSize: 10, opacity: 0.65 }}>{cust.name}</div></div>
+        <button onClick={refreshCalls} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 16, cursor: "pointer" }}>{refreshing ? "⏳" : "🔄"}</button>
         <button onClick={() => { setEc({ ...cust }); setModal("cust"); }} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer", fontWeight: 700 }}>⚙ 編集</button>
       </div>}
 
@@ -69,23 +79,16 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
 
         {/* 電話受付案件バナー */}
         {calls && calls.length > 0 && (
-          <div
-            onClick={() => nav("calls")}
-            style={{
-              background: "linear-gradient(135deg, #1e3a5f, #2563eb)",
-              borderRadius: 14,
-              padding: "14px 18px",
-              marginBottom: 16,
-              cursor: "pointer",
-              boxShadow: "0 4px 12px rgba(37,99,235,0.25)",
-            }}
-          >
+          <div style={{ background: "linear-gradient(135deg, #1e3a5f, #2563eb)", borderRadius: 14, padding: "14px 18px", marginBottom: 16, boxShadow: "0 4px 12px rgba(37,99,235,0.25)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div onClick={() => nav("calls")} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", flex: 1 }}>
                 <span style={{ fontSize: 20 }}>📞</span>
                 <span style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>電話受付案件</span>
               </div>
-              <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 12 }}>一覧を見る →</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button onClick={refreshCalls} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 14, cursor: "pointer" }}>{refreshing ? "⏳" : "🔄"}</button>
+                <span onClick={() => nav("calls")} style={{ color: "rgba(255,255,255,0.6)", fontSize: 12, cursor: "pointer" }}>一覧を見る →</span>
+              </div>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               {[
@@ -100,7 +103,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
               ))}
             </div>
             {calls.filter(c => c.status === "未対応").length > 0 && (
-              <div style={{ marginTop: 10, background: "rgba(239,68,68,0.1)", borderRadius: 8, padding: "8px 12px" }}>
+              <div onClick={() => nav("calls")} style={{ marginTop: 10, background: "rgba(239,68,68,0.1)", borderRadius: 8, padding: "8px 12px", cursor: "pointer" }}>
                 {calls.filter(c => c.status === "未対応").slice(0, 1).map(c => (
                   <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontSize: 11, background: "#ef4444", color: "#fff", borderRadius: 4, padding: "1px 6px", fontWeight: 700 }}>🔴 未対応</span>

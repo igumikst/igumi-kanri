@@ -14,13 +14,30 @@ const URGENCY_CONFIG = {
   "低":   { color: "#9ca3af", bg: "#f9fafb" },
 };
 
+const DEFAULT_TAGS = ["漏水", "設備不具合", "緊急対応", "見積依頼", "定期点検", "その他"];
+
 export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
   const [selected, setSelected] = useState(null);
-  const [filterStatus, setFilterStatus] = useState("すべて");
+  const [filterStatus, setFilterStatus] = useState("未対応"); // ★デフォルト未対応
+  const [filterTag, setFilterTag] = useState("すべて");
+  const [refreshing, setRefreshing] = useState(false);
+  const [tagInput, setTagInput] = useState("");
+  const [showTagEdit, setShowTagEdit] = useState(false);
+  const [customTags, setCustomTags] = useState(DEFAULT_TAGS);
 
-  const filtered = filterStatus === "すべて"
-    ? calls
-    : calls.filter(c => c.status === filterStatus);
+  // タグ一覧（calls内に使われてるタグも含める）
+  const allTags = ["すべて", ...customTags];
+
+  const filtered = calls
+    .filter(c => filterStatus === "すべて" || c.status === filterStatus)
+    .filter(c => filterTag === "すべて" || (c.tags && c.tags.includes(filterTag)));
+
+  const refreshCalls = async () => {
+    setRefreshing(true);
+    const { data } = await supabase.from("calls").select("*").order("received_at", { ascending: false });
+    if (data) setCalls(data);
+    setRefreshing(false);
+  };
 
   const updateStatus = async (id, newStatus) => {
     const { error } = await supabase
@@ -30,6 +47,18 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
     if (!error) {
       setCalls(prev => prev.map(c => c.id === id ? { ...c, status: newStatus } : c));
       if (selected?.id === id) setSelected(prev => ({ ...prev, status: newStatus }));
+    } else {
+      alert("保存に失敗しました: " + error.message);
+    }
+  };
+
+  const toggleTag = async (callId, tag, currentTags) => {
+    const tags = currentTags || [];
+    const newTags = tags.includes(tag) ? tags.filter(t => t !== tag) : [...tags, tag];
+    const { error } = await supabase.from("calls").update({ tags: newTags }).eq("id", callId);
+    if (!error) {
+      setCalls(prev => prev.map(c => c.id === callId ? { ...c, tags: newTags } : c));
+      if (selected?.id === callId) setSelected(prev => ({ ...prev, tags: newTags }));
     }
   };
 
@@ -39,10 +68,9 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
     return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   };
 
-  // 詳細モーダル
+  // 詳細画面
   if (selected) return (
     <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
-      {/* ヘッダー */}
       <div style={{ background: `linear-gradient(135deg,${cust.c1},${cust.c2})`, padding: "16px 20px", position: "sticky", top: 0, zIndex: 50 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button onClick={() => setSelected(null)} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>← 戻る</button>
@@ -68,6 +96,22 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
                 {conf.icon} {s}
               </button>
             ))}
+          </div>
+        </div>
+
+        {/* タグ */}
+        <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
+          <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginBottom: 10 }}>🏷 タグ</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {customTags.map(tag => {
+              const active = selected.tags?.includes(tag);
+              return (
+                <button key={tag} onClick={() => toggleTag(selected.id, tag, selected.tags)}
+                  style={{ padding: "5px 12px", borderRadius: 20, border: `1.5px solid ${active ? cust.c1 : "#E5E7EB"}`, background: active ? cust.c1 : "#fff", color: active ? "#fff" : "#6B7280", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                  {active ? "✓ " : ""}{tag}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -105,7 +149,7 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
           </div>
         )}
 
-        {/* 文字起こし全文 */}
+        {/* 文字起こし */}
         {selected.transcript && (
           <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
             <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginBottom: 8 }}>📝 文字起こし全文</div>
@@ -115,7 +159,7 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
           </div>
         )}
 
-        {/* 録音データ */}
+        {/* 録音 */}
         {selected.recording_url && (
           <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
             <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginBottom: 8 }}>🎙 録音データ</div>
@@ -123,14 +167,13 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
           </div>
         )}
 
-        {/* 折返し電話ボタン */}
+        {/* 折返し */}
         {selected.phone_number && (
           <a href={`tel:${selected.phone_number}`}
             style={{ display: "block", background: `linear-gradient(135deg,${cust.c1},${cust.c2})`, color: "#fff", borderRadius: 14, padding: "14px", textAlign: "center", fontWeight: 800, fontSize: 16, textDecoration: "none", boxShadow: "0 4px 12px rgba(37,99,235,0.3)", marginBottom: 14 }}>
             📞 折返し電話をする
           </a>
         )}
-
       </div>
     </div>
   );
@@ -138,7 +181,6 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
   // 一覧画面
   return (
     <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
-      {/* ヘッダー */}
       <div style={{ background: `linear-gradient(135deg,${cust.c1},${cust.c2})`, padding: "16px 20px 24px", position: "sticky", top: 0, zIndex: 50 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
           <button onClick={() => nav("home")} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>← ホーム</button>
@@ -146,9 +188,12 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
             <div style={{ color: "#fff", fontWeight: 800, fontSize: 18 }}>📞 電話受付案件</div>
             <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, marginTop: 2 }}>全 {calls.length} 件</div>
           </div>
+          <button onClick={refreshCalls} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 8, padding: "8px 14px", fontSize: 15, cursor: "pointer", fontWeight: 700 }}>
+            {refreshing ? "⏳" : "🔄 更新"}
+          </button>
         </div>
 
-        {/* サマリーバッジ */}
+        {/* サマリー */}
         <div style={{ display: "flex", gap: 8 }}>
           {Object.entries(STATUS_CONFIG).map(([s, conf]) => (
             <div key={s} style={{ flex: 1, background: "rgba(255,255,255,0.15)", borderRadius: 10, padding: "8px 4px", textAlign: "center" }}>
@@ -161,8 +206,8 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
 
       <div style={{ padding: "16px 16px 40px" }}>
 
-        {/* フィルター */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 16, overflowX: "auto" }}>
+        {/* ステータスフィルター */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 10, overflowX: "auto" }}>
           {["すべて", "未対応", "対応中", "完了"].map(s => (
             <button key={s} onClick={() => setFilterStatus(s)}
               style={{ flexShrink: 0, padding: "6px 16px", borderRadius: 20, border: "none", fontWeight: 700, fontSize: 12, cursor: "pointer", background: filterStatus === s ? cust.c1 : "#fff", color: filterStatus === s ? "#fff" : "#6B7280", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
@@ -170,6 +215,44 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
             </button>
           ))}
         </div>
+
+        {/* タグフィルター */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 16, overflowX: "auto", alignItems: "center" }}>
+          {allTags.map(tag => (
+            <button key={tag} onClick={() => setFilterTag(tag)}
+              style={{ flexShrink: 0, padding: "4px 12px", borderRadius: 20, border: `1.5px solid ${filterTag === tag ? cust.c1 : "#E5E7EB"}`, fontWeight: 600, fontSize: 11, cursor: "pointer", background: filterTag === tag ? cust.c1 : "#fff", color: filterTag === tag ? "#fff" : "#9CA3AF" }}>
+              🏷 {tag}
+            </button>
+          ))}
+          <button onClick={() => setShowTagEdit(p => !p)}
+            style={{ flexShrink: 0, padding: "4px 10px", borderRadius: 20, border: "1.5px dashed #D1D5DB", fontSize: 11, cursor: "pointer", background: "#fff", color: "#9CA3AF" }}>
+            ＋ タグ編集
+          </button>
+        </div>
+
+        {/* タグ編集パネル */}
+        {showTagEdit && (
+          <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
+            <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginBottom: 10 }}>🏷 タグを管理</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+              {customTags.map(tag => (
+                <div key={tag} style={{ display: "flex", alignItems: "center", gap: 4, background: "#F3F4F6", borderRadius: 20, padding: "4px 10px" }}>
+                  <span style={{ fontSize: 12, color: "#374151" }}>{tag}</span>
+                  <button onClick={() => setCustomTags(prev => prev.filter(t => t !== tag))}
+                    style={{ background: "none", border: "none", color: "#9CA3AF", cursor: "pointer", fontSize: 14, lineHeight: 1 }}>×</button>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input value={tagInput} onChange={e => setTagInput(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && tagInput.trim()) { setCustomTags(prev => [...prev, tagInput.trim()]); setTagInput(""); }}}
+                placeholder="新しいタグを入力..."
+                style={{ flex: 1, border: "1.5px solid #E5E7EB", borderRadius: 8, padding: "7px 12px", fontSize: 13, outline: "none" }} />
+              <button onClick={() => { if (tagInput.trim()) { setCustomTags(prev => [...prev, tagInput.trim()]); setTagInput(""); }}}
+                style={{ background: cust.c1, border: "none", color: "#fff", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>追加</button>
+            </div>
+          </div>
+        )}
 
         {/* 案件リスト */}
         {filtered.length === 0 ? (
@@ -186,31 +269,30 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
                 <div key={call.id} onClick={() => setSelected(call)}
                   style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", cursor: "pointer", borderLeft: `4px solid ${sc.color}` }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       <span style={{ background: sc.bg, color: sc.color, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>{sc.icon} {call.status}</span>
                       {call.urgency && uc && (
                         <span style={{ background: uc.bg, color: uc.color, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>{call.urgency}</span>
                       )}
+                      {call.tags?.map(tag => (
+                        <span key={tag} style={{ background: "#EFF6FF", color: "#2563eb", borderRadius: 6, padding: "2px 8px", fontSize: 10, fontWeight: 600 }}>🏷 {tag}</span>
+                      ))}
                     </div>
-                    <div style={{ fontSize: 11, color: "#9CA3AF" }}>{formatDate(call.received_at)}</div>
+                    <div style={{ fontSize: 11, color: "#9CA3AF", flexShrink: 0, marginLeft: 8 }}>{formatDate(call.received_at)}</div>
                   </div>
-
                   <div style={{ fontSize: 13, fontWeight: 800, color: "#1F2937", marginBottom: 4 }}>
                     {call.company_name || "会社名不明"} {call.contact_name ? `｜${call.contact_name}` : ""}
                   </div>
-
                   {call.property_name && (
                     <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 6 }}>
                       🏠 {call.property_name}{call.room_number ? ` ${call.room_number}号室` : ""}
                     </div>
                   )}
-
                   {call.ai_summary && (
                     <div style={{ fontSize: 12, color: "#374151", background: "#F8FAFF", borderRadius: 8, padding: "8px 10px", borderLeft: "3px solid #2563eb", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
                       {call.ai_summary}
                     </div>
                   )}
-
                   <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 8, textAlign: "right" }}>
                     {call.case_number} ›
                   </div>
