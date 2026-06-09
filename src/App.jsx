@@ -16,6 +16,7 @@ import AI from "./pages/AI";
 import Board from "./pages/Board";
 import Fishing from "./pages/Fishing";
 import AutoEdit from "./pages/AutoEdit";
+import CallsPage from "./pages/CallsPage"; // ★追加
 
 export default function App() {
   const [page, setPage] = useState("home");
@@ -29,6 +30,7 @@ export default function App() {
   const [tmplFiles, setTmplFiles] = useState([]);
   const [boardPosts, setBoardPosts] = useState([]);
   const [boardComments, setBoardComments] = useState([]);
+  const [calls, setCalls] = useState([]); // ★追加
   const [cust, setCust] = useState(DEFAULT_CUST);
   const [ec, setEc] = useState({ ...DEFAULT_CUST });
   const [tileConf, setTileConf] = useState(DEFAULT_TILE_CONF);
@@ -95,7 +97,7 @@ export default function App() {
 
   const loadAll = async () => {
     setLoading(true);
-    const [pjRes, coRes, tkRes, ffRes, foldRes, hsRes, linksRes, tmplRes, bpRes, bcRes] = await Promise.all([
+    const [pjRes, coRes, tkRes, ffRes, foldRes, hsRes, linksRes, tmplRes, bpRes, bcRes, callsRes] = await Promise.all([ // ★ callsRes追加
       supabase.from("projects").select("*").order("created_at", { ascending: false }),
       supabase.from("companies").select("*").order("created_at", { ascending: true }),
       supabase.from("tasks").select("*").order("created_at", { ascending: false }),
@@ -106,6 +108,7 @@ export default function App() {
       supabase.from("template_files").select("id,cat_id,name,type,size,url,path,created_at").order("created_at", { ascending: false }),
       supabase.from("board_posts").select("*").order("created_at", { ascending: false }),
       supabase.from("board_comments").select("*").order("created_at", { ascending: true }),
+      supabase.from("calls").select("*").order("received_at", { ascending: false }), // ★追加
     ]);
     if (pjRes.data) setPjs(pjRes.data.map(p => ({ ...p, subIds: p.subcontractorIds || [], gp: p.grossProfit || 0, qDate: p.quoteDate || "" })));
     if (coRes.data) setCos(coRes.data.map(c => ({ ...c, contacts: c.contacts || [] })));
@@ -129,6 +132,8 @@ export default function App() {
     if (tmplRes.data) setTmplFiles(tmplRes.data);
     if (bpRes.data) setBoardPosts(bpRes.data);
     if (bcRes.data) setBoardComments(bcRes.data);
+    console.log('calls data:', callsRes);
+if (callsRes.data) setCalls(callsRes.data); // ★追加
     setLoading(false);
   };
 
@@ -152,7 +157,7 @@ export default function App() {
     </Modal>
   );
 
-  if (page === "home") return <Home {...commonProps} setPjs={setPjs} setCos={setCos} setTks={setTks} setLinks={setLinks} weather={weather} weekWeather={weekWeather} tileEdit={tileEdit} setTileEdit={setTileEdit} saveTileConf={saveTileConf} saveCustomize={saveCustomize} modal={modal} setModal={setModal} ec={ec} setEc={setEc} boardPosts={boardPosts} />;
+  if (page === "home") return <Home {...commonProps} setPjs={setPjs} setCos={setCos} setTks={setTks} setLinks={setLinks} weather={weather} weekWeather={weekWeather} tileEdit={tileEdit} setTileEdit={setTileEdit} saveTileConf={saveTileConf} saveCustomize={saveCustomize} modal={modal} setModal={setModal} ec={ec} setEc={setEc} boardPosts={boardPosts} calls={calls} />; // ★ calls追加
   if (page === "projects") return <Projects {...commonProps} setPjs={setPjs} />;
   if (page === "companies") return <Companies {...commonProps} setCos={setCos} />;
   if (page === "tasks") return <Tasks {...commonProps} setTks={setTks} />;
@@ -165,6 +170,7 @@ export default function App() {
   if (page === "board") return <Board {...commonProps} boardPosts={boardPosts} setBoardPosts={setBoardPosts} boardComments={boardComments} setBoardComments={setBoardComments} />;
   if (page === "fishing") return <Fishing {...commonProps} fishBoats={fishBoats} saveFishBoats={saveFishBoats} />;
   if (page === "autoedit") return <AutoEdit {...commonProps} />;
+  if (page === "calls") return <Calls {...commonProps} calls={calls} setCalls={setCalls} />; // ★追加
 
   return null;
 }

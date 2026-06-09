@@ -3,7 +3,7 @@ import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { Modal, Inp } from "../components/UI";
 import { PRIO } from "../lib/constants";
 
-export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, setTileEdit, saveTileConf, saveCustomize, weather, weekWeather, fishWeather, isPC, pp, nav, setModal, setEc, ec, rpOpen, setRpOpen, finFiles, tmplFiles, SB_W, RP_W, boardPosts }) {
+export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, setTileEdit, saveTileConf, saveCustomize, weather, weekWeather, fishWeather, isPC, pp, nav, setModal, setEc, ec, rpOpen, setRpOpen, finFiles, tmplFiles, SB_W, RP_W, boardPosts, calls }) {
   const [editTile, setEditTile] = useState(null);
   const [showWeekWeather, setShowWeekWeather] = useState(false);
   const pending = tks.filter(t => !t.done);
@@ -66,6 +66,53 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
       </div>
 
       <div style={{ padding: isPC ? "12px 0 20px" : "28px 14px 30px" }}>
+
+        {/* 電話受付案件バナー */}
+        {calls && calls.length > 0 && (
+          <div
+            onClick={() => nav("calls")}
+            style={{
+              background: "linear-gradient(135deg, #1e3a5f, #2563eb)",
+              borderRadius: 14,
+              padding: "14px 18px",
+              marginBottom: 16,
+              cursor: "pointer",
+              boxShadow: "0 4px 12px rgba(37,99,235,0.25)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 20 }}>📞</span>
+                <span style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>電話受付案件</span>
+              </div>
+              <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 12 }}>一覧を見る →</span>
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              {[
+                { label: "未対応", color: "#ef4444", bg: "rgba(239,68,68,0.15)", count: calls.filter(c => c.status === "未対応").length },
+                { label: "対応中", color: "#f59e0b", bg: "rgba(245,158,11,0.15)", count: calls.filter(c => c.status === "対応中").length },
+                { label: "完了",   color: "#10b981", bg: "rgba(16,185,129,0.15)", count: calls.filter(c => c.status === "完了").length },
+              ].map(s => (
+                <div key={s.label} style={{ flex: 1, background: s.bg, borderRadius: 10, padding: "8px 0", textAlign: "center" }}>
+                  <div style={{ fontSize: 20, fontWeight: 900, color: s.color }}>{s.count}</div>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+            {calls.filter(c => c.status === "未対応").length > 0 && (
+              <div style={{ marginTop: 10, background: "rgba(239,68,68,0.1)", borderRadius: 8, padding: "8px 12px" }}>
+                {calls.filter(c => c.status === "未対応").slice(0, 1).map(c => (
+                  <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 11, background: "#ef4444", color: "#fff", borderRadius: 4, padding: "1px 6px", fontWeight: 700 }}>🔴 未対応</span>
+                    <span style={{ fontSize: 12, color: "rgba(255,255,255,0.9)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {c.company_name}｜{c.property_name}｜{c.ai_summary}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 掲示板の最新投稿 */}
         {boardPosts.length > 0 && (
