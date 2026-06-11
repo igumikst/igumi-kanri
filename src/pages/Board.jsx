@@ -18,6 +18,7 @@ export default function Board({ pjs, cos, tks, links, cust, isPC, pp, nav, rpOpe
   const [boardOpen, setBoardOpen] = useState(null);
   const [modal, setModal] = useState(null);
   const [conf, setConf] = useState(null);
+  const [posting, setPosting] = useState(false); // ★追加：二重送信防止
   const pending = tks.filter(t => !t.done);
 
   const filtPosts = boardCat === "すべて" ? boardPosts : boardPosts.filter(p => p.category === boardCat);
@@ -31,9 +32,25 @@ export default function Board({ pjs, cos, tks, links, cust, isPC, pp, nav, rpOpe
   };
 
   const addBoardPost = async () => {
-    if (!boardNew.content.trim() || !boardNew.author.trim()) return;
-    const { data } = await supabase.from("board_posts").insert([{ category: boardNew.category, content: boardNew.content.trim(), author: boardNew.author.trim(), likes: [] }]).select();
-    if (data) { setBoardPosts(prev => [data[0], ...prev]); setBoardNew({ category: "業務連絡", content: "", author: "" }); setModal(null); }
+    if (!boardNew.content.trim() || !boardNew.author.trim()) {
+      alert("名前と内容を入力してください");
+      return;
+    }
+    setPosting(true);
+    const { data, error } = await supabase
+      .from("board_posts")
+      .insert([{ category: boardNew.category, content: boardNew.content.trim(), author: boardNew.author.trim(), likes: [] }])
+      .select();
+    setPosting(false);
+    if (error) {
+      alert("投稿エラー：" + error.message); // ★エラーを表示
+      return;
+    }
+    if (data) {
+      setBoardPosts(prev => [data[0], ...prev]);
+      setBoardNew({ category: "業務連絡", content: "", author: "" });
+      setModal(null);
+    }
   };
 
   const deleteBoardPost = async (id) => {
@@ -53,8 +70,15 @@ export default function Board({ pjs, cos, tks, links, cust, isPC, pp, nav, rpOpe
 
   const addBoardComment = async (postId) => {
     if (!boardComment.content.trim() || !boardComment.author.trim()) return;
-    const { data } = await supabase.from("board_comments").insert([{ post_id: postId, content: boardComment.content.trim(), author: boardComment.author.trim() }]).select();
-    if (data) { setBoardComments(prev => [...prev, data[0]]); setBoardComment({ postId: null, content: "", author: "" }); }
+    const { data, error } = await supabase
+      .from("board_comments")
+      .insert([{ post_id: postId, content: boardComment.content.trim(), author: boardComment.author.trim() }])
+      .select();
+    if (error) { alert("コメントエラー：" + error.message); return; }
+    if (data) {
+      setBoardComments(prev => [...prev, data[0]]);
+      setBoardComment({ postId: null, content: "", author: "" });
+    }
   };
 
   const deleteBoardComment = async (id) => {
@@ -111,7 +135,7 @@ export default function Board({ pjs, cos, tks, links, cust, isPC, pp, nav, rpOpe
                 </button>
               </div>
               {isOpen && <div style={{ borderTop: "1px solid #F3F4F6", background: "#F9FAFB", padding: "12px 14px" }}>
-                {postComments.map((c, i) => (
+                {postComments.map((c) => (
                   <div key={c.id} style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "flex-start" }}>
                     <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#E07B39", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 12, flexShrink: 0 }}>{c.author.charAt(0)}</div>
                     <div style={{ flex: 1, background: "#fff", borderRadius: 10, padding: "8px 12px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
@@ -137,14 +161,17 @@ export default function Board({ pjs, cos, tks, links, cust, isPC, pp, nav, rpOpe
         })}
       </div>
 
-      {modal === "addPost" && <Modal title="📣 新規投稿" onClose={() => setModal(null)} onSave={addBoardPost}>
-        <Sel label="カテゴリ" opts={BOARD_CATS} value={boardNew.category} onChange={e => setBoardNew({ ...boardNew, category: e.target.value })} />
-        <Inp label="名前 *" value={boardNew.author} onChange={e => setBoardNew({ ...boardNew, author: e.target.value })} placeholder="例：崎岡" />
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 3 }}>内容 *</div>
-          <textarea value={boardNew.content} onChange={e => setBoardNew({ ...boardNew, content: e.target.value })} placeholder="内容を入力..." rows={5} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, resize: "vertical", boxSizing: "border-box", background: "#FAFAFA", color: "#1F2937", fontFamily: "inherit" }} />
-        </div>
-      </Modal>}
+      {modal === "addPost" && (
+        <Modal title="📣 新規投稿" onClose={() => setModal(null)} onSave={addBoardPost}>
+          <Sel label="カテゴリ" opts={BOARD_CATS} value={boardNew.category} onChange={e => setBoardNew({ ...boardNew, category: e.target.value })} />
+          <Inp label="名前 *" value={boardNew.author} onChange={e => setBoardNew({ ...boardNew, author: e.target.value })} placeholder="例：崎岡" />
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 3 }}>内容 *</div>
+            <textarea value={boardNew.content} onChange={e => setBoardNew({ ...boardNew, content: e.target.value })} placeholder="内容を入力..." rows={5} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, resize: "vertical", boxSizing: "border-box", background: "#FAFAFA", color: "#1F2937", fontFamily: "inherit" }} />
+          </div>
+          {posting && <div style={{ textAlign: "center", color: "#6B7280", fontSize: 13 }}>投稿中...</div>}
+        </Modal>
+      )}
       {conf && <Confirm msg={conf.msg} onCancel={() => setConf(null)} onOk={conf.onOk} />}
     </div>
   );
