@@ -8,8 +8,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const [editTile, setEditTile] = useState(null);
   const [showWeekWeather, setShowWeekWeather] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-
-  // 🔒 財務パスワード関連
   const [pwModal, setPwModal] = useState(false);
   const [pwInput, setPwInput] = useState("");
   const [pwErr, setPwErr] = useState("");
@@ -34,7 +32,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
     setRefreshing(false);
   };
 
-  // 🔒 PWをSupabaseから読み込む
   const loadPw = async () => {
     if (pwLoaded) return savedPw;
     const { data } = await supabase.from("home_settings").select("value").eq("id", "finance_password").single();
@@ -44,33 +41,25 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
     return pw;
   };
 
-  // 🔒 財務タップ時の処理
   const handleFinanceClick = async () => {
     const pw = await loadPw();
-    if (!pw || finUnlocked) {
-      nav("finance");
-    } else {
-      setPwModal(true);
-      setPwInput("");
-      setPwErr("");
-    }
+    if (!pw || finUnlocked) { nav("finance"); }
+    else { setPwModal(true); setPwInput(""); setPwErr(""); }
   };
 
-  // 🔒 PW照合
   const handleUnlock = () => {
-    if (pwInput === savedPw) {
-      setFinUnlocked(true);
-      setPwModal(false);
-      setPwInput("");
-      nav("finance");
-    } else {
-      setPwErr("パスワードが違います");
-    }
+    if (pwInput === savedPw) { setFinUnlocked(true); setPwModal(false); setPwInput(""); nav("finance"); }
+    else setPwErr("パスワードが違います");
   };
 
-  // タイルクリックの共通処理
+  // ChatGPTアプリで開く（アプリ未インストールの場合はWebにフォールバック）
+  const openChatGPT = () => {
+    window.location.href = "chatgpt://";
+    setTimeout(() => { window.open("https://chatgpt.com", "_blank"); }, 1500);
+  };
+
   const handleTileClick = (t) => {
-    if (t.key === "chatgpt") { window.open("https://chatgpt.com", "_blank"); return; }
+    if (t.key === "chatgpt") { openChatGPT(); return; }
     if (t.key === "report") { window.open("/report.html", "_blank"); return; }
     if (t.key === "finance") { handleFinanceClick(); return; }
     nav(t.key);
@@ -89,7 +78,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
         <button onClick={() => { setEc({ ...cust }); setModal("cust"); }} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer", fontWeight: 700 }}>⚙ 編集</button>
       </div>}
 
-      {/* バナー */}
       <div style={{ background: `linear-gradient(135deg,${cust.c1},${cust.c2})`, padding: "20px 20px 28px", margin: "0 0 -16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
@@ -123,8 +111,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
       </div>
 
       <div style={{ padding: isPC ? "12px 0 20px" : "28px 14px 30px" }}>
-
-        {/* 電話受付案件バナー */}
         {calls && calls.length > 0 && (
           <div style={{ background: "linear-gradient(135deg, #1e3a5f, #2563eb)", borderRadius: 14, padding: "14px 18px", marginBottom: 16, boxShadow: "0 4px 12px rgba(37,99,235,0.25)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -154,9 +140,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
                 {calls.filter(c => c.status === "未対応").slice(0, 1).map(c => (
                   <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontSize: 11, background: "#ef4444", color: "#fff", borderRadius: 4, padding: "1px 6px", fontWeight: 700 }}>🔴 未対応</span>
-                    <span style={{ fontSize: 12, color: "rgba(255,255,255,0.9)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {c.company_name}｜{c.property_name}｜{c.ai_summary}
-                    </span>
+                    <span style={{ fontSize: 12, color: "rgba(255,255,255,0.9)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.company_name}｜{c.property_name}｜{c.ai_summary}</span>
                   </div>
                 ))}
               </div>
@@ -164,7 +148,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           </div>
         )}
 
-        {/* 掲示板の最新投稿 */}
         {boardPosts.length > 0 && (
           <div style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -196,7 +179,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           </button>
         </div>
 
-        {/* PC リスト表示 */}
         {isPC && !tileEdit && (
           <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", marginBottom: 20 }}>
             {tiles.filter(t => t.visible).map((t, i, arr) => (
@@ -209,7 +191,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: 14, color: "#1F2937", display: "flex", alignItems: "center", gap: 6 }}>
                     {t.label}
-                    {/* 🔒 鍵アイコン */}
                     {t.key === "finance" && savedPw && <span style={{ fontSize: 12 }}>{finUnlocked ? "🔓" : "🔒"}</span>}
                   </div>
                   <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1 }}>{t.sub}</div>
@@ -220,7 +201,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           </div>
         )}
 
-        {/* PC 編集モード */}
         {isPC && tileEdit && (
           <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", marginBottom: 20 }}>
             {tiles.map((t, i) => (
@@ -239,7 +219,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           </div>
         )}
 
-        {/* スマホ タイル表示 */}
         {!isPC && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
           {tiles.map((t) => (
             <div key={t.key}>
@@ -262,7 +241,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
                   <div style={{ fontSize: 26, marginBottom: 8 }}>{t.icon}</div>
                   <div style={{ fontWeight: 800, fontSize: 14, color: "#1F2937", marginBottom: 2, display: "flex", alignItems: "center", gap: 4 }}>
                     {t.label}
-                    {/* 🔒 鍵アイコン */}
                     {t.key === "finance" && savedPw && <span style={{ fontSize: 12 }}>{finUnlocked ? "🔓" : "🔒"}</span>}
                   </div>
                   <div style={{ fontSize: 11, color: "#6B7280" }}>{t.sub}</div>
@@ -287,19 +265,16 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
         </div>
       </div>
 
-      {/* 🔒 PW入力モーダル */}
       {pwModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: 300, boxSizing: "border-box" }}>
             <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4, color: "#1F2937" }}>🔒 財務・書類管理</div>
             <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>パスワードを入力してください</div>
-            <input
-              type="password" value={pwInput} autoFocus
+            <input type="password" value={pwInput} autoFocus
               onChange={e => { setPwInput(e.target.value); setPwErr(""); }}
               onKeyDown={e => e.key === "Enter" && handleUnlock()}
               placeholder="パスワード"
-              style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: pwErr ? "2px solid #DC2626" : "1.5px solid #E5E7EB", fontSize: 15, boxSizing: "border-box", marginBottom: 4, color: "#1F2937", outline: "none" }}
-            />
+              style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: pwErr ? "2px solid #DC2626" : "1.5px solid #E5E7EB", fontSize: 15, boxSizing: "border-box", marginBottom: 4, color: "#1F2937", outline: "none" }} />
             {pwErr && <div style={{ color: "#DC2626", fontSize: 12, marginBottom: 8 }}>{pwErr}</div>}
             <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
               <button onClick={() => { setPwModal(false); setPwInput(""); setPwErr(""); }} style={{ flex: 1, padding: 12, background: "#F3F4F6", border: "none", borderRadius: 10, fontWeight: 700, cursor: "pointer", color: "#374151" }}>キャンセル</button>

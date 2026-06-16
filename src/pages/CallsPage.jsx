@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 
 const STATUS_CONFIG = {
@@ -15,17 +15,39 @@ const URGENCY_CONFIG = {
 };
 
 const DEFAULT_TAGS = ["漏水", "設備不具合", "緊急対応", "見積依頼", "定期点検", "その他"];
+const DEFAULT_ASSIGNEES = ["﨑岡", "後藤", "赤岡", "上村", "綱島", "伊藤"];
 
 export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
   const [selected, setSelected] = useState(null);
-  const [filterStatus, setFilterStatus] = useState("未対応"); // ★デフォルト未対応
+  const [filterStatus, setFilterStatus] = useState("未対応");
   const [filterTag, setFilterTag] = useState("すべて");
   const [refreshing, setRefreshing] = useState(false);
   const [tagInput, setTagInput] = useState("");
   const [showTagEdit, setShowTagEdit] = useState(false);
   const [customTags, setCustomTags] = useState(DEFAULT_TAGS);
 
-  // タグ一覧（calls内に使われてるタグも含める）
+  // 👤 対応者関連
+  const [assignees, setAssignees] = useState(DEFAULT_ASSIGNEES);
+  const [showAssigneeEdit, setShowAssigneeEdit] = useState(false);
+  const [assigneeInput, setAssigneeInput] = useState("");
+  const [assigneeLoaded, setAssigneeLoaded] = useState(false);
+
+  // Supabaseから対応者リストを読み込む
+  useEffect(() => {
+    const load = async () => {
+      const { data } = await supabase.from("home_settings").select("value").eq("id", "assignee_names").single();
+      if (data?.value && Array.isArray(data.value)) setAssignees(data.value);
+      setAssigneeLoaded(true);
+    };
+    load();
+  }, []);
+
+  // 対応者リストをSupabaseに保存
+  const saveAssignees = async (list) => {
+    setAssignees(list);
+    await supabase.from("home_settings").upsert({ id: "assignee_names", value: list, updated_at: new Date().toISOString() });
+  };
+
   const allTags = ["すべて", ...customTags];
 
   const filtered = calls
@@ -40,15 +62,20 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
   };
 
   const updateStatus = async (id, newStatus) => {
-    const { error } = await supabase
-      .from("calls")
-      .update({ status: newStatus })
-      .eq("id", id);
+    const { error } = await supabase.from("calls").update({ status: newStatus }).eq("id", id);
     if (!error) {
       setCalls(prev => prev.map(c => c.id === id ? { ...c, status: newStatus } : c));
       if (selected?.id === id) setSelected(prev => ({ ...prev, status: newStatus }));
-    } else {
-      alert("保存に失敗しました: " + error.message);
+    } else alert("保存に失敗しました: " + error.message);
+  };
+
+  // 👤 対応者を更新
+  const updateAssignee = async (id, name) => {
+    const newAssignee = name === selected?.assignee ? null : name; // 同じ人をタップで解除
+    const { error } = await supabase.from("calls").update({ assignee: newAssignee }).eq("id", id);
+    if (!error) {
+      setCalls(prev => prev.map(c => c.id === id ? { ...c, assignee: newAssignee } : c));
+      if (selected?.id === id) setSelected(prev => ({ ...prev, assignee: newAssignee }));
     }
   };
 
@@ -99,6 +126,53 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
           </div>
         </div>
 
+        {/* 👤 対応者選択 */}
+        <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700 }}>👤 対応者</div>
+            <button onClick={() => setShowAssigneeEdit(p => !p)} style={{ fontSize: 11, color: cust.c1, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>✏️ 名前編集</button>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {assignees.map(name => {
+              const isSelected = selected.assignee === name;
+              return (
+                <button key={name} onClick={() => updateAssignee(selected.id, name)}
+                  style={{ padding: "7px 16px", borderRadius: 20, border: `2px solid ${isSelected ? cust.c1 : "#E5E7EB"}`, background: isSelected ? cust.c1 : "#fff", color: isSelected ? "#fff" : "#374151", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                  {isSelected ? "✓ " : ""}{name}
+                </button>
+              );
+            })}
+          </div>
+          {selected.assignee && (
+            <div style={{ marginTop: 10, fontSize: 12, color: "#6B7280" }}>
+              現在の対応者：<span style={{ fontWeight: 700, color: cust.c1 }}>{selected.assignee}</span>
+            </div>
+          )}
+
+          {/* 名前編集パネル */}
+          {showAssigneeEdit && (
+            <div style={{ marginTop: 14, borderTop: "1px solid #F3F4F6", paddingTop: 14 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+                {assignees.map(name => (
+                  <div key={name} style={{ display: "flex", alignItems: "center", gap: 4, background: "#F3F4F6", borderRadius: 20, padding: "4px 10px" }}>
+                    <span style={{ fontSize: 12, color: "#374151" }}>{name}</span>
+                    <button onClick={() => saveAssignees(assignees.filter(a => a !== name))}
+                      style={{ background: "none", border: "none", color: "#9CA3AF", cursor: "pointer", fontSize: 14 }}>×</button>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input value={assigneeInput} onChange={e => setAssigneeInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && assigneeInput.trim()) { saveAssignees([...assignees, assigneeInput.trim()]); setAssigneeInput(""); }}}
+                  placeholder="名前を追加..."
+                  style={{ flex: 1, border: "1.5px solid #E5E7EB", borderRadius: 8, padding: "7px 12px", fontSize: 13, outline: "none", color: "#1F2937" }} />
+                <button onClick={() => { if (assigneeInput.trim()) { saveAssignees([...assignees, assigneeInput.trim()]); setAssigneeInput(""); }}}
+                  style={{ background: cust.c1, border: "none", color: "#fff", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>追加</button>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* タグ */}
         <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
           <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginBottom: 10 }}>🏷 タグ</div>
@@ -139,27 +213,20 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
           ) : null)}
         </div>
 
-        {/* AI要約 */}
         {selected.ai_summary && (
           <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
             <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginBottom: 8 }}>🤖 AI要約</div>
-            <div style={{ fontSize: 13, color: "#1F2937", lineHeight: 1.7, background: "#F8FAFF", borderRadius: 10, padding: "12px 14px", borderLeft: "3px solid #2563eb" }}>
-              {selected.ai_summary}
-            </div>
+            <div style={{ fontSize: 13, color: "#1F2937", lineHeight: 1.7, background: "#F8FAFF", borderRadius: 10, padding: "12px 14px", borderLeft: "3px solid #2563eb" }}>{selected.ai_summary}</div>
           </div>
         )}
 
-        {/* 文字起こし */}
         {selected.transcript && (
           <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
             <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginBottom: 8 }}>📝 文字起こし全文</div>
-            <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.8, background: "#F9FAFB", borderRadius: 10, padding: "12px 14px", whiteSpace: "pre-wrap" }}>
-              {selected.transcript}
-            </div>
+            <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.8, background: "#F9FAFB", borderRadius: 10, padding: "12px 14px", whiteSpace: "pre-wrap" }}>{selected.transcript}</div>
           </div>
         )}
 
-        {/* 録音 */}
         {selected.recording_url && (
           <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
             <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginBottom: 8 }}>🎙 録音データ</div>
@@ -167,7 +234,6 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
           </div>
         )}
 
-        {/* 折返し */}
         {selected.phone_number && (
           <a href={`tel:${selected.phone_number}`}
             style={{ display: "block", background: `linear-gradient(135deg,${cust.c1},${cust.c2})`, color: "#fff", borderRadius: 14, padding: "14px", textAlign: "center", fontWeight: 800, fontSize: 16, textDecoration: "none", boxShadow: "0 4px 12px rgba(37,99,235,0.3)", marginBottom: 14 }}>
@@ -192,8 +258,6 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
             {refreshing ? "⏳" : "🔄 更新"}
           </button>
         </div>
-
-        {/* サマリー */}
         <div style={{ display: "flex", gap: 8 }}>
           {Object.entries(STATUS_CONFIG).map(([s, conf]) => (
             <div key={s} style={{ flex: 1, background: "rgba(255,255,255,0.15)", borderRadius: 10, padding: "8px 4px", textAlign: "center" }}>
@@ -205,8 +269,6 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
       </div>
 
       <div style={{ padding: "16px 16px 40px" }}>
-
-        {/* ステータスフィルター */}
         <div style={{ display: "flex", gap: 8, marginBottom: 10, overflowX: "auto" }}>
           {["すべて", "未対応", "対応中", "完了"].map(s => (
             <button key={s} onClick={() => setFilterStatus(s)}
@@ -216,7 +278,6 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
           ))}
         </div>
 
-        {/* タグフィルター */}
         <div style={{ display: "flex", gap: 6, marginBottom: 16, overflowX: "auto", alignItems: "center" }}>
           {allTags.map(tag => (
             <button key={tag} onClick={() => setFilterTag(tag)}
@@ -230,7 +291,6 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
           </button>
         </div>
 
-        {/* タグ編集パネル */}
         {showTagEdit && (
           <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
             <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginBottom: 10 }}>🏷 タグを管理</div>
@@ -247,14 +307,13 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
               <input value={tagInput} onChange={e => setTagInput(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter" && tagInput.trim()) { setCustomTags(prev => [...prev, tagInput.trim()]); setTagInput(""); }}}
                 placeholder="新しいタグを入力..."
-                style={{ flex: 1, border: "1.5px solid #E5E7EB", borderRadius: 8, padding: "7px 12px", fontSize: 13, outline: "none" }} />
+                style={{ flex: 1, border: "1.5px solid #E5E7EB", borderRadius: 8, padding: "7px 12px", fontSize: 13, outline: "none", color: "#1F2937" }} />
               <button onClick={() => { if (tagInput.trim()) { setCustomTags(prev => [...prev, tagInput.trim()]); setTagInput(""); }}}
                 style={{ background: cust.c1, border: "none", color: "#fff", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>追加</button>
             </div>
           </div>
         )}
 
-        {/* 案件リスト */}
         {filtered.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 20px", color: "#9CA3AF" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
@@ -271,9 +330,9 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       <span style={{ background: sc.bg, color: sc.color, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>{sc.icon} {call.status}</span>
-                      {call.urgency && uc && (
-                        <span style={{ background: uc.bg, color: uc.color, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>{call.urgency}</span>
-                      )}
+                      {call.urgency && uc && <span style={{ background: uc.bg, color: uc.color, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>{call.urgency}</span>}
+                      {/* 👤 対応者バッジ */}
+                      {call.assignee && <span style={{ background: "#F0FDF4", color: "#059669", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>👤 {call.assignee}</span>}
                       {call.tags?.map(tag => (
                         <span key={tag} style={{ background: "#EFF6FF", color: "#2563eb", borderRadius: 6, padding: "2px 8px", fontSize: 10, fontWeight: 600 }}>🏷 {tag}</span>
                       ))}
@@ -284,18 +343,14 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
                     {call.company_name || "会社名不明"} {call.contact_name ? `｜${call.contact_name}` : ""}
                   </div>
                   {call.property_name && (
-                    <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 6 }}>
-                      🏠 {call.property_name}{call.room_number ? ` ${call.room_number}号室` : ""}
-                    </div>
+                    <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 6 }}>🏠 {call.property_name}{call.room_number ? ` ${call.room_number}号室` : ""}</div>
                   )}
                   {call.ai_summary && (
                     <div style={{ fontSize: 12, color: "#374151", background: "#F8FAFF", borderRadius: 8, padding: "8px 10px", borderLeft: "3px solid #2563eb", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
                       {call.ai_summary}
                     </div>
                   )}
-                  <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 8, textAlign: "right" }}>
-                    {call.case_number} ›
-                  </div>
+                  <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 8, textAlign: "right" }}>{call.case_number} ›</div>
                 </div>
               );
             })}

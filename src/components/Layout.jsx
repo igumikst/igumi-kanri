@@ -128,7 +128,7 @@ export const PCSidebar = ({ cust, tileConf, pjs, cos, pending, page, nav, setMod
             const hasPw = !!savedPw;
             return (
               <button key={t.key} onClick={() => {
-                if (t.key === "chatgpt") { window.open("https://chatgpt.com", "_blank"); }
+                if (t.key === "chatgpt") { window.location.href = "chatgpt://"; setTimeout(() => { window.open("https://chatgpt.com", "_blank"); }, 1500); }
                 else if (t.key === "report") { window.open("/report.html", "_blank"); }
                 else if (isFinance) { handleFinanceClick(); }
                 else { nav(t.key); }
