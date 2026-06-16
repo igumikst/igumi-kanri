@@ -145,8 +145,8 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
     <div class="field"><label>作業日 *</label><input type="date" id="work-date" oninput="refreshPreview()"></div>
     <div class="field"><label>施工者</label><input type="text" id="worker" placeholder="例: 崎岡"></div>
     <div class="field" id="content-field" style="display:none">
-      <label>内容（多摩用・1行ずつ入力）</label>
-      <textarea id="work-content" placeholder="例:&#10;共用給水管一部更新工事&#10;ラッキング材撤去&#10;配管接続確認" rows="4"></textarea>
+      <label>内容</label>
+      <input type="text" id="work-content" placeholder="例: 耐圧　開口　引き換え">
     </div>
   </div>
 
@@ -519,18 +519,7 @@ async function buildNormalWorkbook(wb, minchoFont, thin, double) {
   if(reportType==='tama' && workContent.trim()){
     cws.getRow(21).height=65.1; cws.getRow(22).height=20.1;
     // 内容は複数行になるので最初の行だけラベル、値は1行目に
-    const lines=workContent.split('\n').filter(l=>l.trim());
-    items.push(['B22','内　　　　　容','D22:K22',lines[0]||'']);
-    // 2行目以降は別行に追加
-    for(let i=1;i<lines.length&&i<8;i++){
-      const rowNum=22+i*2;
-      cws.getRow(rowNum).height=65.1;
-      cws.getRow(rowNum+1).height=20.1;
-      cws.mergeCells(`D${rowNum}:K${rowNum}`);
-      const vc=cws.getCell(`D${rowNum}`);
-      vc.value=lines[i];vc.font=minchoFont(14);vc.alignment={vertical:'middle'};
-      vc.border={bottom:thin};
-    }
+    items.push(['B22','内　　　　　容','D22:K22',workContent]);
   }
 
   items.forEach(([lc,lv,mr,val])=>{
