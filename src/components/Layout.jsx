@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { PRIO, fmt } from "../lib/constants";
+import { supabase } from "../lib/supabase";
+import { PRIO } from "../lib/constants";
 
 const SB_W = 180, RP_W = 220;
 
@@ -52,34 +53,166 @@ export const FloatLauncher = ({ links, isPC, nav }) => {
 
 export const PCSidebar = ({ cust, tileConf, pjs, cos, pending, page, nav, setModal, setEc, SB_W }) => {
   const active = pjs.filter(p => p.status !== "完了" && p.status !== "中断");
+
+  // 🔒 財務パスワード関連のstate
+  const [pwModal, setPwModal] = useState(null); // "unlock" | "set" | null
+  const [pwInput, setPwInput] = useState("");
+  const [pwErr, setPwErr] = useState("");
+  const [finUnlocked, setFinUnlocked] = useState(false);
+  const [savedPw, setSavedPw] = useState(null); // Supabaseから読んだPW
+  const [pwLoaded, setPwLoaded] = useState(false);
+
+  // 初回だけSupabaseからPWを取得（設定されてるか確認するため）
+  const loadPw = async () => {
+    if (pwLoaded) return;
+    const { data } = await supabase.from("home_settings").select("value").eq("id", "finance_password").single();
+    setSavedPw(data?.value?.password || null);
+    setPwLoaded(true);
+    return data?.value?.password || null;
+  };
+
+  // 財務タイルをタップした時の処理
+  const handleFinanceClick = async () => {
+    const pw = savedPw ?? await loadPw();
+    if (!pw) {
+      // PW未設定 → そのまま入る
+      nav("finance");
+    } else if (finUnlocked) {
+      // 解除済み → そのまま入る
+      nav("finance");
+    } else {
+      // PW設定済み・未解除 → PW入力モーダル
+      setPwModal("unlock");
+      setPwInput("");
+      setPwErr("");
+    }
+  };
+
+  // PW照合
+  const handleUnlock = () => {
+    if (pwInput === savedPw) {
+      setFinUnlocked(true);
+      setPwModal(null);
+      setPwInput("");
+      nav("finance");
+    } else {
+      setPwErr("パスワードが違います");
+    }
+  };
+
+  // PW設定・変更
+  const handleSetPw = async () => {
+    if (!pwInput.trim()) { setPwErr("入力してください"); return; }
+    await supabase.from("home_settings").upsert({ id: "finance_password", value: { password: pwInput.trim() }, updated_at: new Date().toISOString() });
+    setSavedPw(pwInput.trim());
+    setFinUnlocked(true);
+    setPwModal(null);
+    setPwInput("");
+    alert("パスワードを設定しました！");
+  };
+
   return (
-    <div style={{ position: "fixed", left: 0, top: 0, bottom: 0, width: SB_W, background: "#1A3A5C", zIndex: 100, display: "flex", flexDirection: "column", overflowY: "auto" }}>
-      <div style={{ padding: "18px 16px 14px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ background: cust.acc, borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 16, color: "#fff" }}>I</div>
-          <div><div style={{ fontWeight: 800, fontSize: 13, color: "#fff" }}>{cust.sys}</div><div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>{cust.name}</div></div>
+    <>
+      <div style={{ position: "fixed", left: 0, top: 0, bottom: 0, width: SB_W, background: "#1A3A5C", zIndex: 100, display: "flex", flexDirection: "column", overflowY: "auto" }}>
+        <div style={{ padding: "18px 16px 14px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ background: cust.acc, borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 16, color: "#fff" }}>I</div>
+            <div><div style={{ fontWeight: 800, fontSize: 13, color: "#fff" }}>{cust.sys}</div><div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>{cust.name}</div></div>
+          </div>
+        </div>
+        <div style={{ flex: 1, paddingTop: 6 }}>
+          {tileConf.filter(t => t.visible).map(t => {
+            const isAct = page === t.key;
+            const sub = t.key === "projects" ? `${active.length}件進行中` : t.key === "companies" ? `${cos.length}社` : t.key === "tasks" ? `未完了 ${pending.length}件` : t.sub;
+            const isFinance = t.key === "finance";
+            const hasPw = !!savedPw;
+            return (
+              <button key={t.key} onClick={() => {
+                if (t.key === "chatgpt") { window.open("https://chatgpt.com", "_blank"); }
+                else if (t.key === "report") { window.open("/report.html", "_blank"); }
+                else if (isFinance) { handleFinanceClick(); }
+                else { nav(t.key); }
+              }}
+                style={{ width: "100%", padding: "9px 16px", background: isAct ? "rgba(255,255,255,0.13)" : "transparent", border: "none", color: "#fff", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, borderLeft: `3px solid ${isAct ? t.color : "transparent"}` }}>
+                <span style={{ fontSize: 18, flexShrink: 0 }}>{t.icon}</span>
+                <div style={{ overflow: "hidden", flex: 1 }}>
+                  <div style={{ fontSize: 12, fontWeight: isAct ? 800 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 4 }}>
+                    {t.label}
+                    {/* 🔒 鍵アイコン表示 */}
+                    {isFinance && hasPw && (
+                      <span style={{ fontSize: 11 }}>{finUnlocked ? "🔓" : "🔒"}</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", whiteSpace: "nowrap" }}>{sub}</div>
+                </div>
+                {/* ⚙ PW設定・変更ボタン */}
+                {isFinance && (
+                  <span
+                    onClick={e => { e.stopPropagation(); loadPw().then(() => { setPwModal("set"); setPwInput(""); setPwErr(""); }); }}
+                    style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", cursor: "pointer", flexShrink: 0 }}
+                    title="パスワード設定"
+                  >⚙</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ padding: "12px 16px", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+          <button onClick={() => { setEc({ ...cust }); setModal("cust"); }} style={{ width: "100%", padding: "8px 12px", background: "rgba(255,255,255,0.1)", border: "none", color: "rgba(255,255,255,0.7)", borderRadius: 8, fontSize: 11, cursor: "pointer", fontWeight: 600, textAlign: "left" }}>⚙ カスタマイズ</button>
         </div>
       </div>
-      <div style={{ flex: 1, paddingTop: 6 }}>
-        {tileConf.filter(t => t.visible).map(t => {
-          const isAct = page === t.key;
-          const sub = t.key === "projects" ? `${active.length}件進行中` : t.key === "companies" ? `${cos.length}社` : t.key === "tasks" ? `未完了 ${pending.length}件` : t.sub;
-          return (
-            <button key={t.key} onClick={() => { if (t.key === "chatgpt") { window.open("https://chatgpt.com", "_blank"); } else if (t.key === "report") { window.open("/report.html", "_blank"); } else nav(t.key); }}
-              style={{ width: "100%", padding: "9px 16px", background: isAct ? "rgba(255,255,255,0.13)" : "transparent", border: "none", color: "#fff", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, borderLeft: `3px solid ${isAct ? t.color : "transparent"}` }}>
-              <span style={{ fontSize: 18, flexShrink: 0 }}>{t.icon}</span>
-              <div style={{ overflow: "hidden" }}>
-                <div style={{ fontSize: 12, fontWeight: isAct ? 800 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.label}</div>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", whiteSpace: "nowrap" }}>{sub}</div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-      <div style={{ padding: "12px 16px", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
-        <button onClick={() => { setEc({ ...cust }); setModal("cust"); }} style={{ width: "100%", padding: "8px 12px", background: "rgba(255,255,255,0.1)", border: "none", color: "rgba(255,255,255,0.7)", borderRadius: 8, fontSize: 11, cursor: "pointer", fontWeight: 600, textAlign: "left" }}>⚙ カスタマイズ</button>
-      </div>
-    </div>
+
+      {/* 🔒 PW入力モーダル（unlock） */}
+      {pwModal === "unlock" && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: 300, boxSizing: "border-box" }}>
+            <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4, color: "#1F2937" }}>🔒 財務・書類管理</div>
+            <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>パスワードを入力してください</div>
+            <input
+              type="password" value={pwInput} autoFocus
+              onChange={e => { setPwInput(e.target.value); setPwErr(""); }}
+              onKeyDown={e => e.key === "Enter" && handleUnlock()}
+              placeholder="パスワード"
+              style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: pwErr ? "2px solid #DC2626" : "1.5px solid #E5E7EB", fontSize: 15, boxSizing: "border-box", marginBottom: 4, color: "#1F2937", outline: "none" }}
+            />
+            {pwErr && <div style={{ color: "#DC2626", fontSize: 12, marginBottom: 8 }}>{pwErr}</div>}
+            <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+              <button onClick={() => { setPwModal(null); setPwInput(""); setPwErr(""); }} style={{ flex: 1, padding: 12, background: "#F3F4F6", border: "none", borderRadius: 10, fontWeight: 700, cursor: "pointer", color: "#374151" }}>キャンセル</button>
+              <button onClick={handleUnlock} style={{ flex: 1, padding: 12, background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, cursor: "pointer" }}>開く</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ⚙ PW設定・変更モーダル */}
+      {pwModal === "set" && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: 300, boxSizing: "border-box" }}>
+            <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4, color: "#1F2937" }}>🔐 パスワード{savedPw ? "変更" : "設定"}</div>
+            <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>財務・書類管理に鍵をかけます</div>
+            <input
+              type="password" value={pwInput} autoFocus
+              onChange={e => { setPwInput(e.target.value); setPwErr(""); }}
+              onKeyDown={e => e.key === "Enter" && handleSetPw()}
+              placeholder="新しいパスワード"
+              style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: pwErr ? "2px solid #DC2626" : "1.5px solid #E5E7EB", fontSize: 15, boxSizing: "border-box", marginBottom: 4, color: "#1F2937", outline: "none" }}
+            />
+            {pwErr && <div style={{ color: "#DC2626", fontSize: 12, marginBottom: 8 }}>{pwErr}</div>}
+            {savedPw && (
+              <button onClick={async () => {
+                await supabase.from("home_settings").upsert({ id: "finance_password", value: { password: null }, updated_at: new Date().toISOString() });
+                setSavedPw(null); setFinUnlocked(false); setPwModal(null); setPwInput("");
+                alert("パスワードを解除しました");
+              }} style={{ width: "100%", padding: "8px 0", background: "none", border: "none", color: "#DC2626", fontSize: 12, cursor: "pointer", marginBottom: 4 }}>🗑 パスワードを削除する</button>
+            )}
+            <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+              <button onClick={() => { setPwModal(null); setPwInput(""); setPwErr(""); }} style={{ flex: 1, padding: 12, background: "#F3F4F6", border: "none", borderRadius: 10, fontWeight: 700, cursor: "pointer", color: "#374151" }}>キャンセル</button>
+              <button onClick={handleSetPw} style={{ flex: 1, padding: 12, background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, cursor: "pointer" }}>設定する</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
