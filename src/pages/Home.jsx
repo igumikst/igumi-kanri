@@ -14,6 +14,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const [finUnlocked, setFinUnlocked] = useState(false);
   const [savedPw, setSavedPw] = useState(null);
   const [pwLoaded, setPwLoaded] = useState(false);
+  const [showStorage, setShowStorage] = useState(false); // ★追加
 
   const pending = tks.filter(t => !t.done);
   const active = pjs.filter(p => p.status !== "完了" && p.status !== "中断");
@@ -21,6 +22,15 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
     ...t,
     sub: t.key === "projects" ? `${active.length}件進行中` : t.key === "companies" ? `${cos.length}社登録` : t.key === "tasks" ? `未完了 ${pending.length}件` : t.sub
   }));
+
+  // ★ストレージ計算
+  const finMB = finFiles.reduce((s, f) => s + (f.size || 0), 0) / 1024 / 1024;
+  const tmplMB = tmplFiles.reduce((s, f) => s + (f.size || 0), 0) / 1024 / 1024;
+  const totalMB = finMB + tmplMB;
+  const limitMB = 1024;
+  const storageP = Math.min((totalMB / limitMB) * 100, 100);
+  const storageCol = storageP > 80 ? "#EF4444" : storageP > 50 ? "#F59E0B" : "#059669";
+  const fmtMB = mb => mb < 1 ? `${(mb * 1024).toFixed(0)}KB` : `${mb.toFixed(1)}MB`;
 
   const WD = ["日", "月", "火", "水", "木", "金", "土"];
   const weatherIcon = code => code === 0 ? "☀️" : code <= 2 ? "🌤" : code === 3 ? "☁️" : code <= 48 ? "🌫" : code <= 55 ? "🌦" : code <= 65 ? "🌧" : code <= 75 ? "🌨" : code <= 82 ? "🌦" : code <= 99 ? "⛈" : "🌡";
@@ -52,7 +62,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
     else setPwErr("パスワードが違います");
   };
 
-  // ChatGPTアプリで開く（アプリ未インストールの場合はWebにフォールバック）
   const openChatGPT = () => {
     window.location.href = "chatgpt://";
     setTimeout(() => { window.open("https://chatgpt.com", "_blank"); }, 1500);
@@ -262,6 +271,31 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           ))}
           {pending.length === 0 && <div style={{ padding: 16, color: "#9CA3AF", fontSize: 13, textAlign: "center" }}>タスクはありません</div>}
           <button onClick={() => nav("tasks")} style={{ width: "100%", padding: 10, background: "#F9FAFB", border: "none", fontSize: 12, color: cust.c1, fontWeight: 700, cursor: "pointer", borderTop: "1px solid #F3F4F6" }}>すべて見る →</button>
+        </div>
+
+        {/* ★ストレージ表示（ひっそり） */}
+        <div style={{ marginTop: 24 }}>
+          <button onClick={() => setShowStorage(p => !p)}
+            style={{ width: "100%", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 0" }}>
+            <span style={{ fontSize: 11, color: "#C4C4C4" }}>📦 Storage {fmtMB(totalMB)} / 1GB</span>
+            <span style={{ fontSize: 10, color: "#C4C4C4" }}>{showStorage ? "▲" : "▼"}</span>
+          </button>
+          {showStorage && (
+            <div style={{ background: "#fff", borderRadius: 12, padding: "12px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginTop: 4 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#374151" }}>ストレージ使用量</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: storageCol }}>{storageP.toFixed(1)}%</span>
+              </div>
+              <div style={{ background: "#E5E7EB", borderRadius: 4, height: 8, overflow: "hidden", marginBottom: 10 }}>
+                <div style={{ width: `${storageP}%`, height: "100%", background: storageCol, borderRadius: 4, transition: "width 0.5s" }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#6B7280" }}>
+                <span>📂 財務ファイル　{fmtMB(finMB)}</span>
+                <span>📋 雛形　{fmtMB(tmplMB)}</span>
+              </div>
+              <div style={{ textAlign: "center", marginTop: 8, fontSize: 11, color: "#9CA3AF" }}>合計 {fmtMB(totalMB)} / 1GB</div>
+            </div>
+          )}
         </div>
       </div>
 
