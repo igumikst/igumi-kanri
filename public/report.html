@@ -132,18 +132,18 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
     <div class="field"><label>住所</label><input type="text" id="u-address" placeholder="例: 東京都○○区..."></div>
     <div class="field"><label>工事名称 *</label><input type="text" id="u-workname" placeholder="例: 漏水調査復旧工事"></div>
     <div class="field"><label>作業実施日</label><input type="date" id="u-date"></div>
-    <div class="field"><label>作業者</label><input type="text" id="u-worker" placeholder="例: 崎岡"></div>
+    <div class="field"><label>作業者</label><input type="text" id="u-worker" placeholder="例: 後藤"></div>
     <div class="field"><label>作業内容</label><textarea id="u-content" placeholder="作業内容を入力..."></textarea></div>
   </div>
 
   <!-- 基本情報 -->
   <div class="card">
     <div class="card-ttl">📋 基本情報</div>
-    <div class="field"><label>物件名 *</label><input type="text" id="prop-name" placeholder="例: ライオンズマンション町田中町第2" oninput="refreshPreview()"></div>
-    <div class="field"><label>住所</label><input type="text" id="prop-address" placeholder="例: 東京都町田市中町１丁目２８−１２"></div>
-    <div class="field"><label>件名 *</label><input type="text" id="work-name" placeholder="例: 1002　1102　漏水調査復旧工事" oninput="refreshPreview()"></div>
+    <div class="field"><label>物件名 *</label><input type="text" id="prop-name" placeholder="例: 〇〇マンション〇番館" oninput="refreshPreview()"></div>
+    <div class="field"><label>住所</label><input type="text" id="prop-address" placeholder="例: 東京都〇〇区１丁目２３−４５"></div>
+    <div class="field"><label>件名 *</label><input type="text" id="work-name" placeholder="例: 101　201　漏水調査復旧工事" oninput="refreshPreview()"></div>
     <div class="field"><label>作業日 *</label><input type="date" id="work-date" oninput="refreshPreview()"></div>
-    <div class="field"><label>施工者</label><input type="text" id="worker" placeholder="例: 崎岡"></div>
+    <div class="field"><label>施工者</label><input type="text" id="worker" placeholder="例: 後藤"></div>
   </div>
 
   <!-- 写真 -->
@@ -679,12 +679,14 @@ async function exportXlsx() {
     tCell.font = {name:'ＭＳ 明朝',size:30,bold:true};
     tCell.alignment = {horizontal:'center',vertical:'middle'};
     tCell.border = {left:{style:'double'},right:{style:'double'},top:{style:'double'},bottom:{style:'double'}};
+    const workContent = document.getElementById('work-content').value.trim();
     const items = [
       ['B12','物　　件　　名','D12:K12',propName],
       ['B14','住　　　　　所','D14:K14',address],
       ['B16','件　　　　　名','D16:K16',workName],
       ['B18','作　　業　　日','D18:K18',dateStr],
       ['B20','施　　工　　者','D20:K20',worker],
+      ['B22','内　　　　　容','D22:K22',workContent],
     ];
     items.forEach(([lc,lv,mr,val]) => {
       const c = cws.getCell(lc);
@@ -776,6 +778,7 @@ function saveData() {
       workName:document.getElementById('work-name').value,
       workDate:document.getElementById('work-date').value,
       worker:  document.getElementById('worker').value,
+      content: document.getElementById('work-content').value,
       filename:document.getElementById('filename').value,
     },
     union:{
@@ -810,7 +813,7 @@ function loadData(e) {
         document.getElementById('prop-address').value = data.cover.address||'';
         document.getElementById('work-name').value  = data.cover.workName||'';
         document.getElementById('work-date').value  = data.cover.workDate||'';
-        document.getElementById('worker').value     = data.cover.worker||'';
+        document.getElementById('work-content').value = data.cover.content||'';
         document.getElementById('filename').value   = data.cover.filename||'';
       }
       if (data.union) {
