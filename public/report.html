@@ -115,7 +115,17 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
   <!-- タイプ選択 -->
   <div class="card">
     <div class="card-ttl">📄 報告書タイプ</div>
-    <div class="type-row">
+    <div class="type-row" style="gap:8px">
+  <button class="type-btn active" id="type-normal" onclick="setType('normal')">
+    <span class="type-icon">📋</span>通常
+  </button>
+  <button class="type-btn" id="type-tama" onclick="setType('tama')">
+    <span class="type-icon">🏗</span>多摩
+  </button>
+  <button class="type-btn" id="type-union" onclick="setType('union')">
+    <span class="type-icon">🏢</span>ユニオン
+  </button>
+</div>
       <button class="type-btn active" id="type-normal" onclick="setType('normal')">
         <span class="type-icon">🏗</span>通常（多摩）
       </button>
@@ -144,6 +154,7 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
     <div class="field"><label>件名 *</label><input type="text" id="work-name" placeholder="例: 101　201　漏水調査復旧工事" oninput="refreshPreview()"></div>
     <div class="field"><label>作業日 *</label><input type="date" id="work-date" oninput="refreshPreview()"></div>
     <div class="field"><label>施工者</label><input type="text" id="worker" placeholder="例: 後藤"></div>
+    <div class="field" id="content-field" style="display:none"><label>内容</label><textarea id="work-content" placeholder="作業内容を入力..."></textarea></div>
   </div>
 
   <!-- 写真 -->
@@ -264,6 +275,13 @@ document.getElementById('u-date').value    = new Date().toISOString().split('T')
 // タイプ切替
 // ============================================================
 function setType(type) {
+  reportType = type;
+  document.getElementById('type-normal').classList.toggle('active', type === 'normal');
+  document.getElementById('type-tama').classList.toggle('active',   type === 'tama');
+  document.getElementById('type-union').classList.toggle('active',  type === 'union');
+  document.getElementById('union-card').style.display = type === 'union' ? 'block' : 'none';
+  document.getElementById('content-field').style.display = type === 'tama' ? 'block' : 'none';
+}
   reportType = type;
   document.getElementById('type-normal').classList.toggle('active', type === 'normal');
   document.getElementById('type-union').classList.toggle('active',  type === 'union');
@@ -753,7 +771,7 @@ async function exportXlsx() {
     } else {
       const safe = s => s.replace(/[\\/:*?"<>|]/g,'').substring(0,20);
       const datePart = workDate ? workDate.replace(/-/g,'') : '';
-      const prefix = reportType === 'union' ? '調査報告書' : '報告書';
+      const prefix = reportType === 'union' ? '調査報告書' : reportType === 'tama' ? '報告書_多摩' : '報告書';
       filename = `${prefix}_${safe(propName)}_${safe(workName)}_${datePart}.xlsx`;
     }
     saveAs(blob, filename);
