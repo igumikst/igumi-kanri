@@ -125,14 +125,7 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
   <button class="type-btn" id="type-union" onclick="setType('union')">
     <span class="type-icon">🏢</span>ユニオン
   </button>
-</div>
-      <button class="type-btn active" id="type-normal" onclick="setType('normal')">
-        <span class="type-icon">🏗</span>通常（多摩）
-      </button>
-      <button class="type-btn" id="type-union" onclick="setType('union')">
-        <span class="type-icon">🏢</span>ユニオン
-      </button>
-    </div>
+  </div>
   </div>
 
   <!-- ユニオン専用：調査報告書 -->
@@ -282,11 +275,7 @@ function setType(type) {
   document.getElementById('union-card').style.display = type === 'union' ? 'block' : 'none';
   document.getElementById('content-field').style.display = type === 'tama' ? 'block' : 'none';
 }
-  reportType = type;
-  document.getElementById('type-normal').classList.toggle('active', type === 'normal');
-  document.getElementById('type-union').classList.toggle('active',  type === 'union');
-  document.getElementById('union-card').style.display = type === 'union' ? 'block' : 'none';
-}
+
 
 // ============================================================
 // QUALITY
