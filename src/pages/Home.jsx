@@ -8,6 +8,15 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const [editTile, setEditTile] = useState(null);
   const [showWeekWeather, setShowWeekWeather] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  // 🔒 財務パスワード関連
+  const [pwModal, setPwModal] = useState(false);
+  const [pwInput, setPwInput] = useState("");
+  const [pwErr, setPwErr] = useState("");
+  const [finUnlocked, setFinUnlocked] = useState(false);
+  const [savedPw, setSavedPw] = useState(null);
+  const [pwLoaded, setPwLoaded] = useState(false);
+
   const pending = tks.filter(t => !t.done);
   const active = pjs.filter(p => p.status !== "完了" && p.status !== "中断");
   const tiles = tileConf.filter(t => t.visible || tileEdit).map(t => ({
@@ -23,6 +32,48 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
     const { data } = await supabase.from("calls").select("*").order("received_at", { ascending: false });
     if (data) setCalls(data);
     setRefreshing(false);
+  };
+
+  // 🔒 PWをSupabaseから読み込む
+  const loadPw = async () => {
+    if (pwLoaded) return savedPw;
+    const { data } = await supabase.from("home_settings").select("value").eq("id", "finance_password").single();
+    const pw = data?.value?.password || null;
+    setSavedPw(pw);
+    setPwLoaded(true);
+    return pw;
+  };
+
+  // 🔒 財務タップ時の処理
+  const handleFinanceClick = async () => {
+    const pw = await loadPw();
+    if (!pw || finUnlocked) {
+      nav("finance");
+    } else {
+      setPwModal(true);
+      setPwInput("");
+      setPwErr("");
+    }
+  };
+
+  // 🔒 PW照合
+  const handleUnlock = () => {
+    if (pwInput === savedPw) {
+      setFinUnlocked(true);
+      setPwModal(false);
+      setPwInput("");
+      nav("finance");
+    } else {
+      setPwErr("パスワードが違います");
+    }
+  };
+
+  // タイルクリックの共通処理
+  const handleTileClick = (t) => {
+    if (t.key === "chatgpt") { window.open("https://chatgpt.com", "_blank"); return; }
+    if (t.key === "report") { window.open("/report.html", "_blank"); return; }
+    if (t.key === "finance") { handleFinanceClick(); return; }
+    nav(t.key);
   };
 
   return (
@@ -47,10 +98,8 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
             <div style={{ fontSize: 22, fontWeight: 900, color: "#fff" }}>{cust.sys}</div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 4 }}>案件 {pjs.length}件 ｜ 取引先 {cos.length}社</div>
           </div>
-          {/* 天気ウィジェット */}
           {weather && (
-            <div onClick={() => setShowWeekWeather(p => !p)}
-              style={{ textAlign: "right", background: "rgba(255,255,255,0.15)", borderRadius: 12, padding: "10px 14px", flexShrink: 0, cursor: "pointer" }}>
+            <div onClick={() => setShowWeekWeather(p => !p)} style={{ textAlign: "right", background: "rgba(255,255,255,0.15)", borderRadius: 12, padding: "10px 14px", flexShrink: 0, cursor: "pointer" }}>
               <div style={{ fontSize: 28, lineHeight: 1 }}>{weather.icon}</div>
               <div style={{ fontSize: 20, fontWeight: 900, color: "#fff", marginTop: 4 }}>{weather.temp}°C</div>
               <div style={{ fontSize: 11, color: "rgba(255,255,255,0.8)" }}>{weather.desc}</div>
@@ -58,8 +107,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
             </div>
           )}
         </div>
-
-        {/* 週間天気 */}
         {showWeekWeather && weekWeather && (
           <div style={{ marginTop: 14, background: "rgba(255,255,255,0.12)", borderRadius: 12, padding: "12px 8px", display: "flex", gap: 4, overflowX: "auto" }}>
             {weekWeather.map((d, i) => (
@@ -149,17 +196,22 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           </button>
         </div>
 
+        {/* PC リスト表示 */}
         {isPC && !tileEdit && (
           <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", marginBottom: 20 }}>
             {tiles.filter(t => t.visible).map((t, i, arr) => (
-              <button key={t.key} onClick={() => { if (t.key === "chatgpt") { window.open("https://chatgpt.com", "_blank"); return; } if (t.key === "report") { window.open("/report.html", "_blank"); return; } nav(t.key); }}
+              <button key={t.key} onClick={() => handleTileClick(t)}
                 style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "13px 18px", background: "none", border: "none", borderBottom: i < arr.length - 1 ? "1px solid #F3F4F6" : "none", cursor: "pointer", textAlign: "left" }}
                 onMouseOver={e => e.currentTarget.style.background = "#F9FAFB"}
                 onMouseOut={e => e.currentTarget.style.background = "none"}>
                 <div style={{ width: 4, height: 36, borderRadius: 2, background: t.color, flexShrink: 0 }} />
                 <span style={{ fontSize: 22, flexShrink: 0 }}>{t.icon}</span>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: "#1F2937" }}>{t.label}</div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#1F2937", display: "flex", alignItems: "center", gap: 6 }}>
+                    {t.label}
+                    {/* 🔒 鍵アイコン */}
+                    {t.key === "finance" && savedPw && <span style={{ fontSize: 12 }}>{finUnlocked ? "🔓" : "🔒"}</span>}
+                  </div>
                   <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1 }}>{t.sub}</div>
                 </div>
                 <div style={{ fontSize: 14, color: "#D1D5DB" }}>›</div>
@@ -168,6 +220,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           </div>
         )}
 
+        {/* PC 編集モード */}
         {isPC && tileEdit && (
           <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", marginBottom: 20 }}>
             {tiles.map((t, i) => (
@@ -186,6 +239,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           </div>
         )}
 
+        {/* スマホ タイル表示 */}
         {!isPC && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
           {tiles.map((t) => (
             <div key={t.key}>
@@ -204,9 +258,13 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
                   <div style={{ marginTop: 8, height: 3, borderRadius: 2, background: t.color, width: "40%" }} />
                 </div>
               ) : (
-                <button onClick={() => { if (t.key === "chatgpt") { window.open("https://chatgpt.com", "_blank"); return; } if (t.key === "report") { window.open("/report.html", "_blank"); return; } nav(t.key); }} style={{ width: "100%", background: "#fff", border: "none", borderRadius: 14, padding: "16px 14px", textAlign: "left", cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
+                <button onClick={() => handleTileClick(t)} style={{ width: "100%", background: "#fff", border: "none", borderRadius: 14, padding: "16px 14px", textAlign: "left", cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
                   <div style={{ fontSize: 26, marginBottom: 8 }}>{t.icon}</div>
-                  <div style={{ fontWeight: 800, fontSize: 14, color: "#1F2937", marginBottom: 2 }}>{t.label}</div>
+                  <div style={{ fontWeight: 800, fontSize: 14, color: "#1F2937", marginBottom: 2, display: "flex", alignItems: "center", gap: 4 }}>
+                    {t.label}
+                    {/* 🔒 鍵アイコン */}
+                    {t.key === "finance" && savedPw && <span style={{ fontSize: 12 }}>{finUnlocked ? "🔓" : "🔒"}</span>}
+                  </div>
                   <div style={{ fontSize: 11, color: "#6B7280" }}>{t.sub}</div>
                   <div style={{ marginTop: 10, height: 3, borderRadius: 2, background: t.color, width: "40%" }} />
                 </button>
@@ -228,6 +286,28 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           <button onClick={() => nav("tasks")} style={{ width: "100%", padding: 10, background: "#F9FAFB", border: "none", fontSize: 12, color: cust.c1, fontWeight: 700, cursor: "pointer", borderTop: "1px solid #F3F4F6" }}>すべて見る →</button>
         </div>
       </div>
+
+      {/* 🔒 PW入力モーダル */}
+      {pwModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: 300, boxSizing: "border-box" }}>
+            <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4, color: "#1F2937" }}>🔒 財務・書類管理</div>
+            <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>パスワードを入力してください</div>
+            <input
+              type="password" value={pwInput} autoFocus
+              onChange={e => { setPwInput(e.target.value); setPwErr(""); }}
+              onKeyDown={e => e.key === "Enter" && handleUnlock()}
+              placeholder="パスワード"
+              style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: pwErr ? "2px solid #DC2626" : "1.5px solid #E5E7EB", fontSize: 15, boxSizing: "border-box", marginBottom: 4, color: "#1F2937", outline: "none" }}
+            />
+            {pwErr && <div style={{ color: "#DC2626", fontSize: 12, marginBottom: 8 }}>{pwErr}</div>}
+            <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+              <button onClick={() => { setPwModal(false); setPwInput(""); setPwErr(""); }} style={{ flex: 1, padding: 12, background: "#F3F4F6", border: "none", borderRadius: 10, fontWeight: 700, cursor: "pointer", color: "#374151" }}>キャンセル</button>
+              <button onClick={handleUnlock} style={{ flex: 1, padding: 12, background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, cursor: "pointer" }}>開く</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editTile && (<Modal title="タイルを編集" onClose={() => setEditTile(null)} onSave={() => { saveTileConf(tileConf.map(t => t.key === editTile.key ? editTile : t)); setEditTile(null); }}>
         <Inp label="アイコン" value={editTile.icon} onChange={e => setEditTile({ ...editTile, icon: e.target.value })} />
