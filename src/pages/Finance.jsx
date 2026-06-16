@@ -12,11 +12,6 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
   const [finModal, setFinModal] = useState(null);
   const [newFolder, setNewFolder] = useState({ label: "", icon: "📁" });
   const [editFolder, setEditFolder] = useState(null);
-  const [pws, setPws] = useState({});
-  const [unl, setUnl] = useState({});
-  const [pwMod, setPwMod] = useState(null);
-  const [pwIn, setPwIn] = useState("");
-  const [pwErr, setPwErr] = useState("");
   const [conf, setConf] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(false);
   const pending = tks.filter(t => !t.done);
@@ -67,28 +62,6 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
   const deleteFinFolder = async (id) => {
     await supabase.from("finance_folders").delete().eq("id", id);
     setFinFolders(prev => prev.filter(f => f.id !== id));
-  };
-
-  const PwUI = () => {
-    if (!pwMod) return null;
-    const isSC = pwMod.mode === "set" || pwMod.mode === "change";
-    return (
-      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 500, display: "flex", alignItems: "flex-end" }}>
-        <div style={{ background: "#fff", borderRadius: "20px 20px 0 0", padding: 24, width: "100%", boxSizing: "border-box" }}>
-          <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 6, color: "#1F2937" }}>{isSC ? "🔐 設定" : "🔒 入力"}</div>
-          <input type="password" value={pwIn} onChange={e => { setPwIn(e.target.value); setPwErr(""); }} placeholder="パスワード" style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: pwErr ? "2px solid #DC2626" : "1.5px solid #E5E7EB", fontSize: 16, boxSizing: "border-box", marginBottom: 4, color: "#1F2937" }} />
-          {pwErr && <div style={{ color: "#DC2626", fontSize: 12, marginBottom: 8 }}>{pwErr}</div>}
-          <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
-            <button onClick={() => { setPwMod(null); setPwIn(""); setPwErr(""); }} style={{ flex: 1, padding: 12, background: "#F3F4F6", border: "none", borderRadius: 10, fontWeight: 700, cursor: "pointer" }}>キャンセル</button>
-            <button onClick={() => {
-              if (!pwIn) { setPwErr("入力してください"); return; }
-              if (isSC) { setPws(p => ({ ...p, [pwMod.id]: pwIn })); setPwMod(null); setPwIn(""); setPwErr(""); }
-              else { if (pwIn === pws[pwMod.id]) { setUnl(p => ({ ...p, [pwMod.id]: true })); setFinItem(allItems.find(f => f.id === pwMod.id)); setPwMod(null); setPwIn(""); setPwErr(""); } else setPwErr("パスワードが違います"); }
-            }} style={{ flex: 1, padding: 12, background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, cursor: "pointer" }}>{isSC ? "設定する" : "開く"}</button>
-          </div>
-        </div>
-      </div>
-    );
   };
 
   if (finPrev) return (
@@ -199,7 +172,6 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
           </div>);
         })}
       </div>
-      <PwUI />
     </div>
   );
 
@@ -215,32 +187,26 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
       </div>
       <div style={{ padding: isPC ? "14px 0" : 14 }}>
         <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
-          {allItems.map((item, i) => {
-            const hp = !!pws[item.id], iu = unl[item.id];
-            const totalFiles = finFiles.filter(f => f.item_id === item.id).length;
-            return (
-              <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", borderBottom: i < allItems.length - 1 ? "1px solid #F3F4F6" : "none" }}>
-                <span style={{ fontSize: 26 }}>{item.icon}</span>
-                <div style={{ flex: 1, cursor: "pointer" }} onClick={() => { if (hp && !iu) { setPwMod({ mode: "unlock", id: item.id, label: item.label }); setPwIn(""); setPwErr(""); } else setFinItem(item); }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: "#1F2937" }}>{item.label}</div>
-                  <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>{totalFiles > 0 ? `${totalFiles}件のファイル` : "タップして管理"}</div>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  {totalFiles > 0 && <span style={{ background: "#E07B39", color: "#fff", borderRadius: 10, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>{totalFiles}</span>}
-                  {hp && <span style={{ fontSize: 14 }}>{iu ? "🔓" : "🔒"}</span>}
-                  {item.isCustom && <button onClick={() => { setEditFolder({ ...item }); setFinModal("editFolder"); }} style={{ background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, color: "#1A3A5C", cursor: "pointer" }}>✏️</button>}
-                  {item.isCustom && <button onClick={() => setConf({ msg: `「${item.label}」フォルダ\n\nこの操作は元に戻せません。\n削除しますか？`, onOk: () => { deleteFinFolder(item.id); setConf(null); } })} style={{ background: "#FEF2F2", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, color: "#DC2626", cursor: "pointer" }}>🗑</button>}
-                  {!item.isCustom && <button onClick={() => { setPwMod({ mode: hp ? "change" : "set", id: item.id, label: item.label }); setPwIn(""); setPwErr(""); }} style={{ background: "#F3F4F6", border: "none", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", color: "#374151" }}>{hp ? "変更" : "設定"}</button>}
-                </div>
+          {allItems.map((item, i) => (
+            <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", borderBottom: i < allItems.length - 1 ? "1px solid #F3F4F6" : "none" }}>
+              <span style={{ fontSize: 26 }}>{item.icon}</span>
+              <div style={{ flex: 1, cursor: "pointer" }} onClick={() => setFinItem(item)}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: "#1F2937" }}>{item.label}</div>
+                <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>タップして管理</div>
               </div>
-            );
-          })}
+              {item.isCustom && (
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button onClick={() => { setEditFolder({ ...item }); setFinModal("editFolder"); }} style={{ background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, color: "#1A3A5C", cursor: "pointer" }}>✏️</button>
+                  <button onClick={() => setConf({ msg: `「${item.label}」フォルダ\n\nこの操作は元に戻せません。\n削除しますか？`, onOk: () => { deleteFinFolder(item.id); setConf(null); } })} style={{ background: "#FEF2F2", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, color: "#DC2626", cursor: "pointer" }}>🗑</button>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       </div>
       {conf && <Confirm msg={conf.msg} onCancel={() => setConf(null)} onOk={conf.onOk} />}
-      {finModal === "addFolder" && (<Modal title="📁 フォルダを追加" onClose={() => setFinModal(null)} onSave={addFinFolder}><Inp label="アイコン（絵文字）" value={newFolder.icon} onChange={e => setNewFolder({ ...newFolder, icon: e.target.value })} /><Inp label="フォルダ名 *" value={newFolder.label} onChange={e => setNewFolder({ ...newFolder, label: e.target.value })} placeholder="例: 保険証書" /></Modal>)}
-      {finModal === "editFolder" && editFolder && (<Modal title="📁 フォルダを編集" onClose={() => { setFinModal(null); setEditFolder(null); }} onSave={updateFinFolder}><Inp label="アイコン（絵文字）" value={editFolder.icon} onChange={e => setEditFolder({ ...editFolder, icon: e.target.value })} /><Inp label="フォルダ名 *" value={editFolder.label} onChange={e => setEditFolder({ ...editFolder, label: e.target.value })} /></Modal>)}
-      <PwUI />
+      {finModal === "addFolder" && <Modal title="📁 フォルダを追加" onClose={() => setFinModal(null)} onSave={addFinFolder}><Inp label="アイコン（絵文字）" value={newFolder.icon} onChange={e => setNewFolder({ ...newFolder, icon: e.target.value })} /><Inp label="フォルダ名 *" value={newFolder.label} onChange={e => setNewFolder({ ...newFolder, label: e.target.value })} placeholder="例: 保険証書" /></Modal>}
+      {finModal === "editFolder" && editFolder && <Modal title="📁 フォルダを編集" onClose={() => { setFinModal(null); setEditFolder(null); }} onSave={updateFinFolder}><Inp label="アイコン（絵文字）" value={editFolder.icon} onChange={e => setEditFolder({ ...editFolder, icon: e.target.value })} /><Inp label="フォルダ名 *" value={editFolder.label} onChange={e => setEditFolder({ ...editFolder, label: e.target.value })} /></Modal>}
     </div>
   );
 }

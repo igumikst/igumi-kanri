@@ -25,24 +25,27 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
   const [tagInput, setTagInput] = useState("");
   const [showTagEdit, setShowTagEdit] = useState(false);
   const [customTags, setCustomTags] = useState(DEFAULT_TAGS);
-
-  // 👤 対応者関連
   const [assignees, setAssignees] = useState(DEFAULT_ASSIGNEES);
   const [showAssigneeEdit, setShowAssigneeEdit] = useState(false);
   const [assigneeInput, setAssigneeInput] = useState("");
-  const [assigneeLoaded, setAssigneeLoaded] = useState(false);
 
-  // Supabaseから対応者リストを読み込む
   useEffect(() => {
     const load = async () => {
-      const { data } = await supabase.from("home_settings").select("value").eq("id", "assignee_names").single();
-      if (data?.value && Array.isArray(data.value)) setAssignees(data.value);
-      setAssigneeLoaded(true);
+      const [tagsRes, assigneesRes] = await Promise.all([
+        supabase.from("home_settings").select("value").eq("id", "call_tags").single(),
+        supabase.from("home_settings").select("value").eq("id", "assignee_names").single(),
+      ]);
+      if (tagsRes.data?.value && Array.isArray(tagsRes.data.value)) setCustomTags(tagsRes.data.value);
+      if (assigneesRes.data?.value && Array.isArray(assigneesRes.data.value)) setAssignees(assigneesRes.data.value);
     };
     load();
   }, []);
 
-  // 対応者リストをSupabaseに保存
+  const saveTags = async (list) => {
+    setCustomTags(list);
+    await supabase.from("home_settings").upsert({ id: "call_tags", value: list, updated_at: new Date().toISOString() });
+  };
+
   const saveAssignees = async (list) => {
     setAssignees(list);
     await supabase.from("home_settings").upsert({ id: "assignee_names", value: list, updated_at: new Date().toISOString() });
@@ -69,9 +72,8 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
     } else alert("保存に失敗しました: " + error.message);
   };
 
-  // 👤 対応者を更新
   const updateAssignee = async (id, name) => {
-    const newAssignee = name === selected?.assignee ? null : name; // 同じ人をタップで解除
+    const newAssignee = selected?.assignee === name ? null : name;
     const { error } = await supabase.from("calls").update({ assignee: newAssignee }).eq("id", id);
     if (!error) {
       setCalls(prev => prev.map(c => c.id === id ? { ...c, assignee: newAssignee } : c));
@@ -95,7 +97,6 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
     return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   };
 
-  // 詳細画面
   if (selected) return (
     <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
       <div style={{ background: `linear-gradient(135deg,${cust.c1},${cust.c2})`, padding: "16px 20px", position: "sticky", top: 0, zIndex: 50 }}>
@@ -112,7 +113,6 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
       </div>
 
       <div style={{ padding: "16px 16px 40px" }}>
-
         {/* ステータス変更 */}
         <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
           <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginBottom: 10 }}>ステータス変更</div>
@@ -126,7 +126,7 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
           </div>
         </div>
 
-        {/* 👤 対応者選択 */}
+        {/* 対応者選択 */}
         <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700 }}>👤 対応者</div>
@@ -143,21 +143,14 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
               );
             })}
           </div>
-          {selected.assignee && (
-            <div style={{ marginTop: 10, fontSize: 12, color: "#6B7280" }}>
-              現在の対応者：<span style={{ fontWeight: 700, color: cust.c1 }}>{selected.assignee}</span>
-            </div>
-          )}
-
-          {/* 名前編集パネル */}
+          {selected.assignee && <div style={{ marginTop: 10, fontSize: 12, color: "#6B7280" }}>現在の対応者：<span style={{ fontWeight: 700, color: cust.c1 }}>{selected.assignee}</span></div>}
           {showAssigneeEdit && (
             <div style={{ marginTop: 14, borderTop: "1px solid #F3F4F6", paddingTop: 14 }}>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
                 {assignees.map(name => (
                   <div key={name} style={{ display: "flex", alignItems: "center", gap: 4, background: "#F3F4F6", borderRadius: 20, padding: "4px 10px" }}>
                     <span style={{ fontSize: 12, color: "#374151" }}>{name}</span>
-                    <button onClick={() => saveAssignees(assignees.filter(a => a !== name))}
-                      style={{ background: "none", border: "none", color: "#9CA3AF", cursor: "pointer", fontSize: 14 }}>×</button>
+                    <button onClick={() => saveAssignees(assignees.filter(a => a !== name))} style={{ background: "none", border: "none", color: "#9CA3AF", cursor: "pointer", fontSize: 14 }}>×</button>
                   </div>
                 ))}
               </div>
@@ -175,7 +168,10 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
 
         {/* タグ */}
         <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
-          <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginBottom: 10 }}>🏷 タグ</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700 }}>🏷 タグ</div>
+            <button onClick={() => setShowTagEdit(p => !p)} style={{ fontSize: 11, color: cust.c1, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>✏️ タグ編集</button>
+          </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {customTags.map(tag => {
               const active = selected.tags?.includes(tag);
@@ -187,6 +183,26 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
               );
             })}
           </div>
+          {showTagEdit && (
+            <div style={{ marginTop: 14, borderTop: "1px solid #F3F4F6", paddingTop: 14 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+                {customTags.map(tag => (
+                  <div key={tag} style={{ display: "flex", alignItems: "center", gap: 4, background: "#F3F4F6", borderRadius: 20, padding: "4px 10px" }}>
+                    <span style={{ fontSize: 12, color: "#374151" }}>{tag}</span>
+                    <button onClick={() => saveTags(customTags.filter(t => t !== tag))} style={{ background: "none", border: "none", color: "#9CA3AF", cursor: "pointer", fontSize: 14 }}>×</button>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input value={tagInput} onChange={e => setTagInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && tagInput.trim()) { saveTags([...customTags, tagInput.trim()]); setTagInput(""); }}}
+                  placeholder="新しいタグを入力..."
+                  style={{ flex: 1, border: "1.5px solid #E5E7EB", borderRadius: 8, padding: "7px 12px", fontSize: 13, outline: "none", color: "#1F2937" }} />
+                <button onClick={() => { if (tagInput.trim()) { saveTags([...customTags, tagInput.trim()]); setTagInput(""); }}}
+                  style={{ background: cust.c1, border: "none", color: "#fff", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>追加</button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 基本情報 */}
@@ -205,9 +221,7 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
             <div key={label} style={{ display: "flex", gap: 12, padding: "7px 0", borderBottom: "1px solid #F3F4F6" }}>
               <div style={{ fontSize: 12, color: "#9CA3AF", width: 72, flexShrink: 0 }}>{label}</div>
               <div style={{ fontSize: 13, color: "#1F2937", fontWeight: 600, flex: 1 }}>
-                {label === "緊急度" ? (
-                  <span style={{ background: URGENCY_CONFIG[value]?.bg, color: URGENCY_CONFIG[value]?.color, borderRadius: 6, padding: "2px 8px", fontSize: 12, fontWeight: 700 }}>{value}</span>
-                ) : value}
+                {label === "緊急度" ? <span style={{ background: URGENCY_CONFIG[value]?.bg, color: URGENCY_CONFIG[value]?.color, borderRadius: 6, padding: "2px 8px", fontSize: 12, fontWeight: 700 }}>{value}</span> : value}
               </div>
             </div>
           ) : null)}
@@ -244,7 +258,6 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
     </div>
   );
 
-  // 一覧画面
   return (
     <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
       <div style={{ background: `linear-gradient(135deg,${cust.c1},${cust.c2})`, padding: "16px 20px 24px", position: "sticky", top: 0, zIndex: 50 }}>
@@ -298,17 +311,16 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
               {customTags.map(tag => (
                 <div key={tag} style={{ display: "flex", alignItems: "center", gap: 4, background: "#F3F4F6", borderRadius: 20, padding: "4px 10px" }}>
                   <span style={{ fontSize: 12, color: "#374151" }}>{tag}</span>
-                  <button onClick={() => setCustomTags(prev => prev.filter(t => t !== tag))}
-                    style={{ background: "none", border: "none", color: "#9CA3AF", cursor: "pointer", fontSize: 14, lineHeight: 1 }}>×</button>
+                  <button onClick={() => saveTags(customTags.filter(t => t !== tag))} style={{ background: "none", border: "none", color: "#9CA3AF", cursor: "pointer", fontSize: 14, lineHeight: 1 }}>×</button>
                 </div>
               ))}
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <input value={tagInput} onChange={e => setTagInput(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && tagInput.trim()) { setCustomTags(prev => [...prev, tagInput.trim()]); setTagInput(""); }}}
+                onKeyDown={e => { if (e.key === "Enter" && tagInput.trim()) { saveTags([...customTags, tagInput.trim()]); setTagInput(""); }}}
                 placeholder="新しいタグを入力..."
                 style={{ flex: 1, border: "1.5px solid #E5E7EB", borderRadius: 8, padding: "7px 12px", fontSize: 13, outline: "none", color: "#1F2937" }} />
-              <button onClick={() => { if (tagInput.trim()) { setCustomTags(prev => [...prev, tagInput.trim()]); setTagInput(""); }}}
+              <button onClick={() => { if (tagInput.trim()) { saveTags([...customTags, tagInput.trim()]); setTagInput(""); }}}
                 style={{ background: cust.c1, border: "none", color: "#fff", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>追加</button>
             </div>
           </div>
@@ -331,7 +343,6 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       <span style={{ background: sc.bg, color: sc.color, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>{sc.icon} {call.status}</span>
                       {call.urgency && uc && <span style={{ background: uc.bg, color: uc.color, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>{call.urgency}</span>}
-                      {/* 👤 対応者バッジ */}
                       {call.assignee && <span style={{ background: "#F0FDF4", color: "#059669", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>👤 {call.assignee}</span>}
                       {call.tags?.map(tag => (
                         <span key={tag} style={{ background: "#EFF6FF", color: "#2563eb", borderRadius: 6, padding: "2px 8px", fontSize: 10, fontWeight: 600 }}>🏷 {tag}</span>
@@ -342,9 +353,7 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
                   <div style={{ fontSize: 13, fontWeight: 800, color: "#1F2937", marginBottom: 4 }}>
                     {call.company_name || "会社名不明"} {call.contact_name ? `｜${call.contact_name}` : ""}
                   </div>
-                  {call.property_name && (
-                    <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 6 }}>🏠 {call.property_name}{call.room_number ? ` ${call.room_number}号室` : ""}</div>
-                  )}
+                  {call.property_name && <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 6 }}>🏠 {call.property_name}{call.room_number ? ` ${call.room_number}号室` : ""}</div>}
                   {call.ai_summary && (
                     <div style={{ fontSize: 12, color: "#374151", background: "#F8FAFF", borderRadius: 8, padding: "8px 10px", borderLeft: "3px solid #2563eb", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
                       {call.ai_summary}
