@@ -9,7 +9,6 @@ module.exports = async (req, res) => {
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   const twilioSignature = req.headers["x-twilio-signature"];
   
-  // URLを固定で指定（環境変数に依存しない）
   const url = "https://igumi-kanri.vercel.app/api/voice";
 
   const isValid = twilio.validateRequest(
@@ -29,7 +28,7 @@ module.exports = async (req, res) => {
   twiml.say(
     {
       language: "ja-JP",
-      voice: "Polly.Mizuki",
+      voice: "Google.ja-JP-Wavenet-A",
     },
     "お電話ありがとうございます。株式会社いぐみです。ただいま担当者が不在のため、ご用件をお聞かせください。発信音の後にお話しください。"
   );
@@ -48,7 +47,7 @@ module.exports = async (req, res) => {
   twiml.say(
     {
       language: "ja-JP",
-      voice: "Polly.Mizuki",
+      voice: "Google.ja-JP-Wavenet-A",
     },
     "ありがとうございました。担当者より折り返しご連絡いたします。"
   );
