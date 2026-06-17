@@ -25,13 +25,13 @@ module.exports = async (req, res) => {
 
   const twiml = new twilio.twiml.VoiceResponse();
 
- twiml.pause({ length: 1 });
+ twiml.pause({ length: 3});
 twiml.say(
   {
     language: "ja-JP",
     voice: "Google.ja-JP-Wavenet-A",
   },
- "電話ありがとうございます。株式会社いぐみです。担当者へ直接共有いたしますのでご用件をお聞かせください。"
+ "お電話ありがとうございます。株式会社いぐみです。担当者へ直接共有いたしますのでご用件をお聞かせください。"
 );
 
   twiml.record({
