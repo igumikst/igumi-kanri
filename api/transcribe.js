@@ -1,5 +1,4 @@
 // /api/transcribe.js
-const FormData = require("form-data");
 const https = require("https");
 const http = require("http");
 
@@ -11,18 +10,32 @@ async function transcribeRecording(recordingUrl) {
   const authToken = process.env.TWILIO_AUTH_TOKEN;
 
   console.log(`[transcribe] Fetching audio from Twilio...`);
-  
   const audioBuffer = await fetchWithAuth(recordingUrl, accountSid, authToken);
   console.log(`[transcribe] Got ${audioBuffer.length} bytes`);
 
-  const form = new FormData();
-  form.append("file", audioBuffer, {
-    filename: "recording.mp3",
-    contentType: "audio/mpeg",
-  });
-  form.append("model", "whisper-1");
-  form.append("language", "ja");
-  form.append("response_format", "text");
+  // multipart/form-dataを手動で組み立てる
+  const boundary = "----FormBoundary" + Math.random().toString(36).slice(2);
+  
+  const header = Buffer.from(
+    `--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="file"; filename="recording.mp3"\r\n` +
+    `Content-Type: audio/mpeg\r\n\r\n`
+  );
+  
+  const modelPart = Buffer.from(
+    `\r\n--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="model"\r\n\r\n` +
+    `whisper-1` +
+    `\r\n--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="language"\r\n\r\n` +
+    `ja` +
+    `\r\n--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="response_format"\r\n\r\n` +
+    `text` +
+    `\r\n--${boundary}--\r\n`
+  );
+
+  const body = Buffer.concat([header, audioBuffer, modelPart]);
 
   console.log(`[transcribe] Sending to Whisper...`);
 
@@ -30,9 +43,10 @@ async function transcribeRecording(recordingUrl) {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      ...form.getHeaders(),
+      "Content-Type": `multipart/form-data; boundary=${boundary}`,
+      "Content-Length": body.length,
     },
-    body: form,
+    body: body,
   });
 
   if (!response.ok) {
@@ -54,8 +68,6 @@ function fetchWithAuth(url, user, pass) {
       console.log(`[transcribe] Twilio HTTP status: ${res.statusCode}`);
       
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        console.log(`[transcribe] Redirect to: ${res.headers.location}`);
-        // リダイレクト先は認証不要
         return fetchNoAuth(res.headers.location).then(resolve).catch(reject);
       }
       
@@ -75,7 +87,6 @@ function fetchNoAuth(url) {
   return new Promise((resolve, reject) => {
     const protocol = url.startsWith("https") ? https : http;
     protocol.get(url, (res) => {
-      console.log(`[transcribe] Redirect HTTP status: ${res.statusCode}`);
       const chunks = [];
       res.on("data", (chunk) => chunks.push(chunk));
       res.on("end", () => resolve(Buffer.concat(chunks)));
