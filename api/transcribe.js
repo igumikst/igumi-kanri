@@ -1,7 +1,7 @@
 // /api/transcribe.js
+const FormData = require("form-data");
 const https = require("https");
 const http = require("http");
-const FormData = require("form-data");
 
 async function transcribeRecording(recordingUrl) {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -10,18 +10,10 @@ async function transcribeRecording(recordingUrl) {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
 
-  console.log(`[transcribe] Fetching: ${recordingUrl}`);
-  console.log(`[transcribe] AccountSID exists: ${!!accountSid}`);
-  console.log(`[transcribe] AuthToken exists: ${!!authToken}`);
-
-  let audioBuffer;
-  try {
-    audioBuffer = await fetchWithAuth(recordingUrl, accountSid, authToken);
-    console.log(`[transcribe] Audio fetched: ${audioBuffer.length} bytes`);
-  } catch (err) {
-    console.error(`[transcribe] Fetch error: ${err.message}`);
-    throw err;
-  }
+  console.log(`[transcribe] Fetching audio from Twilio...`);
+  
+  const audioBuffer = await fetchWithAuth(recordingUrl, accountSid, authToken);
+  console.log(`[transcribe] Got ${audioBuffer.length} bytes`);
 
   const form = new FormData();
   form.append("file", audioBuffer, {
@@ -34,20 +26,14 @@ async function transcribeRecording(recordingUrl) {
 
   console.log(`[transcribe] Sending to Whisper...`);
 
-  let response;
-  try {
-    response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        ...form.getHeaders(),
-      },
-      body: form,
-    });
-  } catch (err) {
-    console.error(`[transcribe] Whisper fetch error: ${err.message}`);
-    throw err;
-  }
+  const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      ...form.getHeaders(),
+    },
+    body: form,
+  });
 
   if (!response.ok) {
     const errText = await response.text();
@@ -55,7 +41,7 @@ async function transcribeRecording(recordingUrl) {
   }
 
   const transcript = await response.text();
-  console.log(`[transcribe] Done: ${transcript}`);
+  console.log(`[transcribe] Result: ${transcript}`);
   return transcript.trim();
 }
 
@@ -64,27 +50,37 @@ function fetchWithAuth(url, user, pass) {
     const auth = Buffer.from(`${user}:${pass}`).toString("base64");
     const protocol = url.startsWith("https") ? https : http;
 
-    const req = protocol.get(
-      url,
-      { headers: { Authorization: `Basic ${auth}` } },
-      (res) => {
-        console.log(`[transcribe] HTTP status: ${res.statusCode}`);
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          console.log(`[transcribe] Redirecting to: ${res.headers.location}`);
-          return fetchWithAuth(res.headers.location, user, pass)
-            .then(resolve)
-            .catch(reject);
-        }
-        if (res.statusCode !== 200) {
-          return reject(new Error(`HTTP ${res.statusCode} fetching recording`));
-        }
-        const chunks = [];
-        res.on("data", (chunk) => chunks.push(chunk));
-        res.on("end", () => resolve(Buffer.concat(chunks)));
-        res.on("error", reject);
+    protocol.get(url, { headers: { Authorization: `Basic ${auth}` } }, (res) => {
+      console.log(`[transcribe] Twilio HTTP status: ${res.statusCode}`);
+      
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        console.log(`[transcribe] Redirect to: ${res.headers.location}`);
+        // リダイレクト先は認証不要
+        return fetchNoAuth(res.headers.location).then(resolve).catch(reject);
       }
-    );
-    req.on("error", reject);
+      
+      if (res.statusCode !== 200) {
+        return reject(new Error(`HTTP ${res.statusCode}`));
+      }
+      
+      const chunks = [];
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", () => resolve(Buffer.concat(chunks)));
+      res.on("error", reject);
+    }).on("error", reject);
+  });
+}
+
+function fetchNoAuth(url) {
+  return new Promise((resolve, reject) => {
+    const protocol = url.startsWith("https") ? https : http;
+    protocol.get(url, (res) => {
+      console.log(`[transcribe] Redirect HTTP status: ${res.statusCode}`);
+      const chunks = [];
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", () => resolve(Buffer.concat(chunks)));
+      res.on("error", reject);
+    }).on("error", reject);
   });
 }
 
