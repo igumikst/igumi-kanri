@@ -30,7 +30,7 @@ module.exports = async (req, res) => {
       language: "ja-JP",
       voice: "Google.ja-JP-Wavenet-A",
     },
-    "、お電話ありがとうございます。株式会社いぐみです。担当者へ共有いたしますのでご用件をお話しください。"
+    "、、、、、お電話ありがとうございます。担当者へ直接共有いたしますのでご用件をお話ください。"
   );
 
   twiml.record({
