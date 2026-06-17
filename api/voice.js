@@ -31,7 +31,7 @@ twiml.say(
     language: "ja-JP",
     voice: "Google.ja-JP-Wavenet-A",
   },
- "株式会社いぐみです。担当者へ直接共有いたしますのでご用件をお聞かせください。"
+ "えー、株式会社いぐみです。担当者へ直接共有いたしますのでご用件をお聞かせください。"
 );
 
   twiml.record({
