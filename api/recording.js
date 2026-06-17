@@ -37,16 +37,41 @@ module.exports = async (req, res) => {
   const recordingMp3 = `${RecordingUrl}.mp3`;
   console.log(`[recording] New recording: ${RecordingSid} from ${From}`);
 
-  // 別エンドポイントに処理を投げる（レスポンスを待たない）
-  fetch("https://igumi-kanri.vercel.app/api/pipeline", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+  // pipelineを呼ぶ
+  const pipelineUrl = "https://igumi-kanri.vercel.app/api/pipeline";
+  console.log(`[recording] Calling pipeline: ${pipelineUrl}`);
+  
+  try {
+    const https = require("https");
+    const body = JSON.stringify({
       recordingUrl: recordingMp3,
       callSid: CallSid,
       fromNumber: From,
-    }),
-  }).catch((err) => console.error("[recording] Pipeline kick error:", err));
+    });
+
+    const options = {
+      hostname: "igumi-kanri.vercel.app",
+      path: "/api/pipeline",
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(body),
+      },
+    };
+
+    const pipelineReq = https.request(options, (pipelineRes) => {
+      console.log(`[recording] Pipeline response: ${pipelineRes.statusCode}`);
+    });
+
+    pipelineReq.on("error", (err) => {
+      console.error("[recording] Pipeline request error:", err);
+    });
+
+    pipelineReq.write(body);
+    pipelineReq.end();
+  } catch (err) {
+    console.error("[recording] Failed to call pipeline:", err);
+  }
 
   return res.status(200).send("OK");
 };
