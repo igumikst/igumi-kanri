@@ -37,23 +37,16 @@ module.exports = async (req, res) => {
   const recordingMp3 = `${RecordingUrl}.mp3`;
   console.log(`[recording] New recording: ${RecordingSid} from ${From}`);
 
-  res.status(200).send("OK");
-
-  try {
-    const { transcribeRecording } = require("./transcribe");
-    const transcript = await transcribeRecording(recordingMp3);
-    console.log(`[recording] Transcript done (${transcript.length} chars)`);
-
-    const { analyzeAndRegister } = require("./analyze");
-    await analyzeAndRegister({
-      transcript,
+  // 別エンドポイントに処理を投げる（レスポンスを待たない）
+  fetch("https://igumi-kanri.vercel.app/api/pipeline", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
       recordingUrl: recordingMp3,
       callSid: CallSid,
       fromNumber: From,
-    });
+    }),
+  }).catch((err) => console.error("[recording] Pipeline kick error:", err));
 
-    console.log(`[recording] Pipeline complete for ${RecordingSid}`);
-  } catch (err) {
-    console.error("[recording] Pipeline error:", err);
-  }
+  return res.status(200).send("OK");
 };
