@@ -25,7 +25,7 @@ module.exports = async (req, res) => {
 
   const twiml = new twilio.twiml.VoiceResponse();
 
- twiml.pause({ length: 3});
+ twiml.pause({ length:7});
 twiml.say(
   {
     language: "ja-JP",
