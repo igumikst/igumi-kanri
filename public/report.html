@@ -173,7 +173,7 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
     <div class="card-ttl">⚙️ 出力設定</div>
     <div class="field">
       <label>ファイル名</label>
-     "例: 〇〇マンション101号室201号室漏水調査報告書"
+      <input type="text" id="filename" placeholder="報告書　〇〇マンション101　201　▽月□日　漏水調査">
       <div style="font-size:10px;color:var(--muted);margin-top:4px">空欄の場合は物件名・件名・日付から自動生成</div>
     </div>
     <div class="field" style="margin-top:2px">
@@ -255,7 +255,7 @@ function setType(type) {
   document.getElementById('basic-card').style.display = type==='union' ? 'none' : 'block';
   document.getElementById('content-field').style.display = type==='tama' ? 'block' : 'none';
   const placeholders = {
-    normal: '例: 報告書　〇〇マンション101　201　▽月□日　漏水調査',
+    normal: '報告書　〇〇マンション101　201　▽月□日　漏水調査',
     tama:   '例: 20260601　〇〇マンション　101号室201号室漏水調査報告書',
     union:  '例: 〇〇マンション101号室201号室漏水調査報告書'
   };
@@ -524,7 +524,6 @@ async function buildNormalWorkbook(wb, minchoFont, thin, double) {
   // 多摩用：内容欄を追加
   if(reportType==='tama' && workContent.trim()){
     cws.getRow(21).height=65.1; cws.getRow(22).height=20.1;
-    // 内容は複数行になるので最初の行だけラベル、値は1行目に
     items.push(['B22','内　　　　　容','D22:K22',workContent]);
   }
 
@@ -564,37 +563,31 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   cws.pageSetup.paperSize=9;cws.pageSetup.orientation='portrait';
   cws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
 
-  // 列幅（ユニオン実物：A=3.49 B=4.62 その他デフォルト）
   cws.getColumn('A').width=3.49;
   cws.getColumn('B').width=4.62;
 
-  // 全行の高さ（実物は13.5）
   for(let r=1;r<=60;r++){cws.getRow(r).height=13.5;}
   cws.getRow(2).height=12.75;cws.getRow(3).height=12.75;
   cws.getRow(4).height=12.75;cws.getRow(5).height=12.75;
 
-  // 建物名称（E11:P13）
   cws.mergeCells('E11:P13');
   const buildingCell=cws.getCell('E11');
   buildingCell.value=uBuilding;
   buildingCell.font={name:'ＭＳ Ｐ明朝',size:16};
   buildingCell.alignment={horizontal:'center',vertical:'middle'};
 
-  // 工事名称（D15:Q18）
   cws.mergeCells('D15:Q18');
   const worknameCell=cws.getCell('D15');
   worknameCell.value=uWorkname;
   worknameCell.font={name:'ＭＳ Ｐ明朝',size:14};
   worknameCell.alignment={horizontal:'center',vertical:'middle'};
 
-  // 作業日（F41:O43）
   cws.mergeCells('F41:O43');
   const dateCell=cws.getCell('F41');
   dateCell.value=uDateStr;
   dateCell.font={name:'ＭＳ Ｐ明朝',size:12};
   dateCell.alignment={horizontal:'center',vertical:'middle'};
 
-  // 会社名（F52:O54）
   cws.mergeCells('F52:O54');
   const companyCell=cws.getCell('F52');
   companyCell.value=uCompany;
@@ -606,21 +599,18 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   rws.pageSetup.paperSize=9;rws.pageSetup.orientation='portrait';
   rws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
 
-  // 全行の高さ
   for(let r=1;r<=50;r++){rws.getRow(r).height=13.5;}
   rws.getRow(2).height=12.75;rws.getRow(3).height=12.75;
   rws.getRow(4).height=12.75;rws.getRow(25).height=14.25;
   [27,28,29,30,31,32,33,34].forEach(r=>{rws.getRow(r).height=14.25;});
   [36,37,38,39].forEach(r=>{rws.getRow(r).height=14.25;});
 
-  // タイトル「調査報告書」（B2:S4）
   rws.mergeCells('B2:S4');
   const rtitleCell=rws.getCell('B2');
   rtitleCell.value='調査報告書';
   rtitleCell.font={name:'ＭＳ Ｐ明朝',size:22};
   rtitleCell.alignment={horizontal:'center',vertical:'middle'};
 
-  // 各ラベルと値（リンク付き）
   const reportItems=[
     [5,'建築物名称',{formula:`表紙!E11`}],
     [8,'住所',uAddress],
@@ -630,13 +620,11 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   ];
 
   reportItems.forEach(([rowNum,label,val])=>{
-    // ラベル（B・C列結合）
     rws.mergeCells(`B${rowNum}:B${rowNum+2}`);
     rws.mergeCells(`C${rowNum}:E${rowNum+2}`);
     const lc=rws.getCell(`C${rowNum}`);
     lc.value=label;lc.font={name:'ＭＳ Ｐ明朝',size:12};lc.alignment={horizontal:'center',vertical:'middle'};
 
-    // 値（H〜S列結合）
     rws.mergeCells(`H${rowNum}:S${rowNum+2}`);
     const vc=rws.getCell(`H${rowNum}`);
     if(typeof val==='object'&&val.formula){
@@ -648,14 +636,12 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     vc.border={bottom:thin};
   });
 
-  // 【作業内容】タイトル（C21:G22）
   rws.mergeCells('C21:G22');
   const contentTitleCell=rws.getCell('C21');
   contentTitleCell.value='【　作　業　内　容　】';
   contentTitleCell.font={name:'ＭＳ Ｐ明朝',size:12};
   contentTitleCell.alignment={horizontal:'center',vertical:'middle'};
 
-  // 作業内容（1行ずつC23:Q23〜）
   const contentLines=uContent.split('\n').filter(l=>l.trim());
   contentLines.forEach((line,i)=>{
     const r=23+i;
@@ -667,20 +653,17 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     cc.alignment={vertical:'middle'};
   });
 
-  // （別紙写真添付参照）
   rws.mergeCells('C37:I38');
   const refCell=rws.getCell('C37');
   refCell.value='（別紙写真添付参照）';
   refCell.font={name:'ＭＳ Ｐ明朝',size:12};
 
-  // 上記の作業を実施いたしました
   rws.mergeCells('J40:R41');
   const doneCell=rws.getCell('J40');
   doneCell.value='上記の作業を実施いたしました。';
   doneCell.font={name:'ＭＳ Ｐ明朝',size:12};
   doneCell.alignment={vertical:'middle'};
 
-  // 【備考】
   rws.mergeCells('C45:G46');
   const bikoCell=rws.getCell('C45');
   bikoCell.value='【　備　　　　　考　】';
@@ -692,7 +675,13 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
 }
 
 // ============================================================
-// 写真シート共通生成
+// 写真シート共通生成（修正版：A4に3枚ぴったり収まるレイアウト）
+// ============================================================
+// 【なぜこの設計にしたか】
+// 旧版は行の高さの合計がA4(約813pt)を約93pt超えていたため、
+// 3枚目の写真がページからはみ出していた。
+// 新版：No.行17.25pt + 写真行31pt×8行 = 265.25pt/ブロック
+//       × 3ブロック = 795.75pt → A4に余裕を持って収まる
 // ============================================================
 async function buildPhotoSheets(wb, minchoFont, thin) {
   const pageCount=Math.ceil(photos.length/3);
@@ -707,15 +696,20 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
     const photoCols={A:2.875,B:9,C:9,D:9,E:9,F:9,G:9,H:11.875,I:4.5,J:9,K:5,L:5};
     Object.entries(photoCols).forEach(([c,w])=>{ws.getColumn(c).width=w;});
 
-    // 行の高さ（実物：No.行=17.25、写真行=30、それ以外=None）
-    [3,15,27].forEach(r=>{ws.getRow(r).height=17.25;});
-    [4,5,6,7,8,9,10,11,16,17,18,19,20,21,22,23,28,29,30,31,32,33,34,35].forEach(r=>{ws.getRow(r).height=30;});
+    // 行の高さ設定
+    // ブロック1: 行1(No.行) + 行2〜9(写真8行)
+    // ブロック2: 行10(No.行) + 行11〜18(写真8行)
+    // ブロック3: 行19(No.行) + 行20〜27(写真8行)
+    [1,10,19].forEach(r=>{ws.getRow(r).height=17.25;}); // No.行
+    [2,3,4,5,6,7,8,9,
+     11,12,13,14,15,16,17,18,
+     20,21,22,23,24,25,26,27].forEach(r=>{ws.getRow(r).height=31;}); // 写真行
 
-    // 3枚分のブロック
+    // 3枚分のブロック定義
     const blocks=[
-      {imgTlRow:2,imgBrRow:12,noRow:3,captStart:4},
-      {imgTlRow:14,imgBrRow:24,noRow:15,captStart:16},
-      {imgTlRow:26,imgBrRow:36,noRow:27,captStart:28},
+      {imgTlRow:1, imgBrRow:9,  noRow:1, captStart:2},
+      {imgTlRow:10, imgBrRow:18, noRow:10, captStart:11},
+      {imgTlRow:19, imgBrRow:27, noRow:19, captStart:20},
     ];
 
     for(let bi=0;bi<pagePh.length;bi++){
@@ -723,29 +717,30 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
       const blk=blocks[bi];
       const globalNo=pg*3+bi+1;
 
-      // No.（J列）
+      // No.（J列・K列）
       const noCell=ws.getCell(blk.noRow,10);
       noCell.value='No.';noCell.font=minchoFont(14);noCell.alignment={vertical:'center'};
       const noValCell=ws.getCell(blk.noRow,11);
       noValCell.value=globalNo;noValCell.font=minchoFont(14);noValCell.alignment={vertical:'center'};
 
-      // キャプション（J列・結合・1行ずつ）
+      // キャプション（J〜L列・結合・1行ずつ）
       const capLines=splitCaption(p.caption||'',8);
       capLines.forEach((line,li)=>{
         const r1=blk.captStart+li;
+        if(r1>blk.imgBrRow)return; // ブロック内に収める
         ws.mergeCells(r1,10,r1,12);
         const cell=ws.getCell(r1,10);
         cell.value=line;cell.font=minchoFont(11);
         cell.alignment={vertical:'center',wrapText:true};
       });
 
-      // 写真埋め込み（B列〜H列、実物通りの位置）
+      // 写真埋め込み（B列〜I列）
       if(p.dataUrl){
         const imgBase64=await toJpegBase64(p.dataUrl,quality);
         const imgId=wb.addImage({base64:imgBase64,extension:'jpeg'});
         ws.addImage(imgId,{
-          tl:{col:1,row:blk.imgTlRow},
-          br:{col:8,row:blk.imgBrRow},
+          tl:{col:1, row:blk.imgTlRow},
+          br:{col:8, row:blk.imgBrRow},
           editAs:'twoCell'
         });
       }
