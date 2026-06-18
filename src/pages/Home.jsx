@@ -6,7 +6,7 @@ import { supabase } from "../lib/supabase";
 
 export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, setTileEdit, saveTileConf, saveCustomize, weather, weekWeather, fishWeather, isPC, pp, nav, setModal, setEc, ec, rpOpen, setRpOpen, finFiles, tmplFiles, SB_W, RP_W, boardPosts, calls, setCalls }) {
   const [editTile, setEditTile] = useState(null);
-  const [showWeekWeather, setShowWeekWeather] = useState(false);
+  const [showInfo, setShowInfo] = useState(false); // ★タップで展開
   const [refreshing, setRefreshing] = useState(false);
   const [pwModal, setPwModal] = useState(false);
   const [pwInput, setPwInput] = useState("");
@@ -14,7 +14,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const [finUnlocked, setFinUnlocked] = useState(false);
   const [savedPw, setSavedPw] = useState(null);
   const [pwLoaded, setPwLoaded] = useState(false);
-  const [showStorage, setShowStorage] = useState(false); // ★追加
+  const [showStorage, setShowStorage] = useState(false);
 
   const pending = tks.filter(t => !t.done);
   const active = pjs.filter(p => p.status !== "完了" && p.status !== "中断");
@@ -23,12 +23,10 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
     sub: t.key === "projects" ? `${active.length}件進行中` : t.key === "companies" ? `${cos.length}社登録` : t.key === "tasks" ? `未完了 ${pending.length}件` : t.sub
   }));
 
-  // ★ストレージ計算
   const finMB = finFiles.reduce((s, f) => s + (f.size || 0), 0) / 1024 / 1024;
   const tmplMB = tmplFiles.reduce((s, f) => s + (f.size || 0), 0) / 1024 / 1024;
   const totalMB = finMB + tmplMB;
-  const limitMB = 1024;
-  const storageP = Math.min((totalMB / limitMB) * 100, 100);
+  const storageP = Math.min((totalMB / 1024) * 100, 100);
   const storageCol = storageP > 80 ? "#EF4444" : storageP > 50 ? "#F59E0B" : "#059669";
   const fmtMB = mb => mb < 1 ? `${(mb * 1024).toFixed(0)}KB` : `${mb.toFixed(1)}MB`;
 
@@ -46,9 +44,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
     if (pwLoaded) return savedPw;
     const { data } = await supabase.from("home_settings").select("value").eq("id", "finance_password").single();
     const pw = data?.value?.password || null;
-    setSavedPw(pw);
-    setPwLoaded(true);
-    return pw;
+    setSavedPw(pw); setPwLoaded(true); return pw;
   };
 
   const handleFinanceClick = async () => {
@@ -80,46 +76,59 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
       {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} />}
       {(cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
 
-      {!isPC && <div style={{ background: cust.c1, color: "#fff", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 50 }}>
-        <div style={{ background: cust.acc, borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 16 }}>I</div>
-        <div style={{ flex: 1 }}><div style={{ fontWeight: 800, fontSize: 16 }}>{cust.sys}</div><div style={{ fontSize: 10, opacity: 0.65 }}>{cust.name}</div></div>
-        <button onClick={refreshCalls} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 16, cursor: "pointer" }}>{refreshing ? "⏳" : "🔄"}</button>
-        <button onClick={() => { setEc({ ...cust }); setModal("cust"); }} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer", fontWeight: 700 }}>⚙ 編集</button>
-      </div>}
-
-      <div style={{ background: `linear-gradient(135deg,${cust.c1},${cust.c2})`, padding: "20px 20px 28px", margin: "0 0 -16px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", marginBottom: 2 }}>{new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })}</div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", marginBottom: 4 }}>{cust.name}</div>
-            <div style={{ fontSize: 22, fontWeight: 900, color: "#fff" }}>{cust.sys}</div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 4 }}>案件 {pjs.length}件 ｜ 取引先 {cos.length}社</div>
+      {/* ★スマホ用コンパクトヘッダー */}
+      {!isPC && (
+        <div style={{ background: cust.c1, color: "#fff", padding: "12px 16px", position: "sticky", top: 0, zIndex: 50 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 800, fontSize: 15, lineHeight: 1.2 }}>{cust.sys}</div>
+            </div>
+            {/* 天気 */}
+            {weather && (
+              <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: "rgba(255,255,255,0.9)" }}>
+                <span>{weather.icon}</span>
+                <span style={{ fontWeight: 700 }}>{weather.temp}°C</span>
+              </div>
+            )}
+            <button onClick={refreshCalls} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "5px 8px", fontSize: 14, cursor: "pointer" }}>{refreshing ? "⏳" : "🔄"}</button>
+            <button onClick={() => { setEc({ ...cust }); setModal("cust"); }} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "5px 8px", fontSize: 12, cursor: "pointer", fontWeight: 700 }}>⚙ 編集</button>
           </div>
-          {weather && (
-            <div onClick={() => setShowWeekWeather(p => !p)} style={{ textAlign: "right", background: "rgba(255,255,255,0.15)", borderRadius: 12, padding: "10px 14px", flexShrink: 0, cursor: "pointer" }}>
-              <div style={{ fontSize: 28, lineHeight: 1 }}>{weather.icon}</div>
-              <div style={{ fontSize: 20, fontWeight: 900, color: "#fff", marginTop: 4 }}>{weather.temp}°C</div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.8)" }}>{weather.desc}</div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>横浜 タップで週間</div>
+
+          {/* ★タップで展開する詳細情報 */}
+          <div onClick={() => setShowInfo(p => !p)} style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6, cursor: "pointer", opacity: 0.75 }}>
+            <span style={{ fontSize: 11 }}>{pjs.length}件 | {cos.length}社 | {new Date().toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' })}</span>
+            <span style={{ fontSize: 10 }}>{showInfo ? "▲" : "▼"}</span>
+          </div>
+
+          {showInfo && (
+            <div style={{ marginTop: 8, padding: "10px 12px", background: "rgba(0,0,0,0.2)", borderRadius: 10, fontSize: 12 }}>
+              <div style={{ marginBottom: 4, color: "rgba(255,255,255,0.8)" }}>{cust.name}</div>
+              <div style={{ color: "rgba(255,255,255,0.7)", marginBottom: 6 }}>{new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })}</div>
+              <div style={{ display: "flex", gap: 12, color: "rgba(255,255,255,0.9)", fontWeight: 700 }}>
+                <span>案件 {pjs.length}件</span>
+                <span>取引先 {cos.length}社</span>
+                <span>未完了タスク {pending.length}件</span>
+              </div>
+              {/* 週間天気 */}
+              {weekWeather && (
+                <div style={{ marginTop: 8, display: "flex", gap: 4, overflowX: "auto" }}>
+                  {weekWeather.map((d, i) => (
+                    <div key={i} style={{ flex: 1, minWidth: 36, textAlign: "center" }}>
+                      <div style={{ fontSize: 9, color: "rgba(255,255,255,0.6)" }}>{i === 0 ? "今日" : WD[d.weekday]}</div>
+                      <div style={{ fontSize: 16 }}>{weatherIcon(d.code)}</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: "#fff" }}>{d.max}°</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
-        {showWeekWeather && weekWeather && (
-          <div style={{ marginTop: 14, background: "rgba(255,255,255,0.12)", borderRadius: 12, padding: "12px 8px", display: "flex", gap: 4, overflowX: "auto" }}>
-            {weekWeather.map((d, i) => (
-              <div key={i} style={{ flex: 1, minWidth: 44, textAlign: "center" }}>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.7)", marginBottom: 4 }}>{i === 0 ? "今日" : WD[d.weekday]}</div>
-                <div style={{ fontSize: 20 }}>{weatherIcon(d.code)}</div>
-                <div style={{ fontSize: 12, fontWeight: 800, color: "#fff", marginTop: 2 }}>{d.max}°</div>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}>{d.min}°</div>
-                {d.rain > 0 && <div style={{ fontSize: 9, color: "#BAE6FD", marginTop: 1 }}>{d.rain}mm</div>}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      )}
 
-      <div style={{ padding: isPC ? "12px 0 20px" : "28px 14px 30px" }}>
+      <div style={{ padding: isPC ? "12px 0 20px" : "14px 14px 30px" }}>
+
+        {/* 電話受付案件バナー */}
         {calls && calls.length > 0 && (
           <div style={{ background: "linear-gradient(135deg, #1e3a5f, #2563eb)", borderRadius: 14, padding: "14px 18px", marginBottom: 16, boxShadow: "0 4px 12px rgba(37,99,235,0.25)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -157,6 +166,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           </div>
         )}
 
+        {/* 掲示板の最新投稿 */}
         {boardPosts.length > 0 && (
           <div style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -273,10 +283,9 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           <button onClick={() => nav("tasks")} style={{ width: "100%", padding: 10, background: "#F9FAFB", border: "none", fontSize: 12, color: cust.c1, fontWeight: 700, cursor: "pointer", borderTop: "1px solid #F3F4F6" }}>すべて見る →</button>
         </div>
 
-        {/* ★ストレージ表示（ひっそり） */}
+        {/* ストレージ表示 */}
         <div style={{ marginTop: 24 }}>
-          <button onClick={() => setShowStorage(p => !p)}
-            style={{ width: "100%", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 0" }}>
+          <button onClick={() => setShowStorage(p => !p)} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 0" }}>
             <span style={{ fontSize: 11, color: "#C4C4C4" }}>📦 Storage {fmtMB(totalMB)} / 1GB</span>
             <span style={{ fontSize: 10, color: "#C4C4C4" }}>{showStorage ? "▲" : "▼"}</span>
           </button>
@@ -290,7 +299,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
                 <div style={{ width: `${storageP}%`, height: "100%", background: storageCol, borderRadius: 4, transition: "width 0.5s" }} />
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#6B7280" }}>
-                <span>📂 財務ファイル　{fmtMB(finMB)}</span>
+                <span>📂 財務　{fmtMB(finMB)}</span>
                 <span>📋 雛形　{fmtMB(tmplMB)}</span>
               </div>
               <div style={{ textAlign: "center", marginTop: 8, fontSize: 11, color: "#9CA3AF" }}>合計 {fmtMB(totalMB)} / 1GB</div>
@@ -299,6 +308,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
         </div>
       </div>
 
+      {/* PW入力モーダル */}
       {pwModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: 300, boxSizing: "border-box" }}>

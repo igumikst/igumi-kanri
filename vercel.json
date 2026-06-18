@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "api/recording.js": {
+      "maxDuration": 60
+    },
+    "api/pipeline.js": {
+      "maxDuration": 60
+    }
+  }
+}
