@@ -124,29 +124,29 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
   <!-- ユニオン専用：調査報告書情報 -->
   <div class="card" id="union-card" style="display:none">
     <div class="card-ttl">📋 調査報告書<span class="union-badge">ユニオン専用</span></div>
-    <div class="field"><label>建築物名称 *（表紙・報告書にリンク）</label><input type="text" id="u-building" placeholder="例: コスモ立川サングレイス"></div>
-    <div class="field"><label>住所</label><input type="text" id="u-address" placeholder="例: 東京都立川市富士見町６丁目３８−８"></div>
-    <div class="field"><label>工事名称 *（表紙・報告書にリンク）</label><input type="text" id="u-workname" placeholder="例: 601号室洗濯水栓交換工事"></div>
+    <div class="field"><label>建築物名称 *（表紙・報告書にリンク）</label><input type="text" id="u-building" placeholder="例: 〇〇マンション"></div>
+    <div class="field"><label>住所</label><input type="text" id="u-address" placeholder="例: 東京都〇〇市〇〇町１丁目２３－４"></div>
+    <div class="field"><label>工事名称 *（表紙・報告書にリンク）</label><input type="text" id="u-workname" placeholder="例: 101 201号室漏水調査"></div>
     <div class="field"><label>作業実施日</label><input type="date" id="u-date"></div>
-    <div class="field"><label>作業者</label><input type="text" id="u-worker" placeholder="例: 崎岡"></div>
+    <div class="field"><label>作業者</label><input type="text" id="u-worker" placeholder="例: 﨑岡"></div>
     <div class="field"><label>会社名（表紙下部）</label><input type="text" id="u-company" placeholder="例: 株式会社IGUMI"></div>
     <div class="field">
       <label>作業内容（1行ずつ入力・Enterで改行）</label>
-      <textarea id="u-content" placeholder="例:&#10;601号室&#10;既存洗濯水栓の接続部から滲みあり&#10;洗濯水栓交換&#10;開栓、閉栓確認　異常無し" rows="6"></textarea>
+      <textarea id="u-content" placeholder="例:&#10;101号室&#10;現着時リビング・洋室の天井から落水あり&#10;養生施工&#10;被害直上201号室はご不在の為バルブを閉栓し一時対応" rows="6"></textarea>
     </div>
   </div>
 
   <!-- 基本情報（通常・多摩共通） -->
   <div class="card" id="basic-card">
     <div class="card-ttl">📋 基本情報</div>
-    <div class="field"><label>物件名 *</label><input type="text" id="prop-name" placeholder="例: ライオンズマンション町田中町第2" oninput="refreshPreview()"></div>
-    <div class="field"><label>住所</label><input type="text" id="prop-address" placeholder="例: 東京都町田市中町１丁目２８−１２"></div>
-    <div class="field"><label>件名 *</label><input type="text" id="work-name" placeholder="例: 1002　1102　漏水調査復旧工事" oninput="refreshPreview()"></div>
+    <div class="field"><label>物件名 *</label><input type="text" id="prop-name" placeholder="例: 〇〇マンション" oninput="refreshPreview()"></div>
+    <div class="field"><label>住所</label><input type="text" id="prop-address" placeholder="例: 東京都〇〇市〇〇町１丁目２３－４"></div>
+    <div class="field"><label>件名 *</label><input type="text" id="work-name" placeholder="例:  101 201号室漏水調査" oninput="refreshPreview()"></div>
     <div class="field"><label>作業日 *</label><input type="date" id="work-date" oninput="refreshPreview()"></div>
-    <div class="field"><label>施工者</label><input type="text" id="worker" placeholder="例: 崎岡"></div>
+    <div class="field"><label>施工者</label><input type="text" id="worker" placeholder="例: 﨑岡"></div>
     <div class="field" id="content-field" style="display:none">
       <label>内容</label>
-      <input type="text" id="work-content" placeholder="例: 耐圧　開口　引き換え">
+      <input type="text" id="work-content" placeholder="例: マスカー養生　バルブ閉栓">
     </div>
   </div>
 
@@ -173,7 +173,7 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
     <div class="card-ttl">⚙️ 出力設定</div>
     <div class="field">
       <label>ファイル名</label>
-      <input type="text" id="filename" placeholder="例: 報告書_町田中町_漏水調査_20260513">
+     例: 〇〇マンション101号室201号室漏水調査報告書
       <div style="font-size:10px;color:var(--muted);margin-top:4px">空欄の場合は物件名・件名・日付から自動生成</div>
     </div>
     <div class="field" style="margin-top:2px">
@@ -254,6 +254,12 @@ function setType(type) {
   document.getElementById('union-card').style.display = type==='union' ? 'block' : 'none';
   document.getElementById('basic-card').style.display = type==='union' ? 'none' : 'block';
   document.getElementById('content-field').style.display = type==='tama' ? 'block' : 'none';
+  const placeholders = {
+    normal: '例: 報告書　〇〇マンション101　201　▽月□日　漏水調査',
+    tama:   '例: 20260601　〇〇マンション　101号室201号室漏水調査報告書',
+    union:  '例: 〇〇マンション101号室201号室漏水調査報告書'
+  };
+  document.getElementById('filename').placeholder = placeholders[type];
 }
 
 function setQ(q,btn) { quality=q; document.querySelectorAll('.q-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); }
