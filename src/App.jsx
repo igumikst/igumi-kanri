@@ -18,6 +18,8 @@ import Fishing from "./pages/Fishing";
 import AutoEdit from "./pages/AutoEdit";
 import CallsPage from "./pages/CallsPage";
 import LineSettings from "./pages/LineSettings";
+import SystemManual from "./pages/SystemManual";
+import UserManual from "./pages/UserManual";
 
 export default function App() {
   const [page, setPage] = useState("home");
@@ -172,6 +174,8 @@ export default function App() {
   if (page === "autoedit") return <AutoEdit {...commonProps} />;
   if (page === "calls") return <CallsPage {...commonProps} calls={calls} setCalls={setCalls} />;
   if (page === "linesettings") return <LineSettings {...commonProps} />;
+  if (page === "systemmanual") return <SystemManual {...commonProps} />;
+  if (page === "usermanual") return <UserManual {...commonProps} />;
 
   return null;
 }
