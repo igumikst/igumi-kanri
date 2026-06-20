@@ -2,12 +2,11 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 
-export default function LineSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_W, cust }) {
+export default function LineSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_W, cust, pjs, cos, tks, finFiles, tmplFiles, tileConf }) {
   const [rules, setRules] = useState([]);
   const [staffList, setStaffList] = useState([]);
   const [newKeyword, setNewKeyword] = useState("");
   const [newStaffs, setNewStaffs] = useState([]);
-  const [editId, setEditId] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { loadData(); }, []);
@@ -16,18 +15,10 @@ export default function LineSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
     setLoading(true);
     const [rulesRes, staffRes] = await Promise.all([
       supabase.from("home_settings").select("value").eq("id", "line_keyword_rules").single(),
-      supabase.from("home_settings").select("value").eq("id", "line_staff_ids").single(),
+      supabase.from("home_settings").select("value").eq("id", "line_staff_names").single(),
     ]);
     if (rulesRes.data?.value) setRules(rulesRes.data.value);
-
-    // スタッフIDリストを取得（名前付きで管理）
-    const staffSettingRes = await supabase.from("home_settings").select("value").eq("id", "line_staff_names").single();
-    if (staffSettingRes.data?.value) {
-      setStaffList(staffSettingRes.data.value);
-    } else if (staffRes.data?.value) {
-      // 名前未設定の場合はIDだけ表示
-      setStaffList(staffRes.data.value.map((id, i) => ({ id, name: `スタッフ${i + 1}` })));
-    }
+    if (staffRes.data?.value) setStaffList(staffRes.data.value);
     setLoading(false);
   };
 
@@ -68,50 +59,39 @@ export default function LineSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
     emptyText: { color: "#94A3B8", fontSize: 14, textAlign: "center", padding: "20px 0" },
   };
 
+  const pending = (tks || []).filter(t => !t.done);
+
   return (
     <div style={s.wrap}>
-      {isPC && <PCSidebar nav={nav} page="linesettings" cust={cust} SB_W={SB_W} />}
-      {isPC && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} RP_W={RP_W} nav={nav} cust={cust} />}
-      {!isPC && <FloatLauncher nav={nav} cust={cust} />}
+      {isPC && <PCSidebar nav={nav} page="linesettings" cust={cust} SB_W={SB_W} pjs={pjs || []} cos={cos || []} pending={pending} tileConf={tileConf || []} setModal={() => {}} setEc={() => {}} />}
+      {isPC && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} RP_W={RP_W} nav={nav} cust={cust} pjs={pjs || []} tks={tks || []} finFiles={finFiles || []} tmplFiles={tmplFiles || []} fishWeather={null} setAiInput={() => {}} />}
+      {!isPC && <FloatLauncher nav={nav} cust={cust} links={[]} />}
 
       <div style={s.inner}>
         <div style={s.title}>📲 LINE通知設定</div>
 
-        {/* キーワードルール追加 */}
         <div style={s.card}>
           <div style={s.sectionTitle}>＋ キーワードルールを追加</div>
           <div style={{ marginBottom: 16 }}>
             <div style={s.label}>キーワード（例：長谷工、大和ライフ）</div>
-            <input
-              style={s.input}
-              value={newKeyword}
-              onChange={e => setNewKeyword(e.target.value)}
-              placeholder="キーワードを入力"
-            />
+            <input style={s.input} value={newKeyword} onChange={e => setNewKeyword(e.target.value)} placeholder="キーワードを入力" />
           </div>
-
           <div style={{ marginBottom: 16 }}>
             <div style={s.label}>通知するスタッフ（複数選択可）</div>
             {staffList.length === 0 ? (
-              <div style={s.emptyText}>スタッフがいません。先にBotに一言送ってもらってください。</div>
+              <div style={s.emptyText}>スタッフがいません。先にBotに名前を送ってもらってください。</div>
             ) : (
               staffList.map(staff => (
                 <label key={staff.id} style={s.checkRow}>
-                  <input
-                    type="checkbox"
-                    checked={newStaffs.includes(staff.id)}
-                    onChange={() => toggleStaff(staff.id)}
-                  />
+                  <input type="checkbox" checked={newStaffs.includes(staff.id)} onChange={() => toggleStaff(staff.id)} />
                   <span style={{ fontSize: 15 }}>{staff.name}</span>
                 </label>
               ))
             )}
           </div>
-
           <button style={s.btn} onClick={addRule}>追加する</button>
         </div>
 
-        {/* 現在のルール一覧 */}
         <div style={s.card}>
           <div style={s.sectionTitle}>📋 現在のキーワードルール</div>
           {loading ? (
@@ -140,7 +120,6 @@ export default function LineSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
           )}
         </div>
 
-        {/* それ以外は全員に通知 */}
         <div style={{ ...s.card, background: "#F0FDF4", border: "1px solid #86EFAC" }}>
           <div style={{ fontSize: 14, color: "#166534" }}>
             ✅ キーワードに一致しない案件は<strong>スタッフ全員</strong>に通知されます
