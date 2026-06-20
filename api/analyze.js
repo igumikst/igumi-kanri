@@ -3,23 +3,12 @@
 
 const { createClient } = require("@supabase/supabase-js");
 
-/**
- * メインパイプライン
- * @param {Object} params
- * @param {string} params.transcript     - Whisperの文字起こし結果
- * @param {string} params.recordingUrl   - 録音ファイルURL
- * @param {string} params.callSid        - TwilioのCallSid
- * @param {string} params.fromNumber     - 発信者番号
- */
 async function analyzeAndRegister({ transcript, recordingUrl, callSid, fromNumber }) {
-  // 1. Claude APIで解析
   const analysis = await analyzeWithClaude(transcript);
   console.log("[analyze] Claude analysis:", JSON.stringify(analysis));
 
-  // 2. 案件番号生成（TEL-YYYYMMDD-XXX形式）
   const caseNumber = await generateCaseNumber();
 
-  // 3. Supabaseに登録
   const call = await registerToSupabase({
     caseNumber,
     analysis,
@@ -29,16 +18,12 @@ async function analyzeAndRegister({ transcript, recordingUrl, callSid, fromNumbe
   });
   console.log("[analyze] Registered to Supabase:", call.id);
 
-  // 4. LINE通知
   await sendLineNotification({ caseNumber, analysis, fromNumber });
   console.log("[analyze] LINE notification sent");
 
   return call;
 }
 
-// ─────────────────────────────────────────
-// Claude API解析
-// ─────────────────────────────────────────
 async function analyzeWithClaude(transcript) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
@@ -84,22 +69,17 @@ ${transcript}
   const data = await response.json();
   const rawText = data.content[0].text.trim();
 
-  // JSON抽出（```json ... ``` の場合も対応）
   const jsonMatch = rawText.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error("Claude returned no JSON");
 
   return JSON.parse(jsonMatch[0]);
 }
 
-// ─────────────────────────────────────────
-// 案件番号生成
-// ─────────────────────────────────────────
 async function generateCaseNumber() {
   const supabase = getSupabase();
   const today = new Date();
-  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, ""); // YYYYMMDD
+  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, "");
 
-  // 今日の案件数を取得してシーケンス番号を決定
   const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
   const { count } = await supabase
     .from("calls")
@@ -110,9 +90,6 @@ async function generateCaseNumber() {
   return `TEL-${dateStr}-${seq}`;
 }
 
-// ─────────────────────────────────────────
-// Supabase登録
-// ─────────────────────────────────────────
 async function registerToSupabase({ caseNumber, analysis, transcript, recordingUrl, fromNumber }) {
   const supabase = getSupabase();
 
@@ -139,14 +116,30 @@ async function registerToSupabase({ caseNumber, analysis, transcript, recordingU
   return data;
 }
 
-// ─────────────────────────────────────────
-// LINE通知
-// ─────────────────────────────────────────
 async function sendLineNotification({ caseNumber, analysis, fromNumber }) {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-  const userId = process.env.LINE_USER_ID;
-  if (!token || !userId) {
+  if (!token) {
     console.warn("[analyze] LINE credentials missing – skipping notification");
+    return;
+  }
+
+  const supabase = getSupabase();
+
+  // Supabaseからスタッフ全員のUSER IDを取得
+  const { data } = await supabase
+    .from("home_settings")
+    .select("value")
+    .eq("id", "line_staff_ids")
+    .single();
+
+  // スタッフIDがなければ環境変数のUSER IDにフォールバック
+  let staffIds = data?.value || [];
+  if (staffIds.length === 0 && process.env.LINE_USER_ID) {
+    staffIds = [process.env.LINE_USER_ID];
+  }
+
+  if (staffIds.length === 0) {
+    console.warn("[analyze] No LINE user IDs found – skipping notification");
     return;
   }
 
@@ -163,27 +156,29 @@ async function sendLineNotification({ caseNumber, analysis, fromNumber }) {
     `📝 用件：${analysis.ai_summary || "詳細は録音を確認してください"}\n\n` +
     `🔗 案件詳細：https://igumi-kanri.vercel.app/calls`;
 
-  const response = await fetch("https://api.line.me/v2/bot/message/push", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      to: userId,
-      messages: [{ type: "text", text: message }],
-    }),
-  });
+  // スタッフ全員に個別送信
+  for (const userId of staffIds) {
+    const response = await fetch("https://api.line.me/v2/bot/message/push", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        to: userId,
+        messages: [{ type: "text", text: message }],
+      }),
+    });
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`LINE API error ${response.status}: ${errText}`);
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`LINE API error for ${userId}: ${response.status}: ${errText}`);
+    } else {
+      console.log(`[analyze] LINE notification sent to ${userId}`);
+    }
   }
 }
 
-// ─────────────────────────────────────────
-// Supabaseクライアント（シングルトン）
-// ─────────────────────────────────────────
 let _supabase = null;
 function getSupabase() {
   if (_supabase) return _supabase;
