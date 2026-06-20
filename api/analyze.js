@@ -1,6 +1,4 @@
 // /api/analyze.js
-// Claude APIでテキスト解析 → Supabaseに案件登録 → LINE通知
-
 const { createClient } = require("@supabase/supabase-js");
 
 async function analyzeAndRegister({ transcript, recordingUrl, callSid, fromNumber }) {
@@ -10,11 +8,7 @@ async function analyzeAndRegister({ transcript, recordingUrl, callSid, fromNumbe
   const caseNumber = await generateCaseNumber();
 
   const call = await registerToSupabase({
-    caseNumber,
-    analysis,
-    transcript,
-    recordingUrl,
-    fromNumber,
+    caseNumber, analysis, transcript, recordingUrl, fromNumber,
   });
   console.log("[analyze] Registered to Supabase:", call.id);
 
@@ -68,10 +62,8 @@ ${transcript}
 
   const data = await response.json();
   const rawText = data.content[0].text.trim();
-
   const jsonMatch = rawText.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error("Claude returned no JSON");
-
   return JSON.parse(jsonMatch[0]);
 }
 
@@ -79,20 +71,17 @@ async function generateCaseNumber() {
   const supabase = getSupabase();
   const today = new Date();
   const dateStr = today.toISOString().slice(0, 10).replace(/-/g, "");
-
   const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
   const { count } = await supabase
     .from("calls")
     .select("*", { count: "exact", head: true })
     .gte("received_at", startOfDay);
-
   const seq = String((count || 0) + 1).padStart(3, "0");
   return `TEL-${dateStr}-${seq}`;
 }
 
 async function registerToSupabase({ caseNumber, analysis, transcript, recordingUrl, fromNumber }) {
   const supabase = getSupabase();
-
   const record = {
     case_number: caseNumber,
     received_at: new Date().toISOString(),
@@ -110,7 +99,6 @@ async function registerToSupabase({ caseNumber, analysis, transcript, recordingU
     billing_checked: false,
     tags: analysis.tags || [],
   };
-
   const { data, error } = await supabase.from("calls").insert([record]).select().single();
   if (error) throw new Error(`Supabase insert error: ${error.message}`);
   return data;
@@ -125,26 +113,75 @@ async function sendLineNotification({ caseNumber, analysis, fromNumber }) {
 
   const supabase = getSupabase();
 
-  // Supabaseからスタッフ全員のUSER IDを取得
-  const { data } = await supabase
-    .from("home_settings")
-    .select("value")
-    .eq("id", "line_staff_ids")
-    .single();
+  // キーワードルールとスタッフ情報を取得
+  const [rulesRes, staffNamesRes, staffIdsRes] = await Promise.all([
+    supabase.from("home_settings").select("value").eq("id", "line_keyword_rules").single(),
+    supabase.from("home_settings").select("value").eq("id", "line_staff_names").single(),
+    supabase.from("home_settings").select("value").eq("id", "line_staff_ids").single(),
+  ]);
 
-  // スタッフIDがなければ環境変数のUSER IDにフォールバック
-  let staffIds = data?.value || [];
-  if (staffIds.length === 0 && process.env.LINE_USER_ID) {
-    staffIds = [process.env.LINE_USER_ID];
+  const rules = rulesRes.data?.value || [];
+  const staffNames = staffNamesRes.data?.value || [];
+  const allStaffIds = staffIdsRes.data?.value || [];
+
+  // アクティブなスタッフのIDだけ抽出
+  const activeStaffIds = staffNames
+    .filter(s => s.active !== false)
+    .map(s => s.id);
+
+  // キーワードマッチング
+  // 文字起こし・会社名・AI要約を対象にキーワードを検索
+  const searchText = [
+    analysis.company_name || "",
+    analysis.ai_summary || "",
+    analysis.contact_name || "",
+  ].join(" ");
+
+  const now = new Date();
+  const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+
+  let targetIds = null; // nullのとき全員に送る
+
+  for (const rule of rules) {
+    // キーワードマッチ確認
+    if (!searchText.includes(rule.keyword)) continue;
+
+    // 緊急度フィルター
+    if (rule.urgency && rule.urgency !== "すべて" && rule.urgency !== analysis.urgency) continue;
+
+    // 時間帯フィルター
+    const start = rule.timeStart || "00:00";
+    const end = rule.timeEnd || "23:59";
+    if (currentTime < start || currentTime > end) continue;
+
+    // マッチした！対象スタッフを設定
+    if (rule.staffIds && rule.staffIds.length > 0) {
+      targetIds = rule.staffIds.filter(id => activeStaffIds.includes(id));
+    }
+    console.log(`[analyze] Keyword matched: "${rule.keyword}" → ${targetIds}`);
+    break; // 最初にマッチしたルールを使う
   }
 
-  if (staffIds.length === 0) {
+  // 送信先を決定
+  let sendToIds;
+  if (targetIds !== null) {
+    sendToIds = targetIds;
+  } else {
+    // マッチなし → アクティブなスタッフ全員
+    sendToIds = activeStaffIds.length > 0 ? activeStaffIds : allStaffIds;
+  }
+
+  // フォールバック
+  if (sendToIds.length === 0 && process.env.LINE_USER_ID) {
+    sendToIds = [process.env.LINE_USER_ID];
+  }
+
+  if (sendToIds.length === 0) {
     console.warn("[analyze] No LINE user IDs found – skipping notification");
     return;
   }
 
   const urgencyEmoji = analysis.urgency === "緊急" ? "🚨" : analysis.urgency === "通常" ? "⚡" : "📋";
-
   const message =
     `【IGUMI】新規案件が入電しました\n\n` +
     `📋 案件番号：${caseNumber}\n` +
@@ -156,8 +193,7 @@ async function sendLineNotification({ caseNumber, analysis, fromNumber }) {
     `📝 用件：${analysis.ai_summary || "詳細は録音を確認してください"}\n\n` +
     `🔗 案件詳細：https://igumi-kanri.vercel.app/calls`;
 
-  // スタッフ全員に個別送信
-  for (const userId of staffIds) {
+  for (const userId of sendToIds) {
     const response = await fetch("https://api.line.me/v2/bot/message/push", {
       method: "POST",
       headers: {
