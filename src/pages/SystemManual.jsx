@@ -1,9 +1,27 @@
 import { useState } from "react";
+import { supabase } from "../lib/supabase";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 
 export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_W, cust, pjs, cos, tks, finFiles, tmplFiles, tileConf }) {
   const [tab, setTab] = useState("overview");
+  const [unlocked, setUnlocked] = useState(false);
+  const [pwInput, setPwInput] = useState("");
+  const [pwErr, setPwErr] = useState("");
+  const [pwLoading, setPwLoading] = useState(false);
   const pending = (tks || []).filter(t => !t.done);
+
+  const handleUnlock = async () => {
+    setPwLoading(true);
+    const { data } = await supabase.from("home_settings").select("value").eq("id", "finance_password").single();
+    const savedPw = data?.value?.password || null;
+    if (!savedPw || pwInput === savedPw) {
+      setUnlocked(true);
+      setPwErr("");
+    } else {
+      setPwErr("パスワードが違います");
+    }
+    setPwLoading(false);
+  };
 
   const s = {
     wrap: { fontFamily: "'Hiragino Sans',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp },
@@ -17,13 +35,41 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
     row: { display: "flex", borderBottom: "1px solid #F1F5F9", padding: "10px 0", gap: 16 },
     label: { fontSize: 13, color: "#64748B", width: isPC ? 160 : 120, flexShrink: 0, fontWeight: 600 },
     value: { fontSize: 13, color: "#1F2937", flex: 1, wordBreak: "break-all" },
-    badge: (color) => ({ display: "inline-block", padding: "2px 10px", borderRadius: 20, background: color + "20", color: color, fontSize: 12, fontWeight: 700, marginRight: 6 }),
     costCard: { background: "#F8FAFC", borderRadius: 10, padding: 14, marginBottom: 10, border: "1px solid #E2E8F0", display: "flex", justifyContent: "space-between", alignItems: "center" },
     flowStep: { display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12 },
     stepNum: { width: 28, height: 28, borderRadius: "50%", background: "#1A3A5C", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, flexShrink: 0 },
     alertCard: (color) => ({ background: color + "10", border: `1px solid ${color}40`, borderRadius: 10, padding: 14, marginBottom: 10 }),
     code: { background: "#F1F5F9", borderRadius: 6, padding: "2px 8px", fontSize: 12, fontFamily: "monospace", color: "#1A3A5C" },
   };
+
+  // パスワードロック画面
+  if (!unlocked) return (
+    <div style={s.wrap}>
+      {isPC && <PCSidebar nav={nav} page="systemmanual" cust={cust} SB_W={SB_W} pjs={pjs || []} cos={cos || []} pending={pending} tileConf={tileConf || []} setModal={() => {}} setEc={() => {}} />}
+      {isPC && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} RP_W={RP_W} nav={nav} cust={cust} pjs={pjs || []} tks={tks || []} finFiles={finFiles || []} tmplFiles={tmplFiles || []} fishWeather={null} setAiInput={() => {}} />}
+      {!isPC && <FloatLauncher nav={nav} cust={cust} links={[]} />}
+      <div style={{ ...s.inner, display: "flex", alignItems: "center", justifyContent: "center", minHeight: "80vh" }}>
+        <div style={{ background: "#fff", borderRadius: 16, padding: 32, width: 320, boxSizing: "border-box", boxShadow: "0 4px 16px rgba(0,0,0,0.1)" }}>
+          <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 6, color: "#1A3A5C" }}>🔒 システムマニュアル</div>
+          <div style={{ fontSize: 13, color: "#64748B", marginBottom: 24 }}>パスワードを入力してください</div>
+          <input
+            type="password" value={pwInput} autoFocus
+            onChange={e => { setPwInput(e.target.value); setPwErr(""); }}
+            onKeyDown={e => e.key === "Enter" && handleUnlock()}
+            placeholder="パスワード"
+            style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: pwErr ? "2px solid #DC2626" : "1.5px solid #E5E7EB", fontSize: 15, boxSizing: "border-box", marginBottom: 4, color: "#1F2937", outline: "none" }}
+          />
+          {pwErr && <div style={{ color: "#DC2626", fontSize: 12, marginBottom: 8 }}>{pwErr}</div>}
+          <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+            <button onClick={() => nav("home")} style={{ flex: 1, padding: 12, background: "#F3F4F6", border: "none", borderRadius: 10, fontWeight: 700, cursor: "pointer", color: "#374151" }}>戻る</button>
+            <button onClick={handleUnlock} disabled={pwLoading} style={{ flex: 1, padding: 12, background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, cursor: "pointer" }}>
+              {pwLoading ? "..." : "開く"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div style={s.wrap}>
@@ -32,7 +78,10 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
       {!isPC && <FloatLauncher nav={nav} cust={cust} links={[]} />}
 
       <div style={s.inner}>
-        <div style={s.title}>📘 システムマニュアル</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <div style={s.title}>📘 システムマニュアル</div>
+          <button onClick={() => setUnlocked(false)} style={{ background: "#F1F5F9", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, color: "#64748B", cursor: "pointer", fontWeight: 700 }}>🔒 ロック</button>
+        </div>
         <div style={s.subtitle}>株式会社IGUMI｜IGUMI管理システム 会社保管用ドキュメント｜最終更新：2026/06/20</div>
 
         <div style={s.tabs}>
@@ -48,7 +97,6 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
           ))}
         </div>
 
-        {/* ── システム概要 ── */}
         {tab === "overview" && <>
           <div style={s.card}>
             <div style={s.sectionTitle}>会社情報</div>
@@ -107,7 +155,7 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
                 ["✅", "タスク管理"],
                 ["✅", "財務・書類管理（パスワードロック付き）"],
                 ["✅", "お知らせ・雛形管理"],
-                ["✅", "見積書作成ツール（816品目）"],
+                ["✅", "見積書作成ツール（見積ベース対応）"],
                 ["✅", "分析ダッシュボード"],
                 ["✅", "AIアシスタント"],
                 ["✅", "社内掲示板"],
@@ -124,7 +172,6 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
           </div>
         </>}
 
-        {/* ── アカウント情報 ── */}
         {tab === "accounts" && <>
           <div style={{ ...s.alertCard("#EF4444"), marginBottom: 16 }}>
             <div style={{ fontSize: 13, color: "#991B1B", fontWeight: 700 }}>⚠️ 注意：このページの情報は機密です。取り扱いに十分注意してください。</div>
@@ -150,7 +197,7 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
               title: "Twilio（電話受付）", items: [
                 ["Account SID", "Vercel環境変数を参照（TWILIO_ACCOUNT_SID）"],
                 ["電話番号", "+81 50 1792 1641"],
-                ["Regulatory Bundle SID", "BUf1419e42184a69a417eaeca8cea46d26"],
+                ["Regulatory Bundle SID", "Vercel環境変数を参照"],
                 ["Auth Token", "Vercel環境変数に設定済み"],
                 ["着信URL", "https://igumi-kanri.vercel.app/api/voice"],
               ]
@@ -158,7 +205,7 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
             {
               title: "LINE Messaging API", items: [
                 ["Channel ID", "2010349986"],
-                ["Channel Secret", "ccec4f9a0fcc6e6bf1c3274c799c87ef"],
+                ["Channel Secret", "Vercel環境変数を参照"],
                 ["アクセストークン", "Vercel環境変数に設定済み"],
                 ["通知方式", "スタッフ個別送信（Supabase line_staff_names管理）"],
               ]
@@ -176,16 +223,6 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
                 ["用途", "電話録音の音声→テキスト変換"],
                 ["モデル", "whisper-1"],
                 ["APIキー", "Vercel環境変数に設定済み"],
-              ]
-            },
-            {
-              title: "電話転送設定", items: [
-                ["回線", "ソフトバンク おうちのでんわ"],
-                ["転送先", "05017921641"],
-                ["転送開始", "固定電話から 1421 をダイヤル"],
-                ["転送停止", "固定電話から 1420 をダイヤル"],
-                ["転送方式", "無応答時転送（3コール後）"],
-                ["NTT転送コード", "*720-05017921641# → *720*0# で解除"],
               ]
             },
           ].map(section => (
@@ -228,13 +265,12 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
           </div>
         </>}
 
-        {/* ── 電話受付フロー ── */}
         {tab === "flow" && <>
           <div style={s.card}>
             <div style={s.sectionTitle}>自動受付フロー</div>
             {[
-              ["固定電話に着信（3コール未応答）", "#1A3A5C"],
-              ["ソフトバンク着信転送でTwilio番号に転送", "#0891B2"],
+              ["固定電話に入電", "#1A3A5C"],
+              ["即時転送でTwilio番号に転送", "#0891B2"],
               ["TwilioがWebhookでvoice.jsを呼ぶ", "#0891B2"],
               ['自動音声：「はい、株式会社いぐみです。担当者へ直接共有いたしますのでご用件をお聞かせください。」', "#0891B2"],
               ["録音開始（最大3分・無音5秒で自動終了）", "#0891B2"],
@@ -318,7 +354,6 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
           </div>
         </>}
 
-        {/* ── 料金・コスト ── */}
         {tab === "cost" && <>
           <div style={s.card}>
             <div style={s.sectionTitle}>月額ランニングコスト（月100件想定）</div>
@@ -388,7 +423,6 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
           </div>
         </>}
 
-        {/* ── トラブル対応 ── */}
         {tab === "trouble" && <>
           <div style={s.card}>
             <div style={s.sectionTitle}>タイルが壊れた・アプリが古いバージョンになった</div>
@@ -407,7 +441,7 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
               "Claudeのアーティファクトから Ctrl+A → コピー",
               "App.jsxに貼り付けて Ctrl+S で保存",
               "コマンドプロンプトでgit add src/App.jsx を実行",
-              "git commit -m \"コメント\" を実行",
+              'git commit -m "コメント" を実行',
               "git push を実行",
               "Vercelが自動でデプロイ（1〜2分で反映）",
             ].map((step, i) => (
@@ -446,13 +480,6 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
           </div>
 
           <div style={s.card}>
-            <div style={s.sectionTitle}>LINEグループIDの取得方法</div>
-            <div style={{ fontSize: 14, color: "#374151", lineHeight: 1.8 }}>
-              Cから始まる文字列。BotをグループにJoinさせたタイミングのWebhookイベントでのみ取得可能。Vercelのランタイムログで確認する。
-            </div>
-          </div>
-
-          <div style={s.card}>
             <div style={s.sectionTitle}>使用するClaudeモデル名</div>
             <div style={{ background: "#1A3A5C", borderRadius: 8, padding: 12, fontFamily: "monospace", fontSize: 13, color: "#E0F2FE" }}>
               claude-sonnet-4-6
@@ -461,7 +488,6 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
           </div>
         </>}
 
-        {/* ── 開発環境 ── */}
         {tab === "dev" && <>
           <div style={s.card}>
             <div style={s.sectionTitle}>開発環境セットアップ</div>

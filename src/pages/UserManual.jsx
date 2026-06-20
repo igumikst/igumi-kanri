@@ -46,7 +46,6 @@ export default function UserManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_
           ))}
         </div>
 
-        {/* ── はじめに ── */}
         {tab === "start" && <>
           <div style={s.card}>
             <div style={s.sectionTitle}>IGUMI管理システムとは？</div>
@@ -58,7 +57,7 @@ export default function UserManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_
                 ["📞", "電話が来たら自動でLINEに通知"],
                 ["📋", "案件を一覧で管理・担当者アサイン"],
                 ["✅", "タスクを登録して抜け漏れ防止"],
-                ["📝", "見積書を816品目から作成"],
+                ["📝", "見積ベースから見積書を作成"],
                 ["📌", "社内掲示板でお知らせ共有"],
                 ["🗃", "財務書類を一元管理"],
                 ["📊", "工事写真報告書を自動作成"],
@@ -107,7 +106,6 @@ export default function UserManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_
           </div>
         </>}
 
-        {/* ── LINE通知 ── */}
         {tab === "line" && <>
           <div style={s.card}>
             <div style={s.sectionTitle}>LINE通知に登録する方法</div>
@@ -165,15 +163,14 @@ export default function UserManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_
           </div>
         </>}
 
-        {/* ── 電話受付 ── */}
         {tab === "calls" && <>
           <div style={s.card}>
             <div style={s.sectionTitle}>電話受付の仕組み</div>
             <div style={{ fontSize: 14, color: "#374151", lineHeight: 1.8, marginBottom: 12 }}>
-              会社の固定電話に電話が来て3コール応答しないと、自動でIGUMIのシステムに転送されます。AIが電話を取って録音し、内容をテキスト化してLINEに通知します。
+              会社の固定電話に電話が来ると、自動でIGUMIのシステムに転送されます。AIが電話を取って録音し、内容をテキスト化してLINEに通知します。
             </div>
             {[
-              "固定電話が3コール鳴る",
+              "固定電話に入電",
               "自動で転送・AIが「はい、株式会社いぐみです」と応答",
               "電話主がメッセージを録音",
               "AIが内容を自動解析",
@@ -215,7 +212,6 @@ export default function UserManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_
           <div style={s.tip}>💡 AIが自動で情報を抽出しますが、会社名や物件名が「不明」になることもあります。その場合は録音を再生して内容を確認してください。</div>
         </>}
 
-        {/* ── 案件管理 ── */}
         {tab === "projects" && <>
           <div style={s.card}>
             <div style={s.sectionTitle}>工事案件の管理</div>
@@ -244,7 +240,6 @@ export default function UserManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_
           </div>
         </>}
 
-        {/* ── タスク ── */}
         {tab === "tasks" && <>
           <div style={s.card}>
             <div style={s.sectionTitle}>タスク管理の使い方</div>
@@ -264,7 +259,6 @@ export default function UserManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_
           </div>
         </>}
 
-        {/* ── その他機能 ── */}
         {tab === "features" && <>
           <div style={s.card}>
             <div style={s.sectionTitle}>見積書作成ツール</div>
@@ -275,7 +269,7 @@ export default function UserManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_
                 1. 大カテゴリを選んで追加する<br />
                 2. 細項目を選んで数量・単価を入力<br />
                 3. 「Excelで出力」ボタンで見積書を生成<br />
-                ※816品目の中から選択できます
+                ※見積ベースの品目から選択できます
               </div>
             </div>
             <div style={s.warn}>⚠️ 内部原価（掛け率・卸値など）は自動的に除外されます。お客様に見せても安心です。</div>
