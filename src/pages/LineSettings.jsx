@@ -121,7 +121,10 @@ export default function LineSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
       {!isPC && <FloatLauncher nav={nav} cust={cust} links={[]} />}
 
       <div style={s.inner}>
-        <div style={s.title}>📲 LINE通知設定</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+          <button onClick={() => nav("home")} style={{ background: "#E2E8F0", border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 13, color: "#475569", cursor: "pointer", fontWeight: 700, flexShrink: 0 }}>← 戻る</button>
+          <div style={s.title}>📲 LINE通知設定</div>
+        </div>
 
         {/* タブ */}
         <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>

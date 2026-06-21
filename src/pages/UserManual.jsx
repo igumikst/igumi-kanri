@@ -8,7 +8,7 @@ export default function UserManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_
   const s = {
     wrap: { fontFamily: "'Hiragino Sans',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp },
     inner: { maxWidth: 800, margin: "0 auto", padding: isPC ? "32px 24px" : "16px 12px" },
-    title: { fontSize: isPC ? 24 : 20, fontWeight: 800, color: "#1A3A5C", marginBottom: 8 },
+    title: { fontSize: isPC ? 24 : 20, fontWeight: 800, color: "#1A3A5C", marginBottom: 0 },
     subtitle: { fontSize: 13, color: "#64748B", marginBottom: 24 },
     tabs: { display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" },
     tab: (active) => ({ padding: "8px 16px", borderRadius: 8, border: "none", background: active ? "#1A3A5C" : "#E2E8F0", color: active ? "#fff" : "#475569", fontWeight: 700, cursor: "pointer", fontSize: 13 }),
@@ -30,7 +30,10 @@ export default function UserManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_
       {!isPC && <FloatLauncher nav={nav} cust={cust} links={[]} />}
 
       <div style={s.inner}>
-        <div style={s.title}>📗 使い方マニュアル</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+          <button onClick={() => nav("home")} style={{ background: "#E2E8F0", border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 13, color: "#475569", cursor: "pointer", fontWeight: 700, flexShrink: 0 }}>← 戻る</button>
+          <div style={s.title}>📗 使い方マニュアル</div>
+        </div>
         <div style={s.subtitle}>株式会社IGUMI｜社員向け IGUMI管理システム 操作ガイド</div>
 
         <div style={s.tabs}>
@@ -136,9 +139,7 @@ export default function UserManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_
 
           <div style={s.card}>
             <div style={s.sectionTitle}>通知が届いたら</div>
-            <div style={{ fontSize: 14, color: "#374151", lineHeight: 1.8, marginBottom: 12 }}>
-              通知にはこんな情報が届きます👇
-            </div>
+            <div style={{ fontSize: 14, color: "#374151", lineHeight: 1.8, marginBottom: 12 }}>通知にはこんな情報が届きます👇</div>
             <div style={{ background: "#F0F4F8", borderRadius: 10, padding: 16, fontFamily: "monospace", fontSize: 12, color: "#1F2937", lineHeight: 2 }}>
               【IGUMI】新規案件が入電しました<br /><br />
               📋 案件番号：TEL-20260620-001<br />
@@ -150,16 +151,12 @@ export default function UserManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_
               📝 用件：水漏れの相談<br /><br />
               🔗 案件詳細：https://igumi-kanri.vercel.app/calls
             </div>
-            <div style={{ marginTop: 12, fontSize: 13, color: "#374151" }}>
-              リンクをタップするとIGUMIアプリの電話受付ページが開きます。
-            </div>
+            <div style={{ marginTop: 12, fontSize: 13, color: "#374151" }}>リンクをタップするとIGUMIアプリの電話受付ページが開きます。</div>
           </div>
 
           <div style={s.card}>
             <div style={s.sectionTitle}>名前を変更したい場合</div>
-            <div style={{ fontSize: 14, color: "#374151", lineHeight: 1.8 }}>
-              IGUMI管理BotのトークにLINEで新しい名前を送るだけで自動的に更新されます。
-            </div>
+            <div style={{ fontSize: 14, color: "#374151", lineHeight: 1.8 }}>IGUMI管理BotのトークにLINEで新しい名前を送るだけで自動的に更新されます。</div>
           </div>
         </>}
 
@@ -187,28 +184,19 @@ export default function UserManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_
           <div style={s.card}>
             <div style={s.sectionTitle}>電話受付ページの使い方</div>
             <div style={{ fontSize: 13, color: "#64748B", marginBottom: 12 }}>左メニューの「📞 電話受付」から開く</div>
-            <div style={s.featureCard}>
-              <div style={s.featureTitle}>案件一覧</div>
-              <div style={s.featureDesc}>「未対応」「対応中」「完了」でフィルタリングできます。タグでも絞り込み可能。</div>
-            </div>
-            <div style={s.featureCard}>
-              <div style={s.featureTitle}>案件詳細を開く</div>
-              <div style={s.featureDesc}>案件カードをタップすると詳細が表示されます。録音も再生できます。</div>
-            </div>
-            <div style={s.featureCard}>
-              <div style={s.featureTitle}>ステータスを変更する</div>
-              <div style={s.featureDesc}>詳細画面の「未対応 → 対応中 → 完了」ボタンでステータスを変更できます。</div>
-            </div>
-            <div style={s.featureCard}>
-              <div style={s.featureTitle}>担当者を設定する</div>
-              <div style={s.featureDesc}>詳細画面の「対応者」から担当者名をタップして設定します。</div>
-            </div>
-            <div style={s.featureCard}>
-              <div style={s.featureTitle}>折返し電話をする</div>
-              <div style={s.featureDesc}>詳細画面の下にある「📞 折返し電話をする」ボタンをタップすると、すぐに発信できます。</div>
-            </div>
+            {[
+              ["案件一覧", "「未対応」「対応中」「完了」でフィルタリングできます。タグでも絞り込み可能。"],
+              ["案件詳細を開く", "案件カードをタップすると詳細が表示されます。録音も再生できます。"],
+              ["ステータスを変更する", "詳細画面の「未対応 → 対応中 → 完了」ボタンでステータスを変更できます。"],
+              ["担当者を設定する", "詳細画面の「対応者」から担当者名をタップして設定します。"],
+              ["折返し電話をする", "詳細画面の下にある「📞 折返し電話をする」ボタンをタップすると、すぐに発信できます。"],
+            ].map(([title, desc]) => (
+              <div key={title} style={s.featureCard}>
+                <div style={s.featureTitle}>{title}</div>
+                <div style={s.featureDesc}>{desc}</div>
+              </div>
+            ))}
           </div>
-
           <div style={s.tip}>💡 AIが自動で情報を抽出しますが、会社名や物件名が「不明」になることもあります。その場合は録音を再生して内容を確認してください。</div>
         </>}
 
@@ -216,20 +204,17 @@ export default function UserManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_
           <div style={s.card}>
             <div style={s.sectionTitle}>工事案件の管理</div>
             <div style={{ fontSize: 13, color: "#64748B", marginBottom: 12 }}>左メニューの「📋 案件管理」から開く</div>
-            <div style={s.featureCard}>
-              <div style={s.featureTitle}>新しい案件を登録する</div>
-              <div style={s.featureDesc}>右上の「＋ 新規案件」ボタンから登録。工事名・金額・担当者・ステータスを入力します。</div>
-            </div>
-            <div style={s.featureCard}>
-              <div style={s.featureTitle}>ステータスを更新する</div>
-              <div style={s.featureDesc}>「発注待ち→見積中→着工→進行中→完了」の流れで更新します。</div>
-            </div>
-            <div style={s.featureCard}>
-              <div style={s.featureTitle}>金額・粗利を管理する</div>
-              <div style={s.featureDesc}>受注金額・粗利を入力すると、分析ページで自動集計されます。</div>
-            </div>
+            {[
+              ["新しい案件を登録する", "右上の「＋ 新規案件」ボタンから登録。工事名・金額・担当者・ステータスを入力します。"],
+              ["ステータスを更新する", "「発注待ち→見積中→着工→進行中→完了」の流れで更新します。"],
+              ["金額・粗利を管理する", "受注金額・粗利を入力すると、分析ページで自動集計されます。"],
+            ].map(([title, desc]) => (
+              <div key={title} style={s.featureCard}>
+                <div style={s.featureTitle}>{title}</div>
+                <div style={s.featureDesc}>{desc}</div>
+              </div>
+            ))}
           </div>
-
           <div style={s.card}>
             <div style={s.sectionTitle}>取引先・協力業者の管理</div>
             <div style={{ fontSize: 13, color: "#64748B", marginBottom: 12 }}>左メニューの「🏢 取引先・協力業者」から開く</div>
@@ -244,18 +229,16 @@ export default function UserManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_
           <div style={s.card}>
             <div style={s.sectionTitle}>タスク管理の使い方</div>
             <div style={{ fontSize: 13, color: "#64748B", marginBottom: 12 }}>左メニューの「✅ タスク」から開く</div>
-            <div style={s.featureCard}>
-              <div style={s.featureTitle}>タスクを追加する</div>
-              <div style={s.featureDesc}>「＋ 新規タスク」からタスク名・優先度（高/中/低）・期限・担当者を入力します。</div>
-            </div>
-            <div style={s.featureCard}>
-              <div style={s.featureTitle}>完了にする</div>
-              <div style={s.featureDesc}>タスクのチェックボックスをタップすると完了になります。右パネルの「直近タスク」からも確認できます。</div>
-            </div>
-            <div style={s.featureCard}>
-              <div style={s.featureTitle}>優先度で色分け</div>
-              <div style={s.featureDesc}>赤＝高優先度、黄＝中優先度、緑＝低優先度で表示されます。</div>
-            </div>
+            {[
+              ["タスクを追加する", "「＋ 新規タスク」からタスク名・優先度（高/中/低）・期限・担当者を入力します。"],
+              ["完了にする", "タスクのチェックボックスをタップすると完了になります。右パネルの「直近タスク」からも確認できます。"],
+              ["優先度で色分け", "赤＝高優先度、黄＝中優先度、緑＝低優先度で表示されます。"],
+            ].map(([title, desc]) => (
+              <div key={title} style={s.featureCard}>
+                <div style={s.featureTitle}>{title}</div>
+                <div style={s.featureDesc}>{desc}</div>
+              </div>
+            ))}
           </div>
         </>}
 

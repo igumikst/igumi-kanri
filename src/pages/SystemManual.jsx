@@ -26,7 +26,7 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
   const s = {
     wrap: { fontFamily: "'Hiragino Sans',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp },
     inner: { maxWidth: 800, margin: "0 auto", padding: isPC ? "32px 24px" : "16px 12px" },
-    title: { fontSize: isPC ? 24 : 20, fontWeight: 800, color: "#1A3A5C", marginBottom: 8 },
+    title: { fontSize: isPC ? 24 : 20, fontWeight: 800, color: "#1A3A5C", marginBottom: 0 },
     subtitle: { fontSize: 13, color: "#64748B", marginBottom: 24 },
     tabs: { display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" },
     tab: (active) => ({ padding: "8px 16px", borderRadius: 8, border: "none", background: active ? "#1A3A5C" : "#E2E8F0", color: active ? "#fff" : "#475569", fontWeight: 700, cursor: "pointer", fontSize: 13 }),
@@ -42,7 +42,6 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
     code: { background: "#F1F5F9", borderRadius: 6, padding: "2px 8px", fontSize: 12, fontFamily: "monospace", color: "#1A3A5C" },
   };
 
-  // パスワードロック画面
   if (!unlocked) return (
     <div style={s.wrap}>
       {isPC && <PCSidebar nav={nav} page="systemmanual" cust={cust} SB_W={SB_W} pjs={pjs || []} cos={cos || []} pending={pending} tileConf={tileConf || []} setModal={() => {}} setEc={() => {}} />}
@@ -78,9 +77,10 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
       {!isPC && <FloatLauncher nav={nav} cust={cust} links={[]} />}
 
       <div style={s.inner}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+          <button onClick={() => nav("home")} style={{ background: "#E2E8F0", border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 13, color: "#475569", cursor: "pointer", fontWeight: 700, flexShrink: 0 }}>← 戻る</button>
           <div style={s.title}>📘 システムマニュアル</div>
-          <button onClick={() => setUnlocked(false)} style={{ background: "#F1F5F9", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, color: "#64748B", cursor: "pointer", fontWeight: 700 }}>🔒 ロック</button>
+          <button onClick={() => setUnlocked(false)} style={{ background: "#F1F5F9", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, color: "#64748B", cursor: "pointer", fontWeight: 700, marginLeft: "auto", flexShrink: 0 }}>🔒 ロック</button>
         </div>
         <div style={s.subtitle}>株式会社IGUMI｜IGUMI管理システム 会社保管用ドキュメント｜最終更新：2026/06/20</div>
 
@@ -176,55 +176,41 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
           <div style={{ ...s.alertCard("#EF4444"), marginBottom: 16 }}>
             <div style={{ fontSize: 13, color: "#991B1B", fontWeight: 700 }}>⚠️ 注意：このページの情報は機密です。取り扱いに十分注意してください。</div>
           </div>
-
           {[
-            {
-              title: "Vercel（デプロイ）", items: [
-                ["プロジェクト名", "igumi-kanri（Proプラン）"],
-                ["ログインアカウント", "igumi.kst@gmail.com"],
-                ["本番URL", "https://igumi-kanri.vercel.app/"],
-                ["Proプラン料金", "約3,000円/月"],
-              ]
-            },
-            {
-              title: "Supabase（データベース）", items: [
-                ["プロジェクトID", "zejpcwpoqcncnwlwhnjv"],
-                ["URL", "https://zejpcwpoqcncnwlwhnjv.supabase.co"],
-                ["プラン", "無料プラン（DB 500MBまで）"],
-              ]
-            },
-            {
-              title: "Twilio（電話受付）", items: [
-                ["Account SID", "Vercel環境変数を参照（TWILIO_ACCOUNT_SID）"],
-                ["電話番号", "+81 50 1792 1641"],
-                ["Regulatory Bundle SID", "Vercel環境変数を参照"],
-                ["Auth Token", "Vercel環境変数に設定済み"],
-                ["着信URL", "https://igumi-kanri.vercel.app/api/voice"],
-              ]
-            },
-            {
-              title: "LINE Messaging API", items: [
-                ["Channel ID", "2010349986"],
-                ["Channel Secret", "Vercel環境変数を参照"],
-                ["アクセストークン", "Vercel環境変数に設定済み"],
-                ["通知方式", "スタッフ個別送信（Supabase line_staff_names管理）"],
-              ]
-            },
-            {
-              title: "Anthropic（Claude API）", items: [
-                ["アカウント", "igumi.k.s.t@gmail.com"],
-                ["使用モデル", "claude-sonnet-4-6"],
-                ["クレジット", "$20（自動リロードON）"],
-                ["APIキー", "Vercel環境変数に設定済み"],
-              ]
-            },
-            {
-              title: "OpenAI（Whisper）", items: [
-                ["用途", "電話録音の音声→テキスト変換"],
-                ["モデル", "whisper-1"],
-                ["APIキー", "Vercel環境変数に設定済み"],
-              ]
-            },
+            { title: "Vercel（デプロイ）", items: [
+              ["プロジェクト名", "igumi-kanri（Proプラン）"],
+              ["ログインアカウント", "igumi.kst@gmail.com"],
+              ["本番URL", "https://igumi-kanri.vercel.app/"],
+              ["Proプラン料金", "約3,000円/月"],
+            ]},
+            { title: "Supabase（データベース）", items: [
+              ["プロジェクトID", "zejpcwpoqcncnwlwhnjv"],
+              ["URL", "https://zejpcwpoqcncnwlwhnjv.supabase.co"],
+              ["プラン", "無料プラン（DB 500MBまで）"],
+            ]},
+            { title: "Twilio（電話受付）", items: [
+              ["Account SID", "Vercel環境変数を参照（TWILIO_ACCOUNT_SID）"],
+              ["電話番号", "+81 50 1792 1641"],
+              ["Auth Token", "Vercel環境変数に設定済み"],
+              ["着信URL", "https://igumi-kanri.vercel.app/api/voice"],
+            ]},
+            { title: "LINE Messaging API", items: [
+              ["Channel ID", "2010349986"],
+              ["Channel Secret", "Vercel環境変数を参照"],
+              ["アクセストークン", "Vercel環境変数に設定済み"],
+              ["通知方式", "スタッフ個別送信（Supabase line_staff_names管理）"],
+            ]},
+            { title: "Anthropic（Claude API）", items: [
+              ["アカウント", "igumi.k.s.t@gmail.com"],
+              ["使用モデル", "claude-sonnet-4-6"],
+              ["クレジット", "$20（自動リロードON）"],
+              ["APIキー", "Vercel環境変数に設定済み"],
+            ]},
+            { title: "OpenAI（Whisper）", items: [
+              ["用途", "電話録音の音声→テキスト変換"],
+              ["モデル", "whisper-1"],
+              ["APIキー", "Vercel環境変数に設定済み"],
+            ]},
           ].map(section => (
             <div key={section.title} style={s.card}>
               <div style={s.sectionTitle}>{section.title}</div>
@@ -300,7 +286,7 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
               ["api/recording-proxy.js", "Twilioの録音URLをプロキシ（認証ポップアップ回避）"],
             ].map(([file, desc]) => (
               <div key={file} style={s.row}>
-                <div style={{ ...s.label, fontFamily: "monospace" }}>{file}</div>
+                <div style={{ ...s.label, fontFamily: "monospace", fontSize: 12 }}>{file}</div>
                 <div style={s.value}>{desc}</div>
               </div>
             ))}
@@ -308,7 +294,6 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
 
           <div style={s.card}>
             <div style={s.sectionTitle}>Supabaseテーブル（callsテーブル）</div>
-            <div style={{ fontSize: 13, color: "#64748B", marginBottom: 12 }}>電話受付案件のメインテーブル</div>
             {[
               ["case_number", "案件番号（例：TEL-20260620-001）"],
               ["received_at", "受電日時"],
@@ -523,31 +508,31 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
 
           <div style={s.card}>
             <div style={s.sectionTitle}>ファイル構成</div>
-            <div style={{ fontFamily: "monospace", fontSize: 12, color: "#374151", lineHeight: 2, background: "#F8FAFC", borderRadius: 8, padding: 14 }}>
-              {`igumi-kanri/
-├── api/
-│   ├── voice.js         ← 着信→自動音声
-│   ├── recording.js     ← 録音完了→パイプライン
-│   ├── transcribe.js    ← Whisper文字起こし
-│   ├── analyze.js       ← Claude解析→通知
-│   ├── pipeline.js      ← パイプライン処理
-│   ├── linegroup.js     ← LINEスタッフ登録
-│   ├── recording-proxy.js ← 録音プロキシ
-│   └── package.json
-├── src/
-│   ├── pages/           ← 各ページ（15ファイル）
-│   ├── lib/
-│   │   ├── supabase.js
-│   │   └── constants.js
-│   ├── components/
-│   │   ├── Layout.jsx
-│   │   └── UI.jsx
-│   └── App.jsx
-├── public/
-│   ├── report.html      ← 工事写真報告書
-│   ├── logo192.png
-│   └── manifest.json
-└── vercel.json`}
+            <div style={{ background: "#1A3A5C", borderRadius: 8, padding: 16, fontFamily: "monospace", fontSize: 12, color: "#E0F2FE", lineHeight: 1.8 }}>
+              <div>igumi-kanri/</div>
+              <div>├── api/</div>
+              <div>│&nbsp;&nbsp; ├── voice.js&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ← 着信→自動音声</div>
+              <div>│&nbsp;&nbsp; ├── recording.js&nbsp;&nbsp;&nbsp;&nbsp; ← 録音完了→パイプライン</div>
+              <div>│&nbsp;&nbsp; ├── transcribe.js&nbsp;&nbsp;&nbsp; ← Whisper文字起こし</div>
+              <div>│&nbsp;&nbsp; ├── analyze.js&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ← Claude解析→通知</div>
+              <div>│&nbsp;&nbsp; ├── pipeline.js&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ← パイプライン処理</div>
+              <div>│&nbsp;&nbsp; ├── linegroup.js&nbsp;&nbsp;&nbsp;&nbsp; ← LINEスタッフ登録</div>
+              <div>│&nbsp;&nbsp; ├── recording-proxy.js ← 録音プロキシ</div>
+              <div>│&nbsp;&nbsp; └── package.json</div>
+              <div>├── src/</div>
+              <div>│&nbsp;&nbsp; ├── pages/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ← 各ページ（15ファイル）</div>
+              <div>│&nbsp;&nbsp; ├── lib/</div>
+              <div>│&nbsp;&nbsp; │&nbsp;&nbsp; ├── supabase.js</div>
+              <div>│&nbsp;&nbsp; │&nbsp;&nbsp; └── constants.js</div>
+              <div>│&nbsp;&nbsp; ├── components/</div>
+              <div>│&nbsp;&nbsp; │&nbsp;&nbsp; ├── Layout.jsx</div>
+              <div>│&nbsp;&nbsp; │&nbsp;&nbsp; └── UI.jsx</div>
+              <div>│&nbsp;&nbsp; └── App.jsx</div>
+              <div>├── public/</div>
+              <div>│&nbsp;&nbsp; ├── report.html&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ← 工事写真報告書</div>
+              <div>│&nbsp;&nbsp; ├── logo192.png</div>
+              <div>│&nbsp;&nbsp; └── manifest.json</div>
+              <div>└── vercel.json</div>
             </div>
           </div>
         </>}
