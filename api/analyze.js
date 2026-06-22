@@ -99,6 +99,17 @@ async function registerToSupabase({ caseNumber, analysis, transcript, recordingU
     billing_checked: false,
     tags: analysis.tags || [],
   };
+  // 同じ案件番号が既にあればスキップ
+  const { data: existing } = await supabase
+    .from("calls")
+    .select("id")
+    .eq("case_number", caseNumber)
+    .single();
+  if (existing) {
+    console.log("[analyze] 既存案件のためスキップ:", caseNumber);
+    return existing;
+  }
+
   const { data, error } = await supabase.from("calls").insert([record]).select().single();
   if (error) throw new Error(`Supabase insert error: ${error.message}`);
   return data;
