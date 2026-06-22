@@ -202,7 +202,7 @@ async function sendLineNotification({ caseNumber, analysis, fromNumber }) {
     `🏠 物件：${analysis.property_name || "不明"}${analysis.room_number ? " " + analysis.room_number : ""}\n` +
     `${urgencyEmoji} 緊急度：${analysis.urgency || "通常"}\n` +
     `📝 用件：${analysis.ai_summary || "詳細は録音を確認してください"}\n\n` +
-    `🔗 案件詳細：https://igumi-kanri.vercel.app/calls`;
+    `🔗 案件詳細：https://igumi-kanri.vercel.app`;
 
   for (const userId of sendToIds) {
     const response = await fetch("https://api.line.me/v2/bot/message/push", {
