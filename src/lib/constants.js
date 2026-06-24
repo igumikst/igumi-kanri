@@ -48,6 +48,10 @@ export const DEFAULT_TILE_CONF = [
   {key:"board",icon:"📌",label:"社内掲示板",sub:"お知らせ・連絡",color:"#DC2626",visible:true},
   {key:"fishing",icon:"🎣",label:"釣り情報",sub:"天気・釣果・リンク",color:"#0284C7",visible:true},
   {key:"autoedit",icon:"🤖",label:"Auto-Edit",sub:"AIが自動でアプリを改修",color:"#6D28D9",visible:true},
+  {key:"calls",icon:"📞",label:"電話受付",sub:"入電案件一覧",color:"#0EA5E9",visible:true},
+  {key:"linesettings",icon:"📲",label:"LINE通知設定",sub:"キーワード・スタッフ管理",color:"#06B6D4",visible:true},
+  {key:"systemmanual",icon:"📘",label:"システムマニュアル",sub:"会社保管用ドキュメント",color:"#1A3A5C",visible:true},
+  {key:"usermanual",icon:"📗",label:"使い方マニュアル",sub:"社員向け操作ガイド",color:"#059669",visible:true},
 ];
 export const DEFAULT_CUST = {name:"株式会社IGUMI",sys:"案件管理システム",c1:"#1A3A5C",c2:"#2563EB",acc:"#E07B39",bg:"#F0F4F8",showSidebar:true,showRightPanel:true,showLauncher:true};
 export const PRIO = {high:{l:"高",c:"#EF4444"},mid:{l:"中",c:"#F59E0B"},low:{l:"低",c:"#10B981"}};

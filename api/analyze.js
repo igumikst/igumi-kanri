@@ -1,44 +1,23 @@
 // /api/analyze.js
-// Claude APIでテキスト解析 → Supabaseに案件登録 → LINE通知
-
 const { createClient } = require("@supabase/supabase-js");
 
-/**
- * メインパイプライン
- * @param {Object} params
- * @param {string} params.transcript     - Whisperの文字起こし結果
- * @param {string} params.recordingUrl   - 録音ファイルURL
- * @param {string} params.callSid        - TwilioのCallSid
- * @param {string} params.fromNumber     - 発信者番号
- */
 async function analyzeAndRegister({ transcript, recordingUrl, callSid, fromNumber }) {
-  // 1. Claude APIで解析
   const analysis = await analyzeWithClaude(transcript);
   console.log("[analyze] Claude analysis:", JSON.stringify(analysis));
 
-  // 2. 案件番号生成（TEL-YYYYMMDD-XXX形式）
   const caseNumber = await generateCaseNumber();
 
-  // 3. Supabaseに登録
   const call = await registerToSupabase({
-    caseNumber,
-    analysis,
-    transcript,
-    recordingUrl,
-    fromNumber,
+    caseNumber, analysis, transcript, recordingUrl, fromNumber,
   });
   console.log("[analyze] Registered to Supabase:", call.id);
 
-  // 4. LINE通知
   await sendLineNotification({ caseNumber, analysis, fromNumber });
   console.log("[analyze] LINE notification sent");
 
   return call;
 }
 
-// ─────────────────────────────────────────
-// Claude API解析
-// ─────────────────────────────────────────
 async function analyzeWithClaude(transcript) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
@@ -83,39 +62,26 @@ ${transcript}
 
   const data = await response.json();
   const rawText = data.content[0].text.trim();
-
-  // JSON抽出（```json ... ``` の場合も対応）
   const jsonMatch = rawText.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error("Claude returned no JSON");
-
   return JSON.parse(jsonMatch[0]);
 }
 
-// ─────────────────────────────────────────
-// 案件番号生成
-// ─────────────────────────────────────────
 async function generateCaseNumber() {
   const supabase = getSupabase();
   const today = new Date();
-  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, ""); // YYYYMMDD
-
-  // 今日の案件数を取得してシーケンス番号を決定
+  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, "");
   const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
   const { count } = await supabase
     .from("calls")
     .select("*", { count: "exact", head: true })
     .gte("received_at", startOfDay);
-
   const seq = String((count || 0) + 1).padStart(3, "0");
   return `TEL-${dateStr}-${seq}`;
 }
 
-// ─────────────────────────────────────────
-// Supabase登録
-// ─────────────────────────────────────────
 async function registerToSupabase({ caseNumber, analysis, transcript, recordingUrl, fromNumber }) {
   const supabase = getSupabase();
-
   const record = {
     case_number: caseNumber,
     received_at: new Date().toISOString(),
@@ -133,25 +99,100 @@ async function registerToSupabase({ caseNumber, analysis, transcript, recordingU
     billing_checked: false,
     tags: analysis.tags || [],
   };
+  // 同じ案件番号が既にあればスキップ
+  const { data: existing } = await supabase
+    .from("calls")
+    .select("id")
+    .eq("case_number", caseNumber)
+    .single();
+  if (existing) {
+    console.log("[analyze] 既存案件のためスキップ:", caseNumber);
+    return existing;
+  }
 
   const { data, error } = await supabase.from("calls").insert([record]).select().single();
   if (error) throw new Error(`Supabase insert error: ${error.message}`);
   return data;
 }
 
-// ─────────────────────────────────────────
-// LINE通知
-// ─────────────────────────────────────────
 async function sendLineNotification({ caseNumber, analysis, fromNumber }) {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-  const userId = process.env.LINE_USER_ID;
-  if (!token || !userId) {
+  if (!token) {
     console.warn("[analyze] LINE credentials missing – skipping notification");
     return;
   }
 
-  const urgencyEmoji = analysis.urgency === "緊急" ? "🚨" : analysis.urgency === "通常" ? "⚡" : "📋";
+  const supabase = getSupabase();
 
+  // キーワードルールとスタッフ情報を取得
+  const [rulesRes, staffNamesRes, staffIdsRes] = await Promise.all([
+    supabase.from("home_settings").select("value").eq("id", "line_keyword_rules").single(),
+    supabase.from("home_settings").select("value").eq("id", "line_staff_names").single(),
+    supabase.from("home_settings").select("value").eq("id", "line_staff_ids").single(),
+  ]);
+
+  const rules = rulesRes.data?.value || [];
+  const staffNames = staffNamesRes.data?.value || [];
+  const allStaffIds = staffIdsRes.data?.value || [];
+
+  // アクティブなスタッフのIDだけ抽出
+  const activeStaffIds = staffNames
+    .filter(s => s.active !== false)
+    .map(s => s.id);
+
+  // キーワードマッチング
+  // 文字起こし・会社名・AI要約を対象にキーワードを検索
+  const searchText = [
+    analysis.company_name || "",
+    analysis.ai_summary || "",
+    analysis.contact_name || "",
+  ].join(" ");
+
+  const now = new Date();
+  const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+
+  let targetIds = null; // nullのとき全員に送る
+
+  for (const rule of rules) {
+    // キーワードマッチ確認
+    if (!searchText.includes(rule.keyword)) continue;
+
+    // 緊急度フィルター
+    if (rule.urgency && rule.urgency !== "すべて" && rule.urgency !== analysis.urgency) continue;
+
+    // 時間帯フィルター
+    const start = rule.timeStart || "00:00";
+    const end = rule.timeEnd || "23:59";
+    if (currentTime < start || currentTime > end) continue;
+
+    // マッチした！対象スタッフを設定
+    if (rule.staffIds && rule.staffIds.length > 0) {
+      targetIds = rule.staffIds.filter(id => activeStaffIds.includes(id));
+    }
+    console.log(`[analyze] Keyword matched: "${rule.keyword}" → ${targetIds}`);
+    break; // 最初にマッチしたルールを使う
+  }
+
+  // 送信先を決定
+  let sendToIds;
+  if (targetIds !== null) {
+    sendToIds = targetIds;
+  } else {
+    // マッチなし → アクティブなスタッフ全員
+    sendToIds = activeStaffIds.length > 0 ? activeStaffIds : allStaffIds;
+  }
+
+  // フォールバック
+  if (sendToIds.length === 0 && process.env.LINE_USER_ID) {
+    sendToIds = [process.env.LINE_USER_ID];
+  }
+
+  if (sendToIds.length === 0) {
+    console.warn("[analyze] No LINE user IDs found – skipping notification");
+    return;
+  }
+
+  const urgencyEmoji = analysis.urgency === "緊急" ? "🚨" : analysis.urgency === "通常" ? "⚡" : "📋";
   const message =
     `【IGUMI】新規案件が入電しました\n\n` +
     `📋 案件番号：${caseNumber}\n` +
@@ -161,29 +202,30 @@ async function sendLineNotification({ caseNumber, analysis, fromNumber }) {
     `🏠 物件：${analysis.property_name || "不明"}${analysis.room_number ? " " + analysis.room_number : ""}\n` +
     `${urgencyEmoji} 緊急度：${analysis.urgency || "通常"}\n` +
     `📝 用件：${analysis.ai_summary || "詳細は録音を確認してください"}\n\n` +
-    `🔗 案件詳細：https://igumi-kanri.vercel.app/calls`;
+    `🔗 案件詳細：https://igumi-kanri.vercel.app`;
 
-  const response = await fetch("https://api.line.me/v2/bot/message/push", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      to: userId,
-      messages: [{ type: "text", text: message }],
-    }),
-  });
+  for (const userId of sendToIds) {
+    const response = await fetch("https://api.line.me/v2/bot/message/push", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        to: userId,
+        messages: [{ type: "text", text: message }],
+      }),
+    });
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`LINE API error ${response.status}: ${errText}`);
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`LINE API error for ${userId}: ${response.status}: ${errText}`);
+    } else {
+      console.log(`[analyze] LINE notification sent to ${userId}`);
+    }
   }
 }
 
-// ─────────────────────────────────────────
-// Supabaseクライアント（シングルトン）
-// ─────────────────────────────────────────
 let _supabase = null;
 function getSupabase() {
   if (_supabase) return _supabase;

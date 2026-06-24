@@ -244,7 +244,7 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
         {selected.recording_url && (
           <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
             <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginBottom: 8 }}>🎙 録音データ</div>
-            <audio controls src={selected.recording_url} style={{ width: "100%", borderRadius: 8 }} />
+            <audio controls src={selected.recording_url ? `/api/recording-proxy?url=${encodeURIComponent(selected.recording_url)}` : ""} style={{ width: "100%", borderRadius: 8 }} />
           </div>
         )}
 
