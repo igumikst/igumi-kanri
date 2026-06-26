@@ -4,7 +4,7 @@ import { STATUSES, STATUS_STYLE, fmt, pct } from "../lib/constants";
 import { Badge, Inp, Sel, Modal, Hdr, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 
-export default function Projects({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W }) {
+export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W }) {
   const [selP, setSelP] = useState(null);
   const [modal, setModal] = useState(null);
   const [fltS, setFltS] = useState("すべて");
@@ -13,11 +13,19 @@ export default function Projects({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen
   const [quickStatus, setQuickStatus] = useState(null);
   const [conf, setConf] = useState(null);
   const [editP, setEditP] = useState(null);
+  const [newSalesRep, setNewSalesRep] = useState(""); // 新規担当者入力
   const blankP = { name: "", status: "発注待ち", clientId: "", salesRep: "", inCharge: "崎岡", subIds: [], amount: "", gp: "", qDate: "" };
   const [nP, setNP] = useState(blankP);
+  const [newNSalesRep, setNewNSalesRep] = useState(""); // 新規案件用
 
   const getC = id => cos.find(c => c.id === id);
   const inChargeList = ["すべて", ...new Set(pjs.map(p => p.inCharge).filter(Boolean))];
+
+  // 選択中の取引先の担当者一覧を取得
+  const getContacts = clientId => {
+    const co = getC(clientId);
+    return co?.contacts || [];
+  };
 
   const filtP = pjs.filter(p => {
     if (fltS !== "すべて" && p.status !== fltS) return false;
@@ -29,19 +37,42 @@ export default function Projects({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen
   const tA = filtP.reduce((s, p) => s + (p.amount || 0), 0);
   const tG = filtP.reduce((s, p) => s + (p.gp || 0), 0);
 
+  // 新規担当者を取引先DBに追加する関数
+  const addContactToCompany = async (clientId, name) => {
+    const co = getC(clientId);
+    if (!co || !name) return;
+    const newContact = { id: "ct" + Date.now(), name, role: "営業", tel: "", email: "", memo: "" };
+    const newContacts = [...(co.contacts || []), newContact];
+    await supabase.from("companies").update({ contacts: newContacts }).eq("id", clientId);
+    // cosも更新
+    setCos(cos.map(c => c.id === clientId ? { ...c, contacts: newContacts } : c));
+  };
+
   const savePj = async () => {
     if (!nP.name) return;
-    const { data } = await supabase.from("projects").insert([{ name: nP.name, status: nP.status, clientId: nP.clientId || null, salesRep: nP.salesRep, inCharge: nP.inCharge, subcontractorIds: nP.subIds || [], amount: Number(nP.amount) || 0, grossProfit: Number(nP.gp) || 0, quoteDate: nP.qDate }]).select();
+    let salesRep = nP.salesRep;
+    // 新規担当者が入力されていたら取引先DBに追加
+    if (newNSalesRep && nP.clientId) {
+      await addContactToCompany(nP.clientId, newNSalesRep);
+      salesRep = newNSalesRep;
+    }
+    const { data } = await supabase.from("projects").insert([{ name: nP.name, status: nP.status, clientId: nP.clientId || null, salesRep, inCharge: nP.inCharge, subcontractorIds: nP.subIds || [], amount: Number(nP.amount) || 0, grossProfit: Number(nP.gp) || 0, quoteDate: nP.qDate }]).select();
     if (data) setPjs([{ ...data[0], subIds: data[0].subcontractorIds || [], gp: data[0].grossProfit || 0, qDate: data[0].quoteDate || "" }, ...pjs]);
-    setNP(blankP); setModal(null);
+    setNP(blankP); setNewNSalesRep(""); setModal(null);
   };
 
   const updatePj = async () => {
     if (!editP || !editP.name) return;
-    await supabase.from("projects").update({ name: editP.name, status: editP.status, clientId: editP.clientId || null, salesRep: editP.salesRep, inCharge: editP.inCharge, subcontractorIds: editP.subIds || [], amount: Number(editP.amount) || 0, grossProfit: Number(editP.gp) || 0, quoteDate: editP.qDate }).eq("id", editP.id);
-    const updated = { ...editP, gp: Number(editP.gp) || 0, amount: Number(editP.amount) || 0 };
+    let salesRep = editP.salesRep;
+    // 新規担当者が入力されていたら取引先DBに追加
+    if (newSalesRep && editP.clientId) {
+      await addContactToCompany(editP.clientId, newSalesRep);
+      salesRep = newSalesRep;
+    }
+    await supabase.from("projects").update({ name: editP.name, status: editP.status, clientId: editP.clientId || null, salesRep, inCharge: editP.inCharge, subcontractorIds: editP.subIds || [], amount: Number(editP.amount) || 0, grossProfit: Number(editP.gp) || 0, quoteDate: editP.qDate }).eq("id", editP.id);
+    const updated = { ...editP, salesRep, gp: Number(editP.gp) || 0, amount: Number(editP.amount) || 0 };
     setPjs(pjs.map(p => p.id === editP.id ? updated : p));
-    setSelP(updated); setEditP(null);
+    setSelP(updated); setEditP(null); setNewSalesRep("");
   };
 
   const delPj = async id => {
@@ -50,6 +81,47 @@ export default function Projects({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen
   };
 
   const pending = tks.filter(t => !t.done);
+
+  // 営業担当セレクター（編集用）
+  const SalesRepSelector = ({ clientId, value, onChange, newVal, onNewChange }) => {
+    const contacts = getContacts(clientId);
+    const isNew = value === "__new__";
+    return (
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 3 }}>営業担当</div>
+        <select
+          value={contacts.some(c => c.name === value) ? value : (value ? "__other__" : "")}
+          onChange={e => {
+            if (e.target.value === "__new__") { onChange("__new__"); }
+            else if (e.target.value === "__other__") { onChange(value); }
+            else { onChange(e.target.value); onNewChange(""); }
+          }}
+          style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, background: "#FAFAFA", boxSizing: "border-box", color: "#1F2937", marginBottom: contacts.length > 0 ? 4 : 0 }}>
+          <option value="">未設定</option>
+          {contacts.map(c => <option key={c.id} value={c.name}>{c.name}（{c.role}）</option>)}
+          <option value="__new__">＋ 新しく担当者を追加</option>
+        </select>
+        {/* 新規入力欄 */}
+        {(value === "__new__" || (!contacts.some(c => c.name === value) && value && value !== "__new__")) && (
+          <input
+            value={newVal}
+            onChange={e => { onNewChange(e.target.value); }}
+            placeholder="担当者名を入力（取引先DBにも追加されます）"
+            style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E07B39", fontSize: 13, background: "#FAFAFA", boxSizing: "border-box", color: "#1F2937", marginTop: 4 }}
+          />
+        )}
+        {/* 取引先未選択時の直接入力 */}
+        {!clientId && (
+          <input
+            value={value === "__new__" ? newVal : value}
+            onChange={e => { onChange(e.target.value); }}
+            placeholder="担当者名を直接入力"
+            style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, background: "#FAFAFA", boxSizing: "border-box", color: "#1F2937" }}
+          />
+        )}
+      </div>
+    );
+  };
 
   return (
     <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
@@ -69,18 +141,24 @@ export default function Projects({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen
               <Sel label="ステータス" opts={STATUSES} value={editP.status} onChange={e => setEditP({ ...editP, status: e.target.value })} />
               <div style={{ marginBottom: 10 }}>
                 <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 3 }}>取引先</div>
-                <select value={editP.clientId || ""} onChange={e => setEditP({ ...editP, clientId: e.target.value })} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, background: "#FAFAFA", boxSizing: "border-box", color: "#1F2937" }}>
+                <select value={editP.clientId || ""} onChange={e => setEditP({ ...editP, clientId: e.target.value, salesRep: "" })} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, background: "#FAFAFA", boxSizing: "border-box", color: "#1F2937" }}>
                   <option value="">未設定</option>
                   {cos.filter(c => c.type === "取引先").map(c => <option key={c.id} value={c.id}>{c.name}{c.branch ? " " + c.branch : ""}</option>)}
                 </select>
               </div>
               <Inp label="社内担当" value={editP.inCharge || ""} onChange={e => setEditP({ ...editP, inCharge: e.target.value })} />
-              <Inp label="営業担当" value={editP.salesRep || ""} onChange={e => setEditP({ ...editP, salesRep: e.target.value })} />
+              <SalesRepSelector
+                clientId={editP.clientId}
+                value={editP.salesRep || ""}
+                onChange={v => setEditP({ ...editP, salesRep: v })}
+                newVal={newSalesRep}
+                onNewChange={setNewSalesRep}
+              />
               <Inp label="受注金額" type="number" value={editP.amount || ""} onChange={e => setEditP({ ...editP, amount: e.target.value })} />
               <Inp label="粗利" type="number" value={editP.gp || ""} onChange={e => setEditP({ ...editP, gp: e.target.value })} />
               <Inp label="見積提出日" type="date" value={editP.qDate || ""} onChange={e => setEditP({ ...editP, qDate: e.target.value })} />
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => setEditP(null)} style={{ flex: 1, padding: "12px 0", background: "#F3F4F6", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer", color: "#374151" }}>キャンセル</button>
+                <button onClick={() => { setEditP(null); setNewSalesRep(""); }} style={{ flex: 1, padding: "12px 0", background: "#F3F4F6", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer", color: "#374151" }}>キャンセル</button>
                 <button onClick={updatePj} style={{ flex: 2, padding: "12px 0", background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>💾 保存する</button>
               </div>
             </div>
@@ -91,7 +169,7 @@ export default function Projects({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen
                 <Badge s={selP.status} />
               </div>
               <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-                <button onClick={() => setEditP({ ...selP })} style={{ flex: 2, padding: "8px 0", background: "#EFF6FF", color: "#1A3A5C", border: "1.5px solid #BFDBFE", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✏️ 編集</button>
+                <button onClick={() => { setEditP({ ...selP }); setNewSalesRep(""); }} style={{ flex: 2, padding: "8px 0", background: "#EFF6FF", color: "#1A3A5C", border: "1.5px solid #BFDBFE", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✏️ 編集</button>
                 <button onClick={() => setConf({ msg: `「${selP.name}」\n\nこの操作は元に戻せません。\n削除しますか？`, onOk: () => { delPj(selP.id); setConf(null); } })} style={{ flex: 1, padding: "8px 0", background: "#FEF2F2", color: "#DC2626", border: "1.5px solid #FECACA", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>🗑 削除</button>
               </div>
               <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
@@ -147,10 +225,24 @@ export default function Projects({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen
           </div>
         </div>
       )}
-      {modal === "addP" && (<Modal title="新規案件を追加" onClose={() => setModal(null)} onSave={savePj}>
+      {modal === "addP" && (<Modal title="新規案件を追加" onClose={() => { setModal(null); setNewNSalesRep(""); }} onSave={savePj}>
         <Inp label="案件名 *" value={nP.name} onChange={e => setNP({ ...nP, name: e.target.value })} placeholder="例: ○○マンション改修工事" />
         <Sel label="ステータス" opts={STATUSES} value={nP.status} onChange={e => setNP({ ...nP, status: e.target.value })} />
         <Inp label="社内担当" value={nP.inCharge} onChange={e => setNP({ ...nP, inCharge: e.target.value })} />
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 3 }}>取引先</div>
+          <select value={nP.clientId || ""} onChange={e => setNP({ ...nP, clientId: e.target.value, salesRep: "" })} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, background: "#FAFAFA", boxSizing: "border-box", color: "#1F2937" }}>
+            <option value="">未設定</option>
+            {cos.filter(c => c.type === "取引先").map(c => <option key={c.id} value={c.id}>{c.name}{c.branch ? " " + c.branch : ""}</option>)}
+          </select>
+        </div>
+        <SalesRepSelector
+          clientId={nP.clientId}
+          value={nP.salesRep || ""}
+          onChange={v => setNP({ ...nP, salesRep: v })}
+          newVal={newNSalesRep}
+          onNewChange={setNewNSalesRep}
+        />
         <Inp label="受注金額" type="number" value={nP.amount} onChange={e => setNP({ ...nP, amount: e.target.value })} />
         <Inp label="粗利" type="number" value={nP.gp} onChange={e => setNP({ ...nP, gp: e.target.value })} />
         <Inp label="見積提出日" type="date" value={nP.qDate} onChange={e => setNP({ ...nP, qDate: e.target.value })} />
