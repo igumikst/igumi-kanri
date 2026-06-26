@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { Modal, Inp } from "../components/UI";
 import { PRIO } from "../lib/constants";
@@ -6,7 +6,7 @@ import { supabase } from "../lib/supabase";
 
 export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, setTileEdit, saveTileConf, saveCustomize, weather, weekWeather, fishWeather, isPC, pp, nav, setModal, setEc, ec, rpOpen, setRpOpen, finFiles, tmplFiles, SB_W, RP_W, boardPosts, calls, setCalls }) {
   const [editTile, setEditTile] = useState(null);
-  const [showInfo, setShowInfo] = useState(false); // ★タップで展開
+  const [showInfo, setShowInfo] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [pwModal, setPwModal] = useState(false);
   const [pwInput, setPwInput] = useState("");
@@ -15,9 +15,19 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const [savedPw, setSavedPw] = useState(null);
   const [pwLoaded, setPwLoaded] = useState(false);
   const [showStorage, setShowStorage] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0); // 0=新デザイン 1=旧ホーム
+  const touchStartX = useRef(null);
+  const touchStartY = useRef(null);
 
   const pending = tks.filter(t => !t.done);
   const active = pjs.filter(p => p.status !== "完了" && p.status !== "中断");
+  const unsubmitted = pjs.filter(p => p.status === "進行中" || p.status === "着工");
+  const estimateStatus = {
+    "作成中": pjs.filter(p => p.status === "見積中").length,
+    "提出待ち": pjs.filter(p => p.status === "発注待ち").length,
+    "回答待ち": pjs.filter(p => p.status === "着工").length,
+    "受注": pjs.filter(p => p.status === "進行中").length,
+  };
   const tiles = tileConf.filter(t => t.visible || tileEdit).map(t => ({
     ...t,
     sub: t.key === "projects" ? `${active.length}件進行中` : t.key === "companies" ? `${cos.length}社登録` : t.key === "tasks" ? `未完了 ${pending.length}件` : t.sub
@@ -70,13 +80,302 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
     nav(t.key);
   };
 
+  // スワイプ処理
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e) => {
+    if (touchStartX.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    const dy = e.changedTouches[0].clientY - touchStartY.current;
+    // 横スワイプが縦より大きい場合のみ処理
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+      if (dx < 0 && currentPage < 1) setCurrentPage(1);
+      if (dx > 0 && currentPage > 0) setCurrentPage(0);
+    }
+    touchStartX.current = null;
+    touchStartY.current = null;
+  };
+
+  // ===== 新デザイン1枚目 =====
+  const NewHomePage = () => (
+    <div style={{ padding: "16px 16px 30px" }}>
+
+      {/* 今日の状況バナー */}
+      <div style={{ background: "linear-gradient(135deg, #1A3A5C, #2563EB)", borderRadius: 16, padding: "18px 20px", marginBottom: 18, boxShadow: "0 4px 16px rgba(37,99,235,0.25)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>📅 今日の状況</div>
+          <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 11 }}>
+            {new Date().toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' })}
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          {[
+            { label: "進行中案件", value: `${active.length}件`, color: "#60A5FA", icon: "📋", action: () => nav("projects") },
+            { label: "未完了タスク", value: `${pending.length}件`, color: "#F87171", icon: "✅", action: () => nav("tasks") },
+            { label: "未対応電話", value: `${(calls || []).filter(c => c.status === "未対応").length}件`, color: "#FBBF24", icon: "📞", action: () => nav("calls") },
+            { label: "取引先", value: `${cos.length}社`, color: "#34D399", icon: "🏢", action: () => nav("companies") },
+          ].map(item => (
+            <div key={item.label} onClick={item.action} style={{ background: "rgba(255,255,255,0.1)", borderRadius: 12, padding: "12px", cursor: "pointer" }}>
+              <div style={{ fontSize: 20, fontWeight: 900, color: item.color }}>{item.value}</div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.65)", marginTop: 2 }}>{item.label}</div>
+            </div>
+          ))}
+        </div>
+        {/* 週間天気 */}
+        {weekWeather && (
+          <div style={{ marginTop: 12, display: "flex", gap: 4, overflowX: "auto" }}>
+            {weekWeather.map((d, i) => (
+              <div key={i} style={{ flex: 1, minWidth: 32, textAlign: "center" }}>
+                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>{i === 0 ? "今日" : WD[d.weekday]}</div>
+                <div style={{ fontSize: 14 }}>{weatherIcon(d.code)}</div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: "#fff" }}>{d.max}°</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* メイン4タイル */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
+        {[
+          { icon: "📋", label: "案件", sub: "案件の確認・管理を行います", color: "#1A3A5C", action: () => nav("projects") },
+          { icon: "📸", label: "報告", sub: "現場の報告を作成・確認します", color: "#059669", action: () => window.open("/report.html", "_blank") },
+          { icon: "📝", label: "見積", sub: "見積の作成・確認を行います", color: "#E07B39", action: () => nav("estimate") },
+          { icon: "✨", label: "AI補助", sub: "AIが業務をサポートします", color: "#6366F1", action: () => nav("ai"), gradient: true },
+        ].map(t => (
+          <div key={t.label} onClick={t.action}
+            style={{ background: t.gradient ? "linear-gradient(135deg, #6366F1, #8B5CF6)" : "#fff", borderRadius: 14, padding: "16px 14px", cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", borderLeft: t.gradient ? "none" : `4px solid ${t.color}` }}>
+            <div style={{ fontSize: 24, marginBottom: 6 }}>{t.icon}</div>
+            <div style={{ fontWeight: 800, fontSize: 14, color: t.gradient ? "#fff" : "#1F2937", marginBottom: 2 }}>{t.label}</div>
+            <div style={{ fontSize: 11, color: t.gradient ? "rgba(255,255,255,0.75)" : "#6B7280" }}>{t.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* 未提出の報告書 */}
+      {unsubmitted.length > 0 && (
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>
+              未提出の報告書 <span style={{ background: "#EF4444", color: "#fff", borderRadius: 10, padding: "1px 8px", fontSize: 11 }}>{unsubmitted.length}件</span>
+            </div>
+            <button onClick={() => nav("projects")} style={{ fontSize: 11, color: "#6366F1", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>すべて見る →</button>
+          </div>
+          <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            {unsubmitted.slice(0, 3).map((p, i) => (
+              <div key={p.id} onClick={() => nav("projects")} style={{ padding: "12px 16px", borderBottom: i < Math.min(unsubmitted.length, 3) - 1 ? "1px solid #F3F4F6" : "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>📄</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: "#1F2937" }}>{p.name}</div>
+                  <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1 }}>担当：{p.inCharge || "未設定"}</div>
+                </div>
+                <div style={{ fontSize: 12, color: "#9CA3AF" }}>›</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 見積ステータス */}
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>
+            見積ステータス <span style={{ background: "#E07B39", color: "#fff", borderRadius: 10, padding: "1px 8px", fontSize: 11 }}>{Object.values(estimateStatus).reduce((a, b) => a + b, 0)}件</span>
+          </div>
+          <button onClick={() => nav("projects")} style={{ fontSize: 11, color: "#6366F1", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>すべて見る →</button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
+          {Object.entries(estimateStatus).map(([label, count]) => (
+            <div key={label} onClick={() => nav("projects")} style={{ background: "#fff", borderRadius: 12, padding: "12px 8px", textAlign: "center", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", cursor: "pointer" }}>
+              <div style={{ fontSize: 20, fontWeight: 900, color: "#1A3A5C" }}>{count}</div>
+              <div style={{ fontSize: 10, color: "#6B7280", marginTop: 3 }}>{label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* AIからの提案 */}
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>AIからの提案</div>
+          <button onClick={() => nav("ai")} style={{ fontSize: 11, color: "#6366F1", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>すべて見る →</button>
+        </div>
+        <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+          {[
+            { icon: "💡", text: "過去の類似案件から見積精度を向上できます", action: () => nav("ai") },
+            { icon: "📊", text: `未対応の電話案件が${(calls || []).filter(c => c.status === "未対応").length}件あります`, action: () => nav("calls") },
+            { icon: "✅", text: `未完了タスクが${pending.length}件あります`, action: () => nav("tasks") },
+          ].map((item, i) => (
+            <div key={i} onClick={item.action} style={{ padding: "12px 16px", borderBottom: i < 2 ? "1px solid #F3F4F6" : "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 8, background: "linear-gradient(135deg, #EEF2FF, #E0E7FF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{item.icon}</div>
+              <div style={{ flex: 1, fontSize: 13, color: "#374151" }}>{item.text}</div>
+              <div style={{ fontSize: 12, color: "#9CA3AF" }}>›</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+    </div>
+  );
+
+  // ===== 旧ホーム2枚目 =====
+  const OldHomePage = () => (
+    <div style={{ padding: "14px 14px 30px" }}>
+
+      {calls && calls.length > 0 && (
+        <div style={{ background: "linear-gradient(135deg, #1e3a5f, #2563eb)", borderRadius: 14, padding: "14px 18px", marginBottom: 16, boxShadow: "0 4px 12px rgba(37,99,235,0.25)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div onClick={() => nav("calls")} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", flex: 1 }}>
+              <span style={{ fontSize: 20 }}>📞</span>
+              <span style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>電話受付案件</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button onClick={refreshCalls} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 14, cursor: "pointer" }}>{refreshing ? "⏳" : "🔄"}</button>
+              <span onClick={() => nav("calls")} style={{ color: "rgba(255,255,255,0.6)", fontSize: 12, cursor: "pointer" }}>一覧を見る →</span>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            {[
+              { label: "未対応", color: "#ef4444", bg: "rgba(239,68,68,0.15)", count: calls.filter(c => c.status === "未対応").length },
+              { label: "対応中", color: "#f59e0b", bg: "rgba(245,158,11,0.15)", count: calls.filter(c => c.status === "対応中").length },
+              { label: "完了", color: "#10b981", bg: "rgba(16,185,129,0.15)", count: calls.filter(c => c.status === "完了").length },
+            ].map(s => (
+              <div key={s.label} style={{ flex: 1, background: s.bg, borderRadius: 10, padding: "8px 0", textAlign: "center" }}>
+                <div style={{ fontSize: 20, fontWeight: 900, color: s.color }}>{s.count}</div>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+          {calls.filter(c => c.status === "未対応").length > 0 && (
+            <div onClick={() => nav("calls")} style={{ marginTop: 10, background: "rgba(239,68,68,0.1)", borderRadius: 8, padding: "8px 12px", cursor: "pointer" }}>
+              {calls.filter(c => c.status === "未対応").slice(0, 1).map(c => (
+                <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 11, background: "#ef4444", color: "#fff", borderRadius: 4, padding: "1px 6px", fontWeight: 700 }}>🔴 未対応</span>
+                  <span style={{ fontSize: 12, color: "rgba(255,255,255,0.9)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.company_name}｜{c.property_name}｜{c.ai_summary}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {boardPosts.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF" }}>📣 社内掲示板</div>
+            <button onClick={() => nav("board")} style={{ fontSize: 11, color: cust.c1, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>すべて見る →</button>
+          </div>
+          <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
+            {boardPosts.slice(0, 3).map((post, i) => {
+              const CAT_COLOR = { "業務連絡": "#1D4ED8", "スケジュール": "#166534", "緊急連絡": "#DC2626", "その他": "#374151" };
+              const CAT_BG = { "業務連絡": "#EFF6FF", "スケジュール": "#F0FDF4", "緊急連絡": "#FEF2F2", "その他": "#F9FAFB" };
+              return (
+                <div key={post.id} onClick={() => nav("board")} style={{ padding: "12px 16px", borderBottom: i < Math.min(boardPosts.length, 3) - 1 ? "1px solid #F3F4F6" : "none", cursor: "pointer" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                    <span style={{ background: CAT_BG[post.category] || "#F9FAFB", color: CAT_COLOR[post.category] || "#374151", borderRadius: 6, padding: "1px 7px", fontSize: 10, fontWeight: 700 }}>{post.category}</span>
+                    <span style={{ fontSize: 11, color: "#9CA3AF" }}>{post.author}</span>
+                  </div>
+                  <div style={{ fontSize: 13, color: "#1F2937", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{post.content}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF" }}>DB一覧</div>
+        <button onClick={() => { if (tileEdit) { saveTileConf(tileConf); } setTileEdit(!tileEdit); }} style={{ fontSize: 11, fontWeight: 700, color: tileEdit ? "#E07B39" : "#9CA3AF", background: "none", border: "none", cursor: "pointer" }}>
+          {tileEdit ? "✅ 完了" : "✏️ 並び替え・編集"}
+        </button>
+      </div>
+
+      {!tileEdit && (
+        <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", marginBottom: 20 }}>
+          {tiles.filter(t => t.visible).map((t, i, arr) => (
+            <button key={t.key} onClick={() => handleTileClick(t)}
+              style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "13px 18px", background: "none", border: "none", borderBottom: i < arr.length - 1 ? "1px solid #F3F4F6" : "none", cursor: "pointer", textAlign: "left" }}>
+              <div style={{ width: 4, height: 36, borderRadius: 2, background: t.color, flexShrink: 0 }} />
+              <span style={{ fontSize: 22, flexShrink: 0 }}>{t.icon}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: "#1F2937", display: "flex", alignItems: "center", gap: 6 }}>
+                  {t.label}
+                  {t.key === "finance" && savedPw && <span style={{ fontSize: 12 }}>{finUnlocked ? "🔓" : "🔒"}</span>}
+                </div>
+                <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1 }}>{t.sub}</div>
+              </div>
+              <div style={{ fontSize: 14, color: "#D1D5DB" }}>›</div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {tileEdit && (
+        <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", marginBottom: 20 }}>
+          {tiles.map((t, i) => (
+            <div key={t.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderBottom: i < tiles.length - 1 ? "1px solid #F3F4F6" : "none", opacity: t.visible ? 1 : 0.45 }}>
+              <div style={{ width: 4, height: 32, borderRadius: 2, background: t.color, flexShrink: 0 }} />
+              <span style={{ fontSize: 20, flexShrink: 0 }}>{t.icon}</span>
+              <div style={{ flex: 1, fontWeight: 700, fontSize: 13, color: "#1F2937" }}>{t.label}</div>
+              <div style={{ display: "flex", gap: 4 }}>
+                <button onClick={() => { const pi = tileConf.findIndex(x => x.key === t.key); if (pi > 0) { const n = [...tileConf]; [n[pi], n[pi - 1]] = [n[pi - 1], n[pi]]; saveTileConf(n); } }} style={{ background: "#F3F4F6", border: "none", borderRadius: 4, padding: "3px 8px", fontSize: 12, cursor: "pointer" }}>↑</button>
+                <button onClick={() => { const pi = tileConf.findIndex(x => x.key === t.key); if (pi < tileConf.length - 1) { const n = [...tileConf]; [n[pi], n[pi + 1]] = [n[pi + 1], n[pi]]; saveTileConf(n); } }} style={{ background: "#F3F4F6", border: "none", borderRadius: 4, padding: "3px 8px", fontSize: 12, cursor: "pointer" }}>↓</button>
+                <button onClick={() => setEditTile({ ...t })} style={{ background: "#EFF6FF", border: "none", borderRadius: 4, padding: "3px 8px", fontSize: 11, color: "#1A3A5C", cursor: "pointer" }}>✏️</button>
+                <button onClick={() => saveTileConf(tileConf.map(x => x.key === t.key ? { ...x, visible: !x.visible } : x))} style={{ background: t.visible ? "#FEF2F2" : "#F0FDF4", border: "none", borderRadius: 4, padding: "3px 8px", fontSize: 11, cursor: "pointer" }}>{t.visible ? "🙈" : "👁"}</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", marginBottom: 10 }}>直近のタスク</div>
+      <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
+        {pending.slice(0, 3).map((t, i) => (
+          <div key={t.id} style={{ padding: "12px 16px", borderBottom: i < Math.min(pending.length, 3) - 1 ? "1px solid #F3F4F6" : "none", display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: PRIO[t.prio]?.c || "#9CA3AF", flexShrink: 0 }} />
+            <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#1F2937" }}>{t.title}</div>
+            {t.due && <div style={{ fontSize: 11, color: "#9CA3AF" }}>{t.due}</div>}
+          </div>
+        ))}
+        {pending.length === 0 && <div style={{ padding: 16, color: "#9CA3AF", fontSize: 13, textAlign: "center" }}>タスクはありません</div>}
+        <button onClick={() => nav("tasks")} style={{ width: "100%", padding: 10, background: "#F9FAFB", border: "none", fontSize: 12, color: cust.c1, fontWeight: 700, cursor: "pointer", borderTop: "1px solid #F3F4F6" }}>すべて見る →</button>
+      </div>
+
+      <div style={{ marginTop: 24 }}>
+        <button onClick={() => setShowStorage(p => !p)} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 0" }}>
+          <span style={{ fontSize: 11, color: "#C4C4C4" }}>📦 Storage {fmtMB(totalMB)} / 1GB</span>
+          <span style={{ fontSize: 10, color: "#C4C4C4" }}>{showStorage ? "▲" : "▼"}</span>
+        </button>
+        {showStorage && (
+          <div style={{ background: "#fff", borderRadius: 12, padding: "12px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginTop: 4 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#374151" }}>ストレージ使用量</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: storageCol }}>{storageP.toFixed(1)}%</span>
+            </div>
+            <div style={{ background: "#E5E7EB", borderRadius: 4, height: 8, overflow: "hidden", marginBottom: 10 }}>
+              <div style={{ width: `${storageP}%`, height: "100%", background: storageCol, borderRadius: 4, transition: "width 0.5s" }} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#6B7280" }}>
+              <span>📂 財務　{fmtMB(finMB)}</span>
+              <span>📋 雛形　{fmtMB(tmplMB)}</span>
+            </div>
+            <div style={{ textAlign: "center", marginTop: 8, fontSize: 11, color: "#9CA3AF" }}>合計 {fmtMB(totalMB)} / 1GB</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
-    <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: cust.bg, minHeight: "100vh", ...pp }}>
+    <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
       {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="home" nav={nav} setModal={setModal} setEc={setEc} SB_W={SB_W} />}
       {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} />}
       {(cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
 
-      {/* ★スマホ用コンパクトヘッダー */}
+      {/* ヘッダー */}
       {!isPC && (
         <div style={{ background: cust.c1, color: "#fff", padding: "12px 16px", position: "sticky", top: 0, zIndex: 50 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -92,12 +391,10 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
             <button onClick={refreshCalls} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "5px 8px", fontSize: 14, cursor: "pointer" }}>{refreshing ? "⏳" : "🔄"}</button>
             <button onClick={() => { setEc({ ...cust }); setModal("cust"); }} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "5px 8px", fontSize: 12, cursor: "pointer", fontWeight: 700 }}>⚙ 編集</button>
           </div>
-
           <div onClick={() => setShowInfo(p => !p)} style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6, cursor: "pointer", opacity: 0.75 }}>
             <span style={{ fontSize: 11 }}>{pjs.length}件 | {cos.length}社 | {new Date().toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' })}</span>
             <span style={{ fontSize: 10 }}>{showInfo ? "▲" : "▼"}</span>
           </div>
-
           {showInfo && (
             <div style={{ marginTop: 8, padding: "10px 12px", background: "rgba(0,0,0,0.2)", borderRadius: 10, fontSize: 12 }}>
               <div style={{ marginBottom: 4, color: "rgba(255,255,255,0.8)" }}>{cust.name}</div>
@@ -107,201 +404,42 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
                 <span>取引先 {cos.length}社</span>
                 <span>未完了タスク {pending.length}件</span>
               </div>
-              {weekWeather && (
-                <div style={{ marginTop: 8, display: "flex", gap: 4, overflowX: "auto" }}>
-                  {weekWeather.map((d, i) => (
-                    <div key={i} style={{ flex: 1, minWidth: 36, textAlign: "center" }}>
-                      <div style={{ fontSize: 9, color: "rgba(255,255,255,0.6)" }}>{i === 0 ? "今日" : WD[d.weekday]}</div>
-                      <div style={{ fontSize: 16 }}>{weatherIcon(d.code)}</div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: "#fff" }}>{d.max}°</div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           )}
         </div>
       )}
 
-      <div style={{ padding: isPC ? "12px 0 20px" : "14px 14px 30px" }}>
-
-        {calls && calls.length > 0 && (
-          <div style={{ background: "linear-gradient(135deg, #1e3a5f, #2563eb)", borderRadius: 14, padding: "14px 18px", marginBottom: 16, boxShadow: "0 4px 12px rgba(37,99,235,0.25)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div onClick={() => nav("calls")} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", flex: 1 }}>
-                <span style={{ fontSize: 20 }}>📞</span>
-                <span style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>電話受付案件</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <button onClick={refreshCalls} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 14, cursor: "pointer" }}>{refreshing ? "⏳" : "🔄"}</button>
-                <span onClick={() => nav("calls")} style={{ color: "rgba(255,255,255,0.6)", fontSize: 12, cursor: "pointer" }}>一覧を見る →</span>
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              {[
-                { label: "未対応", color: "#ef4444", bg: "rgba(239,68,68,0.15)", count: calls.filter(c => c.status === "未対応").length },
-                { label: "対応中", color: "#f59e0b", bg: "rgba(245,158,11,0.15)", count: calls.filter(c => c.status === "対応中").length },
-                { label: "完了",   color: "#10b981", bg: "rgba(16,185,129,0.15)", count: calls.filter(c => c.status === "完了").length },
-              ].map(s => (
-                <div key={s.label} style={{ flex: 1, background: s.bg, borderRadius: 10, padding: "8px 0", textAlign: "center" }}>
-                  <div style={{ fontSize: 20, fontWeight: 900, color: s.color }}>{s.count}</div>
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>{s.label}</div>
-                </div>
-              ))}
-            </div>
-            {calls.filter(c => c.status === "未対応").length > 0 && (
-              <div onClick={() => nav("calls")} style={{ marginTop: 10, background: "rgba(239,68,68,0.1)", borderRadius: 8, padding: "8px 12px", cursor: "pointer" }}>
-                {calls.filter(c => c.status === "未対応").slice(0, 1).map(c => (
-                  <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 11, background: "#ef4444", color: "#fff", borderRadius: 4, padding: "1px 6px", fontWeight: 700 }}>🔴 未対応</span>
-                    <span style={{ fontSize: 12, color: "rgba(255,255,255,0.9)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.company_name}｜{c.property_name}｜{c.ai_summary}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+      {/* スワイプエリア */}
+      <div
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        style={{ overflow: "hidden" }}
+      >
+        <div style={{
+          display: "flex",
+          transform: `translateX(-${currentPage * 100}%)`,
+          transition: "transform 0.3s ease",
+          willChange: "transform",
+        }}>
+          <div style={{ minWidth: "100%", width: "100%" }}>
+            <NewHomePage />
           </div>
-        )}
-
-        {boardPosts.length > 0 && (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF" }}>📣 社内掲示板</div>
-              <button onClick={() => nav("board")} style={{ fontSize: 11, color: cust.c1, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>すべて見る →</button>
-            </div>
-            <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
-              {boardPosts.slice(0, 3).map((post, i) => {
-                const CAT_COLOR = { "業務連絡": "#1D4ED8", "スケジュール": "#166534", "緊急連絡": "#DC2626", "その他": "#374151" };
-                const CAT_BG = { "業務連絡": "#EFF6FF", "スケジュール": "#F0FDF4", "緊急連絡": "#FEF2F2", "その他": "#F9FAFB" };
-                return (
-                  <div key={post.id} onClick={() => nav("board")} style={{ padding: "12px 16px", borderBottom: i < Math.min(boardPosts.length, 3) - 1 ? "1px solid #F3F4F6" : "none", cursor: "pointer" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                      <span style={{ background: CAT_BG[post.category] || "#F9FAFB", color: CAT_COLOR[post.category] || "#374151", borderRadius: 6, padding: "1px 7px", fontSize: 10, fontWeight: 700 }}>{post.category}</span>
-                      <span style={{ fontSize: 11, color: "#9CA3AF" }}>{post.author}</span>
-                    </div>
-                    <div style={{ fontSize: 13, color: "#1F2937", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{post.content}</div>
-                  </div>
-                );
-              })}
-            </div>
+          <div style={{ minWidth: "100%", width: "100%" }}>
+            <OldHomePage />
           </div>
-        )}
-
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF" }}>DB一覧</div>
-          <button onClick={() => { if (tileEdit) { saveTileConf(tileConf); } setTileEdit(!tileEdit); }} style={{ fontSize: 11, fontWeight: 700, color: tileEdit ? "#E07B39" : "#9CA3AF", background: "none", border: "none", cursor: "pointer" }}>
-            {tileEdit ? "✅ 完了" : "✏️ 並び替え・編集"}
-          </button>
-        </div>
-
-        {isPC && !tileEdit && (
-          <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", marginBottom: 20 }}>
-            {tiles.filter(t => t.visible).map((t, i, arr) => (
-              <button key={t.key} onClick={() => handleTileClick(t)}
-                style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "13px 18px", background: "none", border: "none", borderBottom: i < arr.length - 1 ? "1px solid #F3F4F6" : "none", cursor: "pointer", textAlign: "left" }}
-                onMouseOver={e => e.currentTarget.style.background = "#F9FAFB"}
-                onMouseOut={e => e.currentTarget.style.background = "none"}>
-                <div style={{ width: 4, height: 36, borderRadius: 2, background: t.color, flexShrink: 0 }} />
-                <span style={{ fontSize: 22, flexShrink: 0 }}>{t.icon}</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: "#1F2937", display: "flex", alignItems: "center", gap: 6 }}>
-                    {t.label}
-                    {t.key === "finance" && savedPw && <span style={{ fontSize: 12 }}>{finUnlocked ? "🔓" : "🔒"}</span>}
-                  </div>
-                  <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1 }}>{t.sub}</div>
-                </div>
-                <div style={{ fontSize: 14, color: "#D1D5DB" }}>›</div>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {isPC && tileEdit && (
-          <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", marginBottom: 20 }}>
-            {tiles.map((t, i) => (
-              <div key={t.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderBottom: i < tiles.length - 1 ? "1px solid #F3F4F6" : "none", opacity: t.visible ? 1 : 0.45 }}>
-                <div style={{ width: 4, height: 32, borderRadius: 2, background: t.color, flexShrink: 0 }} />
-                <span style={{ fontSize: 20, flexShrink: 0 }}>{t.icon}</span>
-                <div style={{ flex: 1, fontWeight: 700, fontSize: 13, color: "#1F2937" }}>{t.label}</div>
-                <div style={{ display: "flex", gap: 4 }}>
-                  <button onClick={() => { const pi = tileConf.findIndex(x => x.key === t.key); if (pi > 0) { const n = [...tileConf]; [n[pi], n[pi - 1]] = [n[pi - 1], n[pi]]; saveTileConf(n); } }} style={{ background: "#F3F4F6", border: "none", borderRadius: 4, padding: "3px 8px", fontSize: 12, cursor: "pointer" }}>↑</button>
-                  <button onClick={() => { const pi = tileConf.findIndex(x => x.key === t.key); if (pi < tileConf.length - 1) { const n = [...tileConf]; [n[pi], n[pi + 1]] = [n[pi + 1], n[pi]]; saveTileConf(n); } }} style={{ background: "#F3F4F6", border: "none", borderRadius: 4, padding: "3px 8px", fontSize: 12, cursor: "pointer" }}>↓</button>
-                  <button onClick={() => setEditTile({ ...t })} style={{ background: "#EFF6FF", border: "none", borderRadius: 4, padding: "3px 8px", fontSize: 11, color: "#1A3A5C", cursor: "pointer" }}>✏️</button>
-                  <button onClick={() => saveTileConf(tileConf.map(x => x.key === t.key ? { ...x, visible: !x.visible } : x))} style={{ background: t.visible ? "#FEF2F2" : "#F0FDF4", border: "none", borderRadius: 4, padding: "3px 8px", fontSize: 11, cursor: "pointer" }}>{t.visible ? "🙈" : "👁"}</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {!isPC && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
-          {tiles.map((t) => (
-            <div key={t.key}>
-              {tileEdit ? (
-                <div style={{ background: "#fff", border: `2px solid ${t.visible ? "#E07B39" : "#E5E7EB"}`, borderRadius: 14, padding: "12px 14px", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", opacity: t.visible ? 1 : 0.5 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                    <span style={{ fontSize: 22 }}>{t.icon}</span>
-                    <div style={{ display: "flex", gap: 4 }}>
-                      <button onClick={() => { const pi = tileConf.findIndex(x => x.key === t.key); if (pi > 0) { const n = [...tileConf]; [n[pi], n[pi - 1]] = [n[pi - 1], n[pi]]; saveTileConf(n); } }} style={{ background: "#F3F4F6", border: "none", borderRadius: 4, padding: "2px 6px", fontSize: 12, cursor: "pointer" }}>↑</button>
-                      <button onClick={() => { const pi = tileConf.findIndex(x => x.key === t.key); if (pi < tileConf.length - 1) { const n = [...tileConf]; [n[pi], n[pi + 1]] = [n[pi + 1], n[pi]]; saveTileConf(n); } }} style={{ background: "#F3F4F6", border: "none", borderRadius: 4, padding: "2px 6px", fontSize: 12, cursor: "pointer" }}>↓</button>
-                      <button onClick={() => setEditTile({ ...t })} style={{ background: "#EFF6FF", border: "none", borderRadius: 4, padding: "2px 6px", fontSize: 11, color: "#1A3A5C", cursor: "pointer" }}>✏️</button>
-                      <button onClick={() => saveTileConf(tileConf.map(x => x.key === t.key ? { ...x, visible: !x.visible } : x))} style={{ background: t.visible ? "#FEF2F2" : "#F0FDF4", border: "none", borderRadius: 4, padding: "2px 6px", fontSize: 11, cursor: "pointer" }}>{t.visible ? "🙈" : "👁"}</button>
-                    </div>
-                  </div>
-                  <div style={{ fontWeight: 800, fontSize: 13, color: "#1F2937" }}>{t.label}</div>
-                  <div style={{ marginTop: 8, height: 3, borderRadius: 2, background: t.color, width: "40%" }} />
-                </div>
-              ) : (
-                <button onClick={() => handleTileClick(t)} style={{ width: "100%", background: "#fff", border: "none", borderRadius: 14, padding: "16px 14px", textAlign: "left", cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
-                  <div style={{ fontSize: 26, marginBottom: 8 }}>{t.icon}</div>
-                  <div style={{ fontWeight: 800, fontSize: 14, color: "#1F2937", marginBottom: 2, display: "flex", alignItems: "center", gap: 4 }}>
-                    {t.label}
-                    {t.key === "finance" && savedPw && <span style={{ fontSize: 12 }}>{finUnlocked ? "🔓" : "🔒"}</span>}
-                  </div>
-                  <div style={{ fontSize: 11, color: "#6B7280" }}>{t.sub}</div>
-                  <div style={{ marginTop: 10, height: 3, borderRadius: 2, background: t.color, width: "40%" }} />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>}
-
-        <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", marginBottom: 10 }}>直近のタスク</div>
-        <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
-          {pending.slice(0, 3).map((t, i) => (
-            <div key={t.id} style={{ padding: "12px 16px", borderBottom: i < Math.min(pending.length, 3) - 1 ? "1px solid #F3F4F6" : "none", display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: PRIO[t.prio]?.c || "#9CA3AF", flexShrink: 0 }} />
-              <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#1F2937" }}>{t.title}</div>
-              {t.due && <div style={{ fontSize: 11, color: "#9CA3AF" }}>{t.due}</div>}
-            </div>
-          ))}
-          {pending.length === 0 && <div style={{ padding: 16, color: "#9CA3AF", fontSize: 13, textAlign: "center" }}>タスクはありません</div>}
-          <button onClick={() => nav("tasks")} style={{ width: "100%", padding: 10, background: "#F9FAFB", border: "none", fontSize: 12, color: cust.c1, fontWeight: 700, cursor: "pointer", borderTop: "1px solid #F3F4F6" }}>すべて見る →</button>
-        </div>
-
-        <div style={{ marginTop: 24 }}>
-          <button onClick={() => setShowStorage(p => !p)} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 0" }}>
-            <span style={{ fontSize: 11, color: "#C4C4C4" }}>📦 Storage {fmtMB(totalMB)} / 1GB</span>
-            <span style={{ fontSize: 10, color: "#C4C4C4" }}>{showStorage ? "▲" : "▼"}</span>
-          </button>
-          {showStorage && (
-            <div style={{ background: "#fff", borderRadius: 12, padding: "12px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginTop: 4 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#374151" }}>ストレージ使用量</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: storageCol }}>{storageP.toFixed(1)}%</span>
-              </div>
-              <div style={{ background: "#E5E7EB", borderRadius: 4, height: 8, overflow: "hidden", marginBottom: 10 }}>
-                <div style={{ width: `${storageP}%`, height: "100%", background: storageCol, borderRadius: 4, transition: "width 0.5s" }} />
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#6B7280" }}>
-                <span>📂 財務　{fmtMB(finMB)}</span>
-                <span>📋 雛形　{fmtMB(tmplMB)}</span>
-              </div>
-              <div style={{ textAlign: "center", marginTop: 8, fontSize: 11, color: "#9CA3AF" }}>合計 {fmtMB(totalMB)} / 1GB</div>
-            </div>
-          )}
         </div>
       </div>
 
+      {/* ドットインジケーター */}
+      {!isPC && (
+        <div style={{ display: "flex", justifyContent: "center", gap: 6, paddingBottom: 16, marginTop: -10 }}>
+          {[0, 1].map(i => (
+            <div key={i} onClick={() => setCurrentPage(i)} style={{ width: i === currentPage ? 20 : 8, height: 8, borderRadius: 4, background: i === currentPage ? cust.c1 : "#D1D5DB", cursor: "pointer", transition: "all 0.3s" }} />
+          ))}
+        </div>
+      )}
+
+      {/* PWモーダル */}
       {pwModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: 300, boxSizing: "border-box" }}>

@@ -2,91 +2,130 @@ import { useState } from "react";
 import { Hdr } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 
-export default function AI({ pjs, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, tileConf, aiMsgs, setAiMsgs, aiInput, setAiInput, SB_W, RP_W }) {
-  const [aiLoading, setAiLoading] = useState(false);
+export default function AI({ pjs, cos, tks, links, cust, tileConf, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, SB_W, RP_W }) {
+  const [selected, setSelected] = useState(null);
   const pending = tks.filter(t => !t.done);
-  const suggestions = ["今月完了した案件は？", "粗利率が一番高い案件は？", "未完了タスクを優先度順に教えて", "受注金額の合計を教えて", "進行中の案件一覧を教えて"];
 
-  const sendAI = async () => {
-    if (!aiInput.trim() || aiLoading) return;
-    const userMsg = aiInput.trim();
-    setAiInput("");
-    setAiMsgs(prev => [...prev, { role: "user", content: userMsg }]);
-    setAiLoading(true);
-    try {
-      const context = `
-あなたはIGUMI管理アプリのAIアシスタントです。以下のデータをもとに質問に答えてください。日本語で簡潔に答えてください。
+  // 仮の相談履歴
+  const recentChats = [
+    { icon: "📝", label: "見積もり相談", color: "#E07B39", text: "外壁塗装工事の単価について相談しました", time: "今日 10:32" },
+    { icon: "📄", label: "報告書相談", color: "#059669", text: "防水工事の報告書の文章を整形してもらいました", time: "昨日 15:15" },
+    { icon: "¥", label: "経理相談", color: "#6366F1", text: "今月の経費の内訳について質問しました", time: "2日前 16:45" },
+  ];
 
-【案件データ】
-${pjs.map(p => `・${p.name}（${p.status}）受注:${p.amount ? '¥' + Number(p.amount).toLocaleString() : '未設定'} 粗利:${p.gp ? '¥' + Number(p.gp).toLocaleString() : '未設定'} 担当:${p.inCharge || '未設定'}`).join('\n')}
+  const boxes = [
+    {
+      key: "report",
+      icon: "📄",
+      label: "報告書相談箱",
+      desc: "報告書の作成サポートや\n記載内容の提案、文章の整形を行います",
+      color: "#059669",
+      bg: "#F0FDF4",
+      iconBg: "linear-gradient(135deg, #D1FAE5, #A7F3D0)",
+      url: null, // カスタムGPTのURL（後で設定）
+    },
+    {
+      key: "estimate",
+      icon: "🧮",
+      label: "見積もり相談箱",
+      desc: "見積書の作成サポートや\n単価・工法の提案、比較検討を行います",
+      color: "#E07B39",
+      bg: "#FFF7ED",
+      iconBg: "linear-gradient(135deg, #FED7AA, #FCA87F)",
+      url: null,
+    },
+    {
+      key: "accounting",
+      icon: "¥",
+      label: "経理相談箱",
+      desc: "経費や請求、PLの確認など\n数字に関する相談を行います",
+      color: "#6366F1",
+      bg: "#EEF2FF",
+      iconBg: "linear-gradient(135deg, #E0E7FF, #C7D2FE)",
+      url: null,
+    },
+  ];
 
-【取引先データ】
-${cos.map(c => `・${c.name}${c.branch ? ' ' + c.branch : ''}（${c.type}）担当者${(c.contacts || []).length}名`).join('\n')}
-
-【未完了タスク】
-${tks.filter(t => !t.done).map(t => `・${t.title}（優先度:${t.prio}）${t.due ? '期限:' + t.due : ''}`).join('\n') || 'なし'}
-      `;
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: [{ role: "system", content: context }, ...aiMsgs.slice(-6), { role: "user", content: userMsg }],
-          max_tokens: 800
-        })
-      });
-      const data = await res.json();
-      const reply = data.choices?.[0]?.message?.content || "エラーが発生しました";
-      setAiMsgs(prev => [...prev, { role: "assistant", content: reply }]);
-    } catch (e) {
-      setAiMsgs(prev => [...prev, { role: "assistant", content: "エラーが発生しました。APIキーを確認してください。" }]);
+  const handleBoxClick = (box) => {
+    if (box.url) {
+      window.open(box.url, "_blank");
+    } else {
+      setSelected(box);
     }
-    setAiLoading(false);
   };
 
   return (
-    <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", display: "flex", flexDirection: "column", ...pp }}>
+    <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
       {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="ai" nav={nav} setModal={() => {}} setEc={() => {}} SB_W={SB_W} />}
-      {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={setAiInput} RP_W={RP_W} />}
+      {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} />}
       {(cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
-      <Hdr title="🤖 AIアシスタント" back={() => nav("home")} />
-      <div style={{ flex: 1, overflowY: "auto", padding: "14px 14px 0" }}>
-        {aiMsgs.length === 0 && (
-          <div>
-            <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)", textAlign: "center" }}>
-              <div style={{ fontSize: 40, marginBottom: 8 }}>🤖</div>
-              <div style={{ fontWeight: 800, fontSize: 15, color: "#1F2937", marginBottom: 4 }}>AIアシスタント</div>
-              <div style={{ fontSize: 12, color: "#6B7280", lineHeight: 1.6 }}>IGUMIのデータについて何でも聞いてください。</div>
+
+      <Hdr title="✨ AI補助" back={() => nav("home")} />
+
+      <div style={{ padding: isPC ? "20px 0" : "20px 16px 40px" }}>
+
+        {/* タイトル */}
+        <div style={{ marginBottom: 24, textAlign: "center" }}>
+          <div style={{ fontWeight: 800, fontSize: 18, color: "#1F2937", marginBottom: 4 }}>相談したい内容を選択してください</div>
+          <div style={{ fontSize: 13, color: "#9CA3AF" }}>AIがあなたの業務をサポートします</div>
+        </div>
+
+        {/* 相談箱3種類 */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 32 }}>
+          {boxes.map(box => (
+            <div key={box.key} onClick={() => handleBoxClick(box)}
+              style={{ background: "#fff", borderRadius: 16, padding: "20px", boxShadow: "0 2px 10px rgba(0,0,0,0.07)", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+              {/* アイコン */}
+              <div style={{ width: 64, height: 64, borderRadius: "50%", background: box.iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, marginBottom: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
+                {box.icon}
+              </div>
+              <div style={{ fontWeight: 800, fontSize: 16, color: box.color, marginBottom: 6 }}>{box.label}</div>
+              <div style={{ fontSize: 13, color: "#6B7280", lineHeight: 1.6, whiteSpace: "pre-line", marginBottom: 14 }}>{box.desc}</div>
+              <div style={{ border: `1.5px solid ${box.color}`, borderRadius: 20, padding: "8px 24px", color: box.color, fontWeight: 700, fontSize: 13 }}>
+                相談をはじめる ›
+              </div>
             </div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", marginBottom: 8 }}>💡 質問例</div>
-            {suggestions.map(s => (
-              <button key={s} onClick={() => setAiInput(s)} style={{ width: "100%", background: "#fff", border: "1.5px solid #E5E7EB", borderRadius: 10, padding: "10px 14px", textAlign: "left", fontSize: 13, color: "#374151", marginBottom: 6, cursor: "pointer", fontWeight: 500 }}>{s}</button>
+          ))}
+        </div>
+
+        {/* 最近の相談履歴（仮） */}
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>最近の相談履歴</div>
+            <button style={{ fontSize: 11, color: "#6366F1", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>すべて見る →</button>
+          </div>
+          <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            {recentChats.map((chat, i) => (
+              <div key={i} style={{ padding: "14px 16px", borderBottom: i < recentChats.length - 1 ? "1px solid #F3F4F6" : "none", display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: "#F3F4F6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0, color: chat.color, fontWeight: 700 }}>
+                  {chat.icon}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: chat.color, marginBottom: 2 }}>{chat.label}</div>
+                  <div style={{ fontSize: 12, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{chat.text}</div>
+                </div>
+                <div style={{ fontSize: 10, color: "#9CA3AF", flexShrink: 0 }}>{chat.time}</div>
+              </div>
             ))}
           </div>
-        )}
-        {aiMsgs.map((m, i) => (
-          <div key={i} style={{ marginBottom: 12, display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
-            {m.role === "assistant" && <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#6D28D9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, marginRight: 8, flexShrink: 0, marginTop: 2 }}>🤖</div>}
-            <div style={{ maxWidth: "80%", padding: "10px 14px", borderRadius: m.role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px", background: m.role === "user" ? "#1A3A5C" : "#fff", color: m.role === "user" ? "#fff" : "#1F2937", fontSize: 13, lineHeight: 1.7, boxShadow: m.role === "assistant" ? "0 1px 4px rgba(0,0,0,0.08)" : "none", whiteSpace: "pre-wrap" }}>{m.content}</div>
-          </div>
-        ))}
-        {aiLoading && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-            <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#6D28D9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>🤖</div>
-            <div style={{ background: "#fff", borderRadius: "16px 16px 16px 4px", padding: "10px 16px", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
-              <div style={{ display: "flex", gap: 4 }}>{[0, 1, 2].map(i => <div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: "#9CA3AF" }} />)}</div>
-            </div>
-          </div>
-        )}
-        <div style={{ height: 14 }} />
-      </div>
-      <div style={{ padding: "12px 14px 24px", background: "#fff", borderTop: "1px solid #F3F4F6" }}>
-        {aiMsgs.length > 0 && <button onClick={() => setAiMsgs([])} style={{ fontSize: 11, color: "#9CA3AF", background: "none", border: "none", cursor: "pointer", marginBottom: 8 }}>🗑 会話をリセット</button>}
-        <div style={{ display: "flex", gap: 8 }}>
-          <input value={aiInput} onChange={e => setAiInput(e.target.value)} onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendAI()} placeholder="質問を入力..." style={{ flex: 1, padding: "10px 14px", borderRadius: 10, border: "1.5px solid #E5E7EB", fontSize: 13, outline: "none", color: "#1F2937" }} />
-          <button onClick={sendAI} disabled={!aiInput.trim() || aiLoading} style={{ background: aiInput.trim() && !aiLoading ? "#6D28D9" : "#E5E7EB", color: aiInput.trim() && !aiLoading ? "#fff" : "#9CA3AF", border: "none", borderRadius: 10, padding: "10px 16px", fontSize: 13, fontWeight: 700, cursor: aiInput.trim() && !aiLoading ? "pointer" : "default" }}>送信</button>
         </div>
       </div>
+
+      {/* 準備中モーダル */}
+      {selected && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 24px" }}>
+          <div style={{ background: "#fff", borderRadius: 20, padding: 28, width: "100%", maxWidth: 320, textAlign: "center" }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>{selected.icon}</div>
+            <div style={{ fontWeight: 800, fontSize: 17, color: selected.color, marginBottom: 8 }}>{selected.label}</div>
+            <div style={{ fontSize: 13, color: "#6B7280", marginBottom: 20, lineHeight: 1.6 }}>
+              カスタムGPTの準備中です。<br />もうしばらくお待ちください！
+            </div>
+            <button onClick={() => setSelected(null)} style={{ width: "100%", padding: "12px 0", background: selected.color, color: "#fff", border: "none", borderRadius: 12, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
+              閉じる
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
