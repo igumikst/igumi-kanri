@@ -31,14 +31,14 @@ export default function Projects({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen
 
   const savePj = async () => {
     if (!nP.name) return;
-    const { data } = await supabase.from("projects").insert([{ name: nP.name, status: nP.status, clientId: nP.clientId, salesRep: nP.salesRep, inCharge: nP.inCharge, subcontractorIds: nP.subIds || [], amount: Number(nP.amount) || 0, grossProfit: Number(nP.gp) || 0, quoteDate: nP.qDate }]).select();
+    const { data } = await supabase.from("projects").insert([{ name: nP.name, status: nP.status, clientId: nP.clientId || null, salesRep: nP.salesRep, inCharge: nP.inCharge, subcontractorIds: nP.subIds || [], amount: Number(nP.amount) || 0, grossProfit: Number(nP.gp) || 0, quoteDate: nP.qDate }]).select();
     if (data) setPjs([{ ...data[0], subIds: data[0].subcontractorIds || [], gp: data[0].grossProfit || 0, qDate: data[0].quoteDate || "" }, ...pjs]);
     setNP(blankP); setModal(null);
   };
 
   const updatePj = async () => {
     if (!editP || !editP.name) return;
-    await supabase.from("projects").update({ name: editP.name, status: editP.status, clientId: editP.clientId, salesRep: editP.salesRep, inCharge: editP.inCharge, subcontractorIds: editP.subIds || [], amount: Number(editP.amount) || 0, grossProfit: Number(editP.gp) || 0, quoteDate: editP.qDate }).eq("id", editP.id);
+    await supabase.from("projects").update({ name: editP.name, status: editP.status, clientId: editP.clientId || null, salesRep: editP.salesRep, inCharge: editP.inCharge, subcontractorIds: editP.subIds || [], amount: Number(editP.amount) || 0, grossProfit: Number(editP.gp) || 0, quoteDate: editP.qDate }).eq("id", editP.id);
     const updated = { ...editP, gp: Number(editP.gp) || 0, amount: Number(editP.amount) || 0 };
     setPjs(pjs.map(p => p.id === editP.id ? updated : p));
     setSelP(updated); setEditP(null);
