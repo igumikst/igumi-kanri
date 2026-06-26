@@ -13,7 +13,7 @@ export default function Projects({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen
   const [quickStatus, setQuickStatus] = useState(null);
   const [conf, setConf] = useState(null);
   const [editP, setEditP] = useState(null);
-  const blankP = { name: "", status: "発注待ち", clientId: "", salesRep: "", inCharge: "崎岡", subIds: [], amount: "", gp: "", qDate: "", memo: "" };
+  const blankP = { name: "", status: "発注待ち", clientId: "", salesRep: "", inCharge: "崎岡", subIds: [], amount: "", gp: "", qDate: "" };
   const [nP, setNP] = useState(blankP);
 
   const getC = id => cos.find(c => c.id === id);
@@ -31,14 +31,14 @@ export default function Projects({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen
 
   const savePj = async () => {
     if (!nP.name) return;
-    const { data } = await supabase.from("projects").insert([{ name: nP.name, status: nP.status, clientId: nP.clientId, salesRep: nP.salesRep, inCharge: nP.inCharge, subcontractorIds: nP.subIds || [], amount: Number(nP.amount) || 0, grossProfit: Number(nP.gp) || 0, quoteDate: nP.qDate, memo: nP.memo }]).select();
+    const { data } = await supabase.from("projects").insert([{ name: nP.name, status: nP.status, clientId: nP.clientId, salesRep: nP.salesRep, inCharge: nP.inCharge, subcontractorIds: nP.subIds || [], amount: Number(nP.amount) || 0, grossProfit: Number(nP.gp) || 0, quoteDate: nP.qDate }]).select();
     if (data) setPjs([{ ...data[0], subIds: data[0].subcontractorIds || [], gp: data[0].grossProfit || 0, qDate: data[0].quoteDate || "" }, ...pjs]);
     setNP(blankP); setModal(null);
   };
 
   const updatePj = async () => {
     if (!editP || !editP.name) return;
-    await supabase.from("projects").update({ name: editP.name, status: editP.status, clientId: editP.clientId, salesRep: editP.salesRep, inCharge: editP.inCharge, subcontractorIds: editP.subIds || [], amount: Number(editP.amount) || 0, grossProfit: Number(editP.gp) || 0, quoteDate: editP.qDate, memo: editP.memo }).eq("id", editP.id);
+    await supabase.from("projects").update({ name: editP.name, status: editP.status, clientId: editP.clientId, salesRep: editP.salesRep, inCharge: editP.inCharge, subcontractorIds: editP.subIds || [], amount: Number(editP.amount) || 0, grossProfit: Number(editP.gp) || 0, quoteDate: editP.qDate }).eq("id", editP.id);
     const updated = { ...editP, gp: Number(editP.gp) || 0, amount: Number(editP.amount) || 0 };
     setPjs(pjs.map(p => p.id === editP.id ? updated : p));
     setSelP(updated); setEditP(null);
@@ -79,10 +79,6 @@ export default function Projects({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen
               <Inp label="受注金額" type="number" value={editP.amount || ""} onChange={e => setEditP({ ...editP, amount: e.target.value })} />
               <Inp label="粗利" type="number" value={editP.gp || ""} onChange={e => setEditP({ ...editP, gp: e.target.value })} />
               <Inp label="見積提出日" type="date" value={editP.qDate || ""} onChange={e => setEditP({ ...editP, qDate: e.target.value })} />
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 3 }}>備考</div>
-                <textarea value={editP.memo || ""} onChange={e => setEditP({ ...editP, memo: e.target.value })} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, resize: "vertical", minHeight: 60, boxSizing: "border-box", background: "#FAFAFA", color: "#1F2937" }} />
-              </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={() => setEditP(null)} style={{ flex: 1, padding: "12px 0", background: "#F3F4F6", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer", color: "#374151" }}>キャンセル</button>
                 <button onClick={updatePj} style={{ flex: 2, padding: "12px 0", background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>💾 保存する</button>
@@ -107,7 +103,6 @@ export default function Projects({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen
                   <div key={l} style={{ marginBottom: 8 }}><div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 2 }}>{l}</div><div style={{ fontSize: 13, fontWeight: 600, color: "#1F2937" }}>{v || "—"}</div></div>
                 ))}
               </div>
-              {selP.memo && <div style={{ background: "#F9FAFB", borderRadius: 8, padding: "8px 12px", fontSize: 13, color: "#374151", marginBottom: 12 }}>📝 {selP.memo}</div>}
               <div style={{ borderTop: "1px solid #F3F4F6", paddingTop: 14 }}>
                 <div style={{ fontWeight: 700, fontSize: 13, color: "#1A3A5C", marginBottom: 8 }}>🏢 取引先</div>
                 {getC(selP.clientId) ? <div style={{ background: "#F0F4F8", borderRadius: 10, padding: "10px 12px" }}><div style={{ fontWeight: 700, color: "#1F2937" }}>{getC(selP.clientId).name}</div></div> : <div style={{ color: "#9CA3AF", fontSize: 13 }}>未設定</div>}
@@ -159,10 +154,6 @@ export default function Projects({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen
         <Inp label="受注金額" type="number" value={nP.amount} onChange={e => setNP({ ...nP, amount: e.target.value })} />
         <Inp label="粗利" type="number" value={nP.gp} onChange={e => setNP({ ...nP, gp: e.target.value })} />
         <Inp label="見積提出日" type="date" value={nP.qDate} onChange={e => setNP({ ...nP, qDate: e.target.value })} />
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 3 }}>備考</div>
-          <textarea value={nP.memo} onChange={e => setNP({ ...nP, memo: e.target.value })} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, resize: "vertical", minHeight: 60, boxSizing: "border-box", background: "#FAFAFA", color: "#1F2937" }} />
-        </div>
       </Modal>)}
       {conf && <Confirm msg={conf.msg} onCancel={() => setConf(null)} onOk={conf.onOk} />}
     </div>
