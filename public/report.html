@@ -569,6 +569,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
 
   const mincho=(size,bold=false)=>({name:'ＭＳ Ｐ明朝',size,bold});
   const hair={style:'hair'};
+  const medium={style:'medium'};
 
   // ─── 表紙シート ───
   const cws=wb.addWorksheet('表紙');
@@ -583,7 +584,26 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   for(let r=1;r<=56;r++){cws.getRow(r).height=13.5;}
   [2,3,4,5].forEach(r=>{cws.getRow(r).height=12.75;});
 
-  // 建物名称 E11:P13（ＭＳ Ｐ明朝20pt太字・中央・四方罫線）
+  // ページ全体に外枠（エクレール準拠）
+  const addOuterBorder=(ws,tl,br,borderStyle)=>{
+    const [tlCol,tlRow]=[tl.replace(/[0-9]/g,''),parseInt(tl.replace(/[A-Z]/gi,''))];
+    const [brCol,brRow]=[br.replace(/[0-9]/g,''),parseInt(br.replace(/[A-Z]/gi,''))];
+    const colToNum=c=>{let n=0;for(const ch of c)n=n*26+ch.charCodeAt(0)-64;return n;};
+    const numToCol=n=>{let s='';while(n>0){s=String.fromCharCode(65+(n-1)%26)+s;n=Math.floor((n-1)/26);}return s;};
+    const tlC=colToNum(tlCol),brC=colToNum(brCol);
+    const b={style:borderStyle};
+    for(let c=tlC;c<=brC;c++){
+      ws.getCell(`${numToCol(c)}${tlRow}`).border={...ws.getCell(`${numToCol(c)}${tlRow}`).border,top:b};
+      ws.getCell(`${numToCol(c)}${brRow}`).border={...ws.getCell(`${numToCol(c)}${brRow}`).border,bottom:b};
+    }
+    for(let r=tlRow;r<=brRow;r++){
+      ws.getCell(`${tlCol}${r}`).border={...ws.getCell(`${tlCol}${r}`).border,left:b};
+      ws.getCell(`${brCol}${r}`).border={...ws.getCell(`${brCol}${r}`).border,right:b};
+    }
+  };
+  addOuterBorder(cws,'B2','T56','medium');
+
+  // 建物名称 E11:P13（ＭＳ Ｐ明朝20pt太字・中央・四方罫線thin）
   cws.mergeCells('E11:P13');
   const buildingCell=cws.getCell('E11');
   buildingCell.value=uBuilding;
@@ -624,9 +644,12 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
 
   for(let r=1;r<=56;r++){rws.getRow(r).height=13.5;}
   [2,3,4,5].forEach(r=>{rws.getRow(r).height=12.75;});
-  [25,27,28,29,30,31,32,33,36,37,38,39].forEach(r=>{rws.getRow(r).height=14.25;});
+  [25,27,28,29,30,31,32,33,36,37,38,39,40,41,42,45,46].forEach(r=>{rws.getRow(r).height=14.25;});
 
-  // タイトル「調査報告書」→ ＭＳ Ｐ明朝・四方罫線（コスモ立川準拠）
+  // ページ全体に外枠（エクレール準拠）
+  addOuterBorder(rws,'B2','T56','medium');
+
+  // タイトル「調査報告書」→ ＭＳ Ｐ明朝・四方罫線thin
   rws.mergeCells('B2:S4');
   const rtitleCell=rws.getCell('B2');
   rtitleCell.value='調査報告書';
@@ -634,16 +657,16 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   rtitleCell.alignment={horizontal:'center',vertical:'middle'};
   rtitleCell.border={top:thin,bottom:thin,left:thin,right:thin};
 
+  // 「作業者」→「作業責任者」に修正（エクレール準拠）
   const reportItems=[
     [5,'建築物名称',{formula:`表紙!E11`}],
     [8,'住所',uAddress],
     [11,'工事名称',{formula:`表紙!D15`}],
     [14,'作業実施日',{formula:`表紙!F41`}],
-    [17,'作業者',uWorker],
+    [17,'作業責任者',uWorker],
   ];
 
   reportItems.forEach(([rowNum,label,val])=>{
-    // ラベル（全てＭＳ Ｐ明朝・均等割付）
     rws.mergeCells(`C${rowNum}:E${rowNum+2}`);
     const lc=rws.getCell(`C${rowNum}`);
     lc.value=label;lc.font=mincho(12);
@@ -651,7 +674,6 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     lc.border={top:thin,bottom:thin};
     rws.mergeCells(`F${rowNum}:F${rowNum+2}`);
     rws.mergeCells(`G${rowNum}:G${rowNum+2}`);
-    // 値（全てＭＳ Ｐ明朝）
     rws.mergeCells(`H${rowNum}:S${rowNum+2}`);
     const vc=rws.getCell(`H${rowNum}`);
     if(typeof val==='object'&&val.formula){
@@ -664,14 +686,13 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     vc.border={bottom:thin,top:thin,right:thin};
   });
 
-  // 【作業内容】（ＭＳ Ｐ明朝）
+  // 【作業内容】
   rws.mergeCells('C21:G22');
   const contentTitleCell=rws.getCell('C21');
   contentTitleCell.value='【　作　業　内　容　】';
   contentTitleCell.font=mincho(12);
   contentTitleCell.alignment={horizontal:'center',vertical:'middle'};
 
-  // 作業内容（全行ＭＳ Ｐ明朝に統一）
   const contentLines=uContent.split('\n').filter(l=>l.trim());
   contentLines.forEach((line,i)=>{
     const r=23+i;
@@ -683,26 +704,30 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     cc.alignment={vertical:'bottom'};
   });
 
-  rws.mergeCells('C37:I38');
-  const refCell=rws.getCell('C37');
+  // （別紙写真添付参照）→ エクレールはC41（行がずれてる）
+  rws.mergeCells('C41:I42');
+  const refCell=rws.getCell('C41');
   refCell.value='（別紙写真添付参照）';
   refCell.font=mincho(12);
   refCell.alignment={vertical:'middle'};
 
-  rws.mergeCells('J40:R41');
-  const doneCell=rws.getCell('J40');
+  // 上記の作業を実施いたしました。→ J44:R45
+  rws.mergeCells('J44:R45');
+  const doneCell=rws.getCell('J44');
   doneCell.value='上記の作業を実施いたしました。';
   doneCell.font=mincho(12);
   doneCell.alignment={vertical:'middle'};
 
-  rws.mergeCells('P42:R43');
-  const ijoCell=rws.getCell('P42');
+  // 以上 → P46:R47
+  rws.mergeCells('P46:R47');
+  const ijoCell=rws.getCell('P46');
   ijoCell.value='以上';
   ijoCell.font=mincho(11);
   ijoCell.alignment={vertical:'middle'};
 
-  rws.mergeCells('C45:G46');
-  const bikoCell=rws.getCell('C45');
+  // 【備考】→ C47:G48
+  rws.mergeCells('C47:G48');
+  const bikoCell=rws.getCell('C47');
   bikoCell.value='【　備　　　　　考　】';
   bikoCell.font=mincho(12);
   bikoCell.alignment={vertical:'middle'};
