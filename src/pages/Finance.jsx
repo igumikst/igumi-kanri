@@ -210,7 +210,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
 
   // ── 月一覧画面 ──
   if (finM) {
-    const monthFiles = finFiles.filter(f => f.item_id === finItem.id && Number(f.year) === Number(finY) && Number(f.month) === Number(finM));
+    console.log("finItem.id:", finItem.id, "finY:", finY, "finM:", finM, "finFiles count:", finFiles.length, "sample item_id:", finFiles[0]?.item_id);
     return (
       <div style={{ fontFamily: "'Hiragino Sans',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
         {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="finance" nav={nav} setModal={() => {}} setEc={() => {}} SB_W={SB_W} />}
