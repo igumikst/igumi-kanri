@@ -1,8 +1,16 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { Modal, Inp } from "../components/UI";
 import { PRIO } from "../lib/constants";
 import { supabase } from "../lib/supabase";
+
+// カテゴリカラー定義（Schedule.jsxと統一）
+const CAT_COLOR_MAP = {
+  "現調": "#2563eb", "調査": "#16a34a", "工事": "#9333ea",
+  "打ち合わせ": "#0891b2", "緊急当番": "#dc2626", "事務": "#78716c",
+  "外出": "#92400e", "休み": "#db2777", "その他": "#6b7280",
+};
+const getCatColor = (sc) => sc.color || CAT_COLOR_MAP[sc.category] || "#6b7280";
 
 export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, setTileEdit, saveTileConf, saveCustomize, weather, weekWeather, fishWeather, isPC, pp, nav, setModal, setEc, ec, rpOpen, setRpOpen, finFiles, tmplFiles, SB_W, RP_W, boardPosts, calls, setCalls }) {
   const [editTile, setEditTile] = useState(null);
@@ -15,7 +23,10 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const [savedPw, setSavedPw] = useState(null);
   const [pwLoaded, setPwLoaded] = useState(false);
   const [showStorage, setShowStorage] = useState(false);
-  const [currentPage, setCurrentPage] = useState(0); // 0=新デザイン 1=旧ホーム
+  const [currentPage, setCurrentPage] = useState(0);
+  const [todaySchedules, setTodaySchedules] = useState([]);
+  // バナーモード: "schedule"=予定表示, "dashboard"=数字ダッシュボード
+  const [bannerMode, setBannerMode] = useState("schedule");
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
 
@@ -42,6 +53,34 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
 
   const WD = ["日", "月", "火", "水", "木", "金", "土"];
   const weatherIcon = code => code === 0 ? "☀️" : code <= 2 ? "🌤" : code === 3 ? "☁️" : code <= 48 ? "🌫" : code <= 55 ? "🌦" : code <= 65 ? "🌧" : code <= 75 ? "🌨" : code <= 82 ? "🌦" : code <= 99 ? "⛈" : "🌡";
+
+  // 今日の予定を取得
+  useEffect(() => {
+    const fetchTodaySchedules = async () => {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const { data } = await supabase
+        .from("schedules")
+        .select("*")
+        .gte("start_at", `${todayStr}T00:00:00`)
+        .lte("start_at", `${todayStr}T23:59:59`)
+        .order("start_at");
+      if (data) setTodaySchedules(data);
+    };
+    fetchTodaySchedules();
+  }, []);
+
+  const formatTime = (isoStr) => {
+    if (!isoStr) return "";
+    const d = new Date(isoStr);
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  };
+
+  const formatTimeRange = (sc) => {
+    if (sc.all_day) return "終日";
+    const s = formatTime(sc.start_at);
+    const e = sc.end_at ? formatTime(sc.end_at) : "";
+    return e ? `${s}-${e}` : s;
+  };
 
   const refreshCalls = async () => {
     setRefreshing(true);
@@ -80,7 +119,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
     nav(t.key);
   };
 
-  // スワイプ処理
   const handleTouchStart = (e) => {
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
@@ -90,7 +128,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
     if (touchStartX.current === null) return;
     const dx = e.changedTouches[0].clientX - touchStartX.current;
     const dy = e.changedTouches[0].clientY - touchStartY.current;
-    // 横スワイプが縦より大きい場合のみ処理
     if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
       if (dx < 0 && currentPage < 1) setCurrentPage(1);
       if (dx > 0 && currentPage > 0) setCurrentPage(0);
@@ -103,51 +140,121 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const NewHomePage = () => (
     <div style={{ padding: "16px 16px 30px" }}>
 
-      {/* 今日の状況バナー */}
-      <div style={{ background: "linear-gradient(135deg, #1A3A5C, #2563EB)", borderRadius: 16, padding: "18px 20px", marginBottom: 18, boxShadow: "0 4px 16px rgba(37,99,235,0.25)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <div style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>📅 今日の状況</div>
-          <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 11 }}>
-            {new Date().toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' })}
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          {[
-            { label: "進行中案件", value: `${active.length}件`, color: "#60A5FA", icon: "📋", action: () => nav("projects") },
-            { label: "未完了タスク", value: `${pending.length}件`, color: "#F87171", icon: "✅", action: () => nav("tasks") },
-            { label: "未対応電話", value: `${(calls || []).filter(c => c.status === "未対応").length}件`, color: "#FBBF24", icon: "📞", action: () => nav("calls") },
-            { label: "取引先", value: `${cos.length}社`, color: "#34D399", icon: "🏢", action: () => nav("companies") },
-          ].map(item => (
-            <div key={item.label} onClick={item.action} style={{ background: "rgba(255,255,255,0.1)", borderRadius: 12, padding: "12px", cursor: "pointer" }}>
-              <div style={{ fontSize: 20, fontWeight: 900, color: item.color }}>{item.value}</div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.65)", marginTop: 2 }}>{item.label}</div>
+      {/* ===== バナー：モードで切り替え ===== */}
+      {bannerMode === "schedule" ? (
+        /* 予定表示モード */
+        <div style={{ background: "linear-gradient(135deg, #1A3A5C, #2563EB)", borderRadius: 16, padding: "14px 16px", marginBottom: 18, boxShadow: "0 4px 16px rgba(37,99,235,0.25)" }}>
+          {/* ヘッダー */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>📅 今日の予定</span>
+              {todaySchedules.length > 0 && (
+                <span style={{ background: "rgba(255,255,255,0.2)", color: "#fff", borderRadius: 10, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>
+                  {todaySchedules.length}件
+                </span>
+              )}
             </div>
-          ))}
+            <div style={{ display: "flex", gap: 5 }}>
+              <button onClick={() => setBannerMode("dashboard")} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "rgba(255,255,255,0.85)", borderRadius: 6, padding: "3px 8px", fontSize: 11, cursor: "pointer" }}>📊</button>
+              <button onClick={() => nav("schedule")} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "rgba(255,255,255,0.85)", borderRadius: 6, padding: "3px 8px", fontSize: 11, cursor: "pointer" }}>全て見る →</button>
+            </div>
+          </div>
+          {/* 予定リスト */}
+          {todaySchedules.length === 0 ? (
+            <div onClick={() => nav("schedule")} style={{ background: "rgba(255,255,255,0.08)", borderRadius: 10, padding: "16px", textAlign: "center", cursor: "pointer", border: "1px dashed rgba(255,255,255,0.2)" }}>
+              <div style={{ fontSize: 20, marginBottom: 4 }}>📭</div>
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)" }}>今日の予定はありません</div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>タップして予定を追加</div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              {todaySchedules.slice(0, 5).map((sc) => (
+                <div key={sc.id} onClick={() => nav("schedule")} style={{ background: "rgba(255,255,255,0.1)", borderRadius: 10, padding: "8px 10px", cursor: "pointer", display: "flex", alignItems: "flex-start", gap: 8, borderLeft: `3px solid ${getCatColor(sc)}` }}>
+                  {/* 時間 */}
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.8)", fontWeight: 700, minWidth: 76, flexShrink: 0, paddingTop: 1 }}>
+                    {formatTimeRange(sc)}
+                  </div>
+                  {/* カテゴリ＋タイトル＋担当者 */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
+                      <span style={{ background: getCatColor(sc), color: "#fff", borderRadius: 4, padding: "1px 6px", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
+                        {sc.category || "その他"}
+                      </span>
+                      <span style={{ fontSize: 12, color: "#fff", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {sc.title}
+                      </span>
+                    </div>
+                    {sc.assignees?.length > 0 && (
+                      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}>👤 {sc.assignees.join("・")}</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {todaySchedules.length > 5 && (
+                <div onClick={() => nav("schedule")} style={{ textAlign: "center", fontSize: 11, color: "rgba(255,255,255,0.6)", cursor: "pointer", paddingTop: 2 }}>
+                  他{todaySchedules.length - 5}件を見る →
+                </div>
+              )}
+            </div>
+          )}
         </div>
-        {/* 週間天気 */}
-        {weekWeather && (
-          <div style={{ marginTop: 12, display: "flex", gap: 4, overflowX: "auto" }}>
-            {weekWeather.map((d, i) => (
-              <div key={i} style={{ flex: 1, minWidth: 32, textAlign: "center" }}>
-                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>{i === 0 ? "今日" : WD[d.weekday]}</div>
-                <div style={{ fontSize: 14 }}>{weatherIcon(d.code)}</div>
-                <div style={{ fontSize: 9, fontWeight: 700, color: "#fff" }}>{d.max}°</div>
+      ) : (
+        /* 数字ダッシュボードモード */
+        <div style={{ background: "linear-gradient(135deg, #1A3A5C, #2563EB)", borderRadius: 16, padding: "18px 20px", marginBottom: 18, boxShadow: "0 4px 16px rgba(37,99,235,0.25)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>📊 今日の状況</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 11 }}>{new Date().toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' })}</div>
+              <button onClick={() => setBannerMode("schedule")} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "rgba(255,255,255,0.85)", borderRadius: 6, padding: "3px 8px", fontSize: 11, cursor: "pointer", marginLeft: 4 }}>📅</button>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            {[
+              { label: "進行中案件", value: `${active.length}件`, color: "#60A5FA", action: () => nav("projects") },
+              { label: "未完了タスク", value: `${pending.length}件`, color: "#F87171", action: () => nav("tasks") },
+              { label: "未対応電話", value: `${(calls || []).filter(c => c.status === "未対応").length}件`, color: "#FBBF24", action: () => nav("calls") },
+              { label: "取引先", value: `${cos.length}社`, color: "#34D399", action: () => nav("companies") },
+            ].map(item => (
+              <div key={item.label} onClick={item.action} style={{ background: "rgba(255,255,255,0.1)", borderRadius: 12, padding: "12px", cursor: "pointer" }}>
+                <div style={{ fontSize: 20, fontWeight: 900, color: item.color }}>{item.value}</div>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.65)", marginTop: 2 }}>{item.label}</div>
               </div>
             ))}
           </div>
-        )}
-      </div>
+          {weekWeather && (
+            <div style={{ marginTop: 12, display: "flex", gap: 4, overflowX: "auto" }}>
+              {weekWeather.map((d, i) => (
+                <div key={i} style={{ flex: 1, minWidth: 32, textAlign: "center" }}>
+                  <div style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>{i === 0 ? "今日" : WD[d.weekday]}</div>
+                  <div style={{ fontSize: 14 }}>{weatherIcon(d.code)}</div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: "#fff" }}>{d.max}°</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
-      {/* メイン4タイル */}
+      {/* メイン5タイル（スケジュール追加） */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
         {[
           { icon: "📋", label: "案件", sub: "案件の確認・管理を行います", color: "#1A3A5C", action: () => nav("projects") },
           { icon: "📸", label: "報告", sub: "現場の報告を作成・確認します", color: "#059669", action: () => window.open("/report.html", "_blank") },
           { icon: "📝", label: "見積", sub: "見積の作成・確認を行います", color: "#E07B39", action: () => nav("estimate") },
+          { icon: "📅", label: "スケジュール", sub: "予定の確認・登録を行います", color: "#2563eb", action: () => nav("schedule") },
           { icon: "✨", label: "AI補助", sub: "AIが業務をサポートします", color: "#6366F1", action: () => nav("ai"), gradient: true },
         ].map(t => (
           <div key={t.label} onClick={t.action}
-            style={{ background: t.gradient ? "linear-gradient(135deg, #6366F1, #8B5CF6)" : "#fff", borderRadius: 14, padding: "16px 14px", cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", borderLeft: t.gradient ? "none" : `4px solid ${t.color}` }}>
+            style={{
+              background: t.gradient ? "linear-gradient(135deg, #6366F1, #8B5CF6)" : "#fff",
+              borderRadius: 14,
+              padding: "16px 14px",
+              cursor: "pointer",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.07)",
+              borderLeft: t.gradient ? "none" : `4px solid ${t.color}`,
+              // AI補助だけ2列幅にして最後に配置
+              gridColumn: t.label === "AI補助" ? "1 / -1" : "auto",
+            }}>
             <div style={{ fontSize: 24, marginBottom: 6 }}>{t.icon}</div>
             <div style={{ fontWeight: 800, fontSize: 14, color: t.gradient ? "#fff" : "#1F2937", marginBottom: 2 }}>{t.label}</div>
             <div style={{ fontSize: 11, color: t.gradient ? "rgba(255,255,255,0.75)" : "#6B7280" }}>{t.sub}</div>
@@ -410,23 +517,10 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
       )}
 
       {/* スワイプエリア */}
-      <div
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        style={{ overflow: "hidden" }}
-      >
-        <div style={{
-          display: "flex",
-          transform: `translateX(-${currentPage * 100}%)`,
-          transition: "transform 0.3s ease",
-          willChange: "transform",
-        }}>
-          <div style={{ minWidth: "100%", width: "100%" }}>
-            <NewHomePage />
-          </div>
-          <div style={{ minWidth: "100%", width: "100%" }}>
-            <OldHomePage />
-          </div>
+      <div onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} style={{ overflow: "hidden" }}>
+        <div style={{ display: "flex", transform: `translateX(-${currentPage * 100}%)`, transition: "transform 0.3s ease", willChange: "transform" }}>
+          <div style={{ minWidth: "100%", width: "100%" }}><NewHomePage /></div>
+          <div style={{ minWidth: "100%", width: "100%" }}><OldHomePage /></div>
         </div>
       </div>
 
