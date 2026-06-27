@@ -513,8 +513,8 @@ async function buildNormalWorkbook(wb, minchoFont, thin, double) {
   cws.getRow(14).height=65.1; cws.getRow(15).height=20.1;
   cws.getRow(16).height=65.1; cws.getRow(17).height=20.1;
   cws.getRow(18).height=65.1; cws.getRow(19).height=20.1;
-  cws.getRow(20).height=65.1; cws.getRow(21).height=30;
-  cws.getRow(22).height=30;
+  cws.getRow(20).height=65.1;
+  // 行21・22は多摩の内容欄として後で上書きするので初期値は設定しない
 
   cws.mergeCells('C6:J6');
   const titleCell=cws.getCell('C6');
@@ -567,7 +567,6 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   let uDateStr='';
   if(uDate){const d=new Date(uDate);uDateStr=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 
-  const gothic=(size,bold=false)=>({name:'ＭＳ ゴシック',size,bold});
   const mincho=(size,bold=false)=>({name:'ＭＳ Ｐ明朝',size,bold});
   const hair={style:'hair'};
 
@@ -584,29 +583,37 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   for(let r=1;r<=56;r++){cws.getRow(r).height=13.5;}
   [2,3,4,5].forEach(r=>{cws.getRow(r).height=12.75;});
 
+  // 建物名称 E11:P13（ＭＳ Ｐ明朝20pt太字・中央・四方罫線）
   cws.mergeCells('E11:P13');
   const buildingCell=cws.getCell('E11');
   buildingCell.value=uBuilding;
-  buildingCell.font=gothic(20,true);
+  buildingCell.font=mincho(20,true);
   buildingCell.alignment={horizontal:'center',vertical:'middle'};
+  buildingCell.border={top:thin,bottom:thin,left:thin,right:thin};
 
+  // 工事名称 D15:Q18（ＭＳ Ｐ明朝22pt太字・中央・下線thin）
   cws.mergeCells('D15:Q18');
   const worknameCell=cws.getCell('D15');
   worknameCell.value=uWorkname;
   worknameCell.font=mincho(22,true);
   worknameCell.alignment={horizontal:'center',vertical:'bottom'};
+  worknameCell.border={bottom:thin};
 
+  // 作業日 F41:O43（ＭＳ Ｐ明朝20pt太字・中央・下線thin）
   cws.mergeCells('F41:O43');
   const dateCell=cws.getCell('F41');
   dateCell.value=uDateStr;
   dateCell.font=mincho(20,true);
   dateCell.alignment={horizontal:'center',vertical:'bottom'};
+  dateCell.border={bottom:thin};
 
+  // 会社名 F52:O54（ＭＳ Ｐ明朝20pt太字・中央・下線thin）
   cws.mergeCells('F52:O54');
   const companyCell=cws.getCell('F52');
   companyCell.value=uCompany;
-  companyCell.font=gothic(20,true);
+  companyCell.font=mincho(20,true);
   companyCell.alignment={horizontal:'center',vertical:'bottom'};
+  companyCell.border={bottom:thin};
 
   // ─── 報告書シート ───
   const rws=wb.addWorksheet('報告書');
@@ -619,12 +626,13 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   [2,3,4,5].forEach(r=>{rws.getRow(r).height=12.75;});
   [25,27,28,29,30,31,32,33,36,37,38,39].forEach(r=>{rws.getRow(r).height=14.25;});
 
+  // タイトル「調査報告書」→ ＭＳ Ｐ明朝・四方罫線（コスモ立川準拠）
   rws.mergeCells('B2:S4');
   const rtitleCell=rws.getCell('B2');
   rtitleCell.value='調査報告書';
-  rtitleCell.font=gothic(22);
+  rtitleCell.font=mincho(22);
   rtitleCell.alignment={horizontal:'center',vertical:'middle'};
-  rtitleCell.border={top:thin,bottom:thin};
+  rtitleCell.border={top:thin,bottom:thin,left:thin,right:thin};
 
   const reportItems=[
     [5,'建築物名称',{formula:`表紙!E11`}],
@@ -635,15 +643,17 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   ];
 
   reportItems.forEach(([rowNum,label,val])=>{
+    // ラベル（全てＭＳ Ｐ明朝・均等割付）
     rws.mergeCells(`C${rowNum}:E${rowNum+2}`);
     const lc=rws.getCell(`C${rowNum}`);
-    lc.value=label;lc.font=gothic(12);
+    lc.value=label;lc.font=mincho(12);
     lc.alignment={horizontal:'distributed',vertical:'middle'};
-    lc.border={bottom:thin};
+    lc.border={top:thin,bottom:thin};
     rws.mergeCells(`F${rowNum}:F${rowNum+2}`);
     rws.mergeCells(`G${rowNum}:G${rowNum+2}`);
-    rws.getCell(`F${rowNum}`).border={bottom:thin};
-    rws.getCell(`G${rowNum}`).border={bottom:thin};
+    rws.getCell(`F${rowNum}`).border={top:thin,bottom:thin};
+    rws.getCell(`G${rowNum}`).border={top:thin,bottom:thin};
+    // 値（全てＭＳ Ｐ明朝）
     rws.mergeCells(`H${rowNum}:S${rowNum+2}`);
     const vc=rws.getCell(`H${rowNum}`);
     if(typeof val==='object'&&val.formula){
@@ -651,17 +661,19 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     } else {
       vc.value=val;
     }
-    vc.font=(rowNum===8)?gothic(12):mincho(12);
+    vc.font=mincho(12);
     vc.alignment={horizontal:(rowNum===8||rowNum===14)?'left':'general',vertical:'middle'};
-    vc.border={bottom:thin,top:thin};
+    vc.border={bottom:thin,top:thin,right:thin};
   });
 
+  // 【作業内容】（ＭＳ Ｐ明朝）
   rws.mergeCells('C21:G22');
   const contentTitleCell=rws.getCell('C21');
   contentTitleCell.value='【　作　業　内　容　】';
-  contentTitleCell.font=gothic(12);
+  contentTitleCell.font=mincho(12);
   contentTitleCell.alignment={horizontal:'center',vertical:'middle'};
 
+  // 作業内容（全行ＭＳ Ｐ明朝に統一）
   const contentLines=uContent.split('\n').filter(l=>l.trim());
   contentLines.forEach((line,i)=>{
     const r=23+i;
@@ -669,41 +681,41 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     rws.mergeCells(`C${r}:Q${r}`);
     const cc=rws.getCell(`C${r}`);
     cc.value=line;
-    cc.font=/号室/.test(line)?mincho(12):gothic(12);
+    cc.font=mincho(12);
     cc.alignment={vertical:'bottom'};
   });
 
   rws.mergeCells('C37:I38');
   const refCell=rws.getCell('C37');
   refCell.value='（別紙写真添付参照）';
-  refCell.font=gothic(12);
+  refCell.font=mincho(12);
   refCell.alignment={vertical:'middle'};
 
   rws.mergeCells('J40:R41');
   const doneCell=rws.getCell('J40');
   doneCell.value='上記の作業を実施いたしました。';
-  doneCell.font=gothic(12);
+  doneCell.font=mincho(12);
   doneCell.alignment={vertical:'middle'};
 
   rws.mergeCells('P42:R43');
   const ijoCell=rws.getCell('P42');
   ijoCell.value='以上';
-  ijoCell.font=gothic(11);
+  ijoCell.font=mincho(11);
   ijoCell.alignment={vertical:'middle'};
 
   rws.mergeCells('C45:G46');
   const bikoCell=rws.getCell('C45');
   bikoCell.value='【　備　　　　　考　】';
-  bikoCell.font=gothic(12);
+  bikoCell.font=mincho(12);
   bikoCell.alignment={vertical:'middle'};
 
-  await buildUnionPhotoSheets(wb,gothic,mincho,thin,hair);
+  await buildUnionPhotoSheets(wb,mincho,thin,hair);
 }
 
 // ============================================================
 // ユニオン専用 写真シート生成（本物準拠）
 // ============================================================
-async function buildUnionPhotoSheets(wb, gothic, mincho, thin, hair) {
+async function buildUnionPhotoSheets(wb, mincho, thin, hair) {
   const pageCount=Math.ceil(photos.length/3);
 
   for(let pg=0;pg<pageCount;pg++){
@@ -712,17 +724,20 @@ async function buildUnionPhotoSheets(wb, gothic, mincho, thin, hair) {
     ws.pageSetup.paperSize=9;ws.pageSetup.orientation='portrait';
     ws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
 
-    ws.getColumn('A').width=2.87;
-    ws.getColumn('B').width=8.99;
-    ws.getColumn('H').width=11.87;
-    ws.getColumn('I').width=4.49;
-    ws.getColumn('J').width=8.99;
+    // 列幅（通常・多摩と統一）
+    ws.getColumn('A').width=2.875;
+    ws.getColumn('B').width=9;
+    ws.getColumn('H').width=11.875;
+    ws.getColumn('I').width=4.5;
+    ws.getColumn('J').width=9;
+    ws.getColumn('K').width=7;
+    ws.getColumn('L').width=7;
 
     [2,14,26].forEach(r=>{ws.getRow(r).height=13.5;});
     [3,15,27].forEach(r=>{ws.getRow(r).height=17.25;});
     [4,5,6,7,8,9,10,11,
      16,17,18,19,20,21,22,23,
-     28,29,30,31,32,33,34,35].forEach(r=>{ws.getRow(r).height=30;});
+     28,29,30,31,32,33,34,35].forEach(r=>{ws.getRow(r).height=28;});
 
     const blocks=[
       {imgTlRow:2, imgBrRow:11, noRow:3,  captStart:4,  captEnd:11},
@@ -789,18 +804,17 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
     ws.pageSetup.paperSize=9;ws.pageSetup.orientation='portrait';
     ws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
 
-    // 列幅（実物通り）
-    const photoCols={A:2.875,B:9,C:9,D:9,E:9,F:9,G:9,H:11.875,I:4.5,J:9,K:5,L:5};
+    // 列幅（K・L列を広げてキャプション欄を拡張）
+    const photoCols={A:2.875,B:9,C:9,D:9,E:9,F:9,G:9,H:11.875,I:4.5,J:9,K:7,L:7};
     Object.entries(photoCols).forEach(([c,w])=>{ws.getColumn(c).width=w;});
 
-    // 行高（実物通り）
-    // 空白行: 行1・2・13・14・25・26（高さ指定なし＝デフォルト）
+    // 行高
     // No.行:  行3・15・27 → 17.25pt
-    // 写真行: 行4〜11・16〜23・28〜35 → 30pt
+    // 写真行: 行4〜11・16〜23・28〜35 → 28pt（30ptだとA4をオーバーして空白ページが生成されるため）
     [3,15,27].forEach(r=>{ws.getRow(r).height=17.25;});
     [4,5,6,7,8,9,10,11,
      16,17,18,19,20,21,22,23,
-     28,29,30,31,32,33,34,35].forEach(r=>{ws.getRow(r).height=30;});
+     28,29,30,31,32,33,34,35].forEach(r=>{ws.getRow(r).height=28;});
 
     // ブロック定義（実物通り）
     const blocks=[
@@ -837,8 +851,8 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
         cell.value=capLines[li]||'';
         cell.font=minchoFont(11);
         cell.alignment={vertical:'center',wrapText:true};
-        // 1行目は bottom:hair、2行目以降は top+bottom:hair（実物通り）
-        cell.border=li===0?{bottom:hair}:{top:hair,bottom:hair};
+        // 全行 bottom:hair のみ（top+bottomの重複で太く見えるのを防ぐ）
+        cell.border={bottom:hair};
       }
 
       // 写真埋め込み（B列col1〜H列col8、行はブロック全体）
@@ -918,13 +932,11 @@ function toJpegBase64(dataUrl,q){
   });
 }
 
+// Enterで改行した行をそのまま1行ずつセルに入れる（12文字強制切りなし）
 function splitCaption(text,maxLines){
-  if(!text)return[''];const result=[];
-  for(const line of text.split(/\n/)){
-    if(result.length>=maxLines)break;
-    for(let i=0;i<line.length;i+=12){if(result.length>=maxLines)break;result.push(line.substring(i,i+12));}
-  }
-  return result.length>0?result:[''];
+  if(!text)return[''];
+  const lines=text.split(/\n/).slice(0,maxLines);
+  return lines.length>0?lines:[''];
 }
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
