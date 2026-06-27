@@ -147,7 +147,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           {/* ヘッダー */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>📅 今日の予定</span>
+              <span style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>📅 スケジュール</span>
               {todaySchedules.length > 0 && (
                 <span style={{ background: "rgba(255,255,255,0.2)", color: "#fff", borderRadius: 10, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>
                   {todaySchedules.length}件
@@ -159,22 +159,60 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
               <button onClick={() => nav("schedule")} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "rgba(255,255,255,0.85)", borderRadius: 6, padding: "3px 8px", fontSize: 11, cursor: "pointer" }}>全て見る →</button>
             </div>
           </div>
-          {/* 予定リスト */}
+          {/* 今週の日付バー（常に表示） */}
+          {(() => {
+            const today = new Date();
+            const day = today.getDay();
+            const monday = new Date(today);
+            monday.setDate(today.getDate() - day + (day === 0 ? -6 : 1));
+            const weekDays = Array.from({ length: 7 }, (_, i) => {
+              const d = new Date(monday);
+              d.setDate(monday.getDate() + i);
+              return d;
+            });
+            const todayStr = today.toISOString().slice(0, 10);
+            return (
+              <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
+                {weekDays.map((d, i) => {
+                  const dStr = d.toISOString().slice(0, 10);
+                  const isToday = dStr === todayStr;
+                  const isSun = d.getDay() === 0;
+                  const isSat = d.getDay() === 6;
+                  // その日の予定数
+                  const cnt = todaySchedules.filter(sc => sc.start_at?.slice(0, 10) === dStr).length;
+                  return (
+                    <div key={i} onClick={() => nav("schedule")} style={{ flex: 1, textAlign: "center", cursor: "pointer" }}>
+                      <div style={{ fontSize: 9, color: isSun ? "#fca5a5" : isSat ? "#93c5fd" : "rgba(255,255,255,0.55)", marginBottom: 2 }}>
+                        {WD[d.getDay()]}
+                      </div>
+                      <div style={{
+                        width: 24, height: 24, borderRadius: "50%", margin: "0 auto 2px",
+                        background: isToday ? "#fff" : "transparent",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: isToday ? "#1A3A5C" : isSun ? "#fca5a5" : isSat ? "#93c5fd" : "rgba(255,255,255,0.85)" }}>
+                          {d.getDate()}
+                        </span>
+                      </div>
+                      {cnt > 0 && <div style={{ width: 4, height: 4, borderRadius: "50%", background: "rgba(255,255,255,0.7)", margin: "0 auto" }} />}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+          {/* 予定リスト（今日の予定。なければメッセージ） */}
           {todaySchedules.length === 0 ? (
-            <div onClick={() => nav("schedule")} style={{ background: "rgba(255,255,255,0.08)", borderRadius: 10, padding: "16px", textAlign: "center", cursor: "pointer", border: "1px dashed rgba(255,255,255,0.2)" }}>
-              <div style={{ fontSize: 20, marginBottom: 4 }}>📭</div>
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)" }}>今日の予定はありません</div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>タップして予定を追加</div>
+            <div onClick={() => nav("schedule")} style={{ background: "rgba(255,255,255,0.08)", borderRadius: 10, padding: "10px 12px", cursor: "pointer", border: "1px dashed rgba(255,255,255,0.2)", textAlign: "center" }}>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>今日の予定はありません　＋ 予定を追加</div>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
               {todaySchedules.slice(0, 5).map((sc) => (
                 <div key={sc.id} onClick={() => nav("schedule")} style={{ background: "rgba(255,255,255,0.1)", borderRadius: 10, padding: "8px 10px", cursor: "pointer", display: "flex", alignItems: "flex-start", gap: 8, borderLeft: `3px solid ${getCatColor(sc)}` }}>
-                  {/* 時間 */}
                   <div style={{ fontSize: 11, color: "rgba(255,255,255,0.8)", fontWeight: 700, minWidth: 76, flexShrink: 0, paddingTop: 1 }}>
                     {formatTimeRange(sc)}
                   </div>
-                  {/* カテゴリ＋タイトル＋担当者 */}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
                       <span style={{ background: getCatColor(sc), color: "#fff", borderRadius: 4, padding: "1px 6px", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
@@ -235,13 +273,12 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
         </div>
       )}
 
-      {/* メイン5タイル（スケジュール追加） */}
+      {/* メイン4タイル（スケジュールタイルは削除） */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
         {[
           { icon: "📋", label: "案件", sub: "案件の確認・管理を行います", color: "#1A3A5C", action: () => nav("projects") },
           { icon: "📸", label: "報告", sub: "現場の報告を作成・確認します", color: "#059669", action: () => window.open("/report.html", "_blank") },
           { icon: "📝", label: "見積", sub: "見積の作成・確認を行います", color: "#E07B39", action: () => nav("estimate") },
-          { icon: "📅", label: "スケジュール", sub: "予定の確認・登録を行います", color: "#2563eb", action: () => nav("schedule") },
           { icon: "✨", label: "AI補助", sub: "AIが業務をサポートします", color: "#6366F1", action: () => nav("ai"), gradient: true },
         ].map(t => (
           <div key={t.label} onClick={t.action}
@@ -252,7 +289,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
               cursor: "pointer",
               boxShadow: "0 2px 8px rgba(0,0,0,0.07)",
               borderLeft: t.gradient ? "none" : `4px solid ${t.color}`,
-              // AI補助だけ2列幅にして最後に配置
               gridColumn: t.label === "AI補助" ? "1 / -1" : "auto",
             }}>
             <div style={{ fontSize: 24, marginBottom: 6 }}>{t.icon}</div>
