@@ -1,9 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { Modal, Inp, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 
-// デフォルトフォルダの初期データ（Supabaseに未登録の場合のみ使う）
 const DEFAULT_FINANCE_ITEMS = [
   { id: "invoice",    label: "請求書PDF",   icon: "🧾" },
   { id: "receipt",    label: "領収書",       icon: "📄" },
@@ -28,20 +27,20 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
   const [pendingDelete, setPendingDelete] = useState(false);
   const [initializing, setInitializing] = useState(false);
 
+  // ── ドラッグ&ドロップ用のstate ──
+  const [dragIdx, setDragIdx] = useState(null);   // ドラッグ中のアイテムのindex
+  const [overIdx, setOverIdx] = useState(null);   // ホバー中のアイテムのindex
+  const touchStartY = useRef(null);               // タッチ開始位置
+  const touchDragIdx = useRef(null);              // タッチドラッグ中のindex
+
   const pending = tks.filter(t => !t.done);
 
-  // ── Supabaseにデフォルトフォルダが未登録なら自動で入れる ──
-  // 理由：constants.jsから移行して、全フォルダをSupabaseで一元管理するため
   useEffect(() => {
     const initDefaults = async () => {
-      if (finFolders.length > 0) return; // すでに登録済みならスキップ
+      if (finFolders.length > 0) return;
       setInitializing(true);
       const inserts = DEFAULT_FINANCE_ITEMS.map((item, i) => ({
-        id: item.id,
-        label: item.label,
-        icon: item.icon,
-        sort_order: i,
-        is_default: true,
+        id: item.id, label: item.label, icon: item.icon, sort_order: i, is_default: true,
       }));
       const { data } = await supabase.from("finance_folders").upsert(inserts, { onConflict: "id" }).select();
       if (data) setFinFolders(data.sort((a, b) => a.sort_order - b.sort_order));
@@ -50,8 +49,8 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     initDefaults();
   }, []);
 
-  const isPDF  = f => f.type === "application/pdf" || f.name?.toLowerCase().endsWith(".pdf");
-  const isImg  = f => f.type?.startsWith("image/");
+  const isPDF   = f => f.type === "application/pdf" || f.name?.toLowerCase().endsWith(".pdf");
+  const isImg   = f => f.type?.startsWith("image/");
   const isExcel = f => f.name?.match(/\.(xlsx|xls)$/i);
   const isWord  = f => f.name?.match(/\.(docx|doc)$/i);
   const fileIcon = f => isImg(f) ? "🖼" : isPDF(f) ? "📕" : isExcel(f) ? "📗" : isWord(f) ? "📘" : "📄";
@@ -77,8 +76,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     const { data: urlData } = supabase.storage.from("files").getPublicUrl(path);
     const { data } = await supabase.from("finance_files").insert([{
       item_id: itemId, year: Number(year), month: Number(month),
-      name: file.name, type: file.type, size: file.size,
-      url: urlData.publicUrl, path
+      name: file.name, type: file.type, size: file.size, url: urlData.publicUrl, path
     }]).select("id,item_id,year,month,name,type,size,url,path,created_at");
     if (data) setFinFiles(prev => [...prev, data[0]]);
   };
@@ -91,7 +89,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     setFinPrev(null);
   };
 
-  // ── フォルダ操作（追加・編集・削除、デフォルトも含めて全部OK）──
+  // ── フォルダ操作 ──
   const addFolder = async () => {
     if (!folderForm.label) return;
     const { data } = await supabase.from("finance_folders")
@@ -104,9 +102,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
 
   const updateFolder = async () => {
     if (!editTarget) return;
-    await supabase.from("finance_folders")
-      .update({ label: editTarget.label, icon: editTarget.icon })
-      .eq("id", editTarget.id);
+    await supabase.from("finance_folders").update({ label: editTarget.label, icon: editTarget.icon }).eq("id", editTarget.id);
     setFinFolders(prev => prev.map(f => f.id === editTarget.id ? { ...f, ...editTarget } : f));
     setEditTarget(null);
     setFinModal(null);
@@ -115,6 +111,62 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
   const deleteFolder = async (id) => {
     await supabase.from("finance_folders").delete().eq("id", id);
     setFinFolders(prev => prev.filter(f => f.id !== id));
+  };
+
+  // ── 並べ替え：ドロップ完了時にSupabaseのsort_orderを更新 ──
+  // 理由：画面上の順番をDBに保存しないと、リロードしたら元に戻ってしまうため
+  const saveOrder = async (newFolders) => {
+    const updates = newFolders.map((f, i) => ({ id: f.id, sort_order: i }));
+    for (const u of updates) {
+      await supabase.from("finance_folders").update({ sort_order: u.sort_order }).eq("id", u.id);
+    }
+  };
+
+  // ── PCドラッグ&ドロップのハンドラ ──
+  const handleDragStart = (i) => setDragIdx(i);
+  const handleDragOver  = (e, i) => { e.preventDefault(); setOverIdx(i); };
+  const handleDrop      = async (i) => {
+    if (dragIdx === null || dragIdx === i) { setDragIdx(null); setOverIdx(null); return; }
+    const newFolders = [...finFolders];
+    const [moved] = newFolders.splice(dragIdx, 1);
+    newFolders.splice(i, 0, moved);
+    setFinFolders(newFolders);
+    setDragIdx(null);
+    setOverIdx(null);
+    await saveOrder(newFolders);
+  };
+  const handleDragEnd = () => { setDragIdx(null); setOverIdx(null); };
+
+  // ── スマホタッチ並べ替えのハンドラ ──
+  // 理由：スマホはdragイベントが使えないのでtouchイベントで代替
+  const handleTouchStart = (e, i) => {
+    touchStartY.current = e.touches[0].clientY;
+    touchDragIdx.current = i;
+  };
+  const handleTouchMove = (e) => {
+    e.preventDefault(); // スクロール防止
+    const y = e.touches[0].clientY;
+    const els = document.querySelectorAll("[data-folder-row]");
+    let overI = null;
+    els.forEach((el, i) => {
+      const rect = el.getBoundingClientRect();
+      if (y >= rect.top && y <= rect.bottom) overI = i;
+    });
+    if (overI !== null) setOverIdx(overI);
+  };
+  const handleTouchEnd = async () => {
+    const from = touchDragIdx.current;
+    const to   = overIdx;
+    if (from === null || to === null || from === to) {
+      touchDragIdx.current = null; setOverIdx(null); return;
+    }
+    const newFolders = [...finFolders];
+    const [moved] = newFolders.splice(from, 1);
+    newFolders.splice(to, 0, moved);
+    setFinFolders(newFolders);
+    touchDragIdx.current = null;
+    setOverIdx(null);
+    await saveOrder(newFolders);
   };
 
   // ── プレビュー画面 ──
@@ -262,7 +314,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     </div>
   );
 
-  // ── トップ画面（フォルダ一覧）──
+  // ── トップ画面（フォルダ一覧 + ドラッグ&ドロップ）──
   return (
     <div style={{ fontFamily: "'Hiragino Sans',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
       {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="finance" nav={nav} setModal={() => {}} setEc={() => {}} SB_W={SB_W} />}
@@ -275,29 +327,50 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
         <button onClick={() => { setFolderForm({ label: "", icon: "📁" }); setFinModal("add"); }} style={{ background: "#E07B39", border: "none", color: "#fff", borderRadius: 8, padding: "5px 12px", fontSize: 12, cursor: "pointer", fontWeight: 800 }}>＋ フォルダ</button>
       </div>
 
-      {initializing && (
-        <div style={{ textAlign: "center", padding: 24, color: "#9CA3AF", fontSize: 13 }}>初期データを読み込み中...</div>
-      )}
+      {initializing && <div style={{ textAlign: "center", padding: 24, color: "#9CA3AF", fontSize: 13 }}>初期データを読み込み中...</div>}
 
       <div style={{ padding: isPC ? "14px 0" : 14 }}>
+        {/* 並べ替えの説明ヒント */}
+        {finFolders.length > 1 && (
+          <div style={{ fontSize: 11, color: "#9CA3AF", textAlign: "center", marginBottom: 8 }}>
+            ☰ を長押し（スマホ）またはドラッグ（PC）で並べ替え
+          </div>
+        )}
         <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
           {finFolders.map((item, i) => (
-            <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", borderBottom: i < finFolders.length - 1 ? "1px solid #F3F4F6" : "none" }}>
+            <div
+              key={item.id}
+              data-folder-row={i}
+              draggable
+              onDragStart={() => handleDragStart(i)}
+              onDragOver={e => handleDragOver(e, i)}
+              onDrop={() => handleDrop(i)}
+              onDragEnd={handleDragEnd}
+              style={{
+                display: "flex", alignItems: "center", gap: 14, padding: "14px 18px",
+                borderBottom: i < finFolders.length - 1 ? "1px solid #F3F4F6" : "none",
+                // ドラッグ中・ホバー中は背景色を変えて「ここに入る」を視覚的に示す
+                background: overIdx === i && dragIdx !== i ? "#EFF6FF" : dragIdx === i ? "#F3F4F6" : "#fff",
+                transition: "background 0.15s",
+                opacity: dragIdx === i ? 0.5 : 1,
+              }}
+            >
+              {/* ドラッグハンドル：スマホはタッチ操作 */}
+              <span
+                style={{ fontSize: 18, color: "#D1D5DB", cursor: "grab", flexShrink: 0, userSelect: "none", touchAction: "none" }}
+                onTouchStart={e => handleTouchStart(e, i)}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+              >☰</span>
+
               <span style={{ fontSize: 26 }}>{item.icon}</span>
               <div style={{ flex: 1, cursor: "pointer" }} onClick={() => setFinItem(item)}>
                 <div style={{ fontWeight: 700, fontSize: 14, color: "#1F2937" }}>{item.label}</div>
                 <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>タップして管理</div>
               </div>
-              {/* 全フォルダに編集・削除ボタンを表示（デフォルトも含む） */}
               <div style={{ display: "flex", gap: 6 }}>
-                <button
-                  onClick={() => { setEditTarget({ ...item }); setFinModal("edit"); }}
-                  style={{ background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, color: "#1A3A5C", cursor: "pointer" }}
-                >✏️</button>
-                <button
-                  onClick={() => setConf({ msg: `「${item.label}」フォルダを削除しますか？\n\n中のファイルは残りますが、フォルダは元に戻せません。`, onOk: () => { deleteFolder(item.id); setConf(null); } })}
-                  style={{ background: "#FEF2F2", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, color: "#DC2626", cursor: "pointer" }}
-                >🗑</button>
+                <button onClick={() => { setEditTarget({ ...item }); setFinModal("edit"); }} style={{ background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, color: "#1A3A5C", cursor: "pointer" }}>✏️</button>
+                <button onClick={() => setConf({ msg: `「${item.label}」フォルダを削除しますか？\n\n中のファイルは残りますが、フォルダは元に戻せません。`, onOk: () => { deleteFolder(item.id); setConf(null); } })} style={{ background: "#FEF2F2", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, color: "#DC2626", cursor: "pointer" }}>🗑</button>
               </div>
             </div>
           ))}
@@ -313,15 +386,12 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
 
       {conf && <Confirm msg={conf.msg} onCancel={() => setConf(null)} onOk={conf.onOk} />}
 
-      {/* フォルダ追加モーダル */}
       {finModal === "add" && (
         <Modal title="📁 フォルダを追加" onClose={() => setFinModal(null)} onSave={addFolder}>
           <Inp label="アイコン（絵文字）" value={folderForm.icon} onChange={e => setFolderForm({ ...folderForm, icon: e.target.value })} />
           <Inp label="フォルダ名 *" value={folderForm.label} onChange={e => setFolderForm({ ...folderForm, label: e.target.value })} placeholder="例: 保険証書" />
         </Modal>
       )}
-
-      {/* フォルダ編集モーダル */}
       {finModal === "edit" && editTarget && (
         <Modal title="📁 フォルダを編集" onClose={() => { setFinModal(null); setEditTarget(null); }} onSave={updateFolder}>
           <Inp label="アイコン（絵文字）" value={editTarget.icon} onChange={e => setEditTarget({ ...editTarget, icon: e.target.value })} />
