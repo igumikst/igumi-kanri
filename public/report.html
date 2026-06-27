@@ -761,8 +761,8 @@ async function buildUnionPhotoSheets(wb, mincho, thin, hair) {
         ws.mergeCells(r1,10,r1,12);
         const cell=ws.getCell(r1,10);
         if(capLines[li]!==undefined){cell.value=capLines[li];}
-        // 全行ＭＳ ゴシック11pt統一（正解ファイル準拠）
-        cell.font={name:'ＭＳ ゴシック',size:11};
+        // 号室を含む行はＭＳ Ｐ明朝、それ以外はＭＳ ゴシック（正解ファイル準拠）
+        cell.font=/号室/.test(capLines[li]||'')?{name:'ＭＳ Ｐ明朝',size:11}:{name:'ＭＳ ゴシック',size:11};
         cell.alignment={vertical:'middle',wrapText:true};
         cell.border={bottom:hair};
       }
