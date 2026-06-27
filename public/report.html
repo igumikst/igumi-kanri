@@ -601,7 +601,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
       ws.getCell(`${brCol}${r}`).border={...ws.getCell(`${brCol}${r}`).border,right:b};
     }
   };
-  addOuterBorder(cws,'B2','T56','medium');
+  addOuterBorder(cws,'B2','T56','thin');
 
   // 建物名称 E11:P13（ＭＳ Ｐ明朝20pt太字・中央・四方罫線thin）
   cws.mergeCells('E11:P13');
@@ -647,7 +647,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   [25,27,28,29,30,31,32,33,36,37,38,39,40,41,42,45,46].forEach(r=>{rws.getRow(r).height=14.25;});
 
   // ページ全体に外枠（エクレール準拠）
-  addOuterBorder(rws,'B2','T56','medium');
+  addOuterBorder(rws,'B2','T56','thin');
 
   // タイトル「調査報告書」→ ＭＳ Ｐ明朝・四方罫線thin
   rws.mergeCells('B2:S4');
