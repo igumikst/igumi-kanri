@@ -20,6 +20,7 @@ import CallsPage from "./pages/CallsPage";
 import LineSettings from "./pages/LineSettings";
 import SystemManual from "./pages/SystemManual";
 import UserManual from "./pages/UserManual";
+import Schedule from "./pages/Schedule";
 
 export default function App() {
   const [page, setPage] = useState("home");
@@ -176,6 +177,6 @@ export default function App() {
   if (page === "linesettings") return <LineSettings {...commonProps} />;
   if (page === "systemmanual") return <SystemManual {...commonProps} />;
   if (page === "usermanual") return <UserManual {...commonProps} />;
-
+  if (page === "schedule") return <Schedule />;
   return null;
 }
