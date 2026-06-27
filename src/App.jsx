@@ -104,7 +104,7 @@ export default function App() {
       supabase.from("projects").select("*").order("created_at", { ascending: false }),
       supabase.from("companies").select("*").order("created_at", { ascending: true }),
       supabase.from("tasks").select("*").order("created_at", { ascending: false }),
-      supabase.from("finance_files").select("id,item_id,year,month,name,type,size,url,path,data,created_at").order("created_at", { ascending: false }),
+     supabase.from("finance_files").select("id,item_id,year,month,name,type,size,url,path,created_at").order("created_at", { ascending: false }),
       supabase.from("finance_folders").select("*").order("sort_order", { ascending: true }),
       supabase.from("home_settings").select("*"),
       supabase.from("links").select("*").order("sort_order", { ascending: true }),
