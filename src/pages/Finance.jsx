@@ -89,6 +89,28 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     setFinPrev(null);
   };
 
+  // ── ファイルを開く ──
+  // 理由：一覧は軽くするためurl/dataを読み込んでいない。
+  // 開く瞬間に、その1件だけ中身(data)を取りに行ってプレビューする。
+  const [opening, setOpening] = useState(false);
+  const openFile = async (f) => {
+    // 新しいファイル（ストレージにある＝urlが http で始まる）はそのまま開ける
+    if (f.url && f.url.startsWith("http")) { setFinPrev(f); return; }
+    // 古いファイル（dataにbase64）はこの1件だけ取りに行く
+    setOpening(true);
+    const { data, error } = await supabase
+      .from("finance_files")
+      .select("data,type")
+      .eq("id", f.id)
+      .single();
+    setOpening(false);
+    if (error || !data?.data) { alert("ファイルを開けませんでした"); return; }
+    // base64の頭に "data:...;base64," が二重で付かないよう整形
+    let url = data.data;
+    if (!url.startsWith("data:")) url = `data:${data.type || f.type};base64,${url}`;
+    setFinPrev({ ...f, url });
+  };
+
   // ── フォルダ操作 ──
   const addFolder = async () => {
     if (!folderForm.label) return;
@@ -210,7 +232,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
 
   // ── 月一覧画面 ──
   if (finM) {
-    console.log("finItem.id:", finItem.id, "finY:", finY, "finM:", finM, "finFiles count:", finFiles.length, "sample item_id:", finFiles[0]?.item_id);
+    const monthFiles = finFiles.filter(f => f.item_id === finItem.id && Number(f.year) === Number(finY) && Number(f.month) === Number(finM));
     return (
       <div style={{ fontFamily: "'Hiragino Sans',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
         {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="finance" nav={nav} setModal={() => {}} setEc={() => {}} SB_W={SB_W} />}
@@ -231,7 +253,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
             ? <div style={{ textAlign: "center", padding: 40, color: "#9CA3AF" }}><div style={{ fontSize: 48, marginBottom: 12 }}>📂</div><div style={{ fontSize: 14 }}>ファイルがありません</div></div>
             : monthFiles.map(f => (
               <div key={f.id} style={{ background: "#fff", borderRadius: 12, marginBottom: 8, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", overflow: "hidden" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", cursor: "pointer" }} onClick={() => setFinPrev(f)}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", cursor: "pointer" }} onClick={() => openFile(f)}>
                   <span style={{ fontSize: 28, flexShrink: 0 }}>{fileIcon(f)}</span>
                   <div style={{ flex: 1, overflow: "hidden" }}>
                     <div style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#1F2937" }}>{f.name}</div>
@@ -240,13 +262,21 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
                   <span style={{ color: "#9CA3AF", fontSize: 14, flexShrink: 0 }}>›</span>
                 </div>
                 <div style={{ display: "flex", borderTop: "1px solid #F3F4F6" }}>
-                  {f.url && <a href={f.url} download={f.name} target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "8px 0", display: "flex", alignItems: "center", justifyContent: "center", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#059669", fontWeight: 700, textDecoration: "none" }}>⬇ 保存</a>}
+                  {f.url && f.url.startsWith("http") && <a href={f.url} download={f.name} target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "8px 0", display: "flex", alignItems: "center", justifyContent: "center", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#059669", fontWeight: 700, textDecoration: "none" }}>⬇ 保存</a>}
                   <button onClick={() => setConf({ msg: `「${f.name}」\n\nこの操作は元に戻せません。\n削除しますか？`, onOk: () => { deleteFinFile(f.id); setConf(null); } })} style={{ flex: 1, padding: "8px 0", background: "none", border: "none", fontSize: 12, color: "#DC2626", fontWeight: 700, cursor: "pointer" }}>🗑 削除</button>
                 </div>
               </div>
             ))}
         </div>
         {conf && <Confirm msg={conf.msg} onCancel={() => setConf(null)} onOk={conf.onOk} />}
+        {opening && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+            <div style={{ background: "#fff", borderRadius: 14, padding: "24px 32px", textAlign: "center" }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>⏳</div>
+              <div style={{ fontWeight: 700, color: "#1F2937" }}>ファイルを開いています...</div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
