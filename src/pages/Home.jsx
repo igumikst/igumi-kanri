@@ -25,8 +25,11 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const [showStorage, setShowStorage] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const [todaySchedules, setTodaySchedules] = useState([]);
-  // バナーモード: "schedule"=予定表示, "dashboard"=数字ダッシュボード
   const [bannerMode, setBannerMode] = useState("schedule");
+  // 4日間カレンダー用
+  const [calBase, setCalBase] = useState(0); // 0=今日起点、+1=1日後起点
+  const [weekSchedules, setWeekSchedules] = useState([]); // 7日分キャッシュ
+  const [detailSc, setDetailSc] = useState(null); // タップした予定の詳細
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
 
@@ -54,27 +57,37 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const WD = ["日", "月", "火", "水", "木", "金", "土"];
   const weatherIcon = code => code === 0 ? "☀️" : code <= 2 ? "🌤" : code === 3 ? "☁️" : code <= 48 ? "🌫" : code <= 55 ? "🌦" : code <= 65 ? "🌧" : code <= 75 ? "🌨" : code <= 82 ? "🌦" : code <= 99 ? "⛈" : "🌡";
 
-  // 今週の予定を取得（月〜日）
+  // 今日から7日分の予定を取得
   useEffect(() => {
-    const fetchWeekSchedules = async () => {
+    const fetch7Days = async () => {
       const now = new Date();
-      const day = now.getDay();
-      const monday = new Date(now);
-      monday.setDate(now.getDate() - day + (day === 0 ? -6 : 1));
-      monday.setHours(0, 0, 0, 0);
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-      sunday.setHours(23, 59, 59, 999);
+      const y = now.getFullYear();
+      const m = String(now.getMonth()+1).padStart(2,"0");
+      const d = String(now.getDate()).padStart(2,"0");
+      const todayStr = `${y}-${m}-${d}`;
+      const end = new Date(now); end.setDate(now.getDate() + 6); end.setHours(23,59,59);
       const { data } = await supabase
-        .from("schedules")
-        .select("*")
-        .gte("start_at", monday.toISOString())
-        .lte("start_at", sunday.toISOString())
+        .from("schedules").select("*")
+        .gte("start_at", `${todayStr}T00:00:00`)
+        .lte("start_at", end.toISOString())
         .order("start_at");
-      if (data) setTodaySchedules(data);
+      if (data) {
+        setWeekSchedules(data);
+        setTodaySchedules(data.filter(sc => sc.start_at?.slice(0,10) === todayStr));
+      }
     };
-    fetchWeekSchedules();
+    fetch7Days();
   }, []);
+
+  function getDayKey(offset = 0) {
+    const d = new Date(); d.setDate(d.getDate() + offset);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  }
+
+  function getScForDay(offset) {
+    const key = getDayKey(offset);
+    return weekSchedules.filter(sc => sc.start_at?.slice(0,10) === key);
+  }
 
   const formatTime = (isoStr) => {
     if (!isoStr) return "";
@@ -149,92 +162,67 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
 
       {/* ===== バナー：モードで切り替え ===== */}
       {bannerMode === "schedule" ? (
-        /* 予定表示モード：横スクロール週間カレンダー */
+        /* 予定表示モード：4日間カレンダー */
         (() => {
-          const now = new Date();
-          const day = now.getDay();
-          const monday = new Date(now);
-          monday.setDate(now.getDate() - day + (day === 0 ? -6 : 1));
-          const weekDays = Array.from({ length: 7 }, (_, i) => {
-            const d = new Date(monday);
-            d.setDate(monday.getDate() + i);
+          const WD_JP = ["日","月","火","水","木","金","土"];
+          const days = [0,1,2,3].map(i => {
+            const d = new Date(); d.setDate(d.getDate() + calBase + i);
             return d;
           });
-          const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
-
           return (
-            <div style={{ background: "linear-gradient(135deg, #1A3A5C, #2563EB)", borderRadius: 16, padding: "12px 14px", marginBottom: 18, boxShadow: "0 4px 16px rgba(37,99,235,0.25)" }}>
+            <div style={{ background:"#fff", borderRadius:16, marginBottom:18, boxShadow:"0 2px 12px rgba(0,0,0,0.08)", overflow:"hidden" }}>
               {/* ヘッダー */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <span style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>📅 スケジュール</span>
-                <div style={{ display: "flex", gap: 5 }}>
-                  <button onClick={() => setBannerMode("dashboard")} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "rgba(255,255,255,0.85)", borderRadius: 6, padding: "3px 8px", fontSize: 11, cursor: "pointer" }}>📊</button>
-                  <button onClick={() => nav("schedule")} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "rgba(255,255,255,0.85)", borderRadius: 6, padding: "3px 8px", fontSize: 11, cursor: "pointer" }}>全て見る →</button>
+              <div style={{ background:"#1a56a0", padding:"9px 12px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <span style={{ color:"#fff", fontWeight:800, fontSize:14 }}>📅 スケジュール</span>
+                  <button onClick={() => setBannerMode("dashboard")} style={{ background:"rgba(255,255,255,0.2)", border:"none", color:"#fff", borderRadius:5, padding:"2px 7px", fontSize:11, cursor:"pointer" }}>📊</button>
+                </div>
+                <div style={{ display:"flex", alignItems:"center", gap:5 }}>
+                  {/* ナビ */}
+                  <button onClick={() => setCalBase(b => Math.max(0, b-4))} disabled={calBase===0}
+                    style={{ background:"rgba(255,255,255,0.2)", border:"none", color: calBase===0?"rgba(255,255,255,0.3)":"#fff", borderRadius:5, padding:"2px 8px", fontSize:12, cursor: calBase===0?"default":"pointer" }}>◀</button>
+                  <button onClick={() => setCalBase(b => b+4)}
+                    style={{ background:"rgba(255,255,255,0.2)", border:"none", color:"#fff", borderRadius:5, padding:"2px 8px", fontSize:12, cursor:"pointer" }}>▶</button>
+                  <button onClick={() => nav("schedule")} style={{ background:"rgba(255,255,255,0.2)", border:"none", color:"#fff", borderRadius:5, padding:"2px 8px", fontSize:11, cursor:"pointer" }}>全て →</button>
+                  <button onClick={() => nav("schedule")} style={{ background:"#fff", border:"none", color:"#1a56a0", borderRadius:5, padding:"2px 8px", fontSize:11, cursor:"pointer", fontWeight:700 }}>＋</button>
                 </div>
               </div>
-              {/* 横スクロール週間カレンダー */}
-              <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", marginLeft: -2, marginRight: -2 }}>
-                <div style={{ display: "flex", gap: 4, minWidth: "max-content", paddingBottom: 4 }}>
-                  {weekDays.map((d, i) => {
-                    const y = d.getFullYear();
-                    const m = String(d.getMonth()+1).padStart(2,"0");
-                    const dd = String(d.getDate()).padStart(2,"0");
-                    const dStr = `${y}-${m}-${dd}`;
-                    const isToday = dStr === todayStr;
-                    const isSun = d.getDay() === 0;
-                    const isSat = d.getDay() === 6;
-                    const daySchs = todaySchedules.filter(sc => sc.start_at?.slice(0,10) === dStr);
-                    return (
-                      <div key={i} onClick={() => nav("schedule")}
-                        style={{
-                          width: 90, flexShrink: 0, cursor: "pointer",
-                          background: isToday ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.07)",
-                          borderRadius: 10, padding: "6px 5px",
-                          border: isToday ? "1.5px solid rgba(255,255,255,0.5)" : "1px solid rgba(255,255,255,0.1)",
-                        }}>
-                        {/* 曜日・日付ヘッダー */}
-                        <div style={{ textAlign: "center", marginBottom: 5 }}>
-                          <div style={{ fontSize: 10, color: isSun ? "#fca5a5" : isSat ? "#93c5fd" : "rgba(255,255,255,0.6)", fontWeight: 600 }}>
-                            {WD[d.getDay()]}
-                          </div>
-                          <div style={{
-                            width: 26, height: 26, borderRadius: "50%", margin: "2px auto 0",
-                            background: isToday ? "#fff" : "transparent",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                          }}>
-                            <span style={{ fontSize: 13, fontWeight: 700, color: isToday ? "#1A3A5C" : isSun ? "#fca5a5" : isSat ? "#93c5fd" : "#fff" }}>
-                              {d.getDate()}
-                            </span>
-                          </div>
-                        </div>
-                        {/* その日の予定チップ */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                          {daySchs.length === 0 ? (
-                            <div style={{ height: 24 }} />
-                          ) : daySchs.slice(0, 3).map((sc) => (
-                            <div key={sc.id} style={{
-                              background: getCatColor(sc),
-                              borderRadius: 4, padding: "2px 4px",
-                            }}>
-                              <div style={{ fontSize: 9, color: "rgba(255,255,255,0.85)", fontWeight: 600, lineHeight: 1.3 }}>
-                                {sc.all_day ? "終日" : formatTimeRange(sc)}
-                              </div>
-                              <div style={{ fontSize: 10, color: "#fff", fontWeight: 700, lineHeight: 1.3, wordBreak: "break-all" }}>
-                                {sc.title.length > 8 ? sc.title.slice(0,8)+"…" : sc.title}
-                              </div>
-                              {sc.assignees?.[0] && (
-                                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.8)" }}>{sc.assignees[0]}</div>
-                              )}
-                            </div>
-                          ))}
-                          {daySchs.length > 3 && (
-                            <div style={{ fontSize: 9, color: "rgba(255,255,255,0.6)", textAlign: "center" }}>他{daySchs.length - 3}件</div>
-                          )}
+              {/* 4列グリッド */}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr" }}>
+                {days.map((d, i) => {
+                  const offset = calBase + i;
+                  const isToday = offset === 0;
+                  const isSun = d.getDay() === 0;
+                  const isSat = d.getDay() === 6;
+                  const daySchs = getScForDay(offset);
+                  return (
+                    <div key={i} style={{ borderRight: i < 3 ? "1px solid #e5e7eb" : "none" }}>
+                      {/* 日付ヘッダー */}
+                      <div style={{ textAlign:"center", padding:"6px 2px", borderBottom:"1px solid #e5e7eb", background: isToday?"#eff6ff":"#f8fafc" }}>
+                        <div style={{ fontSize:9, color: isSun?"#dc2626": isSat?"#2563eb":"#6b7280", fontWeight:600 }}>{WD_JP[d.getDay()]}</div>
+                        <div style={{ width:22, height:22, borderRadius:"50%", margin:"2px auto", background: isToday?"#1a56a0":"transparent", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                          <span style={{ fontSize:11, fontWeight:700, color: isToday?"#fff": isSun?"#dc2626": isSat?"#2563eb":"#1f2937" }}>{d.getDate()}</span>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
+                      {/* 予定 */}
+                      <div style={{ padding:"3px 2px", maxHeight:180, overflowY:"auto" }}>
+                        {daySchs.map((sc) => (
+                          <div key={sc.id} onClick={() => setDetailSc(sc)}
+                            style={{ background: getCatColor(sc)+"18", borderLeft:`3px solid ${getCatColor(sc)}`, borderRadius:3, padding:"2px 3px", marginBottom:2, cursor:"pointer" }}>
+                            {!sc.all_day && (
+                              <div style={{ fontSize:8, color:"#555", fontWeight:600, lineHeight:1.3 }}>{formatTime(sc.start_at)}{sc.end_at?`-${formatTime(sc.end_at)}`:""}</div>
+                            )}
+                            <div style={{ display:"flex", gap:2, flexWrap:"wrap", alignItems:"flex-start" }}>
+                              <span style={{ background:getCatColor(sc), color:"#fff", borderRadius:2, padding:"0 3px", fontSize:8, fontWeight:700, flexShrink:0, lineHeight:1.6 }}>{sc.category}</span>
+                              <span style={{ fontSize:9, color:"#1f2937", fontWeight:600, lineHeight:1.4, wordBreak:"break-all" }}>{sc.title}</span>
+                            </div>
+                          </div>
+                        ))}
+                        <button onClick={() => nav("schedule")} style={{ width:"100%", background:"none", border:"1px dashed #e2e8f0", borderRadius:3, color:"#cbd5e1", fontSize:12, padding:"1px 0", cursor:"pointer", marginTop:1 }}>＋</button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           );
@@ -568,6 +556,51 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           {[0, 1].map(i => (
             <div key={i} onClick={() => setCurrentPage(i)} style={{ width: i === currentPage ? 20 : 8, height: 8, borderRadius: 4, background: i === currentPage ? cust.c1 : "#D1D5DB", cursor: "pointer", transition: "all 0.3s" }} />
           ))}
+        </div>
+      )}
+
+      {/* 予定詳細モーダル */}
+      {detailSc && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}
+          onClick={() => setDetailSc(null)}>
+          <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:400, boxShadow:"0 20px 60px rgba(0,0,0,0.25)", overflow:"hidden" }}
+            onClick={e => e.stopPropagation()}>
+            {/* 詳細ヘッダー */}
+            <div style={{ background: getCatColor(detailSc), padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ background:"rgba(255,255,255,0.25)", color:"#fff", borderRadius:4, padding:"1px 8px", fontSize:11, fontWeight:700 }}>{detailSc.category}</span>
+                <span style={{ color:"#fff", fontWeight:700, fontSize:14 }}>{detailSc.title}</span>
+              </div>
+              <button onClick={() => setDetailSc(null)} style={{ background:"none", border:"none", color:"#fff", fontSize:20, cursor:"pointer" }}>✕</button>
+            </div>
+            {/* 詳細内容 */}
+            <div style={{ padding:0 }}>
+              {[
+                { label:"日時", value: detailSc.all_day
+                  ? detailSc.start_at?.slice(0,10)
+                  : `${detailSc.start_at?.slice(0,10)} ${formatTime(detailSc.start_at)}${detailSc.end_at ? ` 〜 ${formatTime(detailSc.end_at)}` : ""}` },
+                { label:"記入者", value: detailSc.assignees?.[0] || "―" },
+                { label:"対応予定業者", value: detailSc.location?.startsWith("対応：") ? detailSc.location.replace("対応：","") : "―" },
+                { label:"メモ", value: detailSc.memo || "―" },
+              ].map((row, i) => (
+                <div key={i} style={{ display:"flex", alignItems:"flex-start", borderBottom:"1px solid #f1f5f9", padding:"11px 16px", gap:12 }}>
+                  <div style={{ width:80, flexShrink:0, fontSize:12, fontWeight:600, color:"#6b7280", paddingTop:1 }}>{row.label}</div>
+                  <div style={{ flex:1, fontSize:13, color:"#1f2937", wordBreak:"break-all" }}>{row.value}</div>
+                </div>
+              ))}
+            </div>
+            {/* フッター */}
+            <div style={{ padding:"12px 16px", display:"flex", justifyContent:"flex-end", gap:8 }}>
+              <button onClick={() => { setDetailSc(null); nav("schedule"); }}
+                style={{ padding:"8px 16px", background:"#1a56a0", color:"#fff", border:"none", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer" }}>
+                編集する
+              </button>
+              <button onClick={() => setDetailSc(null)}
+                style={{ padding:"8px 14px", background:"#f1f5f9", color:"#374151", border:"none", borderRadius:8, fontSize:13, cursor:"pointer" }}>
+                閉じる
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
