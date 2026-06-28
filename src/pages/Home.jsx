@@ -54,19 +54,26 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const WD = ["日", "月", "火", "水", "木", "金", "土"];
   const weatherIcon = code => code === 0 ? "☀️" : code <= 2 ? "🌤" : code === 3 ? "☁️" : code <= 48 ? "🌫" : code <= 55 ? "🌦" : code <= 65 ? "🌧" : code <= 75 ? "🌨" : code <= 82 ? "🌦" : code <= 99 ? "⛈" : "🌡";
 
-  // 今日の予定を取得
+  // 今週の予定を取得（月〜日）
   useEffect(() => {
-    const fetchTodaySchedules = async () => {
-      const todayStr = new Date().toISOString().slice(0, 10);
+    const fetchWeekSchedules = async () => {
+      const now = new Date();
+      const day = now.getDay();
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - day + (day === 0 ? -6 : 1));
+      monday.setHours(0, 0, 0, 0);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
       const { data } = await supabase
         .from("schedules")
         .select("*")
-        .gte("start_at", `${todayStr}T00:00:00`)
-        .lte("start_at", `${todayStr}T23:59:59`)
+        .gte("start_at", monday.toISOString())
+        .lte("start_at", sunday.toISOString())
         .order("start_at");
       if (data) setTodaySchedules(data);
     };
-    fetchTodaySchedules();
+    fetchWeekSchedules();
   }, []);
 
   const formatTime = (isoStr) => {
@@ -142,100 +149,96 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
 
       {/* ===== バナー：モードで切り替え ===== */}
       {bannerMode === "schedule" ? (
-        /* 予定表示モード */
-        <div style={{ background: "linear-gradient(135deg, #1A3A5C, #2563EB)", borderRadius: 16, padding: "14px 16px", marginBottom: 18, boxShadow: "0 4px 16px rgba(37,99,235,0.25)" }}>
-          {/* ヘッダー */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>📅 スケジュール</span>
-              {todaySchedules.length > 0 && (
-                <span style={{ background: "rgba(255,255,255,0.2)", color: "#fff", borderRadius: 10, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>
-                  {todaySchedules.length}件
-                </span>
-              )}
-            </div>
-            <div style={{ display: "flex", gap: 5 }}>
-              <button onClick={() => setBannerMode("dashboard")} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "rgba(255,255,255,0.85)", borderRadius: 6, padding: "3px 8px", fontSize: 11, cursor: "pointer" }}>📊</button>
-              <button onClick={() => nav("schedule")} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "rgba(255,255,255,0.85)", borderRadius: 6, padding: "3px 8px", fontSize: 11, cursor: "pointer" }}>全て見る →</button>
-            </div>
-          </div>
-          {/* 今週の日付バー（常に表示） */}
-          {(() => {
-            const today = new Date();
-            const day = today.getDay();
-            const monday = new Date(today);
-            monday.setDate(today.getDate() - day + (day === 0 ? -6 : 1));
-            const weekDays = Array.from({ length: 7 }, (_, i) => {
-              const d = new Date(monday);
-              d.setDate(monday.getDate() + i);
-              return d;
-            });
-            const todayStr = today.toISOString().slice(0, 10);
-            return (
-              <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
-                {weekDays.map((d, i) => {
-                  const dStr = d.toISOString().slice(0, 10);
-                  const isToday = dStr === todayStr;
-                  const isSun = d.getDay() === 0;
-                  const isSat = d.getDay() === 6;
-                  // その日の予定数
-                  const cnt = todaySchedules.filter(sc => sc.start_at?.slice(0, 10) === dStr).length;
-                  return (
-                    <div key={i} onClick={() => nav("schedule")} style={{ flex: 1, textAlign: "center", cursor: "pointer" }}>
-                      <div style={{ fontSize: 9, color: isSun ? "#fca5a5" : isSat ? "#93c5fd" : "rgba(255,255,255,0.55)", marginBottom: 2 }}>
-                        {WD[d.getDay()]}
-                      </div>
-                      <div style={{
-                        width: 24, height: 24, borderRadius: "50%", margin: "0 auto 2px",
-                        background: isToday ? "#fff" : "transparent",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                      }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: isToday ? "#1A3A5C" : isSun ? "#fca5a5" : isSat ? "#93c5fd" : "rgba(255,255,255,0.85)" }}>
-                          {d.getDate()}
-                        </span>
-                      </div>
-                      {cnt > 0 && <div style={{ width: 4, height: 4, borderRadius: "50%", background: "rgba(255,255,255,0.7)", margin: "0 auto" }} />}
-                    </div>
-                  );
-                })}
+        /* 予定表示モード：横スクロール週間カレンダー */
+        (() => {
+          const now = new Date();
+          const day = now.getDay();
+          const monday = new Date(now);
+          monday.setDate(now.getDate() - day + (day === 0 ? -6 : 1));
+          const weekDays = Array.from({ length: 7 }, (_, i) => {
+            const d = new Date(monday);
+            d.setDate(monday.getDate() + i);
+            return d;
+          });
+          const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+
+          return (
+            <div style={{ background: "linear-gradient(135deg, #1A3A5C, #2563EB)", borderRadius: 16, padding: "12px 14px", marginBottom: 18, boxShadow: "0 4px 16px rgba(37,99,235,0.25)" }}>
+              {/* ヘッダー */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <span style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>📅 スケジュール</span>
+                <div style={{ display: "flex", gap: 5 }}>
+                  <button onClick={() => setBannerMode("dashboard")} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "rgba(255,255,255,0.85)", borderRadius: 6, padding: "3px 8px", fontSize: 11, cursor: "pointer" }}>📊</button>
+                  <button onClick={() => nav("schedule")} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "rgba(255,255,255,0.85)", borderRadius: 6, padding: "3px 8px", fontSize: 11, cursor: "pointer" }}>全て見る →</button>
+                </div>
               </div>
-            );
-          })()}
-          {/* 予定リスト（今日の予定。なければメッセージ） */}
-          {todaySchedules.length === 0 ? (
-            <div onClick={() => nav("schedule")} style={{ background: "rgba(255,255,255,0.08)", borderRadius: 10, padding: "10px 12px", cursor: "pointer", border: "1px dashed rgba(255,255,255,0.2)", textAlign: "center" }}>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>今日の予定はありません　＋ 予定を追加</div>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-              {todaySchedules.slice(0, 5).map((sc) => (
-                <div key={sc.id} onClick={() => nav("schedule")} style={{ background: "rgba(255,255,255,0.1)", borderRadius: 10, padding: "8px 10px", cursor: "pointer", display: "flex", alignItems: "flex-start", gap: 8, borderLeft: `3px solid ${getCatColor(sc)}` }}>
-                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.8)", fontWeight: 700, minWidth: 76, flexShrink: 0, paddingTop: 1 }}>
-                    {formatTimeRange(sc)}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
-                      <span style={{ background: getCatColor(sc), color: "#fff", borderRadius: 4, padding: "1px 6px", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
-                        {sc.category || "その他"}
-                      </span>
-                      <span style={{ fontSize: 12, color: "#fff", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {sc.title}
-                      </span>
-                    </div>
-                    {sc.assignees?.length > 0 && (
-                      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}>👤 {sc.assignees.join("・")}</div>
-                    )}
-                  </div>
+              {/* 横スクロール週間カレンダー */}
+              <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", marginLeft: -2, marginRight: -2 }}>
+                <div style={{ display: "flex", gap: 4, minWidth: "max-content", paddingBottom: 4 }}>
+                  {weekDays.map((d, i) => {
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth()+1).padStart(2,"0");
+                    const dd = String(d.getDate()).padStart(2,"0");
+                    const dStr = `${y}-${m}-${dd}`;
+                    const isToday = dStr === todayStr;
+                    const isSun = d.getDay() === 0;
+                    const isSat = d.getDay() === 6;
+                    const daySchs = todaySchedules.filter(sc => sc.start_at?.slice(0,10) === dStr);
+                    return (
+                      <div key={i} onClick={() => nav("schedule")}
+                        style={{
+                          width: 90, flexShrink: 0, cursor: "pointer",
+                          background: isToday ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.07)",
+                          borderRadius: 10, padding: "6px 5px",
+                          border: isToday ? "1.5px solid rgba(255,255,255,0.5)" : "1px solid rgba(255,255,255,0.1)",
+                        }}>
+                        {/* 曜日・日付ヘッダー */}
+                        <div style={{ textAlign: "center", marginBottom: 5 }}>
+                          <div style={{ fontSize: 10, color: isSun ? "#fca5a5" : isSat ? "#93c5fd" : "rgba(255,255,255,0.6)", fontWeight: 600 }}>
+                            {WD[d.getDay()]}
+                          </div>
+                          <div style={{
+                            width: 26, height: 26, borderRadius: "50%", margin: "2px auto 0",
+                            background: isToday ? "#fff" : "transparent",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                          }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: isToday ? "#1A3A5C" : isSun ? "#fca5a5" : isSat ? "#93c5fd" : "#fff" }}>
+                              {d.getDate()}
+                            </span>
+                          </div>
+                        </div>
+                        {/* その日の予定チップ */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                          {daySchs.length === 0 ? (
+                            <div style={{ height: 24 }} />
+                          ) : daySchs.slice(0, 3).map((sc) => (
+                            <div key={sc.id} style={{
+                              background: getCatColor(sc),
+                              borderRadius: 4, padding: "2px 4px",
+                            }}>
+                              <div style={{ fontSize: 9, color: "rgba(255,255,255,0.85)", fontWeight: 600, lineHeight: 1.3 }}>
+                                {sc.all_day ? "終日" : formatTimeRange(sc)}
+                              </div>
+                              <div style={{ fontSize: 10, color: "#fff", fontWeight: 700, lineHeight: 1.3, wordBreak: "break-all" }}>
+                                {sc.title.length > 8 ? sc.title.slice(0,8)+"…" : sc.title}
+                              </div>
+                              {sc.assignees?.[0] && (
+                                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.8)" }}>{sc.assignees[0]}</div>
+                              )}
+                            </div>
+                          ))}
+                          {daySchs.length > 3 && (
+                            <div style={{ fontSize: 9, color: "rgba(255,255,255,0.6)", textAlign: "center" }}>他{daySchs.length - 3}件</div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
-              {todaySchedules.length > 5 && (
-                <div onClick={() => nav("schedule")} style={{ textAlign: "center", fontSize: 11, color: "rgba(255,255,255,0.6)", cursor: "pointer", paddingTop: 2 }}>
-                  他{todaySchedules.length - 5}件を見る →
-                </div>
-              )}
+              </div>
             </div>
-          )}
-        </div>
+          );
+        })()
       ) : (
         /* 数字ダッシュボードモード */
         <div style={{ background: "linear-gradient(135deg, #1A3A5C, #2563EB)", borderRadius: 16, padding: "18px 20px", marginBottom: 18, boxShadow: "0 4px 16px rgba(37,99,235,0.25)" }}>
