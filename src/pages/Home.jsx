@@ -289,7 +289,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
               cursor: "pointer",
               boxShadow: "0 2px 8px rgba(0,0,0,0.07)",
               borderLeft: t.gradient ? "none" : `4px solid ${t.color}`,
-              gridColumn: t.label === "AI補助" ? "1 / -1" : "auto",
             }}>
             <div style={{ fontSize: 24, marginBottom: 6 }}>{t.icon}</div>
             <div style={{ fontWeight: 800, fontSize: 14, color: t.gradient ? "#fff" : "#1F2937", marginBottom: 2 }}>{t.label}</div>
