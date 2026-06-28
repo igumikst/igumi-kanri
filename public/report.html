@@ -575,9 +575,17 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   const cws=wb.addWorksheet('表紙');
   cws.pageSetup.paperSize=9;cws.pageSetup.orientation='portrait';
   cws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
+  cws.pageSetup.printArea='B1:T56';
+  cws.pageSetup.fitToPage=true;
+  cws.pageSetup.fitToWidth=1;
+  cws.pageSetup.fitToHeight=1;
 
   cws.getColumn('A').width=3.49;
   cws.getColumn('B').width=4.62;
+  // C〜R列を13.0に（正解準拠・抜けてた）
+  ['C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R'].forEach(col=>{
+    cws.getColumn(col).width=13.0;
+  });
   cws.getColumn('S').width=5.99;
   cws.getColumn('T').width=4.62;
 
@@ -667,13 +675,26 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     if(sides.includes('r'))nb.right=thin;
     cell.border=nb;
   });
+  // 表紙の上辺をC2〜S2にも引いて外枠を完成（正解は上辺省略されてるが見た目優先）
+  ['C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S'].forEach(col=>{
+    const cell=cws.getCell(`${col}2`);
+    cell.border={...cell.border,top:thin};
+  });
 
   // ─── 報告書シート ───
   const rws=wb.addWorksheet('報告書');
   rws.pageSetup.paperSize=9;rws.pageSetup.orientation='portrait';
   rws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
+  rws.pageSetup.printArea='B1:T56';
+  rws.pageSetup.fitToPage=true;
+  rws.pageSetup.fitToWidth=1;
+  rws.pageSetup.fitToHeight=1;
 
   rws.getColumn('A').width=4.62;
+  // B〜T列を13.0に（正解準拠・これが抜けてて列幅がズレてた）
+  ['B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T'].forEach(col=>{
+    rws.getColumn(col).width=13.0;
+  });
 
   // 行高（正解準拠）：基本13.5、行2-5のみ12.75、作業内容ブロック等は14.25
   for(let r=1;r<=56;r++){rws.getRow(r).height=13.5;}
@@ -791,6 +812,11 @@ async function buildUnionPhotoSheets(wb, mincho, thin, hair) {
     const ws=wb.addWorksheet(String(pg+1).padStart(3,'0'));
     ws.pageSetup.paperSize=9;ws.pageSetup.orientation='portrait';
     ws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
+    // 印刷範囲A1:L37＋1ページに収める（正解準拠・空白ページ防止）
+    ws.pageSetup.printArea='A1:L37';
+    ws.pageSetup.fitToPage=true;
+    ws.pageSetup.fitToWidth=1;
+    ws.pageSetup.fitToHeight=1;
 
     // 列幅（エクレール正解ファイル準拠）
     ws.getColumn('A').width=2.87;
