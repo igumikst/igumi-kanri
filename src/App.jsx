@@ -177,6 +177,6 @@ export default function App() {
   if (page === "linesettings") return <LineSettings {...commonProps} />;
   if (page === "systemmanual") return <SystemManual {...commonProps} />;
   if (page === "usermanual") return <UserManual {...commonProps} />;
-  if (page === "schedule") return <Schedule />;
+  if (page === "schedule") return <Schedule nav={nav} />;
   return null;
 }
