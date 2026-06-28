@@ -584,17 +584,19 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   for(let r=1;r<=56;r++){cws.getRow(r).height=13.5;}
   [2,3,4,5].forEach(r=>{cws.getRow(r).height=12.75;});
 
-  // ページ全体に外枠（エクレール準拠）
-  // 上辺・下辺：B〜S列、左辺：B列のleft、右辺：T列のleft
-  const addOuterBorder=(ws,leftCol,rightTcol,innerRightCol,topRow,bottomRow,borderStyle)=>{
+  // ページ全体に外枠
+  // 下辺：B〜S列、左辺：B列のleft、右辺：T列のleft、上辺：skipTopで制御
+  const addOuterBorder=(ws,leftCol,rightTcol,innerRightCol,topRow,bottomRow,borderStyle,skipTop)=>{
     const colToNum=c=>{let n=0;for(const ch of c)n=n*26+ch.charCodeAt(0)-64;return n;};
     const numToCol=n=>{let s='';while(n>0){s=String.fromCharCode(65+(n-1)%26)+s;n=Math.floor((n-1)/26);}return s;};
     const lC=colToNum(leftCol),irC=colToNum(innerRightCol);
     const b={style:borderStyle};
-    // 上辺・下辺（B〜S列）
+    // 下辺（B〜S列）＋ 上辺（skipTopでなければ）
     for(let c=lC;c<=irC;c++){
-      const topCell=ws.getCell(`${numToCol(c)}${topRow}`);
-      topCell.border={...topCell.border,top:b};
+      if(!skipTop){
+        const topCell=ws.getCell(`${numToCol(c)}${topRow}`);
+        topCell.border={...topCell.border,top:b};
+      }
       const btmCell=ws.getCell(`${numToCol(c)}${bottomRow}`);
       btmCell.border={...btmCell.border,bottom:b};
     }
@@ -606,39 +608,65 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
       rCell.border={...rCell.border,left:b};
     }
   };
-  addOuterBorder(cws,'B','T','S',2,56,'thin');
+  // 表紙：上辺はB2のみ（C2〜S2にtopなし）→ skipTop=true、B2に個別でtop付与
+  // 矩形範囲の外周罫線を、各辺の全セルに個別に引く（ExcelJSのmerge対策）
+  const boxBorder=(ws,c1,r1,c2,r2,sides)=>{
+    const colToNum2=c=>{let n=0;for(const ch of c)n=n*26+ch.charCodeAt(0)-64;return n;};
+    const numToCol2=n=>{let s='';while(n>0){s=String.fromCharCode(65+(n-1)%26)+s;n=Math.floor((n-1)/26);}return s;};
+    const cc1=colToNum2(c1),cc2=colToNum2(c2);
+    for(let cc=cc1;cc<=cc2;cc++){
+      for(let r=r1;r<=r2;r++){
+        const cell=ws.getCell(`${numToCol2(cc)}${r}`);
+        const nb={...cell.border};
+        if(sides.includes('top')&&r===r1)nb.top=thin;
+        if(sides.includes('bottom')&&r===r2)nb.bottom=thin;
+        if(sides.includes('left')&&cc===cc1)nb.left=thin;
+        if(sides.includes('right')&&cc===cc2)nb.right=thin;
+        cell.border=nb;
+      }
+    }
+  };
 
-  // 建物名称 E11:P13（ゴシック20pt太字・中央・四方罫線thin）
+  // 建物名称 E11:P13（ゴシック20pt太字・中央）罫線はマップで適用
   cws.mergeCells('E11:P13');
   const buildingCell=cws.getCell('E11');
   buildingCell.value=uBuilding;
   buildingCell.font=gothicC(20,true);
   buildingCell.alignment={horizontal:'center',vertical:'middle'};
-  buildingCell.border={top:thin,bottom:thin,left:thin,right:thin};
 
-  // 工事名称 D15:Q18（ＭＳ Ｐ明朝22pt太字・中央・下線thin）
+  // 工事名称 D15:Q18（ＭＳ Ｐ明朝22pt太字・中央下）
   cws.mergeCells('D15:Q18');
   const worknameCell=cws.getCell('D15');
   worknameCell.value=uWorkname;
   worknameCell.font=mincho(22,true);
   worknameCell.alignment={horizontal:'center',vertical:'bottom'};
-  worknameCell.border={bottom:thin};
 
-  // 作業日 F41:O43（ＭＳ Ｐ明朝20pt太字・中央・下線thin）
+  // 作業日 F41:O43（ＭＳ Ｐ明朝20pt太字・中央下）
   cws.mergeCells('F41:O43');
   const dateCell=cws.getCell('F41');
   dateCell.value=uDateStr;
   dateCell.font=mincho(20,true);
   dateCell.alignment={horizontal:'center',vertical:'bottom'};
-  dateCell.border={bottom:thin};
 
-  // 会社名 F52:O54（ゴシック20pt太字・中央下・下線thin）
+  // 会社名 F52:O54（ゴシック20pt太字・中央下）
   cws.mergeCells('F52:O54');
   const companyCell=cws.getCell('F52');
   companyCell.value=uCompany;
   companyCell.font=gothicC(20,true);
   companyCell.alignment={horizontal:'center',vertical:'bottom'};
-  companyCell.border={bottom:thin};
+
+  // 表紙の罫線をセル単位マップで完全適用（ドラゴン正解ファイル準拠）
+  const COVER_BD={"B2":"tl","T2":"l","B3":"l","T3":"l","B4":"l","T4":"l","B5":"l","T5":"l","B6":"l","T6":"l","B7":"l","T7":"l","B8":"l","T8":"l","B9":"l","T9":"l","B10":"l","T10":"l","B11":"l","E11":"tblr","F11":"t","G11":"t","H11":"t","I11":"t","J11":"t","K11":"t","L11":"t","M11":"t","N11":"t","O11":"t","P11":"tr","T11":"l","B12":"l","E12":"l","P12":"r","T12":"l","B13":"l","E13":"bl","F13":"b","G13":"b","H13":"b","I13":"b","J13":"b","K13":"b","L13":"b","M13":"b","N13":"b","O13":"b","P13":"br","T13":"l","B14":"l","T14":"l","B15":"l","D15":"b","T15":"l","B16":"l","T16":"l","B17":"l","T17":"l","B18":"l","D18":"b","E18":"b","F18":"b","G18":"b","H18":"b","I18":"b","J18":"b","K18":"b","L18":"b","M18":"b","N18":"b","O18":"b","P18":"b","Q18":"b","T18":"l","B19":"l","T19":"l","B20":"l","T20":"l","B21":"l","T21":"l","B22":"l","T22":"l","B23":"l","T23":"l","B24":"l","T24":"l","B25":"l","T25":"l","B26":"l","T26":"l","B27":"l","T27":"l","B28":"l","T28":"l","B29":"l","T29":"l","B30":"l","T30":"l","B31":"l","T31":"l","B32":"l","T32":"l","B33":"l","T33":"l","B34":"l","T34":"l","B35":"l","T35":"l","B36":"l","T36":"l","B37":"l","T37":"l","B38":"l","T38":"l","B39":"l","T39":"l","B40":"l","T40":"l","B41":"l","F41":"b","T41":"l","B42":"l","T42":"l","B43":"l","F43":"b","G43":"b","H43":"b","I43":"b","J43":"b","K43":"b","L43":"b","M43":"b","N43":"b","O43":"b","T43":"l","B44":"l","T44":"l","B45":"l","T45":"l","B46":"l","T46":"l","B47":"l","T47":"l","B48":"l","T48":"l","B49":"l","T49":"l","B50":"l","T50":"l","B51":"l","T51":"l","B52":"l","F52":"b","T52":"l","B53":"l","T53":"l","B54":"l","F54":"b","G54":"b","H54":"b","I54":"b","J54":"b","K54":"b","L54":"b","M54":"b","N54":"b","O54":"b","T54":"l","B55":"l","T55":"l","B56":"bl","C56":"b","D56":"b","E56":"b","F56":"b","G56":"b","H56":"b","I56":"b","J56":"b","K56":"b","L56":"b","M56":"b","N56":"b","O56":"b","P56":"b","Q56":"b","R56":"b","S56":"br","T56":"l"};
+  Object.keys(COVER_BD).forEach(coord=>{
+    const sides=COVER_BD[coord];
+    const cell=cws.getCell(coord);
+    const nb={...cell.border};
+    if(sides.includes('t'))nb.top=thin;
+    if(sides.includes('b'))nb.bottom=thin;
+    if(sides.includes('l'))nb.left=thin;
+    if(sides.includes('r'))nb.right=thin;
+    cell.border=nb;
+  });
 
   // ─── 報告書シート ───
   const rws=wb.addWorksheet('報告書');
@@ -647,102 +675,107 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
 
   rws.getColumn('A').width=4.62;
 
+  // 行高（正解準拠）：基本13.5、行2-5のみ12.75、作業内容ブロック等は14.25
   for(let r=1;r<=56;r++){rws.getRow(r).height=13.5;}
   [2,3,4,5].forEach(r=>{rws.getRow(r).height=12.75;});
-  [25,27,28,29,30,31,32,33,36,37,38,39,40,41,42,45,46].forEach(r=>{rws.getRow(r).height=14.25;});
+  [25,27,28,29,30,31,32,33,36,37,38,39].forEach(r=>{rws.getRow(r).height=14.25;});
 
-  // ページ全体に外枠（エクレール準拠）
-  addOuterBorder(rws,'B','T','S',2,56,'thin');
-
-  // タイトル「調査報告書」→ ゴシック22pt・四方罫線thin
+  // タイトル「調査報告書」B2:S4（ゴシック22pt中央）
   rws.mergeCells('B2:S4');
   const rtitleCell=rws.getCell('B2');
   rtitleCell.value='調査報告書';
   rtitleCell.font=gothicC(22);
   rtitleCell.alignment={horizontal:'center',vertical:'middle'};
-  rtitleCell.border={top:thin,bottom:thin,left:thin,right:thin};
 
-  // ラベル=ゴシック12pt、値=明朝（サイズ・配置はエクレール準拠）
-  // [行, ラベル, 値, 値フォントサイズ, 値の横配置]
+  // 項目ブロック（値・フォント・結合・配置のみ。罫線は最後にマップ一括適用）
+  // [行, ラベル, 値, 値フォント('m'=明朝/'g'=ゴシック), 値の横配置]
   const reportItems=[
-    [5,'建築物名称',{formula:`表紙!E11`},12,'center'],
-    [8,'住所',uAddress,12,'general'],
-    [11,'工事名称',{formula:`表紙!D15`},11,'general'],
-    [14,'作業実施日',{formula:`表紙!F41`},12,'left'],
-    [17,'作業責任者',uWorker,12,'general'],
+    [5,'建築物名称',{formula:`表紙!E11`},'m','general'],
+    [8,'住所',uAddress,'g','left'],
+    [11,'工事名称',{formula:`表紙!D15`},'m','general'],
+    [14,'作業実施日',{formula:`表紙!F41`},'m','left'],
+    [17,'作業者',uWorker,'g','general'],
   ];
 
-  reportItems.forEach(([rowNum,label,val,valSize,valAlign])=>{
-    // ラベル C:E（ゴシック12pt・均等割付）
-    rws.mergeCells(`C${rowNum}:E${rowNum+2}`);
-    const lc=rws.getCell(`C${rowNum}`);
+  reportItems.forEach(([rowNum,label,val,valFont,valAlign])=>{
+    const r0=rowNum, r2=rowNum+2;
+    rws.mergeCells(`B${r0}:B${r2}`);
+    rws.mergeCells(`C${r0}:E${r2}`);
+    const lc=rws.getCell(`C${r0}`);
     lc.value=label;lc.font=gothicC(12);
     lc.alignment={horizontal:'distributed',vertical:'middle'};
-    lc.border={top:thin,bottom:thin};
-    // 区切り F・G
-    rws.mergeCells(`F${rowNum}:F${rowNum+2}`);
-    rws.mergeCells(`G${rowNum}:G${rowNum+2}`);
-    rws.getCell(`F${rowNum}`).border={top:thin,bottom:thin,right:thin};
-    rws.getCell(`G${rowNum}`).border={top:thin,bottom:thin,left:thin};
-    // 値 H:S（明朝・サイズ可変）
-    rws.mergeCells(`H${rowNum}:S${rowNum+2}`);
-    const vc=rws.getCell(`H${rowNum}`);
-    if(typeof val==='object'&&val.formula){
-      vc.value={formula:val.formula};
-    } else {
-      vc.value=val;
-    }
-    vc.font=mincho(valSize);
+    rws.mergeCells(`F${r0}:F${r2}`);
+    rws.mergeCells(`G${r0}:G${r2}`);
+    rws.mergeCells(`H${r0}:S${r2}`);
+    const vc=rws.getCell(`H${r0}`);
+    if(typeof val==='object'&&val.formula){vc.value={formula:val.formula};}
+    else{vc.value=val;}
+    vc.font=(valFont==='m')?mincho(12):gothicC(12);
     vc.alignment={horizontal:valAlign,vertical:'middle'};
-    vc.border={top:thin,bottom:thin,right:thin};
   });
 
-  // 【作業内容】（ゴシック12pt中央）
+  // 【作業内容】C21:G22（ゴシック12pt中央）
   rws.mergeCells('C21:G22');
   const contentTitleCell=rws.getCell('C21');
   contentTitleCell.value='【　作　業　内　容　】';
   contentTitleCell.font=gothicC(12);
   contentTitleCell.alignment={horizontal:'center',vertical:'middle'};
 
-  // 作業内容（1行目だけ明朝、それ以外ゴシック・下寄せ）→ エクレール準拠
+  // 作業内容 C23:Q23〜C36:Q36（全14行を結合・正解準拠）
+  // 入力行は値を入れ、空行も結合だけする（号室含む行のみ明朝、他ゴシック）
   const contentLines=uContent.split('\n').filter(l=>l.trim());
-  contentLines.forEach((line,i)=>{
-    const r=23+i;
-    if(r>40)return;
-    rws.mergeCells(`C${r}:R${r}`);
+  for(let r=23;r<=36;r++){
+    rws.mergeCells(`C${r}:Q${r}`);
     const cc=rws.getCell(`C${r}`);
-    cc.value=line;
-    cc.font=(i===0)?mincho(12):gothicC(12);
+    const line=contentLines[r-23];
+    if(line!==undefined){
+      cc.value=line;
+      cc.font=/号室/.test(line)?mincho(12):gothicC(12);
+    }
     cc.alignment={vertical:'bottom'};
-  });
+  }
 
-  // （別紙写真添付参照）C41:I42（ゴシック12pt中央）
-  rws.mergeCells('C41:I42');
-  const refCell=rws.getCell('C41');
+  // （別紙写真添付参照）C37:I38（ゴシック12pt中央）
+  rws.mergeCells('C37:I38');
+  const refCell=rws.getCell('C37');
   refCell.value='（別紙写真添付参照）';
   refCell.font=gothicC(12);
   refCell.alignment={horizontal:'center',vertical:'middle'};
 
-  // 上記の作業を実施いたしました。J44:R45（ゴシック12pt中央）
-  rws.mergeCells('J44:R45');
-  const doneCell=rws.getCell('J44');
+  // 上記の作業を実施いたしました。J40:R41（ゴシック12pt中央）
+  rws.mergeCells('J40:R41');
+  const doneCell=rws.getCell('J40');
   doneCell.value='上記の作業を実施いたしました。';
   doneCell.font=gothicC(12);
   doneCell.alignment={horizontal:'center',vertical:'middle'};
 
-  // 以上 P46:R47（ゴシック11pt中央）
-  rws.mergeCells('P46:R47');
-  const ijoCell=rws.getCell('P46');
+  // 以上 P42:R43（ゴシック11pt中央）
+  rws.mergeCells('P42:R43');
+  const ijoCell=rws.getCell('P42');
   ijoCell.value='以上';
   ijoCell.font=gothicC(11);
   ijoCell.alignment={horizontal:'center',vertical:'middle'};
 
-  // 【備考】C47:G48（ゴシック12pt中央）
-  rws.mergeCells('C47:G48');
-  const bikoCell=rws.getCell('C47');
+  // 【備考】C45:G46（ゴシック12pt中央）
+  rws.mergeCells('C45:G46');
+  const bikoCell=rws.getCell('C45');
   bikoCell.value='【　備　　　　　考　】';
   bikoCell.font=gothicC(12);
   bikoCell.alignment={horizontal:'center',vertical:'middle'};
+
+
+  // ─── 報告書の罫線をセル単位マップで完全適用（ドラゴン正解ファイル準拠）───
+  const REPORT_BD={"B2":"tblr","C2":"t","D2":"t","E2":"t","F2":"t","G2":"t","H2":"t","I2":"t","J2":"t","K2":"t","L2":"t","M2":"t","N2":"t","O2":"t","P2":"t","Q2":"t","R2":"t","S2":"tr","T2":"l","B3":"l","S3":"r","T3":"l","B4":"bl","C4":"b","D4":"b","E4":"b","F4":"b","G4":"b","H4":"b","I4":"b","J4":"b","K4":"b","L4":"b","M4":"b","N4":"b","O4":"b","P4":"b","Q4":"b","R4":"b","S4":"br","T4":"l","B5":"bl","C5":"b","F5":"b","G5":"tbl","H5":"tbr","I5":"t","J5":"t","K5":"t","L5":"t","M5":"t","N5":"t","O5":"t","P5":"t","Q5":"t","R5":"t","S5":"tr","T5":"l","B6":"l","G6":"l","S6":"r","T6":"l","B7":"bl","C7":"b","D7":"b","E7":"b","F7":"b","G7":"bl","H7":"b","I7":"b","J7":"b","K7":"b","L7":"b","M7":"b","N7":"b","O7":"b","P7":"b","Q7":"b","R7":"b","S7":"br","T7":"l","B8":"tbl","C8":"tb","D8":"t","E8":"t","F8":"tbr","G8":"tbl","H8":"tbr","I8":"t","J8":"t","K8":"t","L8":"t","M8":"t","N8":"t","O8":"t","P8":"t","Q8":"t","R8":"t","S8":"tr","T8":"l","B9":"l","F9":"r","G9":"l","S9":"r","T9":"l","B10":"bl","C10":"b","D10":"b","E10":"b","F10":"br","G10":"bl","H10":"b","I10":"b","J10":"b","K10":"b","L10":"b","M10":"b","N10":"b","O10":"b","P10":"b","Q10":"b","R10":"b","S10":"br","T10":"l","B11":"tbl","C11":"tb","D11":"t","E11":"t","F11":"tbr","G11":"tbl","H11":"tbr","I11":"t","J11":"t","K11":"t","L11":"t","M11":"t","N11":"t","O11":"t","P11":"t","Q11":"t","R11":"t","S11":"tr","T11":"l","B12":"l","F12":"r","G12":"l","S12":"r","T12":"l","B13":"bl","C13":"b","D13":"b","E13":"b","F13":"br","G13":"bl","H13":"b","I13":"b","J13":"b","K13":"b","L13":"b","M13":"b","N13":"b","O13":"b","P13":"b","Q13":"b","R13":"b","S13":"br","T13":"l","B14":"tbl","C14":"tb","D14":"t","E14":"t","F14":"tbr","G14":"tbl","H14":"tbr","I14":"t","J14":"t","K14":"t","L14":"t","M14":"t","N14":"t","O14":"t","P14":"t","Q14":"t","R14":"t","S14":"tr","T14":"l","B15":"l","F15":"r","G15":"l","S15":"r","T15":"l","B16":"bl","C16":"b","D16":"b","E16":"b","F16":"br","G16":"bl","H16":"b","I16":"b","J16":"b","K16":"b","L16":"b","M16":"b","N16":"b","O16":"b","P16":"b","Q16":"b","R16":"b","S16":"br","T16":"l","B17":"tbl","C17":"tb","D17":"t","E17":"t","F17":"tbr","G17":"tbl","H17":"tbr","I17":"t","J17":"t","K17":"t","L17":"t","M17":"t","N17":"t","O17":"t","P17":"t","Q17":"t","R17":"t","S17":"tr","T17":"l","B18":"l","F18":"r","G18":"l","S18":"r","T18":"l","B19":"bl","C19":"b","D19":"b","E19":"b","F19":"br","G19":"bl","H19":"b","I19":"b","J19":"b","K19":"b","L19":"b","M19":"b","N19":"b","O19":"b","P19":"b","Q19":"b","R19":"b","S19":"br","T19":"l","B20":"l","T20":"l","B21":"l","T21":"l","B22":"l","T22":"l","B23":"l","T23":"l","B24":"l","T24":"l","B25":"l","T25":"l","B26":"l","T26":"l","B27":"l","T27":"l","B28":"l","T28":"l","B29":"l","T29":"l","B30":"l","T30":"l","B31":"l","T31":"l","B32":"l","T32":"l","B33":"l","T33":"l","B34":"l","T34":"l","B35":"l","T35":"l","B36":"l","T36":"l","B37":"l","T37":"l","B38":"l","T38":"l","B39":"l","T39":"l","B40":"l","T40":"l","B41":"l","T41":"l","B42":"l","T42":"l","B43":"l","T43":"l","B44":"l","T44":"l","B45":"l","T45":"l","B46":"l","T46":"l","B47":"l","T47":"l","B48":"l","T48":"l","B49":"l","T49":"l","B50":"l","T50":"l","B51":"l","T51":"l","B52":"l","T52":"l","B53":"l","T53":"l","B54":"l","T54":"l","B55":"l","T55":"l","B56":"bl","C56":"b","D56":"b","E56":"b","F56":"b","G56":"b","H56":"b","I56":"b","J56":"b","K56":"b","L56":"b","M56":"b","N56":"b","O56":"b","P56":"b","Q56":"b","R56":"b","S56":"br","T56":"l"};
+  Object.keys(REPORT_BD).forEach(coord=>{
+    const sides=REPORT_BD[coord];
+    const cell=rws.getCell(coord);
+    const nb={...cell.border};
+    if(sides.includes('t'))nb.top=thin;
+    if(sides.includes('b'))nb.bottom=thin;
+    if(sides.includes('l'))nb.left=thin;
+    if(sides.includes('r'))nb.right=thin;
+    cell.border=nb;
+  });
 
   await buildUnionPhotoSheets(wb,mincho,thin,hair);
 }
