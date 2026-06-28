@@ -1,9 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 
-// ============================
-// 定数定義
-// ============================
 const STAFF = ["崎岡", "後藤", "赤岡", "上村", "綱島", "伊藤"];
 
 const CATEGORIES = [
@@ -23,14 +20,11 @@ const getCategoryColor = (label) =>
 
 const DAYS_JP = ["日", "月", "火", "水", "木", "金", "土"];
 
-// ============================
-// 日付ユーティリティ
-// ============================
 function getWeekDates(baseDate) {
   const d = new Date(baseDate);
-  const day = d.getDay(); // 0=日
+  const day = d.getDay();
   const monday = new Date(d);
-  monday.setDate(d.getDate() - day + 1); // 月曜起点
+  monday.setDate(d.getDate() - day + 1);
   return Array.from({ length: 7 }, (_, i) => {
     const nd = new Date(monday);
     nd.setDate(monday.getDate() + i);
@@ -52,10 +46,7 @@ function isSameDay(a, b) {
   return toDateStr(a) === toDateStr(b);
 }
 
-// ============================
-// メインコンポーネント
-// ============================
-export default function Schedule() {
+export default function Schedule({ nav }) {
   const [today] = useState(new Date());
   const [baseDate, setBaseDate] = useState(new Date());
   const weekDates = getWeekDates(baseDate);
@@ -65,17 +56,18 @@ export default function Schedule() {
   const [subcontractors, setSubcontractors] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // モーダル
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
-  const [showSubModal, setShowSubModal] = useState(false); // 外注業者管理モーダル
+  const [showSubModal, setShowSubModal] = useState(false);
   const [newSubName, setNewSubName] = useState("");
 
-  // フォーム
   const emptyForm = {
     title: "",
-    start_at: "",
-    end_at: "",
+    start_date: "",
+    start_h: "",
+    start_m: "00",
+    end_h: "",
+    end_m: "00",
     all_day: false,
     category: "現調",
     assignees: [],
@@ -84,14 +76,15 @@ export default function Schedule() {
     memo: "",
   };
   const [form, setForm] = useState(emptyForm);
-  const [showOutsource, setShowOutsource] = useState(false); // 外注セクション展開
+  const [showOutsource, setShowOutsource] = useState(false);
 
-  // ============================
-  // データ取得
-  // ============================
-  useEffect(() => {
-    fetchAll();
-  }, []);
+  function buildISO(date, h, m) {
+    if (!date) return null;
+    if (h === "") return `${date}T00:00`;
+    return `${date}T${String(h).padStart(2, "0")}:${m || "00"}`;
+  }
+
+  useEffect(() => { fetchAll(); }, []);
 
   async function fetchAll() {
     setLoading(true);
@@ -106,18 +99,17 @@ export default function Schedule() {
     setLoading(false);
   }
 
-  // ============================
-  // 予定保存・削除
-  // ============================
   async function handleSave() {
-    if (!form.title.trim() || !form.start_at) {
-      alert("タイトルと開始日時は必須です");
+    if (!form.title.trim() || !form.start_date) {
+      alert("タイトルと日付は必須です");
       return;
     }
+    const start_at = buildISO(form.start_date, form.start_h, form.start_m);
+    const end_at = form.end_h !== "" ? buildISO(form.start_date, form.end_h, form.end_m) : null;
     const payload = {
       title: form.title.trim(),
-      start_at: form.start_at,
-      end_at: form.end_at || null,
+      start_at,
+      end_at,
       all_day: form.all_day,
       category: form.category,
       color: getCategoryColor(form.category),
@@ -143,9 +135,6 @@ export default function Schedule() {
     fetchAll();
   }
 
-  // ============================
-  // 外注業者管理
-  // ============================
   async function addSubcontractor() {
     if (!newSubName.trim()) return;
     await supabase.from("subcontractors").insert([{ name: newSubName.trim() }]);
@@ -161,26 +150,24 @@ export default function Schedule() {
     setSubcontractors(data || []);
   }
 
-  // ============================
-  // モーダルを開く
-  // ============================
   function openNew(date) {
     const dateStr = toDateStr(date);
-    setForm({
-      ...emptyForm,
-      start_at: `${dateStr}T09:00`,
-      end_at: `${dateStr}T17:00`,
-    });
+    setForm({ ...emptyForm, start_date: dateStr });
     setEditItem(null);
     setShowOutsource(false);
     setShowModal(true);
   }
 
   function openEdit(sc) {
+    const startD = new Date(sc.start_at);
+    const endD = sc.end_at ? new Date(sc.end_at) : null;
     setForm({
       title: sc.title,
-      start_at: sc.start_at?.slice(0, 16) || "",
-      end_at: sc.end_at?.slice(0, 16) || "",
+      start_date: sc.start_at?.slice(0, 10) || "",
+      start_h: sc.all_day ? "" : String(startD.getHours()),
+      start_m: sc.all_day ? "00" : (startD.getMinutes() >= 30 ? "30" : "00"),
+      end_h: endD ? String(endD.getHours()) : "",
+      end_m: endD ? (endD.getMinutes() >= 30 ? "30" : "00") : "00",
       all_day: sc.all_day || false,
       category: sc.category || "現調",
       assignees: sc.assignees || [],
@@ -189,13 +176,10 @@ export default function Schedule() {
       memo: sc.memo || "",
     });
     setEditItem(sc);
-    setShowOutsource(
-      (sc.assignees || []).some((a) => !STAFF.includes(a))
-    );
+    setShowOutsource((sc.assignees || []).some((a) => !STAFF.includes(a)));
     setShowModal(true);
   }
 
-  // 担当者トグル（スタッフ）
   function toggleAssignee(name) {
     setForm((f) => ({
       ...f,
@@ -205,7 +189,6 @@ export default function Schedule() {
     }));
   }
 
-  // 外注業者トグル
   function toggleSub(name) {
     setForm((f) => ({
       ...f,
@@ -215,9 +198,6 @@ export default function Schedule() {
     }));
   }
 
-  // ============================
-  // 該当日の予定を取得
-  // ============================
   function getSchedulesForDay(date) {
     return schedules.filter((sc) => {
       const start = new Date(sc.start_at);
@@ -225,12 +205,6 @@ export default function Schedule() {
     });
   }
 
-  // 今週の予定（全部）
-  const thisWeekSchedules = weekDates.flatMap((d) => getSchedulesForDay(d));
-
-  // ============================
-  // 週ナビゲーション
-  // ============================
   function prevWeek() {
     const d = new Date(baseDate);
     d.setDate(d.getDate() - 7);
@@ -241,25 +215,19 @@ export default function Schedule() {
     d.setDate(d.getDate() + 7);
     setBaseDate(d);
   }
-  function goToday() {
-    setBaseDate(new Date());
-  }
+  function goToday() { setBaseDate(new Date()); }
 
-  // ============================
-  // 週ヘッダーラベル
-  // ============================
   const weekLabel = `${weekDates[0].getMonth() + 1}/${weekDates[0].getDate()} (月) 〜 ${weekDates[6].getMonth() + 1}/${weekDates[6].getDate()} (日)`;
 
-  // ============================
-  // レンダリング
-  // ============================
   return (
     <div style={styles.outer}>
-      {/* ===== PC用サイドバー ===== */}
+      {/* サイドバー */}
       <aside style={styles.sidebar}>
+        {/* 戻るボタン */}
+        <button style={styles.backBtn} onClick={() => nav && nav("home")}>
+          ← ホームへ戻る
+        </button>
         <div style={styles.sideTitle}>📅 スケジュール</div>
-
-        {/* 今日の予定サマリー */}
         <div style={styles.sideSection}>
           <div style={styles.sideSectionTitle}>今日の予定</div>
           {getSchedulesForDay(today).length === 0 ? (
@@ -276,8 +244,6 @@ export default function Schedule() {
             ))
           )}
         </div>
-
-        {/* カテゴリ凡例 */}
         <div style={styles.sideSection}>
           <div style={styles.sideSectionTitle}>カテゴリ</div>
           {CATEGORIES.map((c) => (
@@ -287,45 +253,46 @@ export default function Schedule() {
             </div>
           ))}
         </div>
-
-        {/* 外注業者管理ボタン */}
         <button style={styles.subBtn} onClick={() => setShowSubModal(true)}>
           🏢 外注業者を管理
         </button>
       </aside>
 
-      {/* ===== メインエリア ===== */}
+      {/* メインエリア */}
       <main style={styles.main}>
-        {/* ナビゲーションバー */}
+        {/* スマホ用ヘッダー（サイドバーが見えないとき） */}
+        <div style={styles.mobileHeader}>
+          <button style={styles.mobileBackBtn} onClick={() => nav && nav("home")}>
+            ← 戻る
+          </button>
+          <span style={styles.mobileTitle}>📅 スケジュール</span>
+          <button style={styles.mobileSubBtn} onClick={() => setShowSubModal(true)}>🏢</button>
+        </div>
+
         <div style={styles.navBar}>
           <button style={styles.navBtn} onClick={prevWeek}>‹ 前週</button>
           <button style={styles.todayBtn} onClick={goToday}>今日</button>
           <span style={styles.weekLabel}>{weekLabel}</span>
           <button style={styles.navBtn} onClick={nextWeek}>次週 ›</button>
-          <button style={styles.addBtn} onClick={() => openNew(today)}>
-            ＋ 予定追加
-          </button>
+          <button style={styles.addBtn} onClick={() => openNew(today)}>＋ 予定追加</button>
         </div>
 
-        {/* カレンダーグリッド */}
         {loading ? (
           <div style={styles.loading}>読み込み中...</div>
         ) : (
           <div style={styles.calGrid}>
             {weekDates.map((date, i) => {
               const isToday = isSameDay(date, today);
-              const isSat = i === 5; // 土曜（月曜起点で5番目）
-              const isSun = i === 6; // 日曜
+              const isSat = i === 5;
+              const isSun = i === 6;
               const daySchedules = getSchedulesForDay(date);
               return (
                 <div key={i} style={{
                   ...styles.dayCol,
                   background: isToday ? "#eff6ff" : isSun ? "#fff5f5" : isSat ? "#f0f9ff" : "#fff",
                 }}>
-                  {/* 曜日ヘッダー */}
                   <div style={{
                     ...styles.dayHeader,
-                    color: isSun ? "#dc2626" : isSat ? "#2563eb" : "#374151",
                     background: isToday ? "#2563eb" : "transparent",
                     borderRadius: isToday ? "8px" : "0",
                     color: isToday ? "#fff" : isSun ? "#dc2626" : isSat ? "#2563eb" : "#374151",
@@ -333,16 +300,11 @@ export default function Schedule() {
                     <span style={styles.dayNum}>{date.getDate()}</span>
                     <span style={styles.dayName}>{DAYS_JP[date.getDay()]}</span>
                   </div>
-
-                  {/* 予定リスト */}
                   <div style={styles.eventList}>
                     {daySchedules.map((sc) => (
                       <div
                         key={sc.id}
-                        style={{
-                          ...styles.eventChip,
-                          background: sc.color || "#6b7280",
-                        }}
+                        style={{ ...styles.eventChip, background: sc.color || "#6b7280" }}
                         onClick={() => openEdit(sc)}
                       >
                         <div style={styles.eventTime}>
@@ -350,16 +312,11 @@ export default function Schedule() {
                         </div>
                         <div style={styles.eventTitle}>{sc.title}</div>
                         {sc.assignees?.length > 0 && (
-                          <div style={styles.eventAssignee}>
-                            {sc.assignees.join("・")}
-                          </div>
+                          <div style={styles.eventAssignee}>{sc.assignees.join("・")}</div>
                         )}
                       </div>
                     ))}
-                    {/* ＋追加ボタン（各日） */}
-                    <button style={styles.dayAddBtn} onClick={() => openNew(date)}>
-                      ＋
-                    </button>
+                    <button style={styles.dayAddBtn} onClick={() => openNew(date)}>＋</button>
                   </div>
                 </div>
               );
@@ -368,7 +325,7 @@ export default function Schedule() {
         )}
       </main>
 
-      {/* ===== 予定登録・編集モーダル ===== */}
+      {/* 予定登録・編集モーダル */}
       {showModal && (
         <div style={styles.overlay} onClick={() => setShowModal(false)}>
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
@@ -376,9 +333,8 @@ export default function Schedule() {
               <span style={styles.modalTitle}>{editItem ? "予定を編集" : "予定を追加"}</span>
               <button style={styles.closeBtn} onClick={() => setShowModal(false)}>✕</button>
             </div>
-
             <div style={styles.modalBody}>
-              {/* タイトル */}
+
               <label style={styles.label}>タイトル *</label>
               <input
                 style={styles.input}
@@ -387,7 +343,6 @@ export default function Schedule() {
                 placeholder="例：〇〇マンション 現調"
               />
 
-              {/* カテゴリ */}
               <label style={styles.label}>カテゴリ</label>
               <div style={styles.catGrid}>
                 {CATEGORIES.map((c) => (
@@ -406,51 +361,74 @@ export default function Schedule() {
                 ))}
               </div>
 
-              {/* 終日チェック */}
               <label style={styles.checkRow}>
                 <input
                   type="checkbox"
                   checked={form.all_day}
-                  onChange={(e) => setForm({ ...form, all_day: e.target.checked })}
+                  onChange={(e) => setForm({ ...form, all_day: e.target.checked, start_h: "", end_h: "" })}
                   style={{ marginRight: 8 }}
                 />
                 終日
               </label>
 
-              {/* 日時 */}
+              <label style={styles.label}>日付 *</label>
+              <input
+                type="date"
+                style={styles.input}
+                value={form.start_date}
+                onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+              />
+
               {!form.all_day && (
                 <>
-                  <label style={styles.label}>開始日時 *</label>
-                  <input
-                    type="datetime-local"
-                    style={styles.input}
-                    value={form.start_at}
-                    onChange={(e) => setForm({ ...form, start_at: e.target.value })}
-                  />
-                  <label style={styles.label}>終了日時</label>
-                  <input
-                    type="datetime-local"
-                    style={styles.input}
-                    value={form.end_at}
-                    onChange={(e) => setForm({ ...form, end_at: e.target.value })}
-                  />
-                </>
-              )}
-              {form.all_day && (
-                <>
-                  <label style={styles.label}>日付 *</label>
-                  <input
-                    type="date"
-                    style={styles.input}
-                    value={form.start_at?.slice(0, 10) || ""}
-                    onChange={(e) =>
-                      setForm({ ...form, start_at: `${e.target.value}T00:00`, end_at: `${e.target.value}T23:59` })
-                    }
-                  />
+                  <label style={styles.label}>時刻</label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                    <select
+                      style={{ ...styles.input, flex: 1 }}
+                      value={form.start_h}
+                      onChange={(e) => setForm({ ...form, start_h: e.target.value })}
+                    >
+                      <option value="">--時</option>
+                      {Array.from({ length: 24 }, (_, i) => (
+                        <option key={i} value={String(i)}>{i}時</option>
+                      ))}
+                    </select>
+                    <select
+                      style={{ ...styles.input, flex: 1 }}
+                      value={form.start_m}
+                      onChange={(e) => setForm({ ...form, start_m: e.target.value })}
+                      disabled={form.start_h === ""}
+                    >
+                      <option value="00">00分</option>
+                      <option value="30">30分</option>
+                    </select>
+                    <span style={{ color: "#94a3b8", fontSize: 14, flexShrink: 0 }}>〜</span>
+                    <select
+                      style={{ ...styles.input, flex: 1 }}
+                      value={form.end_h}
+                      onChange={(e) => setForm({ ...form, end_h: e.target.value })}
+                    >
+                      <option value="">--時</option>
+                      {Array.from({ length: 24 }, (_, i) => (
+                        <option key={i} value={String(i)}>{i}時</option>
+                      ))}
+                    </select>
+                    <select
+                      style={{ ...styles.input, flex: 1 }}
+                      value={form.end_m}
+                      onChange={(e) => setForm({ ...form, end_m: e.target.value })}
+                      disabled={form.end_h === ""}
+                    >
+                      <option value="00">00分</option>
+                      <option value="30">30分</option>
+                    </select>
+                  </div>
+                  <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4 }}>
+                    ※ 開始時刻だけ入れればOK。終了は任意
+                  </div>
                 </>
               )}
 
-              {/* 担当者（スタッフ） */}
               <label style={styles.label}>担当者（スタッフ）</label>
               <div style={styles.staffGrid}>
                 {STAFF.map((name) => (
@@ -469,19 +447,13 @@ export default function Schedule() {
                 ))}
               </div>
 
-              {/* 外注業者 */}
-              <button
-                style={styles.outsourceToggle}
-                onClick={() => setShowOutsource(!showOutsource)}
-              >
+              <button style={styles.outsourceToggle} onClick={() => setShowOutsource(!showOutsource)}>
                 {showOutsource ? "▲" : "▼"} 外注業者を追加する
               </button>
               {showOutsource && (
                 <div style={styles.outsourceBox}>
                   {subcontractors.length === 0 ? (
-                    <p style={{ color: "#9ca3af", fontSize: 13 }}>
-                      外注業者が登録されていません。サイドバーの「外注業者を管理」から追加してください。
-                    </p>
+                    <p style={{ color: "#9ca3af", fontSize: 13 }}>外注業者が登録されていません。「外注業者を管理」から追加してください。</p>
                   ) : (
                     <div style={styles.staffGrid}>
                       {subcontractors.map((sub) => (
@@ -503,7 +475,6 @@ export default function Schedule() {
                 </div>
               )}
 
-              {/* 案件紐づけ */}
               <label style={styles.label}>案件（任意）</label>
               <select
                 style={styles.input}
@@ -516,7 +487,6 @@ export default function Schedule() {
                 ))}
               </select>
 
-              {/* 場所 */}
               <label style={styles.label}>場所（任意）</label>
               <input
                 style={styles.input}
@@ -525,7 +495,6 @@ export default function Schedule() {
                 placeholder="例：〇〇マンション 305号室"
               />
 
-              {/* メモ */}
               <label style={styles.label}>メモ（任意）</label>
               <textarea
                 style={{ ...styles.input, height: 72, resize: "vertical" }}
@@ -537,9 +506,7 @@ export default function Schedule() {
 
             <div style={styles.modalFooter}>
               {editItem && (
-                <button style={styles.deleteBtn} onClick={() => { handleDelete(editItem.id); setShowModal(false); }}>
-                  削除
-                </button>
+                <button style={styles.deleteBtn} onClick={() => { handleDelete(editItem.id); setShowModal(false); }}>削除</button>
               )}
               <button style={styles.cancelBtn} onClick={() => setShowModal(false)}>キャンセル</button>
               <button style={styles.saveBtn} onClick={handleSave}>保存</button>
@@ -548,7 +515,7 @@ export default function Schedule() {
         </div>
       )}
 
-      {/* ===== 外注業者管理モーダル ===== */}
+      {/* 外注業者管理モーダル */}
       {showSubModal && (
         <div style={styles.overlay} onClick={() => setShowSubModal(false)}>
           <div style={{ ...styles.modal, maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
@@ -585,403 +552,64 @@ export default function Schedule() {
   );
 }
 
-// ============================
-// スタイル
-// ============================
 const styles = {
-  outer: {
-    display: "flex",
-    minHeight: "100vh",
-    background: "#f8fafc",
-    fontFamily: "'Hiragino Sans', 'Noto Sans JP', sans-serif",
-  },
-
-  // サイドバー
-  sidebar: {
-    width: 220,
-    minWidth: 220,
-    background: "#1e293b",
-    color: "#e2e8f0",
-    padding: "24px 16px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 0,
-    "@media (max-width: 768px)": { display: "none" },
-  },
-  sideTitle: {
-    fontSize: 18,
-    fontWeight: 700,
-    color: "#fff",
-    marginBottom: 24,
-    letterSpacing: "0.05em",
-  },
-  sideSection: {
-    marginBottom: 24,
-  },
-  sideSectionTitle: {
-    fontSize: 11,
-    fontWeight: 600,
-    color: "#94a3b8",
-    letterSpacing: "0.1em",
-    textTransform: "uppercase",
-    marginBottom: 8,
-  },
-  sideEmpty: {
-    fontSize: 12,
-    color: "#64748b",
-    margin: 0,
-  },
-  sideItem: {
-    paddingLeft: 8,
-    marginBottom: 8,
-    borderRadius: 4,
-  },
-  sideItemTime: {
-    fontSize: 11,
-    color: "#94a3b8",
-  },
-  sideItemTitle: {
-    fontSize: 13,
-    color: "#e2e8f0",
-    fontWeight: 500,
-  },
-  sideItemSub: {
-    fontSize: 11,
-    color: "#64748b",
-  },
-  legendRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 6,
-  },
-  legendDot: {
-    width: 10,
-    height: 10,
-    borderRadius: "50%",
-    flexShrink: 0,
-  },
-  legendLabel: {
-    fontSize: 12,
-    color: "#cbd5e1",
-  },
-  subBtn: {
-    marginTop: "auto",
-    padding: "10px 12px",
-    background: "#334155",
-    color: "#e2e8f0",
-    border: "none",
-    borderRadius: 8,
-    fontSize: 13,
-    cursor: "pointer",
-    textAlign: "left",
-  },
-
-  // メインエリア
-  main: {
-    flex: 1,
-    padding: "20px 16px",
-    overflowX: "auto",
-  },
-  navBar: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 16,
-    flexWrap: "wrap",
-  },
-  navBtn: {
-    padding: "6px 14px",
-    background: "#fff",
-    border: "1px solid #e2e8f0",
-    borderRadius: 8,
-    fontSize: 14,
-    cursor: "pointer",
-    color: "#374151",
-  },
-  todayBtn: {
-    padding: "6px 14px",
-    background: "#2563eb",
-    border: "none",
-    borderRadius: 8,
-    fontSize: 14,
-    cursor: "pointer",
-    color: "#fff",
-    fontWeight: 600,
-  },
-  weekLabel: {
-    fontSize: 14,
-    fontWeight: 600,
-    color: "#1e293b",
-    flex: 1,
-    textAlign: "center",
-  },
-  addBtn: {
-    padding: "6px 16px",
-    background: "#16a34a",
-    border: "none",
-    borderRadius: 8,
-    fontSize: 14,
-    cursor: "pointer",
-    color: "#fff",
-    fontWeight: 600,
-  },
-  loading: {
-    textAlign: "center",
-    padding: 40,
-    color: "#94a3b8",
-  },
-
-  // カレンダーグリッド
-  calGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(7, 1fr)",
-    gap: 4,
-    minWidth: 700,
-  },
-  dayCol: {
-    borderRadius: 10,
-    border: "1px solid #e2e8f0",
-    minHeight: 200,
-    overflow: "hidden",
-  },
-  dayHeader: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    padding: "8px 4px",
-    borderBottom: "1px solid #e2e8f0",
-  },
-  dayNum: {
-    fontSize: 18,
-    fontWeight: 700,
-    lineHeight: 1.2,
-  },
-  dayName: {
-    fontSize: 11,
-    fontWeight: 500,
-    opacity: 0.8,
-  },
-  eventList: {
-    padding: "6px 4px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-  },
-  eventChip: {
-    borderRadius: 6,
-    padding: "5px 7px",
-    cursor: "pointer",
-    transition: "opacity 0.15s",
-  },
-  eventTime: {
-    fontSize: 10,
-    color: "rgba(255,255,255,0.85)",
-    fontWeight: 500,
-  },
-  eventTitle: {
-    fontSize: 12,
-    color: "#fff",
-    fontWeight: 600,
-    lineHeight: 1.3,
-    wordBreak: "break-all",
-  },
-  eventAssignee: {
-    fontSize: 10,
-    color: "rgba(255,255,255,0.8)",
-    marginTop: 1,
-  },
-  dayAddBtn: {
-    width: "100%",
-    padding: "4px 0",
-    background: "transparent",
-    border: "1px dashed #cbd5e1",
-    borderRadius: 6,
-    fontSize: 16,
-    color: "#94a3b8",
-    cursor: "pointer",
-    marginTop: 2,
-  },
-
-  // オーバーレイ・モーダル
-  overlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.5)",
-    zIndex: 1000,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 16,
-  },
-  modal: {
-    background: "#fff",
-    borderRadius: 16,
-    width: "100%",
-    maxWidth: 560,
-    maxHeight: "90vh",
-    display: "flex",
-    flexDirection: "column",
-    boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
-  },
-  modalHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "18px 20px",
-    borderBottom: "1px solid #f1f5f9",
-  },
-  modalTitle: {
-    fontSize: 17,
-    fontWeight: 700,
-    color: "#1e293b",
-  },
-  closeBtn: {
-    background: "none",
-    border: "none",
-    fontSize: 18,
-    cursor: "pointer",
-    color: "#94a3b8",
-    padding: "4px 8px",
-  },
-  modalBody: {
-    flex: 1,
-    overflowY: "auto",
-    padding: "16px 20px",
-  },
-  modalFooter: {
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: 8,
-    padding: "14px 20px",
-    borderTop: "1px solid #f1f5f9",
-  },
-
-  // フォーム
-  label: {
-    display: "block",
-    fontSize: 12,
-    fontWeight: 600,
-    color: "#64748b",
-    marginBottom: 4,
-    marginTop: 12,
-    letterSpacing: "0.05em",
-  },
-  input: {
-    width: "100%",
-    padding: "9px 12px",
-    border: "1px solid #e2e8f0",
-    borderRadius: 8,
-    fontSize: 14,
-    color: "#1e293b",
-    background: "#f8fafc",
-    boxSizing: "border-box",
-    outline: "none",
-    marginBottom: 0,
-  },
-  checkRow: {
-    display: "flex",
-    alignItems: "center",
-    fontSize: 14,
-    color: "#374151",
-    marginTop: 12,
-    cursor: "pointer",
-  },
-  catGrid: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 6,
-  },
-  catChip: {
-    padding: "5px 12px",
-    borderRadius: 20,
-    fontSize: 12,
-    fontWeight: 600,
-    cursor: "pointer",
-    transition: "all 0.15s",
-  },
-  staffGrid: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 6,
-  },
-  staffChip: {
-    padding: "6px 14px",
-    borderRadius: 20,
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-    transition: "all 0.15s",
-  },
-  outsourceToggle: {
-    marginTop: 12,
-    padding: "6px 0",
-    background: "none",
-    border: "none",
-    color: "#7c3aed",
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-    textAlign: "left",
-  },
-  outsourceBox: {
-    background: "#faf5ff",
-    border: "1px solid #e9d5ff",
-    borderRadius: 8,
-    padding: "10px 12px",
-    marginTop: 4,
-  },
-
-  // ボタン
-  saveBtn: {
-    padding: "9px 20px",
-    background: "#2563eb",
-    color: "#fff",
-    border: "none",
-    borderRadius: 8,
-    fontSize: 14,
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  cancelBtn: {
-    padding: "9px 16px",
-    background: "#f1f5f9",
-    color: "#374151",
-    border: "none",
-    borderRadius: 8,
-    fontSize: 14,
-    cursor: "pointer",
-  },
-  deleteBtn: {
-    padding: "9px 16px",
-    background: "#fee2e2",
-    color: "#dc2626",
-    border: "none",
-    borderRadius: 8,
-    fontSize: 14,
-    cursor: "pointer",
-    marginRight: "auto",
-  },
-
-  // 外注業者管理
-  subRow: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "8px 0",
-    borderBottom: "1px solid #f1f5f9",
-  },
-  subName: {
-    fontSize: 14,
-    color: "#1e293b",
-  },
-  subDeleteBtn: {
-    padding: "4px 10px",
-    background: "#fee2e2",
-    color: "#dc2626",
-    border: "none",
-    borderRadius: 6,
-    fontSize: 12,
-    cursor: "pointer",
-  },
+  outer: { display: "flex", minHeight: "100vh", background: "#f8fafc", fontFamily: "'Hiragino Sans', 'Noto Sans JP', sans-serif" },
+  sidebar: { width: 220, minWidth: 220, background: "#1e293b", color: "#e2e8f0", padding: "16px 16px 24px", display: "flex", flexDirection: "column", gap: 0 },
+  backBtn: { marginBottom: 16, padding: "8px 12px", background: "#334155", color: "#94a3b8", border: "none", borderRadius: 8, fontSize: 13, cursor: "pointer", textAlign: "left", width: "100%" },
+  sideTitle: { fontSize: 18, fontWeight: 700, color: "#fff", marginBottom: 24, letterSpacing: "0.05em" },
+  sideSection: { marginBottom: 24 },
+  sideSectionTitle: { fontSize: 11, fontWeight: 600, color: "#94a3b8", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 },
+  sideEmpty: { fontSize: 12, color: "#64748b", margin: 0 },
+  sideItem: { paddingLeft: 8, marginBottom: 8, borderRadius: 4 },
+  sideItemTime: { fontSize: 11, color: "#94a3b8" },
+  sideItemTitle: { fontSize: 13, color: "#e2e8f0", fontWeight: 500 },
+  sideItemSub: { fontSize: 11, color: "#64748b" },
+  legendRow: { display: "flex", alignItems: "center", gap: 8, marginBottom: 6 },
+  legendDot: { width: 10, height: 10, borderRadius: "50%", flexShrink: 0 },
+  legendLabel: { fontSize: 12, color: "#cbd5e1" },
+  subBtn: { marginTop: "auto", padding: "10px 12px", background: "#334155", color: "#e2e8f0", border: "none", borderRadius: 8, fontSize: 13, cursor: "pointer", textAlign: "left" },
+  main: { flex: 1, padding: "20px 16px", overflowX: "auto" },
+  mobileHeader: { display: "flex", alignItems: "center", gap: 8, marginBottom: 12, padding: "8px 0" },
+  mobileBackBtn: { padding: "6px 12px", background: "#f1f5f9", border: "none", borderRadius: 8, fontSize: 13, cursor: "pointer", color: "#374151", fontWeight: 600 },
+  mobileTitle: { flex: 1, fontSize: 15, fontWeight: 700, color: "#1e293b" },
+  mobileSubBtn: { padding: "6px 10px", background: "#f1f5f9", border: "none", borderRadius: 8, fontSize: 16, cursor: "pointer" },
+  navBar: { display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" },
+  navBtn: { padding: "6px 14px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 14, cursor: "pointer", color: "#374151" },
+  todayBtn: { padding: "6px 14px", background: "#2563eb", border: "none", borderRadius: 8, fontSize: 14, cursor: "pointer", color: "#fff", fontWeight: 600 },
+  weekLabel: { fontSize: 14, fontWeight: 600, color: "#1e293b", flex: 1, textAlign: "center" },
+  addBtn: { padding: "6px 16px", background: "#16a34a", border: "none", borderRadius: 8, fontSize: 14, cursor: "pointer", color: "#fff", fontWeight: 600 },
+  loading: { textAlign: "center", padding: 40, color: "#94a3b8" },
+  calGrid: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, minWidth: 700 },
+  dayCol: { borderRadius: 10, border: "1px solid #e2e8f0", minHeight: 200, overflow: "hidden" },
+  dayHeader: { display: "flex", flexDirection: "column", alignItems: "center", padding: "8px 4px", borderBottom: "1px solid #e2e8f0" },
+  dayNum: { fontSize: 18, fontWeight: 700, lineHeight: 1.2 },
+  dayName: { fontSize: 11, fontWeight: 500, opacity: 0.8 },
+  eventList: { padding: "6px 4px", display: "flex", flexDirection: "column", gap: 4 },
+  eventChip: { borderRadius: 6, padding: "5px 7px", cursor: "pointer", transition: "opacity 0.15s" },
+  eventTime: { fontSize: 10, color: "rgba(255,255,255,0.85)", fontWeight: 500 },
+  eventTitle: { fontSize: 12, color: "#fff", fontWeight: 600, lineHeight: 1.3, wordBreak: "break-all" },
+  eventAssignee: { fontSize: 10, color: "rgba(255,255,255,0.8)", marginTop: 1 },
+  dayAddBtn: { width: "100%", padding: "4px 0", background: "transparent", border: "1px dashed #cbd5e1", borderRadius: 6, fontSize: 16, color: "#94a3b8", cursor: "pointer", marginTop: 2 },
+  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 },
+  modal: { background: "#fff", borderRadius: 16, width: "100%", maxWidth: 560, maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" },
+  modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 20px", borderBottom: "1px solid #f1f5f9" },
+  modalTitle: { fontSize: 17, fontWeight: 700, color: "#1e293b" },
+  closeBtn: { background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#94a3b8", padding: "4px 8px" },
+  modalBody: { flex: 1, overflowY: "auto", padding: "16px 20px" },
+  modalFooter: { display: "flex", justifyContent: "flex-end", gap: 8, padding: "14px 20px", borderTop: "1px solid #f1f5f9" },
+  label: { display: "block", fontSize: 12, fontWeight: 600, color: "#64748b", marginBottom: 4, marginTop: 12, letterSpacing: "0.05em" },
+  input: { width: "100%", padding: "9px 12px", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 14, color: "#1e293b", background: "#f8fafc", boxSizing: "border-box", outline: "none", marginBottom: 0 },
+  checkRow: { display: "flex", alignItems: "center", fontSize: 14, color: "#374151", marginTop: 12, cursor: "pointer" },
+  catGrid: { display: "flex", flexWrap: "wrap", gap: 6 },
+  catChip: { padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" },
+  staffGrid: { display: "flex", flexWrap: "wrap", gap: 6 },
+  staffChip: { padding: "6px 14px", borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" },
+  outsourceToggle: { marginTop: 12, padding: "6px 0", background: "none", border: "none", color: "#7c3aed", fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left" },
+  outsourceBox: { background: "#faf5ff", border: "1px solid #e9d5ff", borderRadius: 8, padding: "10px 12px", marginTop: 4 },
+  saveBtn: { padding: "9px 20px", background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer" },
+  cancelBtn: { padding: "9px 16px", background: "#f1f5f9", color: "#374151", border: "none", borderRadius: 8, fontSize: 14, cursor: "pointer" },
+  deleteBtn: { padding: "9px 16px", background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 8, fontSize: 14, cursor: "pointer", marginRight: "auto" },
+  subRow: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #f1f5f9" },
+  subName: { fontSize: 14, color: "#1e293b" },
+  subDeleteBtn: { padding: "4px 10px", background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, fontSize: 12, cursor: "pointer" },
 };
