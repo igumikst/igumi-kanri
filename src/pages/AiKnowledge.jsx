@@ -4,7 +4,7 @@ import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { Confirm } from "../components/UI";
 
 const HEADER_COLOR = "#1a56a0";
-const CATEGORIES = ["理念", "現場知識", "会社ルール", "その他"];
+const CATEGORIES = ["人格設定", "理念", "現場知識", "会社ルール", "その他"];
 
 const EMPTY_FORM = { title: "", content: "", category: "理念", is_active: true };
 

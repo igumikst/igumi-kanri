@@ -369,7 +369,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
     );
   };
 
-  const FeatureCard = ({ icon, title, desc, bg, accent, onCardClick, pills }) => (
+  const FeatureCard = ({ icon, title, desc, bg, accent, onCardClick, pills, extraLink }) => (
     <div onClick={onCardClick} style={{ background: bg, borderRadius: 14, padding: "14px 16px", marginBottom: 10, cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.04)", borderLeft: `4px solid ${accent}` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
         <span style={{ fontSize: 26 }}>{icon}</span>
@@ -379,7 +379,10 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
         </div>
         <span style={{ fontSize: 18, color: "#9ca3af" }}>›</span>
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{pills}</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+        {pills}
+        {extraLink}
+      </div>
     </div>
   );
 
@@ -411,6 +414,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           {item("🏢 取引先", () => drawerNav(() => nav("companies")))}
           {item("📌 掲示板", () => drawerNav(() => nav("board")))}
           {item("📞 電話受付", () => drawerNav(() => nav("calls")))}
+          {item("📦 報告書保管箱", () => drawerNav(() => nav("reports")))}
           <div style={sectionTitle}>外部ツール・サービス</div>
           {item("📧 メール", () => drawerNav(() => window.open("https://mail.google.com", "_blank")))}
           {item("🏗 コンクルー", () => drawerNav(() => window.open("https://conkuru.jp", "_blank")))}
@@ -441,6 +445,15 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           <Pill key="m" onClick={() => openAiAssist("mentor", "report")}>🧭 AIメンター</Pill>,
           <Pill key="r" onClick={() => openAiAssist("review", "report")}>🛡️ AIレビュー</Pill>,
         ]}
+        extraLink={
+          <button
+            key="archive"
+            onClick={(e) => { e.stopPropagation(); nav("reports"); }}
+            style={{ padding: "5px 10px", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", background: "rgba(255,255,255,0.85)", fontSize: 11, fontWeight: 700, color: "#1a56a0", cursor: "pointer", whiteSpace: "nowrap" }}
+          >
+            📦 保管箱
+          </button>
+        }
       />
       <FeatureCard
         icon="📝" title="見積書作成" desc="見積書の作成・管理を行います" bg="#fef3e8" accent="#e8862e"

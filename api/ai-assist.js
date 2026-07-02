@@ -30,30 +30,42 @@ function buildSystemPrompt(mode, context) {
   return SYSTEM_PROMPTS[key] || BASE_PERSONA;
 }
 
-async function fetchKnowledgeBlock() {
+async function fetchKnowledgeParts() {
   try {
     const url = process.env.SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_KEY;
-    if (!url || !key) return "";
+    if (!url || !key) return { personalityBlock: "", knowledgeBlock: "" };
 
     const supabase = createClient(url, key);
     const { data, error } = await supabase
       .from("ai_knowledge")
-      .select("title, content")
+      .select("title, content, category")
       .eq("is_active", true)
       .order("updated_at", { ascending: false });
 
-    if (error || !data?.length) return "";
+    if (error || !data?.length) return { personalityBlock: "", knowledgeBlock: "" };
 
-    const lines = data.map((row) => `${row.title || "（無題）"}：${row.content || ""}`);
-    let block = `【IGUMIの理念・知識ベース】\n${lines.join("\n\n")}`;
-    if (block.length > KNOWLEDGE_MAX_CHARS) {
-      block = block.slice(0, KNOWLEDGE_MAX_CHARS);
+    const personalityRows = data.filter((row) => row.category === "人格設定");
+    const otherRows = data.filter((row) => row.category !== "人格設定");
+
+    let personalityBlock = "";
+    if (personalityRows.length) {
+      const lines = personalityRows.map((row) => `${row.title || "（無題）"}：${row.content || ""}`);
+      personalityBlock = `【最優先の人格指示】\n${lines.join("\n\n")}\n\n`;
     }
-    return `\n\n${block}`;
+
+    let knowledgeBlock = "";
+    if (otherRows.length) {
+      const lines = otherRows.map((row) => `${row.title || "（無題）"}：${row.content || ""}`);
+      let block = `【IGUMIの理念・知識ベース】\n${lines.join("\n\n")}`;
+      if (block.length > KNOWLEDGE_MAX_CHARS) block = block.slice(0, KNOWLEDGE_MAX_CHARS);
+      knowledgeBlock = `\n\n${block}`;
+    }
+
+    return { personalityBlock, knowledgeBlock };
   } catch (e) {
     console.error("[ai-assist] knowledge fetch failed:", e);
-    return "";
+    return { personalityBlock: "", knowledgeBlock: "" };
   }
 }
 
@@ -94,8 +106,8 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "メッセージが空です" });
     }
 
-    const knowledgeBlock = await fetchKnowledgeBlock();
-    const systemPrompt = buildSystemPrompt(mode, context) + knowledgeBlock;
+    const { personalityBlock, knowledgeBlock } = await fetchKnowledgeParts();
+    const systemPrompt = personalityBlock + buildSystemPrompt(mode, context) + knowledgeBlock;
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
