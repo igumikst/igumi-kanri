@@ -89,6 +89,28 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     setFinPrev(null);
   };
 
+  // ── ファイルを開く ──
+  // 理由：一覧は軽くするためurl/dataを読み込んでいない。
+  // 開く瞬間に、その1件だけ中身(data)を取りに行ってプレビューする。
+  const [opening, setOpening] = useState(false);
+  const openFile = async (f) => {
+    // 新しいファイル（ストレージにある＝urlが http で始まる）はそのまま開ける
+    if (f.url && f.url.startsWith("http")) { setFinPrev(f); return; }
+    // 古いファイル（dataにbase64）はこの1件だけ取りに行く
+    setOpening(true);
+    const { data, error } = await supabase
+      .from("finance_files")
+      .select("data,type")
+      .eq("id", f.id)
+      .single();
+    setOpening(false);
+    if (error || !data?.data) { alert("ファイルを開けませんでした"); return; }
+    // base64の頭に "data:...;base64," が二重で付かないよう整形
+    let url = data.data;
+    if (!url.startsWith("data:")) url = `data:${data.type || f.type};base64,${url}`;
+    setFinPrev({ ...f, url });
+  };
+
   // ── フォルダ操作 ──
   const addFolder = async () => {
     if (!folderForm.label) return;
@@ -169,6 +191,107 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     await saveOrder(newFolders);
   };
 
+  // ════════════════════════════════════════════
+  // ── マイフォルダ（無限階層）ここから ──
+  // 既存の財務フォルダ・年フォルダとは完全に独立した自由フォルダ。
+  // custom_folders / custom_files の2テーブルで親子関係を表現する。
+  // ════════════════════════════════════════════
+  const [customOpen, setCustomOpen] = useState(false);          // マイフォルダ画面を開いてるか
+  const [customPath, setCustomPath] = useState([]);             // 今いる階層のパンくず [{id,name,icon},...]
+  const [cFolders, setCFolders] = useState([]);                 // 全フォルダ
+  const [cFiles, setCFiles] = useState([]);                     // 全ファイル
+  const [cModal, setCModal] = useState(null);                   // モーダル種別
+  const [cForm, setCForm] = useState({ name: "", icon: "📁" }); // 追加フォーム
+  const [cEdit, setCEdit] = useState(null);                     // 編集対象
+  const [cUploading, setCUploading] = useState(false);
+
+  // 今いるフォルダのid（ルートは null）
+  const curParent = customPath.length ? customPath[customPath.length - 1].id : null;
+
+  // マイフォルダのデータを初回に読み込む
+  useEffect(() => {
+    const load = async () => {
+      const [fo, fi] = await Promise.all([
+        supabase.from("custom_folders").select("*").order("sort_order", { ascending: true }),
+        supabase.from("custom_files").select("id,folder_id,name,type,size,url,path,created_at").order("created_at", { ascending: false }),
+      ]);
+      if (fo.data) setCFolders(fo.data);
+      if (fi.data) setCFiles(fi.data);
+    };
+    load();
+  }, []);
+
+  // 今の階層に表示するフォルダ・ファイル
+  const curFolders = cFolders.filter(f => (f.parent_id || null) === curParent);
+  const curFiles   = cFiles.filter(f => (f.folder_id || null) === curParent);
+
+  // フォルダ追加
+  const addCustomFolder = async () => {
+    if (!cForm.name) return;
+    const maxOrder = curFolders.length;
+    const { data } = await supabase.from("custom_folders")
+      .insert([{ parent_id: curParent, name: cForm.name, icon: cForm.icon, sort_order: maxOrder }])
+      .select();
+    if (data) setCFolders(prev => [...prev, data[0]]);
+    setCForm({ name: "", icon: "📁" });
+    setCModal(null);
+  };
+
+  // フォルダ名・アイコン編集
+  const updateCustomFolder = async () => {
+    if (!cEdit) return;
+    await supabase.from("custom_folders").update({ name: cEdit.name, icon: cEdit.icon }).eq("id", cEdit.id);
+    setCFolders(prev => prev.map(f => f.id === cEdit.id ? { ...f, name: cEdit.name, icon: cEdit.icon } : f));
+    setCEdit(null);
+    setCModal(null);
+  };
+
+  // フォルダ削除（中の子フォルダ・ファイルも全部消す）
+  // 理由：DB側はCASCADEで自動削除されるが、画面表示用のstateも手動で掃除する
+  const collectDescendants = (rootId) => {
+    const ids = [rootId];
+    let queue = [rootId];
+    while (queue.length) {
+      const pid = queue.shift();
+      cFolders.forEach(f => { if (f.parent_id === pid) { ids.push(f.id); queue.push(f.id); } });
+    }
+    return ids;
+  };
+  const deleteCustomFolder = async (id) => {
+    const delIds = collectDescendants(id);
+    await supabase.from("custom_folders").delete().eq("id", id); // CASCADEで子も消える
+    setCFolders(prev => prev.filter(f => !delIds.includes(f.id)));
+    setCFiles(prev => prev.filter(f => !delIds.includes(f.folder_id)));
+  };
+
+  // ファイルをアップロード（ストレージに保存。base64は使わない＝軽い）
+  const uploadCustomFile = async (file) => {
+    setCUploading(true);
+    const safeName = file.name.replace(/[^\w.\-]/g, '_');
+    const path = `custom/${curParent || "root"}/${Date.now()}_${safeName}`;
+    const { error } = await supabase.storage.from("files").upload(path, file);
+    if (error) { setCUploading(false); alert(`アップロードエラー: ${error.message}`); return; }
+    const { data: urlData } = supabase.storage.from("files").getPublicUrl(path);
+    const { data } = await supabase.from("custom_files")
+      .insert([{ folder_id: curParent, name: file.name, type: file.type, size: file.size, url: urlData.publicUrl, path }])
+      .select("id,folder_id,name,type,size,url,path,created_at");
+    if (data) setCFiles(prev => [...prev, data[0]]);
+    setCUploading(false);
+  };
+
+  // ファイル削除
+  const deleteCustomFile = async (id) => {
+    const f = cFiles.find(f => f.id === id);
+    if (f?.path) { try { await supabase.storage.from("files").remove([f.path]); } catch (e) {} }
+    await supabase.from("custom_files").delete().eq("id", id);
+    setCFiles(prev => prev.filter(f => f.id !== id));
+    setFinPrev(null);
+  };
+
+  // マイフォルダのファイルを開く（プレビュー画面を共用）
+  const openCustomFile = (f) => { setFinPrev({ ...f, _custom: true }); };
+  // ── マイフォルダ ここまで ──
+
   // ── プレビュー画面 ──
   if (finPrev) return (
     <div style={{ fontFamily: "'Hiragino Sans',sans-serif", background: "#1A1A2E", minHeight: "100vh", display: "flex", flexDirection: "column", ...pp }}>
@@ -200,11 +323,131 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={() => setPendingDelete(false)} style={{ flex: 1, padding: "12px 0", background: "#4B5563", color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer" }}>キャンセル</button>
-              <button onClick={() => { deleteFinFile(finPrev.id); setPendingDelete(false); }} style={{ flex: 1, padding: "12px 0", background: "#DC2626", color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>削除する</button>
+              <button onClick={() => { (finPrev._custom ? deleteCustomFile : deleteFinFile)(finPrev.id); setPendingDelete(false); }} style={{ flex: 1, padding: "12px 0", background: "#DC2626", color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>削除する</button>
             </div>
           </div>
         )}
       </div>
+    </div>
+  );
+
+  // ── マイフォルダ画面（無限階層）──
+  if (customOpen) return (
+    <div style={{ fontFamily: "'Hiragino Sans',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
+      {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="finance" nav={nav} setModal={() => {}} setEc={() => {}} SB_W={SB_W} />}
+      {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} />}
+
+      {/* ヘッダー */}
+      <div style={{ background: "#1A3A5C", color: "#fff", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 50 }}>
+        <button
+          onClick={() => {
+            // 1階層戻る。ルートにいたらマイフォルダ自体を閉じる
+            if (customPath.length === 0) { setCustomOpen(false); }
+            else setCustomPath(prev => prev.slice(0, -1));
+          }}
+          style={{ background: "none", border: "none", color: "#fff", fontSize: 20, cursor: "pointer" }}
+        >←</button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 800, fontSize: 15 }}>
+            {customPath.length === 0 ? "📁 マイフォルダ" : `${customPath[customPath.length - 1].icon} ${customPath[customPath.length - 1].name}`}
+          </div>
+          {/* パンくず */}
+          <div style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>
+            <span style={{ cursor: "pointer" }} onClick={() => setCustomPath([])}>マイフォルダ</span>
+            {customPath.map((p, i) => (
+              <span key={p.id}>
+                <span style={{ opacity: 0.5 }}> › </span>
+                <span style={{ cursor: "pointer" }} onClick={() => setCustomPath(prev => prev.slice(0, i + 1))}>{p.name}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={() => { setCForm({ name: "", icon: "📁" }); setCModal("addC"); }} style={{ background: "#E07B39", border: "none", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer", fontWeight: 800 }}>＋ フォルダ</button>
+          <label style={{ background: "#059669", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
+            ＋ ファイル
+            <input type="file" accept="image/*,application/pdf,.xlsx,.docx,.xls,.doc" multiple onChange={async e => { for (const f of Array.from(e.target.files)) { await uploadCustomFile(f); } e.target.value = ""; }} style={{ display: "none" }} />
+          </label>
+        </div>
+      </div>
+
+      <div style={{ padding: isPC ? "14px 0" : 14 }}>
+        {/* フォルダ一覧 */}
+        {curFolders.length > 0 && (
+          <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", marginBottom: 12 }}>
+            {curFolders.map((fo, i) => (
+              <div key={fo.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", borderBottom: i < curFolders.length - 1 ? "1px solid #F3F4F6" : "none" }}>
+                <span style={{ fontSize: 26 }}>{fo.icon}</span>
+                <div style={{ flex: 1, cursor: "pointer" }} onClick={() => setCustomPath(prev => [...prev, { id: fo.id, name: fo.name, icon: fo.icon }])}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#1F2937" }}>{fo.name}</div>
+                  <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>
+                    {cFolders.filter(x => x.parent_id === fo.id).length}フォルダ・{cFiles.filter(x => x.folder_id === fo.id).length}ファイル
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button onClick={() => { setCEdit({ ...fo }); setCModal("editC"); }} style={{ background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, color: "#1A3A5C", cursor: "pointer" }}>✏️</button>
+                  <button onClick={() => setConf({ msg: `「${fo.name}」フォルダを削除しますか？\n\n中のフォルダ・ファイルも全て消えます。\nこの操作は元に戻せません。`, onOk: () => { deleteCustomFolder(fo.id); setConf(null); } })} style={{ background: "#FEF2F2", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, color: "#DC2626", cursor: "pointer" }}>🗑</button>
+                </div>
+                <span style={{ color: "#9CA3AF" }}>›</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ファイル一覧 */}
+        {curFiles.length > 0 && (
+          <div>
+            {curFiles.map(f => (
+              <div key={f.id} style={{ background: "#fff", borderRadius: 12, marginBottom: 8, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", overflow: "hidden" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", cursor: "pointer" }} onClick={() => openCustomFile(f)}>
+                  <span style={{ fontSize: 28, flexShrink: 0 }}>{fileIcon(f)}</span>
+                  <div style={{ flex: 1, overflow: "hidden" }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#1F2937" }}>{f.name}</div>
+                    <div style={{ fontSize: 11, color: "#9CA3AF" }}>{f.size ? `${(f.size / 1024).toFixed(0)}KB` : ""}</div>
+                  </div>
+                  <span style={{ color: "#9CA3AF", fontSize: 14, flexShrink: 0 }}>›</span>
+                </div>
+                <div style={{ display: "flex", borderTop: "1px solid #F3F4F6" }}>
+                  {f.url && <a href={f.url} download={f.name} target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "8px 0", display: "flex", alignItems: "center", justifyContent: "center", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#059669", fontWeight: 700, textDecoration: "none" }}>⬇ 保存</a>}
+                  <button onClick={() => setConf({ msg: `「${f.name}」\n\nこの操作は元に戻せません。\n削除しますか？`, onOk: () => { deleteCustomFile(f.id); setConf(null); } })} style={{ flex: 1, padding: "8px 0", background: "none", border: "none", fontSize: 12, color: "#DC2626", fontWeight: 700, cursor: "pointer" }}>🗑 削除</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 空のとき */}
+        {curFolders.length === 0 && curFiles.length === 0 && (
+          <div style={{ textAlign: "center", padding: 40, color: "#9CA3AF" }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>📂</div>
+            <div style={{ fontSize: 14 }}>まだ何もありません</div>
+            <div style={{ fontSize: 12, marginTop: 4 }}>上の「＋フォルダ」「＋ファイル」で追加できます</div>
+          </div>
+        )}
+      </div>
+
+      {conf && <Confirm msg={conf.msg} onCancel={() => setConf(null)} onOk={conf.onOk} />}
+      {cUploading && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+          <div style={{ background: "#fff", borderRadius: 14, padding: "24px 32px", textAlign: "center" }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>⏳</div>
+            <div style={{ fontWeight: 700, color: "#1F2937" }}>アップロード中...</div>
+          </div>
+        </div>
+      )}
+
+      {cModal === "addC" && (
+        <Modal title="📁 フォルダを追加" onClose={() => setCModal(null)} onSave={addCustomFolder}>
+          <Inp label="アイコン（絵文字）" value={cForm.icon} onChange={e => setCForm({ ...cForm, icon: e.target.value })} />
+          <Inp label="フォルダ名 *" value={cForm.name} onChange={e => setCForm({ ...cForm, name: e.target.value })} placeholder="例: 2025年契約まとめ" />
+        </Modal>
+      )}
+      {cModal === "editC" && cEdit && (
+        <Modal title="📁 フォルダを編集" onClose={() => { setCModal(null); setCEdit(null); }} onSave={updateCustomFolder}>
+          <Inp label="アイコン（絵文字）" value={cEdit.icon} onChange={e => setCEdit({ ...cEdit, icon: e.target.value })} />
+          <Inp label="フォルダ名 *" value={cEdit.name} onChange={e => setCEdit({ ...cEdit, name: e.target.value })} />
+        </Modal>
+      )}
     </div>
   );
 
@@ -231,7 +474,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
             ? <div style={{ textAlign: "center", padding: 40, color: "#9CA3AF" }}><div style={{ fontSize: 48, marginBottom: 12 }}>📂</div><div style={{ fontSize: 14 }}>ファイルがありません</div></div>
             : monthFiles.map(f => (
               <div key={f.id} style={{ background: "#fff", borderRadius: 12, marginBottom: 8, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", overflow: "hidden" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", cursor: "pointer" }} onClick={() => setFinPrev(f)}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", cursor: "pointer" }} onClick={() => openFile(f)}>
                   <span style={{ fontSize: 28, flexShrink: 0 }}>{fileIcon(f)}</span>
                   <div style={{ flex: 1, overflow: "hidden" }}>
                     <div style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#1F2937" }}>{f.name}</div>
@@ -240,13 +483,21 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
                   <span style={{ color: "#9CA3AF", fontSize: 14, flexShrink: 0 }}>›</span>
                 </div>
                 <div style={{ display: "flex", borderTop: "1px solid #F3F4F6" }}>
-                  {f.url && <a href={f.url} download={f.name} target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "8px 0", display: "flex", alignItems: "center", justifyContent: "center", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#059669", fontWeight: 700, textDecoration: "none" }}>⬇ 保存</a>}
+                  {f.url && f.url.startsWith("http") && <a href={f.url} download={f.name} target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "8px 0", display: "flex", alignItems: "center", justifyContent: "center", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#059669", fontWeight: 700, textDecoration: "none" }}>⬇ 保存</a>}
                   <button onClick={() => setConf({ msg: `「${f.name}」\n\nこの操作は元に戻せません。\n削除しますか？`, onOk: () => { deleteFinFile(f.id); setConf(null); } })} style={{ flex: 1, padding: "8px 0", background: "none", border: "none", fontSize: 12, color: "#DC2626", fontWeight: 700, cursor: "pointer" }}>🗑 削除</button>
                 </div>
               </div>
             ))}
         </div>
         {conf && <Confirm msg={conf.msg} onCancel={() => setConf(null)} onOk={conf.onOk} />}
+        {opening && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+            <div style={{ background: "#fff", borderRadius: 14, padding: "24px 32px", textAlign: "center" }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>⏳</div>
+              <div style={{ fontWeight: 700, color: "#1F2937" }}>ファイルを開いています...</div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -381,6 +632,19 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
               <div style={{ fontSize: 12, marginTop: 4 }}>「＋ フォルダ」で追加できます</div>
             </div>
           )}
+        </div>
+
+        {/* ── マイフォルダ入口（自由に階層を作れるエリア）── */}
+        <div
+          onClick={() => { setCustomOpen(true); setCustomPath([]); }}
+          style={{ marginTop: 16, background: "linear-gradient(135deg,#1A3A5C,#2563EB)", borderRadius: 14, padding: "18px 20px", display: "flex", alignItems: "center", gap: 14, boxShadow: "0 2px 8px rgba(37,99,235,0.25)", cursor: "pointer" }}
+        >
+          <span style={{ fontSize: 30 }}>🗂</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: 15, color: "#fff" }}>マイフォルダ（自由フォルダ）</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.85)", marginTop: 2 }}>フォルダもファイルも自由に・好きなだけ階層を作れる</div>
+          </div>
+          <span style={{ color: "#fff", fontSize: 18 }}>›</span>
         </div>
       </div>
 

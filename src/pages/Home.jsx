@@ -9,21 +9,13 @@ const SCHEDULE_BLUE = "#1a56a0";
 const BG = "#eef1f6";
 const WD = ["日", "月", "火", "水", "木", "金", "土"];
 
-const getScDate = (s) => s.schedule_date || s.date || (s.start_at ? String(s.start_at).slice(0, 10) : "");
-const getScTitle = (s) => s.title || s.name || "予定";
-const getScTime = (s) => s.start_time || s.time || (s.start_at ? String(s.start_at).slice(11, 16) : "");
-const fmtDateKey = (d) => {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+const CAT_COLOR_MAP = {
+  "現調": "#2563eb", "調査": "#16a34a", "工事": "#9333ea",
+  "打ち合わせ": "#0891b2", "緊急当番": "#dc2626", "事務": "#78716c",
+  "外出": "#92400e", "休み": "#db2777", "その他": "#6b7280",
 };
-const addDays = (base, n) => {
-  const d = new Date(base);
-  d.setDate(d.getDate() + n);
-  d.setHours(0, 0, 0, 0);
-  return d;
-};
+const getCatColor = (sc) => sc.color || CAT_COLOR_MAP[sc.category] || "#6b7280";
+
 const fmtCallDate = (iso) => {
   if (!iso) return "";
   const d = new Date(iso);
@@ -53,8 +45,9 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const [currentPage, setCurrentPage] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [bannerMode, setBannerMode] = useState("schedule");
-  const [calOffset, setCalOffset] = useState(0);
-  const [schedules, setSchedules] = useState([]);
+  const [calBase, setCalBase] = useState(0);
+  const [weekSchedules, setWeekSchedules] = useState([]);
+  const [todaySchedules, setTodaySchedules] = useState([]);
   const [detailSc, setDetailSc] = useState(null);
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
@@ -86,14 +79,48 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const weatherIcon = code => code === 0 ? "☀️" : code <= 2 ? "🌤" : code === 3 ? "☁️" : code <= 48 ? "🌫" : code <= 55 ? "🌦" : code <= 65 ? "🌧" : code <= 75 ? "🌨" : code <= 82 ? "🌦" : code <= 99 ? "⛈" : "🌡";
 
   useEffect(() => {
-    (async () => {
-      const { data } = await supabase.from("schedules").select("*").order("schedule_date", { ascending: true });
-      if (data) setSchedules(data);
-    })();
+    const fetch7Days = async () => {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, "0");
+      const d = String(now.getDate()).padStart(2, "0");
+      const todayStr = `${y}-${m}-${d}`;
+      const end = new Date(now); end.setDate(now.getDate() + 6); end.setHours(23, 59, 59);
+      const { data } = await supabase
+        .from("schedules").select("*")
+        .gte("start_at", `${todayStr}T00:00:00`)
+        .lte("start_at", end.toISOString())
+        .order("start_at");
+      if (data) {
+        setWeekSchedules(data);
+        setTodaySchedules(data.filter(sc => sc.start_at?.slice(0, 10) === todayStr));
+      }
+    };
+    fetch7Days();
   }, []);
 
-  const calDays = [0, 1, 2, 3].map(i => addDays(new Date(), calOffset + i));
-  const getEventsForDay = (day) => schedules.filter(s => getScDate(s) === fmtDateKey(day));
+  function getDayKey(offset = 0) {
+    const d = new Date(); d.setDate(d.getDate() + offset);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  function getScForDay(offset) {
+    const key = getDayKey(offset);
+    return weekSchedules.filter(sc => sc.start_at?.slice(0, 10) === key);
+  }
+
+  const formatTime = (isoStr) => {
+    if (!isoStr) return "";
+    const d = new Date(isoStr);
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  };
+
+  const formatTimeRange = (sc) => {
+    if (sc.all_day) return "終日";
+    const s = formatTime(sc.start_at);
+    const e = sc.end_at ? formatTime(sc.end_at) : "";
+    return e ? `${s}-${e}` : s;
+  };
 
   const refreshCalls = async () => {
     setRefreshing(true);
@@ -183,83 +210,103 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
     </div>
   );
 
-  const ScheduleBanner = () => (
-    <div style={{ background: "#fff", borderRadius: 16, overflow: "hidden", marginBottom: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
-      <div style={{ background: SCHEDULE_BLUE, padding: "10px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          {bannerMode === "schedule" && (
-            <>
-              <button onClick={() => setCalOffset(o => o - 4)} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 6, padding: "2px 8px", cursor: "pointer", fontSize: 12 }}>◀</button>
-              <button onClick={() => setCalOffset(o => o + 4)} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 6, padding: "2px 8px", cursor: "pointer", fontSize: 12 }}>▶</button>
-            </>
-          )}
-          <button onClick={() => setBannerMode(m => m === "schedule" ? "stats" : "schedule")} style={{ background: "none", border: "none", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer", padding: 0 }}>
-            {bannerMode === "schedule" ? "📅 スケジュール" : "📊 今日の状況"}
-          </button>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          {bannerMode === "schedule" && (
-            <>
-              <button onClick={() => nav("schedule")} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>全て→</button>
-              <button onClick={() => nav("schedule")} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 8, width: 28, height: 28, fontSize: 16, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>＋</button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {bannerMode === "schedule" ? (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)" }}>
-          {calDays.map((day, di) => {
-            const events = getEventsForDay(day);
-            const isToday = fmtDateKey(day) === fmtDateKey(new Date());
-            return (
-              <div key={fmtDateKey(day)} style={{ borderRight: di < 3 ? "1px solid #eef1f6" : "none", padding: "8px 6px", minHeight: 110 }}>
-                <div style={{ textAlign: "center", marginBottom: 6 }}>
-                  <div style={{ fontSize: 9, color: isToday ? SCHEDULE_BLUE : "#9ca3af", fontWeight: isToday ? 800 : 600 }}>{WD[day.getDay()]}</div>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: isToday ? SCHEDULE_BLUE : "#374151" }}>{day.getDate()}</div>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  {events.slice(0, 3).map(ev => (
-                    <div key={ev.id} onClick={() => setDetailSc(ev)} style={{ background: ev.color || "#dbeafe", color: "#1e3a5f", borderRadius: 6, padding: "3px 5px", fontSize: 9, fontWeight: 700, cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {getScTime(ev) && <span style={{ marginRight: 2 }}>{getScTime(ev)}</span>}{getScTitle(ev)}
+  const ScheduleBanner = () => {
+    if (bannerMode === "schedule") {
+      const WD_JP = ["日", "月", "火", "水", "木", "金", "土"];
+      const days = [0, 1, 2, 3].map(i => {
+        const d = new Date(); d.setDate(d.getDate() + calBase + i);
+        return d;
+      });
+      return (
+        <div style={{ background: "#fff", borderRadius: 16, marginBottom: 16, boxShadow: "0 2px 12px rgba(0,0,0,0.08)", overflow: "hidden" }}>
+          <div style={{ background: SCHEDULE_BLUE, padding: "9px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ color: "#fff", fontWeight: 800, fontSize: 14 }}>📅 スケジュール</span>
+              <button onClick={() => setBannerMode("dashboard")} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 5, padding: "2px 7px", fontSize: 11, cursor: "pointer" }}>📊</button>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <button onClick={() => setCalBase(b => Math.max(0, b - 4))} disabled={calBase === 0}
+                style={{ background: "rgba(255,255,255,0.2)", border: "none", color: calBase === 0 ? "rgba(255,255,255,0.3)" : "#fff", borderRadius: 5, padding: "2px 8px", fontSize: 12, cursor: calBase === 0 ? "default" : "pointer" }}>◀</button>
+              <button onClick={() => setCalBase(b => b + 4)}
+                style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 5, padding: "2px 8px", fontSize: 12, cursor: "pointer" }}>▶</button>
+              <button onClick={() => nav("schedule")} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 5, padding: "2px 8px", fontSize: 11, cursor: "pointer" }}>全て →</button>
+              <button onClick={() => nav("schedule")} style={{ background: "#fff", border: "none", color: SCHEDULE_BLUE, borderRadius: 5, padding: "2px 8px", fontSize: 11, cursor: "pointer", fontWeight: 700 }}>＋</button>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
+            {days.map((d, i) => {
+              const offset = calBase + i;
+              const isToday = offset === 0;
+              const isSun = d.getDay() === 0;
+              const isSat = d.getDay() === 6;
+              const daySchs = getScForDay(offset);
+              return (
+                <div key={i} style={{ borderRight: i < 3 ? "1px solid #e5e7eb" : "none" }}>
+                  <div style={{ textAlign: "center", padding: "6px 2px", borderBottom: "1px solid #e5e7eb", background: isToday ? "#eff6ff" : "#f8fafc" }}>
+                    <div style={{ fontSize: 9, color: isSun ? "#dc2626" : isSat ? "#2563eb" : "#6b7280", fontWeight: 600 }}>{WD_JP[d.getDay()]}</div>
+                    <div style={{ width: 22, height: 22, borderRadius: "50%", margin: "2px auto", background: isToday ? SCHEDULE_BLUE : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: isToday ? "#fff" : isSun ? "#dc2626" : isSat ? "#2563eb" : "#1f2937" }}>{d.getDate()}</span>
                     </div>
-                  ))}
-                  <button onClick={() => nav("schedule")} style={{ width: "100%", padding: "6px 0", borderRadius: 8, border: "1.5px dashed #cbd5e1", background: "transparent", color: "#94a3b8", fontSize: 14, cursor: "pointer", marginTop: 2 }}>＋</button>
+                  </div>
+                  <div style={{ padding: "3px 2px", maxHeight: 180, overflowY: "auto" }}>
+                    {daySchs.map((sc) => (
+                      <div key={sc.id} onClick={() => setDetailSc(sc)}
+                        style={{ background: getCatColor(sc) + "18", borderLeft: `3px solid ${getCatColor(sc)}`, borderRadius: 3, padding: "2px 3px", marginBottom: 2, cursor: "pointer" }}>
+                        {!sc.all_day && (
+                          <div style={{ fontSize: 8, color: "#555", fontWeight: 600, lineHeight: 1.3 }}>{formatTime(sc.start_at)}{sc.end_at ? `-${formatTime(sc.end_at)}` : ""}</div>
+                        )}
+                        <div style={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "flex-start" }}>
+                          <span style={{ background: getCatColor(sc), color: "#fff", borderRadius: 2, padding: "0 3px", fontSize: 8, fontWeight: 700, flexShrink: 0, lineHeight: 1.6 }}>{sc.category}</span>
+                          <span style={{ fontSize: 9, color: "#1f2937", fontWeight: 600, lineHeight: 1.4, wordBreak: "break-all" }}>{sc.title}</span>
+                        </div>
+                      </div>
+                    ))}
+                    <button onClick={() => nav("schedule")} style={{ width: "100%", background: "none", border: "1px dashed #e2e8f0", borderRadius: 3, color: "#cbd5e1", fontSize: 12, padding: "1px 0", cursor: "pointer", marginTop: 1 }}>＋</button>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-      ) : (
-        <div style={{ padding: "14px 12px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            {[
-              { label: "進行中案件", value: `${active.length}件`, color: "#1a56a0", action: () => nav("projects") },
-              { label: "未完了タスク", value: `${pending.length}件`, color: "#ef4444", action: () => nav("tasks") },
-              { label: "未対応電話", value: `${pendingCallsCount}件`, color: "#f59e0b", action: () => nav("calls") },
-              { label: "取引先", value: `${cos.length}社`, color: "#22a06b", action: () => nav("companies") },
-            ].map(item => (
-              <div key={item.label} onClick={item.action} style={{ background: "#f8fafc", borderRadius: 12, padding: "12px", cursor: "pointer" }}>
-                <div style={{ fontSize: 20, fontWeight: 900, color: item.color }}>{item.value}</div>
-                <div style={{ fontSize: 10, color: "#6b7280", marginTop: 2 }}>{item.label}</div>
+      );
+    }
+
+    return (
+      <div style={{ background: "linear-gradient(135deg, #1A3A5C, #2563EB)", borderRadius: 16, padding: "18px 20px", marginBottom: 16, boxShadow: "0 4px 16px rgba(37,99,235,0.25)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>📊 今日の状況</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 11 }}>{new Date().toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "short" })}</div>
+            <button onClick={() => setBannerMode("schedule")} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "rgba(255,255,255,0.85)", borderRadius: 6, padding: "3px 8px", fontSize: 11, cursor: "pointer", marginLeft: 4 }}>📅</button>
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          {[
+            { label: "進行中案件", value: `${active.length}件`, color: "#60A5FA", action: () => nav("projects") },
+            { label: "未完了タスク", value: `${pending.length}件`, color: "#F87171", action: () => nav("tasks") },
+            { label: "未対応電話", value: `${pendingCallsCount}件`, color: "#FBBF24", action: () => nav("calls") },
+            { label: "取引先", value: `${cos.length}社`, color: "#34D399", action: () => nav("companies") },
+          ].map(item => (
+            <div key={item.label} onClick={item.action} style={{ background: "rgba(255,255,255,0.1)", borderRadius: 12, padding: "12px", cursor: "pointer" }}>
+              <div style={{ fontSize: 20, fontWeight: 900, color: item.color }}>{item.value}</div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.65)", marginTop: 2 }}>{item.label}</div>
+            </div>
+          ))}
+        </div>
+        {weekWeather && (
+          <div style={{ marginTop: 12, display: "flex", gap: 4, overflowX: "auto" }}>
+            {weekWeather.map((d, i) => (
+              <div key={i} style={{ flex: 1, minWidth: 32, textAlign: "center" }}>
+                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>{i === 0 ? "今日" : WD[d.weekday]}</div>
+                <div style={{ fontSize: 14 }}>{weatherIcon(d.code)}</div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: "#fff" }}>{d.max}°</div>
               </div>
             ))}
           </div>
-          {weekWeather && (
-            <div style={{ marginTop: 12, display: "flex", gap: 4, overflowX: "auto" }}>
-              {weekWeather.map((d, i) => (
-                <div key={i} style={{ flex: 1, minWidth: 32, textAlign: "center" }}>
-                  <div style={{ fontSize: 9, color: "#9ca3af" }}>{i === 0 ? "今日" : WD[d.weekday]}</div>
-                  <div style={{ fontSize: 14 }}>{weatherIcon(d.code)}</div>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: "#374151" }}>{d.max}°</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
+        )}
+      </div>
+    );
+  };
 
   const FeatureCard = ({ icon, title, desc, bg, accent, onCardClick, pills }) => (
     <div onClick={onCardClick} style={{ background: bg, borderRadius: 14, padding: "14px 16px", marginBottom: 10, cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.04)", borderLeft: `4px solid ${accent}` }}>
@@ -607,13 +654,42 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
       <SideDrawer />
 
       {detailSc && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: "100%", maxWidth: 340, boxSizing: "border-box" }}>
-            <div style={{ fontWeight: 800, fontSize: 16, color: "#1f2937", marginBottom: 12 }}>{getScTitle(detailSc)}</div>
-            {getScDate(detailSc) && <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>📅 {getScDate(detailSc)}{getScTime(detailSc) ? ` ${getScTime(detailSc)}` : ""}</div>}
-            {detailSc.assignee && <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>👤 {detailSc.assignee}</div>}
-            {detailSc.memo && <div style={{ fontSize: 13, color: "#374151", marginBottom: 12, lineHeight: 1.6 }}>{detailSc.memo}</div>}
-            <button onClick={() => setDetailSc(null)} style={{ width: "100%", padding: 12, background: NAVY, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>閉じる</button>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 600, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+          onClick={() => setDetailSc(null)}>
+          <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 400, boxShadow: "0 20px 60px rgba(0,0,0,0.25)", overflow: "hidden" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ background: getCatColor(detailSc), padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ background: "rgba(255,255,255,0.25)", color: "#fff", borderRadius: 4, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>{detailSc.category}</span>
+                <span style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>{detailSc.title}</span>
+              </div>
+              <button onClick={() => setDetailSc(null)} style={{ background: "none", border: "none", color: "#fff", fontSize: 20, cursor: "pointer" }}>✕</button>
+            </div>
+            <div style={{ padding: 0 }}>
+              {[
+                { label: "日時", value: detailSc.all_day
+                  ? detailSc.start_at?.slice(0, 10)
+                  : `${detailSc.start_at?.slice(0, 10)} ${formatTime(detailSc.start_at)}${detailSc.end_at ? ` 〜 ${formatTime(detailSc.end_at)}` : ""}` },
+                { label: "記入者", value: detailSc.assignees?.[0] || "―" },
+                { label: "対応予定業者", value: detailSc.location?.startsWith("対応：") ? detailSc.location.replace("対応：", "") : "―" },
+                { label: "メモ", value: detailSc.memo || "―" },
+              ].map((row, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "flex-start", borderBottom: "1px solid #f1f5f9", padding: "11px 16px", gap: 12 }}>
+                  <div style={{ width: 80, flexShrink: 0, fontSize: 12, fontWeight: 600, color: "#6b7280", paddingTop: 1 }}>{row.label}</div>
+                  <div style={{ flex: 1, fontSize: 13, color: "#1f2937", wordBreak: "break-all" }}>{row.value}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ padding: "12px 16px", display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button onClick={() => { setDetailSc(null); nav("schedule"); }}
+                style={{ padding: "8px 16px", background: SCHEDULE_BLUE, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                編集する
+              </button>
+              <button onClick={() => setDetailSc(null)}
+                style={{ padding: "8px 14px", background: "#f1f5f9", color: "#374151", border: "none", borderRadius: 8, fontSize: 13, cursor: "pointer" }}>
+                閉じる
+              </button>
+            </div>
           </div>
         </div>
       )}

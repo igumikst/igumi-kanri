@@ -20,6 +20,7 @@ import CallsPage from "./pages/CallsPage";
 import LineSettings from "./pages/LineSettings";
 import SystemManual from "./pages/SystemManual";
 import UserManual from "./pages/UserManual";
+import Schedule from "./pages/Schedule";
 
 export default function App() {
   const [page, setPage] = useState("home");
@@ -104,7 +105,7 @@ export default function App() {
       supabase.from("projects").select("*").order("created_at", { ascending: false }),
       supabase.from("companies").select("*").order("created_at", { ascending: true }),
       supabase.from("tasks").select("*").order("created_at", { ascending: false }),
-      supabase.from("finance_files").select("id,item_id,year,month,name,type,size,url,path,created_at").order("created_at", { ascending: false }),
+     supabase.from("finance_files").select("id,item_id,year,month,name,type,size,url,path,created_at").order("created_at", { ascending: false }),
       supabase.from("finance_folders").select("*").order("sort_order", { ascending: true }),
       supabase.from("home_settings").select("*"),
       supabase.from("links").select("*").order("sort_order", { ascending: true }),
@@ -160,7 +161,7 @@ export default function App() {
   );
 
   if (page === "home") return <Home {...commonProps} setPjs={setPjs} setCos={setCos} setTks={setTks} setLinks={setLinks} weather={weather} weekWeather={weekWeather} tileEdit={tileEdit} setTileEdit={setTileEdit} saveTileConf={saveTileConf} saveCustomize={saveCustomize} modal={modal} setModal={setModal} ec={ec} setEc={setEc} boardPosts={boardPosts} calls={calls} />;
-  if (page === "projects") return <Projects {...commonProps} setPjs={setPjs} />;
+  if (page === "projects") return <Projects {...commonProps} setPjs={setPjs} setCos={setCos} />;
   if (page === "companies") return <Companies {...commonProps} setCos={setCos} />;
   if (page === "tasks") return <Tasks {...commonProps} setTks={setTks} />;
   if (page === "links") return <Links {...commonProps} setLinks={setLinks} />;
@@ -176,6 +177,6 @@ export default function App() {
   if (page === "linesettings") return <LineSettings {...commonProps} />;
   if (page === "systemmanual") return <SystemManual {...commonProps} />;
   if (page === "usermanual") return <UserManual {...commonProps} />;
-
+  if (page === "schedule") return <Schedule nav={nav} />;
   return null;
 }
