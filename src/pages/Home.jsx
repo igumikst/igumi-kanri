@@ -109,13 +109,34 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
 
   useEffect(() => {
     (async () => {
+      const applyPosts = (rows) => {
+        setBlogPosts(rows.map((p, i) => ({
+          id: p.id || p.url || String(i),
+          title: p.title,
+          url: p.url,
+          thumbnail_url: p.thumbnail_url || null,
+          published_at: p.published_at,
+        })));
+      };
+
+      try {
+        const res = await fetch("/api/blog-feed");
+        if (res.ok) {
+          const json = await res.json();
+          if (json.posts?.length) {
+            applyPosts(json.posts);
+            return;
+          }
+        }
+      } catch (_) { /* fall through to Supabase */ }
+
       const { data, error } = await supabase
         .from("blog_posts")
         .select("id, title, url, thumbnail_url, published_at")
         .order("published_at", { ascending: false })
         .order("sort_order", { ascending: true })
         .limit(3);
-      if (!error && data?.length) setBlogPosts(data);
+      if (!error && data?.length) applyPosts(data);
     })();
   }, []);
 
