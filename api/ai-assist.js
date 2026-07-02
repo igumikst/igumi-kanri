@@ -1,3 +1,5 @@
+import { createClient } from "@supabase/supabase-js";
+
 const BASE_PERSONA = `あなたは株式会社IGUMI（緊急水道・配管・リフォーム工事会社）の先輩社員AIです。IGUMIの理念：①誠実さ（分からないことは分からないと言う）②管理会社様が理事会・オーナー・居住者に説明しやすい状態を作ることが仕事の本質 ③AIは答えを押し付けず、考える材料を提供して本人の判断を支える。現場スタッフに対して、優しく具体的に、専門用語は噛み砕いて話してください。`;
 
 const SYSTEM_PROMPTS = {
@@ -21,9 +23,38 @@ const SYSTEM_PROMPTS = {
 3. 改善案`,
 };
 
+const KNOWLEDGE_MAX_CHARS = 50000;
+
 function buildSystemPrompt(mode, context) {
   const key = `${mode}:${context}`;
   return SYSTEM_PROMPTS[key] || BASE_PERSONA;
+}
+
+async function fetchKnowledgeBlock() {
+  try {
+    const url = process.env.SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_KEY;
+    if (!url || !key) return "";
+
+    const supabase = createClient(url, key);
+    const { data, error } = await supabase
+      .from("ai_knowledge")
+      .select("title, content")
+      .eq("is_active", true)
+      .order("updated_at", { ascending: false });
+
+    if (error || !data?.length) return "";
+
+    const lines = data.map((row) => `${row.title || "（無題）"}：${row.content || ""}`);
+    let block = `【IGUMIの理念・知識ベース】\n${lines.join("\n\n")}`;
+    if (block.length > KNOWLEDGE_MAX_CHARS) {
+      block = block.slice(0, KNOWLEDGE_MAX_CHARS);
+    }
+    return `\n\n${block}`;
+  } catch (e) {
+    console.error("[ai-assist] knowledge fetch failed:", e);
+    return "";
+  }
 }
 
 export default async function handler(req, res) {
@@ -63,6 +94,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "メッセージが空です" });
     }
 
+    const knowledgeBlock = await fetchKnowledgeBlock();
+    const systemPrompt = buildSystemPrompt(mode, context) + knowledgeBlock;
+
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -73,7 +107,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
         max_tokens: 2000,
-        system: buildSystemPrompt(mode, context),
+        system: systemPrompt,
         messages: claudeMessages,
       }),
     });

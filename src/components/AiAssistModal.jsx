@@ -2,6 +2,13 @@ import { useState, useEffect, useRef } from "react";
 
 const MENTOR_COLOR = "#1a56a0";
 const REVIEW_COLOR = "#22a06b";
+const USER_BUBBLE_COLOR = "#1a56a0";
+const MSG_AREA_BG = "#f5f7f9";
+const INPUT_STYLE = {
+  background: "#fff",
+  color: "#1f2937",
+  border: "1.5px solid #e5e7eb",
+};
 
 const GREETINGS = {
   "mentor:report": "報告書作成のお手伝いをします！今日はどんな現場でしたか？",
@@ -77,6 +84,20 @@ export default function AiAssistModal({ mode, context, onClose }) {
   };
 
   return (
+    <>
+      <style>{`
+        .ai-assist-input {
+          background: #fff !important;
+          color: #1f2937 !important;
+          -webkit-text-fill-color: #1f2937;
+          color-scheme: light;
+        }
+        .ai-assist-input::placeholder {
+          color: #9ca3af;
+          opacity: 1;
+          -webkit-text-fill-color: #9ca3af;
+        }
+      `}</style>
     <div
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 700, display: "flex", alignItems: "flex-end" }}
       onClick={onClose}
@@ -117,7 +138,7 @@ export default function AiAssistModal({ mode, context, onClose }) {
 
         <div
           ref={scrollRef}
-          style={{ flex: 1, overflowY: "auto", padding: "16px", background: "#f8fafc" }}
+          style={{ flex: 1, overflowY: "auto", padding: "16px", background: MSG_AREA_BG, color: "#1f2937" }}
         >
           {messages.map((msg, i) => (
             <div
@@ -133,7 +154,7 @@ export default function AiAssistModal({ mode, context, onClose }) {
                   maxWidth: "85%",
                   padding: "10px 14px",
                   borderRadius: msg.role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                  background: msg.role === "user" ? headerColor : "#fff",
+                  background: msg.role === "user" ? USER_BUBBLE_COLOR : "#fff",
                   color: msg.role === "user" ? "#fff" : "#1f2937",
                   fontSize: 14,
                   lineHeight: 1.6,
@@ -182,6 +203,7 @@ export default function AiAssistModal({ mode, context, onClose }) {
           }}
         >
           <textarea
+            className="ai-assist-input"
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -197,13 +219,13 @@ export default function AiAssistModal({ mode, context, onClose }) {
               flex: 1,
               padding: "10px 12px",
               borderRadius: 12,
-              border: "1.5px solid #e5e7eb",
               fontSize: 14,
               resize: "none",
               outline: "none",
               fontFamily: "inherit",
               boxSizing: "border-box",
-              color: "#1f2937",
+              colorScheme: "light",
+              ...INPUT_STYLE,
             }}
           />
           <button
@@ -227,5 +249,6 @@ export default function AiAssistModal({ mode, context, onClose }) {
         </div>
       </div>
     </div>
+    </>
   );
 }

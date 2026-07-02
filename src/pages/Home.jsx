@@ -44,8 +44,11 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const [showInfo, setShowInfo] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [pwModal, setPwModal] = useState(false);
+  const [akPwModal, setAkPwModal] = useState(false);
   const [pwInput, setPwInput] = useState("");
+  const [akPwInput, setAkPwInput] = useState("");
   const [pwErr, setPwErr] = useState("");
+  const [akPwErr, setAkPwErr] = useState("");
   const [finUnlocked, setFinUnlocked] = useState(false);
   const [savedPw, setSavedPw] = useState(null);
   const [pwLoaded, setPwLoaded] = useState(false);
@@ -185,9 +188,20 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
     else { setPwModal(true); setPwInput(""); setPwErr(""); }
   };
 
+  const handleAiKnowledgeClick = async () => {
+    const pw = await loadPw();
+    if (!pw || finUnlocked) { nav("aiknowledge"); }
+    else { setAkPwModal(true); setAkPwInput(""); setAkPwErr(""); }
+  };
+
   const handleUnlock = () => {
     if (pwInput === savedPw) { setFinUnlocked(true); setPwModal(false); setPwInput(""); nav("finance"); }
     else setPwErr("パスワードが違います");
+  };
+
+  const handleAkUnlock = () => {
+    if (akPwInput === savedPw) { setFinUnlocked(true); setAkPwModal(false); setAkPwInput(""); nav("aiknowledge"); }
+    else setAkPwErr("パスワードが違います");
   };
 
   const openChatGPT = () => {
@@ -405,6 +419,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           {item("📅 Googleカレンダー", () => drawerNav(() => window.open("https://calendar.google.com", "_blank")))}
           <div style={sectionTitle}>社内限定</div>
           {item("🔒 財務/書類", () => drawerNav(() => handleFinanceClick()), savedPw ? <span style={{ fontSize: 12 }}>{finUnlocked ? "🔓" : "🔒"}</span> : null)}
+          {item("🔒 AIナレッジ", () => drawerNav(() => handleAiKnowledgeClick()), savedPw ? <span style={{ fontSize: 12 }}>{finUnlocked ? "🔓" : "🔒"}</span> : null)}
           <div style={sectionTitle}>設定・その他</div>
           {item("🤖 AI補助", () => drawerNav(() => nav("ai")))}
           {item("🎣 釣り情報", () => drawerNav(() => nav("fishing")))}
@@ -775,11 +790,30 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
               onChange={e => { setPwInput(e.target.value); setPwErr(""); }}
               onKeyDown={e => e.key === "Enter" && handleUnlock()}
               placeholder="パスワード"
-              style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: pwErr ? "2px solid #DC2626" : "1.5px solid #E5E7EB", fontSize: 15, boxSizing: "border-box", marginBottom: 4, color: "#1F2937", outline: "none" }} />
+              style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: pwErr ? "2px solid #DC2626" : "1.5px solid #E5E7EB", fontSize: 15, boxSizing: "border-box", marginBottom: 4, color: "#1F2937", background: "#fff", outline: "none" }} />
             {pwErr && <div style={{ color: "#DC2626", fontSize: 12, marginBottom: 8 }}>{pwErr}</div>}
             <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
               <button onClick={() => { setPwModal(false); setPwInput(""); setPwErr(""); }} style={{ flex: 1, padding: 12, background: "#F3F4F6", border: "none", borderRadius: 10, fontWeight: 700, cursor: "pointer", color: "#374151" }}>キャンセル</button>
               <button onClick={handleUnlock} style={{ flex: 1, padding: 12, background: NAVY, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, cursor: "pointer" }}>開く</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {akPwModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: 300, boxSizing: "border-box" }}>
+            <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4, color: "#1F2937" }}>🔒 AIナレッジ管理</div>
+            <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>パスワードを入力してください</div>
+            <input type="password" value={akPwInput} autoFocus
+              onChange={e => { setAkPwInput(e.target.value); setAkPwErr(""); }}
+              onKeyDown={e => e.key === "Enter" && handleAkUnlock()}
+              placeholder="パスワード"
+              style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: akPwErr ? "2px solid #DC2626" : "1.5px solid #E5E7EB", fontSize: 15, boxSizing: "border-box", marginBottom: 4, color: "#1F2937", background: "#fff", outline: "none" }} />
+            {akPwErr && <div style={{ color: "#DC2626", fontSize: 12, marginBottom: 8 }}>{akPwErr}</div>}
+            <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+              <button onClick={() => { setAkPwModal(false); setAkPwInput(""); setAkPwErr(""); }} style={{ flex: 1, padding: 12, background: "#F3F4F6", border: "none", borderRadius: 10, fontWeight: 700, cursor: "pointer", color: "#374151" }}>キャンセル</button>
+              <button onClick={handleAkUnlock} style={{ flex: 1, padding: 12, background: NAVY, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, cursor: "pointer" }}>開く</button>
             </div>
           </div>
         </div>
