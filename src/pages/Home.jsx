@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { Modal, Inp } from "../components/UI";
+import AiAssistModal from "../components/AiAssistModal";
 import { PRIO } from "../lib/constants";
 import { supabase } from "../lib/supabase";
 
@@ -57,6 +58,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const [todaySchedules, setTodaySchedules] = useState([]);
   const [detailSc, setDetailSc] = useState(null);
   const [blogPosts, setBlogPosts] = useState([]);
+  const [aiAssist, setAiAssist] = useState(null);
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
 
@@ -191,6 +193,10 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const openChatGPT = () => {
     window.location.href = "chatgpt://";
     setTimeout(() => { window.open("https://chatgpt.com", "_blank"); }, 1500);
+  };
+
+  const openAiAssist = (mode, context) => {
+    setAiAssist({ mode, context });
   };
 
   const handleTileClick = (t) => {
@@ -417,16 +423,16 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
         icon="📸" title="報告書作成" desc="現場の記録を作成・管理します" bg="#e8f7f0" accent="#22a06b"
         onCardClick={() => window.open("/report.html", "_blank")}
         pills={[
-          <Pill key="m" onClick={() => alert("準備中")}>🧭 AIメンター</Pill>,
-          <Pill key="r" onClick={() => alert("準備中")}>🛡️ AIレビュー</Pill>,
+          <Pill key="m" onClick={() => openAiAssist("mentor", "report")}>🧭 AIメンター</Pill>,
+          <Pill key="r" onClick={() => openAiAssist("review", "report")}>🛡️ AIレビュー</Pill>,
         ]}
       />
       <FeatureCard
         icon="📝" title="見積書作成" desc="見積書の作成・管理を行います" bg="#fef3e8" accent="#e8862e"
         onCardClick={() => nav("estimate")}
         pills={[
-          <Pill key="m" onClick={() => alert("準備中")}>🧭 AIメンター</Pill>,
-          <Pill key="r" onClick={() => alert("準備中")}>🛡️ AIレビュー</Pill>,
+          <Pill key="m" onClick={() => openAiAssist("mentor", "estimate")}>🧭 AIメンター</Pill>,
+          <Pill key="r" onClick={() => openAiAssist("review", "estimate")}>🛡️ AIレビュー</Pill>,
         ]}
       />
       <FeatureCard
@@ -777,6 +783,14 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
             </div>
           </div>
         </div>
+      )}
+
+      {aiAssist && (
+        <AiAssistModal
+          mode={aiAssist.mode}
+          context={aiAssist.context}
+          onClose={() => setAiAssist(null)}
+        />
       )}
 
       {editTile && (<Modal title="タイルを編集" onClose={() => setEditTile(null)} onSave={() => { saveTileConf(tileConf.map(t => t.key === editTile.key ? editTile : t)); setEditTile(null); }}>
