@@ -22,6 +22,13 @@ const fmtCallDate = (iso) => {
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 
+const fmtBlogDate = (dateStr) => {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" });
+};
+
 const Pill = ({ children, onClick }) => (
   <button
     onClick={(e) => { e.stopPropagation(); onClick?.(e); }}
@@ -49,6 +56,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const [weekSchedules, setWeekSchedules] = useState([]);
   const [todaySchedules, setTodaySchedules] = useState([]);
   const [detailSc, setDetailSc] = useState(null);
+  const [blogPosts, setBlogPosts] = useState([]);
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
 
@@ -97,6 +105,18 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
       }
     };
     fetch7Days();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      const { data, error } = await supabase
+        .from("blog_posts")
+        .select("id, title, url, thumbnail_url, published_at")
+        .order("published_at", { ascending: false })
+        .order("sort_order", { ascending: true })
+        .limit(3);
+      if (!error && data?.length) setBlogPosts(data);
+    })();
   }, []);
 
   function getDayKey(offset = 0) {
@@ -395,6 +415,31 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           <Pill key="l" onClick={() => window.open("https://igumi-inc.jp", "_blank")}>記事一覧を見る</Pill>,
         ]}
       />
+
+      {blogPosts.length > 0 && (
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>最新のブログ記事</div>
+            <button onClick={() => window.open("https://igumi-inc.jp", "_blank")} style={{ fontSize: 11, color: "#6366F1", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>すべて見る →</button>
+          </div>
+          <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            {blogPosts.map((post, i) => (
+              <div key={post.id} onClick={() => window.open(post.url, "_blank")} style={{ padding: "12px 16px", borderBottom: i < blogPosts.length - 1 ? "1px solid #F3F4F6" : "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 86, height: 64, borderRadius: 8, overflow: "hidden", flexShrink: 0, background: "#e5e7eb" }}>
+                  {post.thumbnail_url ? (
+                    <img src={post.thumbnail_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  ) : null}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: "#1F2937", overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{post.title}</div>
+                  <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 4 }}>{fmtBlogDate(post.published_at)}</div>
+                </div>
+                <div style={{ fontSize: 12, color: "#9CA3AF", flexShrink: 0 }}>›</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {unsubmitted.length > 0 && (
         <div style={{ marginBottom: 18 }}>
