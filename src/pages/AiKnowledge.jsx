@@ -126,6 +126,7 @@ export default function AiKnowledge({ pjs, cos, tks, links, cust, isPC, pp, nav,
       )}
       {(cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
 
+      <div style={{ maxWidth: isPC ? 800 : "100%", margin: "0 auto", width: "100%" }}>
       <div style={{ background: HEADER_COLOR, color: "#fff", padding: "14px 16px", position: "sticky", top: 0, zIndex: 50, display: "flex", alignItems: "center", gap: 10 }}>
         <button onClick={() => nav("home")} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, cursor: "pointer", fontWeight: 700, flexShrink: 0 }}>← 戻る</button>
         <div style={{ flex: 1 }}>
@@ -191,6 +192,7 @@ export default function AiKnowledge({ pjs, cos, tks, links, cust, isPC, pp, nav,
             </div>
           ))
         )}
+      </div>
       </div>
 
       {showForm && (
