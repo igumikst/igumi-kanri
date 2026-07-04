@@ -2,7 +2,7 @@
 // さくらインターネットIMAPから受信トレイのメールを取得
 
 const { ImapFlow } = require("imapflow");
-const iconv = require("iconv-lite");
+const { simpleParser } = require("mailparser");
 
 function parseIntParam(val, fallback, min, max) {
   const n = parseInt(Array.isArray(val) ? val[0] : val, 10);
@@ -10,14 +10,7 @@ function parseIntParam(val, fallback, min, max) {
   return Math.min(max, Math.max(min, n));
 }
 
-function formatFrom(from) {
-  if (!from?.length) return "";
-  const entry = from[0];
-  if (entry.name) return entry.name;
-  return entry.address || "";
-}
-
-function decodeBodyPart(text) {
+function stripHtml(text) {
   return text
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/g, "&")
@@ -32,127 +25,28 @@ function decodeBodyPart(text) {
     .trim();
 }
 
-function getHeaderValue(headerBlock, name) {
-  const re = new RegExp(`^${name}:\\s*([^\\r\\n]*(?:\\r?\\n[ \\t][^\\r\\n]*)*)`, "im");
-  const match = headerBlock.match(re);
-  return match ? match[1].replace(/\r?\n[ \t]/g, " ").trim() : "";
+function formatFromAddress(from) {
+  if (!from?.value?.length) return "";
+  const entry = from.value[0];
+  if (entry.name) return entry.name;
+  return entry.address || "";
 }
 
-function getCharset(headerBlock) {
-  const contentType = getHeaderValue(headerBlock, "Content-Type");
-  const match = contentType.match(/charset=["']?([^"';\s]+)/i);
-  return match ? match[1].trim() : "utf-8";
-}
-
-function normalizeCharset(charset) {
-  const c = (charset || "utf-8").toLowerCase().replace(/[_\s]/g, "-");
-  if (c === "utf8" || c === "utf-8") return "utf8";
-  if (c === "iso-2022-jp" || c === "iso2022-jp") return "ISO-2022-JP";
-  if (c === "shift-jis" || c === "sjis" || c === "cp932" || c === "windows-31j" || c === "x-sjis") return "Shift_JIS";
-  return charset;
-}
-
-function decodeQuotedPrintable(bodyStr) {
-  const cleaned = bodyStr.replace(/=\r?\n/g, "");
-  const bytes = [];
-  for (let i = 0; i < cleaned.length; i += 1) {
-    if (cleaned[i] === "=" && i + 2 < cleaned.length) {
-      bytes.push(parseInt(cleaned.slice(i + 1, i + 3), 16));
-      i += 2;
-    } else {
-      bytes.push(cleaned.charCodeAt(i) & 0xff);
-    }
+async function parseMailSource(source, maxLen) {
+  const parsed = await simpleParser(source);
+  let body = (parsed.text || "").trim();
+  if (!body && parsed.html) {
+    body = stripHtml(String(parsed.html));
   }
-  return Buffer.from(bytes);
-}
-
-function decodeBodyBytes(bodyStr, transferEncoding) {
-  const enc = (transferEncoding || "7bit").toLowerCase().trim();
-  if (enc === "base64") {
-    return Buffer.from(bodyStr.replace(/\s/g, ""), "base64");
-  }
-  if (enc === "quoted-printable") {
-    return decodeQuotedPrintable(bodyStr);
-  }
-  return Buffer.from(bodyStr, "binary");
-}
-
-function decodeBuffer(buf, charset) {
-  const normalized = normalizeCharset(charset);
-  if (iconv.encodingExists(normalized)) {
-    return iconv.decode(buf, normalized);
+  if (maxLen && body.length > maxLen) {
+    body = `${body.slice(0, maxLen)}…`;
   }
 
-  for (const fallback of ["utf8", "ISO-2022-JP", "Shift_JIS"]) {
-    if (!iconv.encodingExists(fallback)) continue;
-    const text = iconv.decode(buf, fallback);
-    if (!text.includes("\uFFFD")) return text;
-  }
-
-  return iconv.decode(buf, "utf8");
-}
-
-function splitMimeParts(body, boundary) {
-  const escaped = boundary.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return body.split(new RegExp(`--${escaped}(?:--)?`));
-}
-
-function decodeMimePart(partHeaders, partBody) {
-  const charset = getCharset(partHeaders);
-  const transferEncoding = getHeaderValue(partHeaders, "Content-Transfer-Encoding");
-  const bytes = decodeBodyBytes(partBody, transferEncoding);
-  return decodeBuffer(bytes, charset);
-}
-
-function findTextPart(raw, preferredType) {
-  const str = Buffer.isBuffer(raw) ? raw.toString("binary") : String(raw || "");
-  const headerEnd = str.search(/\r?\n\r?\n/);
-  const headerBlock = headerEnd >= 0 ? str.slice(0, headerEnd) : "";
-  const body = headerEnd >= 0 ? str.slice(headerEnd).replace(/^\r?\n\r?\n/, "") : str;
-
-  const boundaryMatch = headerBlock.match(/boundary="?([^"\r\n;]+)"?/i);
-  if (boundaryMatch) {
-    const parts = splitMimeParts(body, boundaryMatch[1]);
-    for (const part of parts) {
-      const trimmed = part.replace(/^\r?\n/, "");
-      if (!trimmed.trim()) continue;
-      const partHeaderEnd = trimmed.search(/\r?\n\r?\n/);
-      if (partHeaderEnd < 0) continue;
-      const partHeaders = trimmed.slice(0, partHeaderEnd);
-      const partBody = trimmed.slice(partHeaderEnd).replace(/^\r?\n\r?\n/, "");
-
-      if (/Content-Type:\s*multipart\//i.test(partHeaders)) {
-        const nested = findTextPart(Buffer.from(`${partHeaders}\r\n\r\n${partBody}`, "binary"), preferredType);
-        if (nested) return nested;
-        continue;
-      }
-
-      if (!new RegExp(`Content-Type:\\s*${preferredType}`, "i").test(partHeaders)) continue;
-      return decodeMimePart(partHeaders, partBody);
-    }
-    return null;
-  }
-
-  if (new RegExp(`Content-Type:\\s*${preferredType}`, "i").test(headerBlock)) {
-    return decodeMimePart(headerBlock, body);
-  }
-  return null;
-}
-
-function extractBody(raw, maxLen) {
-  let body = findTextPart(raw, "text/plain") || findTextPart(raw, "text/html") || "";
-
-  if (!body) {
-    const str = Buffer.isBuffer(raw) ? raw.toString("binary") : String(raw || "");
-    const headerEnd = str.search(/\r?\n\r?\n/);
-    const headerBlock = headerEnd >= 0 ? str.slice(0, headerEnd) : "";
-    const rawBody = headerEnd >= 0 ? str.slice(headerEnd).replace(/^\r?\n\r?\n/, "") : str;
-    body = decodeMimePart(headerBlock, rawBody);
-  }
-
-  body = decodeBodyPart(body);
-  if (maxLen && body.length > maxLen) return `${body.slice(0, maxLen)}…`;
-  return body;
+  return {
+    subject: parsed.subject || "(件名なし)",
+    from: formatFromAddress(parsed.from),
+    body,
+  };
 }
 
 function createClient() {
@@ -200,12 +94,13 @@ async function fetchMailList(limit, offset) {
     const mails = [];
 
     for await (const message of client.fetch(pageUids, { envelope: true, source: true, uid: true }, { uid: true })) {
+      const parsed = message.source ? await parseMailSource(message.source, 100) : { subject: "(件名なし)", from: "", body: "" };
       mails.push({
         uid: message.uid,
-        subject: message.envelope?.subject || "(件名なし)",
-        from: formatFrom(message.envelope?.from),
+        subject: parsed.subject,
+        from: parsed.from,
         date: message.envelope?.date ? message.envelope.date.toISOString() : "",
-        snippet: message.source ? extractBody(message.source, 100) : "",
+        snippet: parsed.body,
       });
     }
 
@@ -222,12 +117,13 @@ async function fetchMailFull(uid) {
     }
     if (!message) return null;
 
+    const parsed = message.source ? await parseMailSource(message.source) : { subject: "(件名なし)", from: "", body: "" };
     return {
       uid: message.uid,
-      subject: message.envelope?.subject || "(件名なし)",
-      from: formatFrom(message.envelope?.from),
+      subject: parsed.subject,
+      from: parsed.from,
       date: message.envelope?.date ? message.envelope.date.toISOString() : "",
-      body: message.source ? extractBody(message.source) : "",
+      body: parsed.body,
     };
   });
 }
