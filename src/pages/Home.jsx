@@ -304,6 +304,49 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
     setTimeout(() => { window.open("https://chatgpt.com", "_blank"); }, 1500);
   };
 
+  const openMailInbox = () => {
+    const ua = navigator.userAgent || "";
+    const isIOS = /iPad|iPhone|iPod/.test(ua);
+    const isAndroid = /Android/.test(ua);
+    let appOpened = false;
+
+    const onVisibilityChange = () => {
+      if (document.hidden) appOpened = true;
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    const cleanup = () => document.removeEventListener("visibilitychange", onVisibilityChange);
+
+    const tryFallback = (url) => {
+      setTimeout(() => {
+        cleanup();
+        if (!appOpened && !document.hidden) {
+          window.location.href = url;
+        }
+      }, 800);
+    };
+
+    if (isIOS) {
+      window.location.href = "ms-outlook://emails/inbox";
+      tryFallback("message://");
+      return;
+    }
+
+    if (isAndroid) {
+      window.location.href = "ms-outlook://emails/inbox";
+      tryFallback("intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.APP_EMAIL;end");
+      return;
+    }
+
+    window.location.href = "ms-outlook://emails/inbox";
+    setTimeout(() => {
+      cleanup();
+      if (!appOpened && !document.hidden) {
+        window.open("https://outlook.office.com/mail/inbox", "_blank");
+      }
+    }, 1500);
+  };
+
   const openAiAssist = (mode, context) => {
     setAiAssist({ mode, context });
   };
@@ -642,7 +685,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <button onClick={() => fetchMails(true)} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 14, cursor: "pointer" }}>{mailRefreshing ? "⏳" : "🔄"}</button>
-            <button onClick={() => { window.location.href = "https://secure.sakura.ad.jp/rs/mail/"; }} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>メールを開く</button>
+            <button onClick={openMailInbox} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>メールを開く</button>
           </div>
         </div>
 
