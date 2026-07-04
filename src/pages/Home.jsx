@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from "react";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { Modal, Inp } from "../components/UI";
 import AiAssistModal from "../components/AiAssistModal";
-import { PRIO } from "../lib/constants";
 import { supabase } from "../lib/supabase";
 
 const NAVY = "#122a4a";
@@ -607,19 +606,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           ))}
         </div>
       )}
-
-      <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", marginBottom: 10 }}>直近のタスク</div>
-      <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
-        {pending.slice(0, 3).map((t, i) => (
-          <div key={t.id} style={{ padding: "12px 16px", borderBottom: i < Math.min(pending.length, 3) - 1 ? "1px solid #F3F4F6" : "none", display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: PRIO[t.prio]?.c || "#9CA3AF", flexShrink: 0 }} />
-            <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#1F2937" }}>{t.title}</div>
-            {t.due && <div style={{ fontSize: 11, color: "#9CA3AF" }}>{t.due}</div>}
-          </div>
-        ))}
-        {pending.length === 0 && <div style={{ padding: 16, color: "#9CA3AF", fontSize: 13, textAlign: "center" }}>タスクはありません</div>}
-        <button onClick={() => nav("tasks")} style={{ width: "100%", padding: 10, background: "#F9FAFB", border: "none", fontSize: 12, color: cust.c1, fontWeight: 700, cursor: "pointer", borderTop: "1px solid #F3F4F6" }}>すべて見る →</button>
-      </div>
 
       <div style={{ marginTop: 24 }}>
         <button onClick={() => setShowStorage(p => !p)} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 0" }}>
