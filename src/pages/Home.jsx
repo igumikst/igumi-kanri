@@ -642,7 +642,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <button onClick={() => fetchMails(true)} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 14, cursor: "pointer" }}>{mailRefreshing ? "⏳" : "🔄"}</button>
-            <button onClick={() => { window.location.href = "https://mail.sakura.ne.jp/"; }} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>メールを開く</button>
+            <button onClick={() => { window.location.href = "https://secure.sakura.ad.jp/rs/mail/"; }} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>メールを開く</button>
           </div>
         </div>
 
