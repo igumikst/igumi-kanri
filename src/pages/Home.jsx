@@ -17,12 +17,6 @@ const CAT_COLOR_MAP = {
 };
 const getCatColor = (sc) => sc.color || CAT_COLOR_MAP[sc.category] || "#6b7280";
 
-const fmtCallDate = (iso) => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-};
-
 const fmtBlogDate = (dateStr) => {
   if (!dateStr) return "";
   const d = new Date(dateStr);
@@ -67,13 +61,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
 
   const pending = tks.filter(t => !t.done);
   const active = pjs.filter(p => p.status !== "完了" && p.status !== "中断");
-  const unsubmitted = pjs.filter(p => p.status === "進行中" || p.status === "着工");
-  const estimateStatus = {
-    "作成中": pjs.filter(p => p.status === "見積中").length,
-    "提出待ち": pjs.filter(p => p.status === "発注待ち").length,
-    "回答待ち": pjs.filter(p => p.status === "着工").length,
-    "受注": pjs.filter(p => p.status === "進行中").length,
-  };
   const pendingCalls = (calls || []).filter(c => c.status === "未対応");
   const pendingCallsCount = pendingCalls.length;
   const todayLabel = new Date().toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "short" });
@@ -496,53 +483,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
         </div>
       )}
 
-      {unsubmitted.length > 0 && (
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>
-              未提出の報告書 <span style={{ background: "#EF4444", color: "#fff", borderRadius: 10, padding: "1px 8px", fontSize: 11 }}>{unsubmitted.length}件</span>
-            </div>
-            <button onClick={() => nav("projects")} style={{ fontSize: 11, color: "#6366F1", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>すべて見る →</button>
-          </div>
-          <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-            {unsubmitted.slice(0, 3).map((p, i) => (
-              <div key={p.id} onClick={() => nav("projects")} style={{ padding: "12px 16px", borderBottom: i < Math.min(unsubmitted.length, 3) - 1 ? "1px solid #F3F4F6" : "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>📄</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: "#1F2937" }}>{p.name}</div>
-                  <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1 }}>担当：{p.inCharge || "未設定"}</div>
-                </div>
-                <div style={{ fontSize: 12, color: "#9CA3AF" }}>›</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <div style={{ background: "#fff", borderRadius: 14, padding: "14px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)", cursor: "pointer" }} onClick={() => nav("calls")}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: NAVY, marginBottom: 10 }}>📞 未対応の電話</div>
-          {pendingCalls.length === 0 ? (
-            <div style={{ fontSize: 12, color: "#9ca3af", textAlign: "center", padding: "12px 0" }}>未対応はありません</div>
-          ) : pendingCalls.slice(0, 2).map((c, i) => (
-            <div key={c.id} style={{ padding: "8px 0", borderTop: i > 0 ? "1px solid #f3f4f6" : "none" }}>
-              <div style={{ fontSize: 10, color: "#9ca3af" }}>{fmtCallDate(c.received_at)}</div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginTop: 2 }}>{c.phone_number || "番号不明"}</div>
-            </div>
-          ))}
-        </div>
-        <div style={{ background: "#fff", borderRadius: 14, padding: "14px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: NAVY, marginBottom: 10 }}>📝 見積ステータス</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-            {Object.entries(estimateStatus).map(([label, count]) => (
-              <div key={label} onClick={() => nav("projects")} style={{ background: "#f8fafc", borderRadius: 10, padding: "8px 6px", textAlign: "center", cursor: "pointer" }}>
-                <div style={{ fontSize: 18, fontWeight: 900, color: SCHEDULE_BLUE }}>{count}</div>
-                <div style={{ fontSize: 9, color: "#6b7280", marginTop: 2 }}>{label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
     </div>
   );
 
@@ -585,6 +525,19 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           )}
         </div>
       )}
+
+      <div style={{ background: "linear-gradient(135deg, #1e3a5f, #2563eb)", borderRadius: 14, padding: "14px 18px", marginBottom: 16, boxShadow: "0 4px 12px rgba(37,99,235,0.25)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <span style={{ fontSize: 20 }}>📧</span>
+          <span style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>メール</span>
+        </div>
+        <button
+          onClick={() => { window.location.href = "mailto:info@igumi-inc.jp"; }}
+          style={{ width: "100%", background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 10, padding: "10px 16px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+        >
+          メールを開く
+        </button>
+      </div>
 
       {boardPosts.length > 0 && (
         <div style={{ marginBottom: 16 }}>
