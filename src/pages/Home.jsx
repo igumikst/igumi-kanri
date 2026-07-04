@@ -29,6 +29,13 @@ const fmtBlogDate = (dateStr) => {
   return d.toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" });
 };
 
+const fmtMailDate = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+
 const Pill = ({ children, onClick }) => (
   <button
     onClick={(e) => { e.stopPropagation(); onClick?.(e); }}
@@ -57,6 +64,10 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const [todaySchedules, setTodaySchedules] = useState([]);
   const [detailSc, setDetailSc] = useState(null);
   const [blogPosts, setBlogPosts] = useState([]);
+  const [mails, setMails] = useState([]);
+  const [mailLoading, setMailLoading] = useState(true);
+  const [mailError, setMailError] = useState("");
+  const [mailRefreshing, setMailRefreshing] = useState(false);
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
 
@@ -169,6 +180,35 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
     if (data) setCalls(data);
     setRefreshing(false);
   };
+
+  const fetchMails = async (isRefresh = false) => {
+    if (isRefresh) setMailRefreshing(true);
+    else setMailLoading(true);
+    setMailError("");
+    try {
+      const res = await fetch("/api/mail-feed");
+      const json = await res.json();
+      if (json.error && !json.mails?.length) {
+        setMails([]);
+        setMailError("メールを取得できませんでした");
+      } else {
+        setMails(json.mails || []);
+        if (!json.mails?.length && json.error) {
+          setMailError("メールを取得できませんでした");
+        }
+      }
+    } catch (_) {
+      setMails([]);
+      setMailError("メールを取得できませんでした");
+    } finally {
+      setMailLoading(false);
+      setMailRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMails();
+  }, []);
 
   const loadPw = async () => {
     if (pwLoaded) return savedPw;
@@ -551,6 +591,40 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           )}
         </div>
       )}
+
+      <div style={{ background: "linear-gradient(135deg, #1e3a5f, #2563eb)", borderRadius: 14, padding: "14px 18px", marginBottom: 16, boxShadow: "0 4px 12px rgba(37,99,235,0.25)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
+            <span style={{ fontSize: 20 }}>📧</span>
+            <span style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>メール</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button onClick={() => fetchMails(true)} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 14, cursor: "pointer" }}>{mailRefreshing ? "⏳" : "🔄"}</button>
+            <button onClick={() => { window.location.href = "mailto:info@igumi-inc.jp"; }} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>メールを開く</button>
+          </div>
+        </div>
+
+        {mailLoading ? (
+          <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, textAlign: "center", padding: "12px 0" }}>取得中...</div>
+        ) : mailError ? (
+          <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, textAlign: "center", padding: "12px 0" }}>{mailError}</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {mails.map((mail, i) => (
+              <div key={`${mail.date}-${mail.subject}-${i}`} style={{ background: "rgba(255,255,255,0.1)", borderRadius: 10, padding: "10px 12px" }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{mail.subject}</div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 4 }}>
+                  <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{mail.from}</span>
+                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", flexShrink: 0 }}>{fmtMailDate(mail.date)}</span>
+                </div>
+                {mail.snippet && (
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginTop: 6, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", lineHeight: 1.4 }}>{mail.snippet}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {boardPosts.length > 0 && (
         <div style={{ marginBottom: 16 }}>
