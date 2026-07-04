@@ -866,8 +866,8 @@ async function buildUnionPhotoSheets(wb, mincho, thin, hair) {
       noValCell.value=globalNo;noValCell.font={name:'ＭＳ 明朝',size:14};
       noValCell.alignment={vertical:'middle'};noValCell.border={bottom:thin};
 
-      const capLines=splitCaption(p.caption||'',8);
-      for(let li=0; li<8; li++){
+      const capLines=splitCaption(p.caption||'');
+      for(let li=0; li<3; li++){
         const r1=blk.captStart+li;
         ws.mergeCells(r1,10,r1,12);
         const cell=ws.getCell(r1,10);
@@ -913,14 +913,16 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
     const ws=wb.addWorksheet(String(pg+1).padStart(3,'0'));
     ws.pageSetup.paperSize=9;ws.pageSetup.orientation='portrait';
     ws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
-    // scale=91で縮小（fitToPageはExcelJSで効かない。ライオンズOKファイルと同じ方式）
-    ws.pageSetup.scale=91;
+    ws.pageSetup.printArea='A1:L37';
+    ws.pageSetup.fitToPage=true;
+    ws.pageSetup.fitToWidth=1;
+    ws.pageSetup.fitToHeight=1;
 
     // 列幅
     const photoCols={A:2.875,B:9,C:9,D:9,E:9,F:9,G:9,H:11.875,I:4.5,J:9,K:7,L:7};
     Object.entries(photoCols).forEach(([c,w])=>{ws.getColumn(c).width=w;});
 
-    // 行高（scale=91で91%縮小されるので30ptでOK）
+    // 行高
     [3,15,27].forEach(r=>{ws.getRow(r).height=17.25;});
     [4,5,6,7,8,9,10,11,
      16,17,18,19,20,21,22,23,
@@ -952,8 +954,8 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
       noValCell.border={bottom:thin};
 
       // キャプション欄（J:L結合・各行・下線hair）→ 実物通り
-      const capLines=splitCaption(p.caption||'',8);
-      for(let li=0;li<8;li++){
+      const capLines=splitCaption(p.caption||'');
+      for(let li=0;li<3;li++){
         const r1=blk.captStart+li;
         if(r1>blk.captEnd)break;
         ws.mergeCells(r1,10,r1,12);
@@ -1042,10 +1044,15 @@ function toJpegBase64(dataUrl,q){
   });
 }
 
-// Enterで改行した行をそのまま1行ずつセルに入れる（12文字強制切りなし）
-function splitCaption(text,maxLines){
-  if(!text)return[''];
-  const lines=text.split(/\n/).slice(0,maxLines);
+// キャプションをmaxLen文字ごとに分割（最大3行）
+function splitCaption(caption,maxLen=12){
+  if(!caption)return[''];
+  const maxLines=3;
+  const text=String(caption);
+  const lines=[];
+  for(let i=0;i<text.length&&lines.length<maxLines;i+=maxLen){
+    lines.push(text.slice(i,i+maxLen));
+  }
   return lines.length>0?lines:[''];
 }
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
