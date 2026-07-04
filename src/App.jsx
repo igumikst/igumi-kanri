@@ -21,6 +21,8 @@ import LineSettings from "./pages/LineSettings";
 import SystemManual from "./pages/SystemManual";
 import UserManual from "./pages/UserManual";
 import Schedule from "./pages/Schedule";
+import AiKnowledge from "./pages/AiKnowledge";
+import Reports from "./pages/Reports";
 
 export default function App() {
   const [page, setPage] = useState("home");
@@ -178,5 +180,7 @@ export default function App() {
   if (page === "systemmanual") return <SystemManual {...commonProps} />;
   if (page === "usermanual") return <UserManual {...commonProps} />;
   if (page === "schedule") return <Schedule nav={nav} />;
+  if (page === "aiknowledge") return <AiKnowledge {...commonProps} />;
+  if (page === "reports") return <Reports {...commonProps} />;
   return null;
 }

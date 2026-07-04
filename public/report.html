@@ -43,6 +43,7 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:12px 16px;border-radius:10px;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;width:100%}
 .btn:active{transform:scale(.97);opacity:.88}
 .btn-green{background:var(--green);color:#fff;font-size:16px;padding:15px}
+.btn-blue{background:var(--blue);color:#fff;font-size:15px;padding:13px}
 .btn-ghost{background:#F3F4F6;color:#374151}
 .btn-red-soft{background:#FEF2F2;color:var(--red);border:1.5px solid #FECACA}
 .btn-sm{padding:7px 12px;font-size:12px;border-radius:8px}
@@ -103,6 +104,8 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
 .modal-handle{width:40px;height:4px;background:#E5E7EB;border-radius:2px;margin:0 auto 16px}
 .modal-ttl{font-size:16px;font-weight:800;margin-bottom:10px}
 .modal-msg{font-size:13px;color:var(--muted);margin-bottom:18px;line-height:1.7}
+.ai-result{white-space:pre-wrap;font-size:13px;color:var(--text);line-height:1.75;background:#F8FAFC;border:1px solid var(--border);border-radius:10px;padding:14px;max-height:55vh;overflow-y:auto}
+.ai-review-ov{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:310;display:flex;align-items:flex-end}
 .divider{height:1px;background:var(--border);margin:12px 0}
 .badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;background:#FFF7ED;color:var(--orange)}
 .filename-note{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.7}
@@ -230,7 +233,9 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
   <!-- 出力・保存 -->
   <div class="card" id="card-export">
     <div class="card-ttl">📤 出力・保存</div>
+    <button class="btn btn-blue" onclick="aiReviewReport()" style="margin-bottom:10px">🧭 AIに精査してもらう</button>
     <button class="btn btn-green" onclick="exportXlsx()" style="margin-bottom:10px">📊 XLSXで報告書を出力</button>
+    <button class="btn btn-ghost" onclick="saveToArchive()" style="margin-bottom:10px">💾 保管箱に保存</button>
     <div class="divider"></div>
     <p style="font-size:11px;color:var(--muted);margin-bottom:10px">作業データを保存・読み込みできます（写真含む）</p>
     <div style="display:flex;gap:8px">
@@ -260,8 +265,19 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
     </div>
   </div>
 </div>
+<div class="ai-review-ov" id="ai-review-modal" style="display:none" onclick="if(event.target===this)closeAiReviewModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-ttl">🧭 AI精査結果</div>
+    <div class="ai-result" id="ai-review-body"></div>
+    <button class="btn btn-ghost" onclick="closeAiReviewModal()" style="margin-top:14px">閉じる</button>
+  </div>
+</div>
 
 <script>
+const SUPABASE_URL = 'https://zejpcwpoqcncnwlwhnjv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InplanBjd3BvcWNuY253bHdobmp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NDQ2NDIsImV4cCI6MjA5NTMyMDY0Mn0.gsr0v1yKRwmHHTQdpUw7TXeOPuH_N5hzQxibK8nnS_I';
+
 let photos=[], nextId=1, quality=0.70, reportType='normal';
 let dragSrcId=null, touchDragId=null, touchClone=null;
 
@@ -850,8 +866,8 @@ async function buildUnionPhotoSheets(wb, mincho, thin, hair) {
       noValCell.value=globalNo;noValCell.font={name:'ＭＳ 明朝',size:14};
       noValCell.alignment={vertical:'middle'};noValCell.border={bottom:thin};
 
-      const capLines=splitCaption(p.caption||'',8);
-      for(let li=0; li<8; li++){
+      const capLines=splitCaption(p.caption||'');
+      for(let li=0; li<3; li++){
         const r1=blk.captStart+li;
         ws.mergeCells(r1,10,r1,12);
         const cell=ws.getCell(r1,10);
@@ -897,14 +913,16 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
     const ws=wb.addWorksheet(String(pg+1).padStart(3,'0'));
     ws.pageSetup.paperSize=9;ws.pageSetup.orientation='portrait';
     ws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
-    // scale=91で縮小（fitToPageはExcelJSで効かない。ライオンズOKファイルと同じ方式）
-    ws.pageSetup.scale=91;
+    ws.pageSetup.printArea='A1:L37';
+    ws.pageSetup.fitToPage=true;
+    ws.pageSetup.fitToWidth=1;
+    ws.pageSetup.fitToHeight=1;
 
     // 列幅
     const photoCols={A:2.875,B:9,C:9,D:9,E:9,F:9,G:9,H:11.875,I:4.5,J:9,K:7,L:7};
     Object.entries(photoCols).forEach(([c,w])=>{ws.getColumn(c).width=w;});
 
-    // 行高（scale=91で91%縮小されるので30ptでOK）
+    // 行高
     [3,15,27].forEach(r=>{ws.getRow(r).height=17.25;});
     [4,5,6,7,8,9,10,11,
      16,17,18,19,20,21,22,23,
@@ -936,8 +954,8 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
       noValCell.border={bottom:thin};
 
       // キャプション欄（J:L結合・各行・下線hair）→ 実物通り
-      const capLines=splitCaption(p.caption||'',8);
-      for(let li=0;li<8;li++){
+      const capLines=splitCaption(p.caption||'');
+      for(let li=0;li<3;li++){
         const r1=blk.captStart+li;
         if(r1>blk.captEnd)break;
         ws.mergeCells(r1,10,r1,12);
@@ -1026,14 +1044,115 @@ function toJpegBase64(dataUrl,q){
   });
 }
 
-// Enterで改行した行をそのまま1行ずつセルに入れる（12文字強制切りなし）
-function splitCaption(text,maxLines){
-  if(!text)return[''];
-  const lines=text.split(/\n/).slice(0,maxLines);
+// キャプションをmaxLen文字ごとに分割（最大3行）
+function splitCaption(caption,maxLen=12){
+  if(!caption)return[''];
+  const maxLines=3;
+  const text=String(caption);
+  const lines=[];
+  for(let i=0;i<text.length&&lines.length<maxLines;i+=maxLen){
+    lines.push(text.slice(i,i+maxLen));
+  }
   return lines.length>0?lines:[''];
 }
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+
+function getReportTypeLabel(){return reportType==='union'?'ユニオン':reportType==='tama'?'多摩':'通常';}
+
+function gatherReportText(){
+  const lines=[];
+  lines.push(`【報告書タイプ】${getReportTypeLabel()}`);
+  if(reportType==='union'){
+    lines.push(`【建築物名称】${document.getElementById('u-building').value.trim()}`);
+    lines.push(`【住所】${document.getElementById('u-address').value.trim()}`);
+    lines.push(`【工事名称】${document.getElementById('u-workname').value.trim()}`);
+    lines.push(`【作業実施日】${document.getElementById('u-date').value}`);
+    lines.push(`【作業者】${document.getElementById('u-worker').value.trim()}`);
+    lines.push(`【会社名】${document.getElementById('u-company').value.trim()}`);
+    lines.push(`【作業内容】\n${document.getElementById('u-content').value.trim()}`);
+  }else{
+    lines.push(`【物件名】${document.getElementById('prop-name').value.trim()}`);
+    lines.push(`【住所】${document.getElementById('prop-address').value.trim()}`);
+    lines.push(`【件名】${document.getElementById('work-name').value.trim()}`);
+    lines.push(`【作業日】${document.getElementById('work-date').value}`);
+    lines.push(`【施工者】${document.getElementById('worker').value.trim()}`);
+    if(reportType==='tama') lines.push(`【内容】${document.getElementById('work-content').value.trim()}`);
+  }
+  const fn=document.getElementById('filename').value.trim();
+  if(fn) lines.push(`【ファイル名】${fn}`);
+  if(photos.length>0){
+    lines.push('\n【写真キャプション一覧】');
+    photos.forEach((p,i)=>lines.push(`No.${i+1}: ${p.caption||'（キャプションなし）'}`));
+  }else{
+    lines.push('\n【写真キャプション一覧】（写真なし）');
+  }
+  return lines.join('\n');
+}
+
+async function aiReviewReport(){
+  const summary=gatherReportText();
+  showLoading('AIが精査中...','報告書の内容を確認しています');
+  try{
+    const res=await fetch('/api/ai-assist',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        mode:'review',
+        context:'report',
+        messages:[{role:'user',content:'以下の報告書を精査してください：\n'+summary}]
+      })
+    });
+    const data=await res.json();
+    hideLoading();
+    if(!res.ok||!data.text){showToast('精査に失敗しました');return;}
+    document.getElementById('ai-review-body').textContent=data.text;
+    document.getElementById('ai-review-modal').style.display='flex';
+  }catch(_){hideLoading();showToast('精査に失敗しました');}
+}
+
+function closeAiReviewModal(){document.getElementById('ai-review-modal').style.display='none';}
+
+async function saveToArchive(){
+  const content=gatherReportText();
+  let propertyName='',title='',createdBy='';
+  if(reportType==='union'){
+    propertyName=document.getElementById('u-building').value.trim();
+    const workName=document.getElementById('u-workname').value.trim();
+    createdBy=document.getElementById('u-worker').value.trim();
+    title=document.getElementById('filename').value.trim()||(propertyName&&workName?`${propertyName}_${workName}`:'');
+  }else{
+    propertyName=document.getElementById('prop-name').value.trim();
+    const workName=document.getElementById('work-name').value.trim();
+    createdBy=document.getElementById('worker').value.trim();
+    title=document.getElementById('filename').value.trim()||(propertyName&&workName?`${propertyName}_${workName}`:'');
+  }
+  if(!title){showToast('⚠️ 物件名と件名（またはファイル名）を入力してください');return;}
+  showLoading('保存中...','保管箱に登録しています');
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/reports`,{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'apikey':SUPABASE_ANON_KEY,
+        'Authorization':`Bearer ${SUPABASE_ANON_KEY}`,
+        'Prefer':'return=minimal'
+      },
+      body:JSON.stringify({
+        title,
+        report_type:reportType,
+        property_name:propertyName,
+        content,
+        source:'report_tool',
+        created_by:createdBy
+      })
+    });
+    hideLoading();
+    if(!res.ok){showToast('保存に失敗しました');return;}
+    showToast('保管箱に保存しました！');
+  }catch(_){hideLoading();showToast('保存に失敗しました');}
+}
+
 function showLoading(t,s){document.getElementById('loading').style.display='flex';document.getElementById('loading-t').textContent=t||'処理中...';document.getElementById('loading-s').textContent=s||'';}
 function hideLoading(){document.getElementById('loading').style.display='none';}
 function showToast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),3200);}

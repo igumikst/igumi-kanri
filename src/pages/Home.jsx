@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { Modal, Inp } from "../components/UI";
-import { PRIO } from "../lib/constants";
+import AiAssistModal from "../components/AiAssistModal";
 import { supabase } from "../lib/supabase";
 
 const NAVY = "#122a4a";
@@ -15,12 +15,6 @@ const CAT_COLOR_MAP = {
   "外出": "#92400e", "休み": "#db2777", "その他": "#6b7280",
 };
 const getCatColor = (sc) => sc.color || CAT_COLOR_MAP[sc.category] || "#6b7280";
-
-const fmtCallDate = (iso) => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-};
 
 const fmtBlogDate = (dateStr) => {
   if (!dateStr) return "";
@@ -50,8 +44,11 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const [showInfo, setShowInfo] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [pwModal, setPwModal] = useState(false);
+  const [akPwModal, setAkPwModal] = useState(false);
   const [pwInput, setPwInput] = useState("");
+  const [akPwInput, setAkPwInput] = useState("");
   const [pwErr, setPwErr] = useState("");
+  const [akPwErr, setAkPwErr] = useState("");
   const [finUnlocked, setFinUnlocked] = useState(false);
   const [savedPw, setSavedPw] = useState(null);
   const [pwLoaded, setPwLoaded] = useState(false);
@@ -68,18 +65,12 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const [mailLoading, setMailLoading] = useState(true);
   const [mailError, setMailError] = useState("");
   const [mailRefreshing, setMailRefreshing] = useState(false);
+  const [aiAssist, setAiAssist] = useState(null);
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
 
   const pending = tks.filter(t => !t.done);
   const active = pjs.filter(p => p.status !== "完了" && p.status !== "中断");
-  const unsubmitted = pjs.filter(p => p.status === "進行中" || p.status === "着工");
-  const estimateStatus = {
-    "作成中": pjs.filter(p => p.status === "見積中").length,
-    "提出待ち": pjs.filter(p => p.status === "発注待ち").length,
-    "回答待ち": pjs.filter(p => p.status === "着工").length,
-    "受注": pjs.filter(p => p.status === "進行中").length,
-  };
   const pendingCalls = (calls || []).filter(c => c.status === "未対応");
   const pendingCallsCount = pendingCalls.length;
   const todayLabel = new Date().toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "short" });
@@ -116,6 +107,37 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
       }
     };
     fetch7Days();
+  }, []);
+
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtmlLang = html.lang;
+    const prevHtmlTranslate = html.getAttribute("translate");
+    const prevBodyTranslate = body.getAttribute("translate");
+
+    html.lang = "ja";
+    html.setAttribute("translate", "no");
+    body.setAttribute("translate", "no");
+
+    let meta = document.querySelector('meta[name="google"][content="notranslate"]');
+    let addedMeta = false;
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.name = "google";
+      meta.content = "notranslate";
+      document.head.appendChild(meta);
+      addedMeta = true;
+    }
+
+    return () => {
+      html.lang = prevHtmlLang;
+      if (prevHtmlTranslate != null) html.setAttribute("translate", prevHtmlTranslate);
+      else html.removeAttribute("translate");
+      if (prevBodyTranslate != null) body.setAttribute("translate", prevBodyTranslate);
+      else body.removeAttribute("translate");
+      if (addedMeta) meta.remove();
+    };
   }, []);
 
   useEffect(() => {
@@ -223,14 +245,29 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
     else { setPwModal(true); setPwInput(""); setPwErr(""); }
   };
 
+  const handleAiKnowledgeClick = async () => {
+    const pw = await loadPw();
+    if (!pw || finUnlocked) { nav("aiknowledge"); }
+    else { setAkPwModal(true); setAkPwInput(""); setAkPwErr(""); }
+  };
+
   const handleUnlock = () => {
     if (pwInput === savedPw) { setFinUnlocked(true); setPwModal(false); setPwInput(""); nav("finance"); }
     else setPwErr("パスワードが違います");
   };
 
+  const handleAkUnlock = () => {
+    if (akPwInput === savedPw) { setFinUnlocked(true); setAkPwModal(false); setAkPwInput(""); nav("aiknowledge"); }
+    else setAkPwErr("パスワードが違います");
+  };
+
   const openChatGPT = () => {
     window.location.href = "chatgpt://";
     setTimeout(() => { window.open("https://chatgpt.com", "_blank"); }, 1500);
+  };
+
+  const openAiAssist = (mode, context) => {
+    setAiAssist({ mode, context });
   };
 
   const handleTileClick = (t) => {
@@ -389,7 +426,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
     );
   };
 
-  const FeatureCard = ({ icon, title, desc, bg, accent, onCardClick, pills }) => (
+  const FeatureCard = ({ icon, title, desc, bg, accent, onCardClick, pills, extraLink }) => (
     <div onClick={onCardClick} style={{ background: bg, borderRadius: 14, padding: "14px 16px", marginBottom: 10, cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.04)", borderLeft: `4px solid ${accent}` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
         <span style={{ fontSize: 26 }}>{icon}</span>
@@ -399,7 +436,10 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
         </div>
         <span style={{ fontSize: 18, color: "#9ca3af" }}>›</span>
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{pills}</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+        {pills}
+        {extraLink}
+      </div>
     </div>
   );
 
@@ -431,6 +471,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           {item("🏢 取引先", () => drawerNav(() => nav("companies")))}
           {item("📌 掲示板", () => drawerNav(() => nav("board")))}
           {item("📞 電話受付", () => drawerNav(() => nav("calls")))}
+          {item("📦 報告書保管箱", () => drawerNav(() => nav("reports")))}
           <div style={sectionTitle}>外部ツール・サービス</div>
           {item("📧 メール", () => drawerNav(() => window.open("https://mail.google.com", "_blank")))}
           {item("🏗 コンクルー", () => drawerNav(() => window.open("https://conkuru.jp", "_blank")))}
@@ -439,6 +480,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           {item("📅 Googleカレンダー", () => drawerNav(() => window.open("https://calendar.google.com", "_blank")))}
           <div style={sectionTitle}>社内限定</div>
           {item("🔒 財務/書類", () => drawerNav(() => handleFinanceClick()), savedPw ? <span style={{ fontSize: 12 }}>{finUnlocked ? "🔓" : "🔒"}</span> : null)}
+          {item("🔒 AIナレッジ", () => drawerNav(() => handleAiKnowledgeClick()), savedPw ? <span style={{ fontSize: 12 }}>{finUnlocked ? "🔓" : "🔒"}</span> : null)}
           <div style={sectionTitle}>設定・その他</div>
           {item("🤖 AI補助", () => drawerNav(() => nav("ai")))}
           {item("🎣 釣り情報", () => drawerNav(() => nav("fishing")))}
@@ -457,16 +499,25 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
         icon="📸" title="報告書作成" desc="現場の記録を作成・管理します" bg="#e8f7f0" accent="#22a06b"
         onCardClick={() => window.open("/report.html", "_blank")}
         pills={[
-          <Pill key="m" onClick={() => alert("準備中")}>🧭 AIメンター</Pill>,
-          <Pill key="r" onClick={() => alert("準備中")}>🛡️ AIレビュー</Pill>,
+          <Pill key="m" onClick={() => openAiAssist("mentor", "report")}>🧭 AIメンター</Pill>,
+          <Pill key="r" onClick={() => openAiAssist("review", "report")}>🛡️ AIレビュー</Pill>,
         ]}
+        extraLink={
+          <button
+            key="archive"
+            onClick={(e) => { e.stopPropagation(); nav("reports"); }}
+            style={{ padding: "5px 10px", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", background: "rgba(255,255,255,0.85)", fontSize: 11, fontWeight: 700, color: "#1a56a0", cursor: "pointer", whiteSpace: "nowrap" }}
+          >
+            📦 保管箱
+          </button>
+        }
       />
       <FeatureCard
         icon="📝" title="見積書作成" desc="見積書の作成・管理を行います" bg="#fef3e8" accent="#e8862e"
         onCardClick={() => nav("estimate")}
         pills={[
-          <Pill key="m" onClick={() => alert("準備中")}>🧭 AIメンター</Pill>,
-          <Pill key="r" onClick={() => alert("準備中")}>🛡️ AIレビュー</Pill>,
+          <Pill key="m" onClick={() => openAiAssist("mentor", "estimate")}>🧭 AIメンター</Pill>,
+          <Pill key="r" onClick={() => openAiAssist("review", "estimate")}>🛡️ AIレビュー</Pill>,
         ]}
       />
       <FeatureCard
@@ -502,53 +553,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
         </div>
       )}
 
-      {unsubmitted.length > 0 && (
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>
-              未提出の報告書 <span style={{ background: "#EF4444", color: "#fff", borderRadius: 10, padding: "1px 8px", fontSize: 11 }}>{unsubmitted.length}件</span>
-            </div>
-            <button onClick={() => nav("projects")} style={{ fontSize: 11, color: "#6366F1", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>すべて見る →</button>
-          </div>
-          <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-            {unsubmitted.slice(0, 3).map((p, i) => (
-              <div key={p.id} onClick={() => nav("projects")} style={{ padding: "12px 16px", borderBottom: i < Math.min(unsubmitted.length, 3) - 1 ? "1px solid #F3F4F6" : "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>📄</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: "#1F2937" }}>{p.name}</div>
-                  <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1 }}>担当：{p.inCharge || "未設定"}</div>
-                </div>
-                <div style={{ fontSize: 12, color: "#9CA3AF" }}>›</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <div style={{ background: "#fff", borderRadius: 14, padding: "14px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)", cursor: "pointer" }} onClick={() => nav("calls")}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: NAVY, marginBottom: 10 }}>📞 未対応の電話</div>
-          {pendingCalls.length === 0 ? (
-            <div style={{ fontSize: 12, color: "#9ca3af", textAlign: "center", padding: "12px 0" }}>未対応はありません</div>
-          ) : pendingCalls.slice(0, 2).map((c, i) => (
-            <div key={c.id} style={{ padding: "8px 0", borderTop: i > 0 ? "1px solid #f3f4f6" : "none" }}>
-              <div style={{ fontSize: 10, color: "#9ca3af" }}>{fmtCallDate(c.received_at)}</div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginTop: 2 }}>{c.phone_number || "番号不明"}</div>
-            </div>
-          ))}
-        </div>
-        <div style={{ background: "#fff", borderRadius: 14, padding: "14px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: NAVY, marginBottom: 10 }}>📝 見積ステータス</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-            {Object.entries(estimateStatus).map(([label, count]) => (
-              <div key={label} onClick={() => nav("projects")} style={{ background: "#f8fafc", borderRadius: 10, padding: "8px 6px", textAlign: "center", cursor: "pointer" }}>
-                <div style={{ fontSize: 18, fontWeight: 900, color: SCHEDULE_BLUE }}>{count}</div>
-                <div style={{ fontSize: 9, color: "#6b7280", marginTop: 2 }}>{label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
     </div>
   );
 
@@ -695,19 +699,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
         </div>
       )}
 
-      <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", marginBottom: 10 }}>直近のタスク</div>
-      <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
-        {pending.slice(0, 3).map((t, i) => (
-          <div key={t.id} style={{ padding: "12px 16px", borderBottom: i < Math.min(pending.length, 3) - 1 ? "1px solid #F3F4F6" : "none", display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: PRIO[t.prio]?.c || "#9CA3AF", flexShrink: 0 }} />
-            <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#1F2937" }}>{t.title}</div>
-            {t.due && <div style={{ fontSize: 11, color: "#9CA3AF" }}>{t.due}</div>}
-          </div>
-        ))}
-        {pending.length === 0 && <div style={{ padding: 16, color: "#9CA3AF", fontSize: 13, textAlign: "center" }}>タスクはありません</div>}
-        <button onClick={() => nav("tasks")} style={{ width: "100%", padding: 10, background: "#F9FAFB", border: "none", fontSize: 12, color: cust.c1, fontWeight: 700, cursor: "pointer", borderTop: "1px solid #F3F4F6" }}>すべて見る →</button>
-      </div>
-
       <div style={{ marginTop: 24 }}>
         <button onClick={() => setShowStorage(p => !p)} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 0" }}>
           <span style={{ fontSize: 11, color: "#C4C4C4" }}>📦 Storage {fmtMB(totalMB)} / 1GB</span>
@@ -734,7 +725,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   );
 
   return (
-    <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: currentPage === 0 ? BG : "#F0F4F8", minHeight: "100vh", ...pp }}>
+    <div translate="no" className="notranslate" style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: currentPage === 0 ? BG : "#F0F4F8", minHeight: "100vh", ...pp }}>
       {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="home" nav={nav} setModal={setModal} setEc={setEc} SB_W={SB_W} />}
       {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} />}
       {(cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
@@ -843,7 +834,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
               onChange={e => { setPwInput(e.target.value); setPwErr(""); }}
               onKeyDown={e => e.key === "Enter" && handleUnlock()}
               placeholder="パスワード"
-              style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: pwErr ? "2px solid #DC2626" : "1.5px solid #E5E7EB", fontSize: 15, boxSizing: "border-box", marginBottom: 4, color: "#1F2937", outline: "none" }} />
+              style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: pwErr ? "2px solid #DC2626" : "1.5px solid #E5E7EB", fontSize: 15, boxSizing: "border-box", marginBottom: 4, color: "#1F2937", background: "#fff", outline: "none" }} />
             {pwErr && <div style={{ color: "#DC2626", fontSize: 12, marginBottom: 8 }}>{pwErr}</div>}
             <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
               <button onClick={() => { setPwModal(false); setPwInput(""); setPwErr(""); }} style={{ flex: 1, padding: 12, background: "#F3F4F6", border: "none", borderRadius: 10, fontWeight: 700, cursor: "pointer", color: "#374151" }}>キャンセル</button>
@@ -851,6 +842,33 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
             </div>
           </div>
         </div>
+      )}
+
+      {akPwModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: 300, boxSizing: "border-box" }}>
+            <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4, color: "#1F2937" }}>🔒 AIナレッジ管理</div>
+            <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>パスワードを入力してください</div>
+            <input type="password" value={akPwInput} autoFocus
+              onChange={e => { setAkPwInput(e.target.value); setAkPwErr(""); }}
+              onKeyDown={e => e.key === "Enter" && handleAkUnlock()}
+              placeholder="パスワード"
+              style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: akPwErr ? "2px solid #DC2626" : "1.5px solid #E5E7EB", fontSize: 15, boxSizing: "border-box", marginBottom: 4, color: "#1F2937", background: "#fff", outline: "none" }} />
+            {akPwErr && <div style={{ color: "#DC2626", fontSize: 12, marginBottom: 8 }}>{akPwErr}</div>}
+            <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+              <button onClick={() => { setAkPwModal(false); setAkPwInput(""); setAkPwErr(""); }} style={{ flex: 1, padding: 12, background: "#F3F4F6", border: "none", borderRadius: 10, fontWeight: 700, cursor: "pointer", color: "#374151" }}>キャンセル</button>
+              <button onClick={handleAkUnlock} style={{ flex: 1, padding: 12, background: NAVY, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, cursor: "pointer" }}>開く</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {aiAssist && (
+        <AiAssistModal
+          mode={aiAssist.mode}
+          context={aiAssist.context}
+          onClose={() => setAiAssist(null)}
+        />
       )}
 
       {editTile && (<Modal title="タイルを編集" onClose={() => setEditTile(null)} onSave={() => { saveTileConf(tileConf.map(t => t.key === editTile.key ? editTile : t)); setEditTile(null); }}>

@@ -56,8 +56,11 @@ export const PCSidebar = ({ cust, tileConf, pjs, cos, pending, page, nav, setMod
 
   // 🔒 財務パスワード関連のstate
   const [pwModal, setPwModal] = useState(null); // "unlock" | "set" | null
+  const [akPwModal, setAkPwModal] = useState(false);
   const [pwInput, setPwInput] = useState("");
+  const [akPwInput, setAkPwInput] = useState("");
   const [pwErr, setPwErr] = useState("");
+  const [akPwErr, setAkPwErr] = useState("");
   const [finUnlocked, setFinUnlocked] = useState(false);
   const [savedPw, setSavedPw] = useState(null); // Supabaseから読んだPW
   const [pwLoaded, setPwLoaded] = useState(false);
@@ -97,6 +100,30 @@ export const PCSidebar = ({ cust, tileConf, pjs, cos, pending, page, nav, setMod
       nav("finance");
     } else {
       setPwErr("パスワードが違います");
+    }
+  };
+
+  const handleAiKnowledgeClick = async () => {
+    const pw = savedPw ?? await loadPw();
+    if (!pw) {
+      nav("aiknowledge");
+    } else if (finUnlocked) {
+      nav("aiknowledge");
+    } else {
+      setAkPwModal(true);
+      setAkPwInput("");
+      setAkPwErr("");
+    }
+  };
+
+  const handleAkUnlock = () => {
+    if (akPwInput === savedPw) {
+      setFinUnlocked(true);
+      setAkPwModal(false);
+      setAkPwInput("");
+      nav("aiknowledge");
+    } else {
+      setAkPwErr("パスワードが違います");
     }
   };
 
@@ -156,6 +183,19 @@ export const PCSidebar = ({ cust, tileConf, pjs, cos, pending, page, nav, setMod
               </button>
             );
           })}
+          <button onClick={handleAiKnowledgeClick}
+            style={{ width: "100%", padding: "9px 16px", background: page === "aiknowledge" ? "rgba(255,255,255,0.13)" : "transparent", border: "none", color: "#fff", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, borderLeft: `3px solid ${page === "aiknowledge" ? "#1a56a0" : "transparent"}` }}>
+            <span style={{ fontSize: 18, flexShrink: 0 }}>🧠</span>
+            <div style={{ overflow: "hidden", flex: 1 }}>
+              <div style={{ fontSize: 12, fontWeight: page === "aiknowledge" ? 800 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 4 }}>
+                AIナレッジ
+                {savedPw && (
+                  <span style={{ fontSize: 11 }}>{finUnlocked ? "🔓" : "🔒"}</span>
+                )}
+              </div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", whiteSpace: "nowrap" }}>社内限定</div>
+            </div>
+          </button>
         </div>
         <div style={{ padding: "12px 16px", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
           <button onClick={() => { setEc({ ...cust }); setModal("cust"); }} style={{ width: "100%", padding: "8px 12px", background: "rgba(255,255,255,0.1)", border: "none", color: "rgba(255,255,255,0.7)", borderRadius: 8, fontSize: 11, cursor: "pointer", fontWeight: 600, textAlign: "left" }}>⚙ カスタマイズ</button>
@@ -179,6 +219,28 @@ export const PCSidebar = ({ cust, tileConf, pjs, cos, pending, page, nav, setMod
             <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
               <button onClick={() => { setPwModal(null); setPwInput(""); setPwErr(""); }} style={{ flex: 1, padding: 12, background: "#F3F4F6", border: "none", borderRadius: 10, fontWeight: 700, cursor: "pointer", color: "#374151" }}>キャンセル</button>
               <button onClick={handleUnlock} style={{ flex: 1, padding: 12, background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, cursor: "pointer" }}>開く</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🔒 AIナレッジ PW入力モーダル */}
+      {akPwModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: 300, boxSizing: "border-box" }}>
+            <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4, color: "#1F2937" }}>🔒 AIナレッジ管理</div>
+            <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>パスワードを入力してください</div>
+            <input
+              type="password" value={akPwInput} autoFocus
+              onChange={e => { setAkPwInput(e.target.value); setAkPwErr(""); }}
+              onKeyDown={e => e.key === "Enter" && handleAkUnlock()}
+              placeholder="パスワード"
+              style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: akPwErr ? "2px solid #DC2626" : "1.5px solid #E5E7EB", fontSize: 15, boxSizing: "border-box", marginBottom: 4, color: "#1F2937", background: "#fff", outline: "none" }}
+            />
+            {akPwErr && <div style={{ color: "#DC2626", fontSize: 12, marginBottom: 8 }}>{akPwErr}</div>}
+            <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+              <button onClick={() => { setAkPwModal(false); setAkPwInput(""); setAkPwErr(""); }} style={{ flex: 1, padding: 12, background: "#F3F4F6", border: "none", borderRadius: 10, fontWeight: 700, cursor: "pointer", color: "#374151" }}>キャンセル</button>
+              <button onClick={handleAkUnlock} style={{ flex: 1, padding: 12, background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, cursor: "pointer" }}>開く</button>
             </div>
           </div>
         </div>
