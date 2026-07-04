@@ -65,6 +65,10 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const [mailLoading, setMailLoading] = useState(true);
   const [mailError, setMailError] = useState("");
   const [mailRefreshing, setMailRefreshing] = useState(false);
+  const [mailLoadingMore, setMailLoadingMore] = useState(false);
+  const [mailTotal, setMailTotal] = useState(0);
+  const [mailDetail, setMailDetail] = useState(null);
+  const [mailDetailLoading, setMailDetailLoading] = useState(false);
   const [aiAssist, setAiAssist] = useState(null);
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
@@ -208,23 +212,57 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
     else setMailLoading(true);
     setMailError("");
     try {
-      const res = await fetch("/api/mail-feed");
+      const res = await fetch("/api/mail-feed?limit=5&offset=0");
       const json = await res.json();
       if (json.error && !json.mails?.length) {
         setMails([]);
+        setMailTotal(0);
         setMailError("メールを取得できませんでした");
       } else {
         setMails(json.mails || []);
+        setMailTotal(json.total ?? (json.mails?.length || 0));
         if (!json.mails?.length && json.error) {
           setMailError("メールを取得できませんでした");
         }
       }
     } catch (_) {
       setMails([]);
+      setMailTotal(0);
       setMailError("メールを取得できませんでした");
     } finally {
       setMailLoading(false);
       setMailRefreshing(false);
+    }
+  };
+
+  const loadMoreMails = async () => {
+    setMailLoadingMore(true);
+    try {
+      const res = await fetch(`/api/mail-feed?limit=5&offset=${mails.length}`);
+      const json = await res.json();
+      if (json.mails?.length) {
+        setMails(prev => [...prev, ...json.mails]);
+      }
+      if (json.total != null) setMailTotal(json.total);
+    } catch (_) {
+      /* keep current list */
+    } finally {
+      setMailLoadingMore(false);
+    }
+  };
+
+  const openMailDetail = async (mail) => {
+    setMailDetail({ ...mail, body: "" });
+    setMailDetailLoading(true);
+    try {
+      const res = await fetch(`/api/mail-feed?full=true&uid=${mail.uid}`);
+      const json = await res.json();
+      if (json.mail) setMailDetail(json.mail);
+      else setMailDetail(prev => prev ? { ...prev, body: "本文を取得できませんでした" } : null);
+    } catch (_) {
+      setMailDetail(prev => prev ? { ...prev, body: "本文を取得できませんでした" } : null);
+    } finally {
+      setMailDetailLoading(false);
     }
   };
 
@@ -615,7 +653,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {mails.map((mail, i) => (
-              <div key={`${mail.date}-${mail.subject}-${i}`} style={{ background: "rgba(255,255,255,0.1)", borderRadius: 10, padding: "10px 12px" }}>
+              <div key={mail.uid || `${mail.date}-${mail.subject}-${i}`} onClick={() => openMailDetail(mail)} style={{ background: "rgba(255,255,255,0.1)", borderRadius: 10, padding: "10px 12px", cursor: "pointer" }}>
                 <div style={{ fontSize: 13, fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{mail.subject}</div>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 4 }}>
                   <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{mail.from}</span>
@@ -626,6 +664,15 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
                 )}
               </div>
             ))}
+            {mails.length < mailTotal && (
+              <button
+                onClick={loadMoreMails}
+                disabled={mailLoadingMore}
+                style={{ width: "100%", background: "rgba(255,255,255,0.12)", border: "none", color: "#fff", borderRadius: 10, padding: "10px 0", fontSize: 12, fontWeight: 700, cursor: mailLoadingMore ? "default" : "pointer", opacity: mailLoadingMore ? 0.7 : 1 }}
+              >
+                {mailLoadingMore ? "読み込み中..." : "もっと見る"}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -869,6 +916,48 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           context={aiAssist.context}
           onClose={() => setAiAssist(null)}
         />
+      )}
+
+      {mailDetail && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 700, display: "flex", alignItems: "flex-end" }}
+          onClick={() => setMailDetail(null)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: "20px 20px 0 0",
+              width: "100%",
+              maxHeight: "85vh",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 -4px 24px rgba(0,0,0,0.15)",
+              boxSizing: "border-box",
+              overflow: "hidden",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ background: "#1a56a0", color: "#fff", padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+              <div style={{ fontWeight: 800, fontSize: 15 }}>📧 メール詳細</div>
+              <button onClick={() => setMailDetail(null)} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 8, width: 32, height: 32, fontSize: 16, cursor: "pointer" }}>✕</button>
+            </div>
+            <div style={{ flex: 1, overflowY: "auto", padding: "16px", background: "#f5f7f9", color: "#1f2937" }}>
+              <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 12, lineHeight: 1.5 }}>{mailDetail.subject}</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16, fontSize: 12, color: "#6b7280" }}>
+                <span>{mailDetail.from}</span>
+                <span>·</span>
+                <span>{fmtMailDate(mailDetail.date)}</span>
+              </div>
+              {mailDetailLoading ? (
+                <div style={{ textAlign: "center", padding: "24px 0", color: "#9ca3af", fontSize: 13 }}>読み込み中...</div>
+              ) : (
+                <div style={{ background: "#fff", borderRadius: 12, padding: "14px 16px", fontSize: 14, lineHeight: 1.7, whiteSpace: "pre-wrap", wordBreak: "break-word", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+                  {mailDetail.body || "（本文なし）"}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {editTile && (<Modal title="タイルを編集" onClose={() => setEditTile(null)} onSave={() => { saveTileConf(tileConf.map(t => t.key === editTile.key ? editTile : t)); setEditTile(null); }}>
