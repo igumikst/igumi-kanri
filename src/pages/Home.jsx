@@ -99,6 +99,37 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   }, []);
 
   useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtmlLang = html.lang;
+    const prevHtmlTranslate = html.getAttribute("translate");
+    const prevBodyTranslate = body.getAttribute("translate");
+
+    html.lang = "ja";
+    html.setAttribute("translate", "no");
+    body.setAttribute("translate", "no");
+
+    let meta = document.querySelector('meta[name="google"][content="notranslate"]');
+    let addedMeta = false;
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.name = "google";
+      meta.content = "notranslate";
+      document.head.appendChild(meta);
+      addedMeta = true;
+    }
+
+    return () => {
+      html.lang = prevHtmlLang;
+      if (prevHtmlTranslate != null) html.setAttribute("translate", prevHtmlTranslate);
+      else html.removeAttribute("translate");
+      if (prevBodyTranslate != null) body.setAttribute("translate", prevBodyTranslate);
+      else body.removeAttribute("translate");
+      if (addedMeta) meta.remove();
+    };
+  }, []);
+
+  useEffect(() => {
     (async () => {
       const applyPosts = (rows) => {
         setBlogPosts(rows.map((p, i) => ({
@@ -633,7 +664,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   );
 
   return (
-    <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: currentPage === 0 ? BG : "#F0F4F8", minHeight: "100vh", ...pp }}>
+    <div translate="no" className="notranslate" style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: currentPage === 0 ? BG : "#F0F4F8", minHeight: "100vh", ...pp }}>
       {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="home" nav={nav} setModal={setModal} setEc={setEc} SB_W={SB_W} />}
       {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} />}
       {(cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
