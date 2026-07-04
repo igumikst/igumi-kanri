@@ -24,13 +24,6 @@ const fmtBlogDate = (dateStr) => {
   return d.toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" });
 };
 
-const fmtMailDate = (dateStr) => {
-  if (!dateStr) return "";
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return dateStr;
-  return d.toLocaleDateString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
-};
-
 const Pill = ({ children, onClick }) => (
   <button
     onClick={(e) => { e.stopPropagation(); onClick?.(e); }}
@@ -62,8 +55,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const [todaySchedules, setTodaySchedules] = useState([]);
   const [detailSc, setDetailSc] = useState(null);
   const [blogPosts, setBlogPosts] = useState([]);
-  const [mailEmails, setMailEmails] = useState([]);
-  const [mailRefreshing, setMailRefreshing] = useState(false);
   const [aiAssist, setAiAssist] = useState(null);
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
@@ -139,34 +130,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
         .limit(3);
       if (!error && data?.length) applyPosts(data);
     })();
-  }, []);
-
-  const refreshMails = async () => {
-    setMailRefreshing(true);
-    try {
-      const res = await fetch("/api/mail-feed");
-      if (res.ok) {
-        const json = await res.json();
-        if (json.emails?.length) {
-          setMailEmails(json.emails.slice(0, 3).map((e, i) => ({
-            id: e.id || String(i),
-            subject: e.subject,
-            from_name: e.from_name,
-            from: e.from,
-            date: e.date,
-            snippet: e.snippet,
-            url: e.url,
-          })));
-        } else {
-          setMailEmails([]);
-        }
-      }
-    } catch (_) { /* ignore */ }
-    setMailRefreshing(false);
-  };
-
-  useEffect(() => {
-    refreshMails();
   }, []);
 
   function getDayKey(offset = 0) {
@@ -564,40 +527,10 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
       )}
 
       <div style={{ background: "linear-gradient(135deg, #1e3a5f, #2563eb)", borderRadius: 14, padding: "14px 18px", marginBottom: 16, boxShadow: "0 4px 12px rgba(37,99,235,0.25)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
-            <span style={{ fontSize: 20 }}>📧</span>
-            <span style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>メール</span>
-          </div>
-          <button onClick={refreshMails} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 14, cursor: "pointer" }}>{mailRefreshing ? "⏳" : "🔄"}</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <span style={{ fontSize: 20 }}>📧</span>
+          <span style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>メール</span>
         </div>
-        {mailEmails.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
-            {mailEmails.map((email) => (
-              <div
-                key={email.id}
-                onClick={() => window.open(email.url || "https://mail.google.com", "_blank")}
-                style={{ background: "rgba(255,255,255,0.1)", borderRadius: 8, padding: "8px 12px", cursor: "pointer" }}
-              >
-                <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.95)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {email.subject}
-                </div>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.65)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {email.from_name || email.from || "送信者不明"}{email.date ? ` · ${fmtMailDate(email.date)}` : ""}
-                </div>
-                {email.snippet && (
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {email.snippet}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : !mailRefreshing && (
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", textAlign: "center", marginBottom: 10, padding: "4px 0" }}>
-            直近のメールはありません
-          </div>
-        )}
         <button
           onClick={() => { window.location.href = "mailto:info@igumi-inc.jp"; }}
           style={{ width: "100%", background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 10, padding: "10px 16px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
