@@ -58,8 +58,10 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
   const [finPrev, setFinPrev] = useState(null);
   const [finModal, setFinModal] = useState(null);
   const [folderForm, setFolderForm] = useState({ label: "", icon: "📁" });
+  const [monthForm, setMonthForm] = useState({ month: "" });
   const [addParentId, setAddParentId] = useState(null);
   const [editTarget, setEditTarget] = useState(null);
+  const [editHidden, setEditHidden] = useState(false);
   const [editFileTarget, setEditFileTarget] = useState(null);
   const [hiddenFolderIds, setHiddenFolderIds] = useState([]);
   const [conf, setConf] = useState(null);
@@ -121,14 +123,11 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     loadHidden();
   }, []);
 
-  const toggleFolderVisibility = async (id) => {
-    const next = hiddenFolderIds.includes(id)
-      ? hiddenFolderIds.filter(x => x !== id)
-      : [...hiddenFolderIds, id];
-    setHiddenFolderIds(next);
+  const saveHiddenFolders = async (ids) => {
+    setHiddenFolderIds(ids);
     await supabase.from("home_settings").upsert({
       id: "finance_hidden_folders",
-      value: { ids: next },
+      value: { ids },
       updated_at: new Date().toISOString(),
     });
   };
@@ -282,6 +281,35 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     setFinModal(null);
   };
 
+  const addMonthFolder = async () => {
+    const m = Number(monthForm.month);
+    if (!m || m < 1 || m > 12) { alert("1〜12の月を入力してください"); return; }
+    if (!finItem || !isYearFolder(finItem)) return;
+    if (childFolders(finItem.id).some(f => folderMeta(f).type === "month" && folderMeta(f).month === m)) {
+      alert(`${m}月のフォルダは既にあります`); return;
+    }
+    const siblings = childFolders(finItem.id);
+    const { data, error } = await supabase.from("finance_folders").insert([{
+      parent_id: finItem.id, label: `${m}月`, icon: `M:${m}`,
+      sort_order: siblings.length, is_default: false,
+    }]).select();
+    if (error) { alert(`月フォルダ追加エラー: ${error.message}`); return; }
+    if (data) setFinFolders(prev => [...prev, data[0]]);
+    setMonthForm({ month: "" });
+    setFinModal(null);
+  };
+
+  const openAddMonth = () => {
+    setMonthForm({ month: "" });
+    setFinModal("addMonth");
+  };
+
+  const openEditFolder = (item) => {
+    setEditTarget({ ...item });
+    setEditHidden(isFolderHidden(item.id));
+    setFinModal("edit");
+  };
+
   const updateFolder = async () => {
     if (!editTarget) return;
     const meta = folderMeta(editTarget);
@@ -291,6 +319,14 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     await supabase.from("finance_folders").update(payload).eq("id", editTarget.id);
     setFinFolders(prev => prev.map(f => f.id === editTarget.id ? { ...f, ...payload } : f));
     if (finItem?.id === editTarget.id) setFinItem(prev => ({ ...prev, ...payload }));
+    if (!editTarget.parent_id) {
+      const next = editHidden
+        ? [...new Set([...hiddenFolderIds, editTarget.id])]
+        : hiddenFolderIds.filter(x => x !== editTarget.id);
+      if (next.length !== hiddenFolderIds.length || next.some((id, i) => id !== hiddenFolderIds[i])) {
+        await saveHiddenFolders(next);
+      }
+    }
     setEditTarget(null);
     setFinModal(null);
   };
@@ -443,7 +479,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     </div>
   );
 
-  const renderFolderRows = (siblings, { onOpen, showVisibility = false }) => {
+  const renderFolderRows = (siblings, { onOpen }) => {
     const onDrop = makeDropHandler(siblings);
     const onTouchEnd = makeTouchEnd(siblings);
     return siblings.map((item, i) => {
@@ -451,7 +487,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
       const counts = countFolderContents(item);
       const isCurrentYear = meta.type === "year" && meta.year === cy;
       const isCurrentMonth = meta.type === "month" && meta.year === cy && meta.month === cm;
-      const hidden = showVisibility && isFolderHidden(item.id);
+      const hidden = isFolderHidden(item.id);
       return (
         <div
           key={item.id}
@@ -489,14 +525,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
             <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>{folderSubtitle(item, counts)}</div>
           </div>
           <div style={{ display: "flex", gap: 6 }}>
-            {showVisibility && (
-              <button
-                onClick={e => { e.stopPropagation(); toggleFolderVisibility(item.id); }}
-                title={hidden ? "表示する" : "非表示にする"}
-                style={{ background: hidden ? "#F3F4F6" : "#F0FDF4", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}
-              >{hidden ? "👁‍🗨" : "👁"}</button>
-            )}
-            <button onClick={e => { e.stopPropagation(); setEditTarget({ ...item }); setFinModal("edit"); }} style={{ background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, color: "#1A3A5C", cursor: "pointer" }}>✏️</button>
+            <button onClick={e => { e.stopPropagation(); openEditFolder(item); }} style={{ background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, color: "#1A3A5C", cursor: "pointer" }}>✏️</button>
             <button onClick={e => { e.stopPropagation(); setConf({ msg: `「${displayFolderLabel(item, meta)}」フォルダを削除しますか？\n\n中のサブフォルダも全て消えます。\nファイルは残りますが、フォルダは元に戻せません。`, onOk: () => { deleteFolder(item.id); setConf(null); } }); }} style={{ background: "#FEF2F2", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, color: "#DC2626", cursor: "pointer" }}>🗑</button>
           </div>
           <span style={{ color: "#9CA3AF" }}>›</span>
@@ -541,12 +570,39 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
           <Inp label="フォルダ名 *" value={folderForm.label} onChange={e => setFolderForm({ ...folderForm, label: e.target.value })} placeholder="例: 保険証書" />
         </Modal>
       )}
+      {finModal === "addMonth" && (
+        <Modal title="📅 月フォルダを追加" onClose={() => setFinModal(null)} onSave={addMonthFolder}>
+          <Inp label="月（1〜12）*" value={monthForm.month} onChange={e => setMonthForm({ month: e.target.value })} placeholder="例: 3" />
+        </Modal>
+      )}
       {finModal === "edit" && editTarget && (
         <Modal title="📁 フォルダを編集" onClose={() => { setFinModal(null); setEditTarget(null); }} onSave={updateFolder}>
           {folderMeta(editTarget).type === "normal" && (
             <Inp label="アイコン（絵文字）" value={editTarget.icon} onChange={e => setEditTarget({ ...editTarget, icon: e.target.value })} />
           )}
           <Inp label="フォルダ名 *" value={editTarget.label} onChange={e => setEditTarget({ ...editTarget, label: e.target.value })} />
+          {!editTarget.parent_id && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 16, padding: "12px 14px", background: "#F9FAFB", borderRadius: 10 }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>非表示にする</div>
+                <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>一覧から薄く表示されます</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditHidden(v => !v)}
+                style={{
+                  width: 50, height: 28, borderRadius: 14, border: "none", cursor: "pointer", flexShrink: 0,
+                  background: editHidden ? "#1A3A5C" : "#D1D5DB", position: "relative", transition: "background 0.2s",
+                }}
+              >
+                <span style={{
+                  position: "absolute", top: 3, left: editHidden ? 25 : 3,
+                  width: 22, height: 22, borderRadius: "50%", background: "#fff", transition: "left 0.2s",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                }} />
+              </button>
+            </div>
+          )}
         </Modal>
       )}
       {finModal === "editFile" && editFileTarget && (
@@ -664,6 +720,9 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
             {breadcrumbNav(breadcrumb)}
           </div>
           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+            {isYearFolder(finItem) && (
+              <button onClick={openAddMonth} style={{ background: "#E07B39", border: "none", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer", fontWeight: 800 }}>＋ 月を追加</button>
+            )}
             {!isYearFolder(finItem) && (
               <button onClick={() => openAddFolder(finItem.id)} style={{ background: "#E07B39", border: "none", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer", fontWeight: 800 }}>＋ フォルダ</button>
             )}
@@ -724,13 +783,12 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
       <div style={{ padding: isPC ? "14px 0" : 14 }}>
         {rootFolders.length > 1 && (
           <div style={{ fontSize: 11, color: "#9CA3AF", textAlign: "center", marginBottom: 8 }}>
-            ☰ を長押し（スマホ）またはドラッグ（PC）で並べ替え　・　👁 で非表示切替
+            ☰ を長押し（スマホ）またはドラッグ（PC）で並べ替え
           </div>
         )}
         <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
           {renderFolderRows(rootFolders, {
             onOpen: (item) => { if (!isFolderHidden(item.id)) { setFinItem(item); setFolderPath([]); } },
-            showVisibility: true,
           })}
           {rootFolders.length === 0 && !initializing && (
             <div style={{ textAlign: "center", padding: 40, color: "#9CA3AF" }}>
