@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { Modal, Inp, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
@@ -17,12 +17,22 @@ const DEFAULT_FINANCE_ITEMS = [
 
 const normParent = (id) => id || null;
 const isDirectFile = (f) => (f.year == null || f.year === 0) && (f.month == null || f.month === 0);
+const isYearFolder = (f) => f?.folder_type === "year";
+const isMonthFolder = (f) => f?.folder_type === "month";
+
+const genYM = () => {
+  const now = new Date(), res = {};
+  for (let y = 2022; y <= now.getFullYear(); y++) {
+    res[y] = [];
+    const max = y === now.getFullYear() ? now.getMonth() + 1 : 12;
+    for (let m = 1; m <= max; m++) res[y].push(m);
+  }
+  return res;
+};
 
 export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, setFinFiles, finFolders, setFinFolders, tmplFiles, fishWeather, tileConf, SB_W, RP_W }) {
   const [finItem, setFinItem] = useState(null);
   const [folderPath, setFolderPath] = useState([]);
-  const [finY, setFinY] = useState(null);
-  const [finM, setFinM] = useState(null);
   const [finPrev, setFinPrev] = useState(null);
   const [finModal, setFinModal] = useState(null);
   const [folderForm, setFolderForm] = useState({ label: "", icon: "📁" });
@@ -32,27 +42,40 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
   const [pendingDelete, setPendingDelete] = useState(false);
   const [initializing, setInitializing] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [ymSyncing, setYmSyncing] = useState(false);
 
   const [dragIdx, setDragIdx] = useState(null);
   const [overIdx, setOverIdx] = useState(null);
   const touchStartY = useRef(null);
   const touchDragIdx = useRef(null);
+  const ymSyncedRef = useRef(new Set());
 
   const pending = tks.filter(t => !t.done);
+  const ym = genYM();
+  const now = new Date(), cy = now.getFullYear(), cm = now.getMonth() + 1;
 
-  const childFolders = (parentId) =>
+  const childFolders = useCallback((parentId) =>
     finFolders
       .filter(f => normParent(f.parent_id) === normParent(parentId))
-      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
+  [finFolders]);
 
   const rootFolders = childFolders(null);
+
+  const getRootItemId = useCallback((folderId) => {
+    let current = finFolders.find(f => f.id === folderId);
+    while (current?.parent_id) {
+      current = finFolders.find(f => f.id === current.parent_id);
+    }
+    return current?.id || folderId;
+  }, [finFolders]);
 
   useEffect(() => {
     const initDefaults = async () => {
       if (finFolders.length > 0) return;
       setInitializing(true);
       const inserts = DEFAULT_FINANCE_ITEMS.map((item, i) => ({
-        id: item.id, label: item.label, icon: item.icon, sort_order: i, is_default: true, parent_id: null,
+        id: item.id, label: item.label, icon: item.icon, sort_order: i, is_default: true, parent_id: null, folder_type: "normal",
       }));
       const { data } = await supabase.from("finance_folders").upsert(inserts, { onConflict: "id" }).select();
       if (data) setFinFolders(data.sort((a, b) => a.sort_order - b.sort_order));
@@ -61,23 +84,72 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     initDefaults();
   }, []);
 
+  const ensureYearFolders = async (rootId) => {
+    if (ymSyncedRef.current.has(`y:${rootId}`)) return;
+    setYmSyncing(true);
+    const ymData = genYM();
+    const existingYears = childFolders(rootId).filter(isYearFolder);
+    const created = [];
+
+    for (const y of Object.keys(ymData).map(Number).sort((a, b) => b - a)) {
+      if (existingYears.some(f => f.year_num === y)) continue;
+      const siblings = childFolders(rootId);
+      const { data, error } = await supabase.from("finance_folders").insert([{
+        parent_id: rootId, label: `${y}年`, icon: "📁", folder_type: "year",
+        year_num: y, sort_order: siblings.length + created.length, is_default: false,
+      }]).select();
+      if (error) { console.warn("年フォルダ作成エラー:", error.message); continue; }
+      if (data) created.push(data[0]);
+    }
+
+    if (created.length) setFinFolders(prev => [...prev, ...created]);
+    ymSyncedRef.current.add(`y:${rootId}`);
+    setYmSyncing(false);
+  };
+
+  const ensureMonthFolders = async (yearFolder) => {
+    if (!yearFolder?.year_num) return;
+    const key = `m:${yearFolder.id}`;
+    if (ymSyncedRef.current.has(key)) return;
+    setYmSyncing(true);
+    const months = ym[yearFolder.year_num] || [];
+    const existingMonths = childFolders(yearFolder.id).filter(isMonthFolder);
+    const created = [];
+
+    for (const m of months) {
+      if (existingMonths.some(f => f.month_num === m)) continue;
+      const siblings = childFolders(yearFolder.id);
+      const { data, error } = await supabase.from("finance_folders").insert([{
+        parent_id: yearFolder.id, label: `${m}月`, icon: "📅", folder_type: "month",
+        year_num: yearFolder.year_num, month_num: m,
+        sort_order: siblings.length + created.length, is_default: false,
+      }]).select();
+      if (error) { console.warn("月フォルダ作成エラー:", error.message); continue; }
+      if (data) created.push(data[0]);
+    }
+
+    if (created.length) setFinFolders(prev => [...prev, ...created]);
+    ymSyncedRef.current.add(key);
+    setYmSyncing(false);
+  };
+
+  useEffect(() => {
+    if (!finItem) return;
+    if (isMonthFolder(finItem)) return;
+    if (isYearFolder(finItem)) {
+      ensureMonthFolders(finItem);
+      return;
+    }
+    if (!finItem.parent_id) {
+      ensureYearFolders(finItem.id);
+    }
+  }, [finItem?.id]);
+
   const isPDF   = f => f.type === "application/pdf" || f.name?.toLowerCase().endsWith(".pdf");
   const isImg   = f => f.type?.startsWith("image/");
   const isExcel = f => f.name?.match(/\.(xlsx|xls)$/i);
   const isWord  = f => f.name?.match(/\.(docx|doc)$/i);
   const fileIcon = f => isImg(f) ? "🖼" : isPDF(f) ? "📕" : isExcel(f) ? "📗" : isWord(f) ? "📘" : "📄";
-
-  const genYM = () => {
-    const now = new Date(), res = {};
-    for (let y = 2022; y <= now.getFullYear(); y++) {
-      res[y] = [];
-      const max = y === now.getFullYear() ? now.getMonth() + 1 : 12;
-      for (let m = 1; m <= max; m++) res[y].push(m);
-    }
-    return res;
-  };
-  const ym = genYM();
-  const now = new Date(), cy = now.getFullYear(), cm = now.getMonth() + 1;
 
   const uploadFinFile = async (file, itemId, year, month) => {
     const safeName = file.name.replace(/[^\w.\-]/g, '_');
@@ -143,7 +215,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     const { data, error } = await supabase.from("finance_folders")
       .insert([{
         label: folderForm.label, icon: folderForm.icon,
-        sort_order: siblings.length, is_default: false, parent_id: addParentId,
+        sort_order: siblings.length, is_default: false, parent_id: addParentId, folder_type: "normal",
       }])
       .select();
     if (error) { alert(`フォルダ追加エラー: ${error.message}`); return; }
@@ -165,11 +237,16 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     const delIds = collectDescendantIds(id);
     await supabase.from("finance_folders").delete().eq("id", id);
     setFinFolders(prev => prev.filter(f => !delIds.includes(f.id)));
+    delIds.forEach(did => ymSyncedRef.current.delete(`m:${did}`));
     if (finItem && delIds.includes(finItem.id)) {
-      setFinItem(null);
-      setFolderPath([]);
-      setFinY(null);
-      setFinM(null);
+      if (folderPath.length === 0) {
+        setFinItem(null);
+      } else {
+        const newPath = folderPath.slice(0, -1);
+        const parentInfo = folderPath[folderPath.length - 1];
+        setFolderPath(newPath);
+        setFinItem(finFolders.find(f => f.id === parentInfo.id) || parentInfo);
+      }
     }
   };
 
@@ -228,12 +305,9 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
   const enterSubfolder = (folder) => {
     setFolderPath(prev => [...prev, { id: finItem.id, label: finItem.label, icon: finItem.icon }]);
     setFinItem(folder);
-    setFinY(null);
-    setFinM(null);
   };
 
   const goBackFromFolder = () => {
-    if (finY) { setFinY(null); setFinM(null); return; }
     if (folderPath.length === 0) {
       setFinItem(null);
       return;
@@ -250,11 +324,34 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     setFinModal("add");
   };
 
-  const countFolderContents = (folderId) => {
-    const subCnt = childFolders(folderId).length;
-    const fileCnt = finFiles.filter(f => f.item_id === folderId && isDirectFile(f)).length;
-    const ymCnt = finFiles.filter(f => f.item_id === folderId && !isDirectFile(f)).length;
-    return { subCnt, fileCnt, ymCnt };
+  const countFolderContents = (folder) => {
+    const rootId = getRootItemId(folder.id);
+    if (isMonthFolder(folder)) {
+      const fileCnt = finFiles.filter(f => f.item_id === rootId && Number(f.year) === folder.year_num && Number(f.month) === folder.month_num).length;
+      return { subCnt: 0, fileCnt, ymCnt: 0 };
+    }
+    if (isYearFolder(folder)) {
+      const subCnt = childFolders(folder.id).length;
+      const ymCnt = finFiles.filter(f => f.item_id === rootId && Number(f.year) === folder.year_num && !isDirectFile(f)).length;
+      return { subCnt, fileCnt: 0, ymCnt };
+    }
+    const subCnt = childFolders(folder.id).length;
+    const fileCnt = finFiles.filter(f => f.item_id === folder.id && isDirectFile(f)).length;
+    return { subCnt, fileCnt, ymCnt: 0 };
+  };
+
+  const folderSubtitle = (folder, { subCnt, fileCnt, ymCnt }) => {
+    if (isMonthFolder(folder)) return fileCnt > 0 ? `${fileCnt}件` : "タップして管理";
+    if (isYearFolder(folder)) {
+      const parts = [];
+      if (subCnt > 0) parts.push(`${subCnt}ヶ月`);
+      if (ymCnt > 0) parts.push(`${ymCnt}件`);
+      return parts.length ? parts.join("・") : "タップして管理";
+    }
+    const parts = [];
+    if (subCnt > 0) parts.push(`${subCnt}フォルダ`);
+    if (fileCnt > 0) parts.push(`${fileCnt}ファイル`);
+    return parts.length ? parts.join("・") : "タップして管理";
   };
 
   const renderFileRow = (f) => (
@@ -274,16 +371,18 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     </div>
   );
 
-  const renderFolderRows = (siblings, { onOpen, showReorder = true }) => {
+  const renderFolderRows = (siblings, { onOpen }) => {
     const onDrop = makeDropHandler(siblings);
     const onTouchEnd = makeTouchEnd(siblings);
     return siblings.map((item, i) => {
-      const { subCnt, fileCnt, ymCnt } = countFolderContents(item.id);
+      const counts = countFolderContents(item);
+      const isCurrentYear = isYearFolder(item) && item.year_num === cy;
+      const isCurrentMonth = isMonthFolder(item) && item.year_num === cy && item.month_num === cm;
       return (
         <div
           key={item.id}
           data-folder-row={i}
-          draggable={showReorder}
+          draggable
           onDragStart={() => handleDragStart(i)}
           onDragOver={e => handleDragOver(e, i)}
           onDrop={() => onDrop(i)}
@@ -294,27 +393,23 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
             background: overIdx === i && dragIdx !== i ? "#EFF6FF" : dragIdx === i ? "#F3F4F6" : "#fff",
             transition: "background 0.15s",
             opacity: dragIdx === i ? 0.5 : 1,
+            borderLeft: isCurrentYear ? "4px solid #1A3A5C" : isCurrentMonth ? "4px solid #E07B39" : "4px solid transparent",
           }}
         >
-          {showReorder && (
-            <span
-              style={{ fontSize: 18, color: "#D1D5DB", cursor: "grab", flexShrink: 0, userSelect: "none", touchAction: "none" }}
-              onTouchStart={makeTouchStart(i)}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={onTouchEnd}
-            >☰</span>
-          )}
+          <span
+            style={{ fontSize: 18, color: "#D1D5DB", cursor: "grab", flexShrink: 0, userSelect: "none", touchAction: "none" }}
+            onTouchStart={makeTouchStart(i)}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={onTouchEnd}
+          >☰</span>
           <span style={{ fontSize: 26 }}>{item.icon}</span>
           <div style={{ flex: 1, cursor: "pointer" }} onClick={() => onOpen(item)}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: "#1F2937" }}>{item.label}</div>
-            <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>
-              {subCnt > 0 && `${subCnt}フォルダ`}
-              {subCnt > 0 && (fileCnt > 0 || ymCnt > 0) && "・"}
-              {fileCnt > 0 && `${fileCnt}ファイル`}
-              {fileCnt > 0 && ymCnt > 0 && "・"}
-              {ymCnt > 0 && `年月別${ymCnt}件`}
-              {subCnt === 0 && fileCnt === 0 && ymCnt === 0 && "タップして管理"}
+            <div style={{ fontWeight: 700, fontSize: 14, color: "#1F2937", display: "flex", alignItems: "center", gap: 6 }}>
+              {item.label}
+              {isCurrentYear && <span style={{ fontSize: 10, background: "#1A3A5C", color: "#fff", borderRadius: 4, padding: "1px 6px", fontWeight: 700 }}>今年</span>}
+              {isCurrentMonth && <span style={{ fontSize: 10, background: "#E07B39", color: "#fff", borderRadius: 4, padding: "1px 6px", fontWeight: 700 }}>今月</span>}
             </div>
+            <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>{folderSubtitle(item, counts)}</div>
           </div>
           <div style={{ display: "flex", gap: 6 }}>
             <button onClick={e => { e.stopPropagation(); setEditTarget({ ...item }); setFinModal("edit"); }} style={{ background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, color: "#1A3A5C", cursor: "pointer" }}>✏️</button>
@@ -331,6 +426,25 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
       {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="finance" nav={nav} setModal={() => {}} setEc={() => {}} SB_W={SB_W} />}
       {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} />}
       {children}
+    </div>
+  );
+
+  const breadcrumbNav = (breadcrumb) => (
+    <div style={{ fontSize: 11, opacity: 0.8, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      {breadcrumb.map((p, i) => (
+        <span key={p.id}>
+          {i > 0 && <span style={{ opacity: 0.5 }}> › </span>}
+          <span
+            style={{ cursor: i < breadcrumb.length - 1 ? "pointer" : "default" }}
+            onClick={() => {
+              if (i >= breadcrumb.length - 1) return;
+              const target = breadcrumb[i];
+              setFolderPath(breadcrumb.slice(0, i));
+              setFinItem(finFolders.find(f => f.id === target.id) || target);
+            }}
+          >{p.label}</span>
+        </span>
+      ))}
     </div>
   );
 
@@ -363,6 +477,11 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
             <div style={{ fontSize: 32, marginBottom: 8 }}>⏳</div>
             <div style={{ fontWeight: 700, color: "#1F2937" }}>アップロード中...</div>
           </div>
+        </div>
+      )}
+      {ymSyncing && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, pointerEvents: "none" }}>
+          <div style={{ background: "#fff", borderRadius: 14, padding: "16px 24px", textAlign: "center", fontSize: 13, color: "#6B7280" }}>フォルダを準備中...</div>
         </div>
       )}
     </>
@@ -407,20 +526,23 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     </div>
   );
 
-  // ── 月一覧画面 ──
-  if (finM) {
-    const monthFiles = finFiles.filter(f => f.item_id === finItem.id && Number(f.year) === Number(finY) && Number(f.month) === Number(finM));
+  // ── 月フォルダ：ファイル一覧 ──
+  if (finItem && isMonthFolder(finItem)) {
+    const rootId = getRootItemId(finItem.id);
+    const monthFiles = finFiles.filter(f => f.item_id === rootId && Number(f.year) === finItem.year_num && Number(f.month) === finItem.month_num);
+    const breadcrumb = [...folderPath, { id: finItem.id, label: finItem.label, icon: finItem.icon }];
+
     return layoutShell(
       <>
         <div style={{ background: "#1A3A5C", color: "#fff", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 50 }}>
-          <button onClick={() => setFinM(null)} style={{ background: "none", border: "none", color: "#fff", fontSize: 20, cursor: "pointer" }}>←</button>
-          <div style={{ flex: 1 }}>
+          <button onClick={goBackFromFolder} style={{ background: "none", border: "none", color: "#fff", fontSize: 20, cursor: "pointer" }}>←</button>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 800, fontSize: 15 }}>{finItem.icon} {finItem.label}</div>
-            <div style={{ fontSize: 11, opacity: 0.7 }}>{finY}年{finM}月</div>
+            {breadcrumbNav(breadcrumb)}
           </div>
-          <label style={{ background: "#E07B39", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+          <label style={{ background: "#E07B39", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
             ＋ 追加
-            <input type="file" accept="image/*,application/pdf,.xlsx,.docx,.xls,.doc" multiple onChange={async e => { for (const f of Array.from(e.target.files)) { await uploadFinFile(f, finItem.id, finY, finM); } e.target.value = ""; }} style={{ display: "none" }} />
+            <input type="file" accept="image/*,application/pdf,.xlsx,.docx,.xls,.doc" multiple onChange={async e => { for (const f of Array.from(e.target.files)) { await uploadFinFile(f, rootId, finItem.year_num, finItem.month_num); } e.target.value = ""; }} style={{ display: "none" }} />
           </label>
         </div>
         <div style={{ padding: isPC ? "14px 0" : 14 }}>
@@ -433,73 +555,12 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     );
   }
 
-  // ── 年月別：年選択画面 ──
-  if (finItem && finY === "browse") return layoutShell(
-    <>
-      <div style={{ background: "#1A3A5C", color: "#fff", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 50 }}>
-        <button onClick={() => setFinY(null)} style={{ background: "none", border: "none", color: "#fff", fontSize: 20, cursor: "pointer" }}>←</button>
-        <div style={{ flex: 1, fontWeight: 800, fontSize: 15 }}>{finItem.icon} {finItem.label} — 年月別</div>
-      </div>
-      <div style={{ padding: isPC ? "14px 0" : 14 }}>
-        {Object.keys(ym).sort((a, b) => b - a).map(y => {
-          const tot = Object.values(ym[y] || []).reduce((s, m) => s + finFiles.filter(f => f.item_id === finItem.id && Number(f.year) === Number(y) && Number(f.month) === m).length, 0);
-          const isN = Number(y) === cy;
-          return (
-            <div key={y} onClick={() => setFinY(y)} style={{ background: "#fff", borderRadius: 12, padding: "14px 16px", marginBottom: 8, display: "flex", alignItems: "center", gap: 12, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", cursor: "pointer", borderLeft: isN ? "4px solid #1A3A5C" : "4px solid transparent" }}>
-              <span style={{ fontSize: 26 }}>📁</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 15, display: "flex", alignItems: "center", gap: 6, color: "#1F2937" }}>
-                  {y}年{isN && <span style={{ fontSize: 10, background: "#1A3A5C", color: "#fff", borderRadius: 4, padding: "1px 6px", fontWeight: 700 }}>今年</span>}
-                </div>
-                <div style={{ fontSize: 11, color: "#9CA3AF" }}>{tot}件</div>
-              </div>
-              <span style={{ color: "#9CA3AF" }}>›</span>
-            </div>
-          );
-        })}
-      </div>
-      {modals}
-    </>
-  );
-
-  // ── 月選択画面 ──
-  if (finY) return layoutShell(
-    <>
-      <div style={{ background: "#1A3A5C", color: "#fff", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 50 }}>
-        <button onClick={() => setFinY("browse")} style={{ background: "none", border: "none", color: "#fff", fontSize: 20, cursor: "pointer" }}>←</button>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 800, fontSize: 15 }}>{finItem.icon} {finItem.label}</div>
-          <div style={{ fontSize: 11, opacity: 0.7 }}>{finY}年</div>
-        </div>
-      </div>
-      <div style={{ padding: isPC ? "14px 0" : 14 }}>
-        {(ym[finY] || []).slice().reverse().map(m => {
-          const cnt = finFiles.filter(f => f.item_id === finItem.id && Number(f.year) === Number(finY) && Number(f.month) === m).length;
-          const isN = Number(finY) === cy && m === cm;
-          return (
-            <div key={m} onClick={() => setFinM(m)} style={{ background: "#fff", borderRadius: 12, padding: "14px 16px", marginBottom: 8, display: "flex", alignItems: "center", gap: 12, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", cursor: "pointer", borderLeft: isN ? "4px solid #E07B39" : "4px solid transparent" }}>
-              <span style={{ fontSize: 24 }}>📅</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", gap: 6, color: "#1F2937" }}>
-                  {m}月{isN && <span style={{ fontSize: 10, background: "#E07B39", color: "#fff", borderRadius: 4, padding: "1px 6px", fontWeight: 700 }}>今月</span>}
-                </div>
-                <div style={{ fontSize: 11, color: "#9CA3AF" }}>{cnt}件</div>
-              </div>
-              <span style={{ color: "#9CA3AF" }}>›</span>
-            </div>
-          );
-        })}
-      </div>
-      {modals}
-    </>
-  );
-
-  // ── フォルダ内容画面（サブフォルダ・直下ファイル・年月別入口）──
-  if (finItem && !finY) {
+  // ── フォルダ内容画面（サブフォルダ・年フォルダ・直下ファイル）──
+  if (finItem) {
     const siblings = childFolders(finItem.id);
-    const directFiles = finFiles.filter(f => f.item_id === finItem.id && isDirectFile(f));
-    const ymTotal = finFiles.filter(f => f.item_id === finItem.id && !isDirectFile(f)).length;
+    const directFiles = isYearFolder(finItem) ? [] : finFiles.filter(f => f.item_id === finItem.id && isDirectFile(f));
     const breadcrumb = [...folderPath, { id: finItem.id, label: finItem.label, icon: finItem.icon }];
+    const showAddFile = !isYearFolder(finItem);
 
     return layoutShell(
       <>
@@ -507,31 +568,18 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
           <button onClick={goBackFromFolder} style={{ background: "none", border: "none", color: "#fff", fontSize: 20, cursor: "pointer" }}>←</button>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 800, fontSize: 15 }}>{finItem.icon} {finItem.label}</div>
-            <div style={{ fontSize: 11, opacity: 0.8, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {breadcrumb.map((p, i) => (
-                <span key={p.id}>
-                  {i > 0 && <span style={{ opacity: 0.5 }}> › </span>}
-                  <span
-                    style={{ cursor: i < breadcrumb.length - 1 ? "pointer" : "default" }}
-                    onClick={() => {
-                      if (i >= breadcrumb.length - 1) return;
-                      const target = breadcrumb[i];
-                      setFolderPath(breadcrumb.slice(0, i));
-                      setFinItem(finFolders.find(f => f.id === target.id) || target);
-                      setFinY(null);
-                      setFinM(null);
-                    }}
-                  >{p.label}</span>
-                </span>
-              ))}
-            </div>
+            {breadcrumbNav(breadcrumb)}
           </div>
           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-            <button onClick={() => openAddFolder(finItem.id)} style={{ background: "#E07B39", border: "none", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer", fontWeight: 800 }}>＋ フォルダ</button>
-            <label style={{ background: "#059669", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
-              ＋ ファイル
-              <input type="file" accept="image/*,application/pdf,.xlsx,.docx,.xls,.doc" multiple onChange={async e => { for (const f of Array.from(e.target.files)) { await uploadDirectFile(f, finItem.id); } e.target.value = ""; }} style={{ display: "none" }} />
-            </label>
+            {!isYearFolder(finItem) && (
+              <button onClick={() => openAddFolder(finItem.id)} style={{ background: "#E07B39", border: "none", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer", fontWeight: 800 }}>＋ フォルダ</button>
+            )}
+            {showAddFile && (
+              <label style={{ background: "#059669", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
+                ＋ ファイル
+                <input type="file" accept="image/*,application/pdf,.xlsx,.docx,.xls,.doc" multiple onChange={async e => { for (const f of Array.from(e.target.files)) { await uploadDirectFile(f, finItem.id); } e.target.value = ""; }} style={{ display: "none" }} />
+              </label>
+            )}
           </div>
         </div>
 
@@ -555,19 +603,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
             </div>
           )}
 
-          <div
-            onClick={() => setFinY("browse")}
-            style={{ background: "#fff", borderRadius: 12, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", cursor: "pointer", borderLeft: "4px solid #1A3A5C" }}
-          >
-            <span style={{ fontSize: 26 }}>📅</span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: 15, color: "#1F2937" }}>年月別で管理</div>
-              <div style={{ fontSize: 11, color: "#9CA3AF" }}>{ymTotal}件のファイル</div>
-            </div>
-            <span style={{ color: "#9CA3AF" }}>›</span>
-          </div>
-
-          {siblings.length === 0 && directFiles.length === 0 && ymTotal === 0 && (
+          {siblings.length === 0 && directFiles.length === 0 && !ymSyncing && (
             <div style={{ textAlign: "center", padding: 32, color: "#9CA3AF" }}>
               <div style={{ fontSize: 48, marginBottom: 12 }}>📂</div>
               <div style={{ fontSize: 14 }}>まだ何もありません</div>
@@ -600,7 +636,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
         )}
         <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
           {renderFolderRows(rootFolders, {
-            onOpen: (item) => { setFinItem(item); setFolderPath([]); setFinY(null); setFinM(null); },
+            onOpen: (item) => { setFinItem(item); setFolderPath([]); },
           })}
           {rootFolders.length === 0 && !initializing && (
             <div style={{ textAlign: "center", padding: 40, color: "#9CA3AF" }}>
