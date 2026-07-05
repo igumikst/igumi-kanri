@@ -17,8 +17,26 @@ const DEFAULT_FINANCE_ITEMS = [
 
 const normParent = (id) => id || null;
 const isDirectFile = (f) => (f.year == null || f.year === 0) && (f.month == null || f.month === 0);
-const isYearFolder = (f) => f?.folder_type === "year";
-const isMonthFolder = (f) => f?.folder_type === "month";
+
+const yearFolderId = (rootId, year) => `ym-y-${rootId}-${year}`;
+const monthFolderId = (yearFolderIdVal, month) => `ym-m-${yearFolderIdVal}-${month}`;
+
+const parseFolderMeta = (folder, allFolders = []) => {
+  if (!folder) return { type: "normal", year: null, month: null };
+  if (folder.folder_type === "year") return { type: "year", year: folder.year_num, month: null };
+  if (folder.folder_type === "month") return { type: "month", year: folder.year_num, month: folder.month_num };
+
+  const yearMatch = folder.id?.match(/^ym-y-(.+)-(\d+)$/);
+  if (yearMatch) return { type: "year", year: Number(yearMatch[2]), month: null };
+
+  const monthMatch = folder.id?.match(/^ym-m-(.+)-(\d+)$/);
+  if (monthMatch) {
+    const yearFolder = allFolders.find(f => f.id === monthMatch[1]);
+    const yMeta = yearFolder ? parseFolderMeta(yearFolder, allFolders) : { year: null };
+    return { type: "month", year: yMeta.year, month: Number(monthMatch[2]) };
+  }
+  return { type: "normal", year: null, month: null };
+};
 
 const genYM = () => {
   const now = new Date(), res = {};
@@ -62,6 +80,10 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
 
   const rootFolders = childFolders(null);
 
+  const folderMeta = (f) => parseFolderMeta(f, finFolders);
+  const isYearFolder = (f) => folderMeta(f).type === "year";
+  const isMonthFolder = (f) => folderMeta(f).type === "month";
+
   const getRootItemId = useCallback((folderId) => {
     let current = finFolders.find(f => f.id === folderId);
     while (current?.parent_id) {
@@ -75,7 +97,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
       if (finFolders.length > 0) return;
       setInitializing(true);
       const inserts = DEFAULT_FINANCE_ITEMS.map((item, i) => ({
-        id: item.id, label: item.label, icon: item.icon, sort_order: i, is_default: true, parent_id: null, folder_type: "normal",
+        id: item.id, label: item.label, icon: item.icon, sort_order: i, is_default: true, parent_id: null,
       }));
       const { data } = await supabase.from("finance_folders").upsert(inserts, { onConflict: "id" }).select();
       if (data) setFinFolders(data.sort((a, b) => a.sort_order - b.sort_order));
@@ -88,16 +110,16 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     if (ymSyncedRef.current.has(`y:${rootId}`)) return;
     setYmSyncing(true);
     const ymData = genYM();
-    const existingYears = childFolders(rootId).filter(isYearFolder);
     const created = [];
 
     for (const y of Object.keys(ymData).map(Number).sort((a, b) => b - a)) {
-      if (existingYears.some(f => f.year_num === y)) continue;
+      if (finFolders.some(f => f.id === yearFolderId(rootId, y))) continue;
       const siblings = childFolders(rootId);
-      const { data, error } = await supabase.from("finance_folders").insert([{
-        parent_id: rootId, label: `${y}年`, icon: "📁", folder_type: "year",
-        year_num: y, sort_order: siblings.length + created.length, is_default: false,
-      }]).select();
+      const { data, error } = await supabase.from("finance_folders").upsert([{
+        id: yearFolderId(rootId, y),
+        parent_id: rootId, label: `${y}年`, icon: "📁",
+        sort_order: siblings.length + created.length, is_default: false,
+      }], { onConflict: "id" }).select();
       if (error) { console.warn("年フォルダ作成エラー:", error.message); continue; }
       if (data) created.push(data[0]);
     }
@@ -108,22 +130,22 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
   };
 
   const ensureMonthFolders = async (yearFolder) => {
-    if (!yearFolder?.year_num) return;
+    const meta = folderMeta(yearFolder);
+    if (!meta.year) return;
     const key = `m:${yearFolder.id}`;
     if (ymSyncedRef.current.has(key)) return;
     setYmSyncing(true);
-    const months = ym[yearFolder.year_num] || [];
-    const existingMonths = childFolders(yearFolder.id).filter(isMonthFolder);
+    const months = ym[meta.year] || [];
     const created = [];
 
     for (const m of months) {
-      if (existingMonths.some(f => f.month_num === m)) continue;
+      if (finFolders.some(f => f.id === monthFolderId(yearFolder.id, m))) continue;
       const siblings = childFolders(yearFolder.id);
-      const { data, error } = await supabase.from("finance_folders").insert([{
-        parent_id: yearFolder.id, label: `${m}月`, icon: "📅", folder_type: "month",
-        year_num: yearFolder.year_num, month_num: m,
+      const { data, error } = await supabase.from("finance_folders").upsert([{
+        id: monthFolderId(yearFolder.id, m),
+        parent_id: yearFolder.id, label: `${m}月`, icon: "📅",
         sort_order: siblings.length + created.length, is_default: false,
-      }]).select();
+      }], { onConflict: "id" }).select();
       if (error) { console.warn("月フォルダ作成エラー:", error.message); continue; }
       if (data) created.push(data[0]);
     }
@@ -215,7 +237,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     const { data, error } = await supabase.from("finance_folders")
       .insert([{
         label: folderForm.label, icon: folderForm.icon,
-        sort_order: siblings.length, is_default: false, parent_id: addParentId, folder_type: "normal",
+        sort_order: siblings.length, is_default: false, parent_id: addParentId,
       }])
       .select();
     if (error) { alert(`フォルダ追加エラー: ${error.message}`); return; }
@@ -326,13 +348,14 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
 
   const countFolderContents = (folder) => {
     const rootId = getRootItemId(folder.id);
-    if (isMonthFolder(folder)) {
-      const fileCnt = finFiles.filter(f => f.item_id === rootId && Number(f.year) === folder.year_num && Number(f.month) === folder.month_num).length;
+    const meta = folderMeta(folder);
+    if (meta.type === "month") {
+      const fileCnt = finFiles.filter(f => f.item_id === rootId && Number(f.year) === meta.year && Number(f.month) === meta.month).length;
       return { subCnt: 0, fileCnt, ymCnt: 0 };
     }
-    if (isYearFolder(folder)) {
+    if (meta.type === "year") {
       const subCnt = childFolders(folder.id).length;
-      const ymCnt = finFiles.filter(f => f.item_id === rootId && Number(f.year) === folder.year_num && !isDirectFile(f)).length;
+      const ymCnt = finFiles.filter(f => f.item_id === rootId && Number(f.year) === meta.year && !isDirectFile(f)).length;
       return { subCnt, fileCnt: 0, ymCnt };
     }
     const subCnt = childFolders(folder.id).length;
@@ -376,8 +399,8 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     const onTouchEnd = makeTouchEnd(siblings);
     return siblings.map((item, i) => {
       const counts = countFolderContents(item);
-      const isCurrentYear = isYearFolder(item) && item.year_num === cy;
-      const isCurrentMonth = isMonthFolder(item) && item.year_num === cy && item.month_num === cm;
+      const isCurrentYear = folderMeta(item).type === "year" && folderMeta(item).year === cy;
+      const isCurrentMonth = folderMeta(item).type === "month" && folderMeta(item).year === cy && folderMeta(item).month === cm;
       return (
         <div
           key={item.id}
@@ -529,7 +552,8 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
   // ── 月フォルダ：ファイル一覧 ──
   if (finItem && isMonthFolder(finItem)) {
     const rootId = getRootItemId(finItem.id);
-    const monthFiles = finFiles.filter(f => f.item_id === rootId && Number(f.year) === finItem.year_num && Number(f.month) === finItem.month_num);
+    const meta = folderMeta(finItem);
+    const monthFiles = finFiles.filter(f => f.item_id === rootId && Number(f.year) === meta.year && Number(f.month) === meta.month);
     const breadcrumb = [...folderPath, { id: finItem.id, label: finItem.label, icon: finItem.icon }];
 
     return layoutShell(
@@ -542,7 +566,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
           </div>
           <label style={{ background: "#E07B39", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
             ＋ 追加
-            <input type="file" accept="image/*,application/pdf,.xlsx,.docx,.xls,.doc" multiple onChange={async e => { for (const f of Array.from(e.target.files)) { await uploadFinFile(f, rootId, finItem.year_num, finItem.month_num); } e.target.value = ""; }} style={{ display: "none" }} />
+            <input type="file" accept="image/*,application/pdf,.xlsx,.docx,.xls,.doc" multiple onChange={async e => { for (const f of Array.from(e.target.files)) { await uploadFinFile(f, rootId, meta.year, meta.month); } e.target.value = ""; }} style={{ display: "none" }} />
           </label>
         </div>
         <div style={{ padding: isPC ? "14px 0" : 14 }}>
