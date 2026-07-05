@@ -40,6 +40,8 @@ const displayFolderIcon = (folder, meta) => {
   return folder.icon || "📁";
 };
 
+const displayFolderLabel = (folder, meta) => folder.label || "";
+
 const genYM = () => {
   const now = new Date(), res = {};
   for (let y = 2022; y <= now.getFullYear(); y++) {
@@ -58,6 +60,8 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
   const [folderForm, setFolderForm] = useState({ label: "", icon: "📁" });
   const [addParentId, setAddParentId] = useState(null);
   const [editTarget, setEditTarget] = useState(null);
+  const [editFileTarget, setEditFileTarget] = useState(null);
+  const [hiddenFolderIds, setHiddenFolderIds] = useState([]);
   const [conf, setConf] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(false);
   const [initializing, setInitializing] = useState(false);
@@ -107,6 +111,29 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     };
     initDefaults();
   }, []);
+
+  useEffect(() => {
+    const loadHidden = async () => {
+      const { data } = await supabase.from("home_settings").select("value").eq("id", "finance_hidden_folders").single();
+      const ids = data?.value?.ids || data?.value || [];
+      if (Array.isArray(ids)) setHiddenFolderIds(ids);
+    };
+    loadHidden();
+  }, []);
+
+  const toggleFolderVisibility = async (id) => {
+    const next = hiddenFolderIds.includes(id)
+      ? hiddenFolderIds.filter(x => x !== id)
+      : [...hiddenFolderIds, id];
+    setHiddenFolderIds(next);
+    await supabase.from("home_settings").upsert({
+      id: "finance_hidden_folders",
+      value: { ids: next },
+      updated_at: new Date().toISOString(),
+    });
+  };
+
+  const isFolderHidden = (id) => hiddenFolderIds.includes(id);
 
   const ensureYearFolders = async (rootId) => {
     if (ymSyncedRef.current.has(`y:${rootId}`)) return;
@@ -203,6 +230,15 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     await supabase.from("finance_files").delete().eq("id", id);
     setFinFiles(prev => prev.filter(f => f.id !== id));
     setFinPrev(null);
+  };
+
+  const updateFinFile = async () => {
+    if (!editFileTarget?.name?.trim()) return;
+    await supabase.from("finance_files").update({ name: editFileTarget.name.trim() }).eq("id", editFileTarget.id);
+    setFinFiles(prev => prev.map(f => f.id === editFileTarget.id ? { ...f, name: editFileTarget.name.trim() } : f));
+    if (finPrev?.id === editFileTarget.id) setFinPrev(prev => ({ ...prev, name: editFileTarget.name.trim() }));
+    setEditFileTarget(null);
+    setFinModal(null);
   };
 
   const [opening, setOpening] = useState(false);
@@ -329,7 +365,12 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
   };
 
   const enterSubfolder = (folder) => {
-    setFolderPath(prev => [...prev, { id: finItem.id, label: finItem.label, icon: finItem.icon }]);
+    const meta = folderMeta(finItem);
+    setFolderPath(prev => [...prev, {
+      id: finItem.id,
+      label: displayFolderLabel(finItem, meta),
+      icon: displayFolderIcon(finItem, meta),
+    }]);
     setFinItem(folder);
   };
 
@@ -383,34 +424,40 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
 
   const renderFileRow = (f) => (
     <div key={f.id} style={{ background: "#fff", borderRadius: 12, marginBottom: 8, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", overflow: "hidden" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", cursor: "pointer" }} onClick={() => openFile(f)}>
-        <span style={{ fontSize: 28, flexShrink: 0 }}>{fileIcon(f)}</span>
-        <div style={{ flex: 1, overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px" }}>
+        <span style={{ fontSize: 28, flexShrink: 0, cursor: "pointer" }} onClick={() => openFile(f)}>{fileIcon(f)}</span>
+        <div style={{ flex: 1, overflow: "hidden", cursor: "pointer" }} onClick={() => openFile(f)}>
           <div style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#1F2937" }}>{f.name}</div>
           <div style={{ fontSize: 11, color: "#9CA3AF" }}>{f.size ? `${(f.size / 1024).toFixed(0)}KB` : ""}</div>
         </div>
-        <span style={{ color: "#9CA3AF", fontSize: 14, flexShrink: 0 }}>›</span>
+        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+          <button onClick={() => { setEditFileTarget({ ...f }); setFinModal("editFile"); }} style={{ background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, color: "#1A3A5C", cursor: "pointer" }}>✏️</button>
+          <button onClick={() => setConf({ msg: `「${f.name}」\n\nこの操作は元に戻せません。\n削除しますか？`, onOk: () => { deleteFinFile(f.id); setConf(null); } })} style={{ background: "#FEF2F2", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, color: "#DC2626", cursor: "pointer" }}>🗑</button>
+        </div>
       </div>
-      <div style={{ display: "flex", borderTop: "1px solid #F3F4F6" }}>
-        {f.url && f.url.startsWith("http") && <a href={f.url} download={f.name} target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "8px 0", display: "flex", alignItems: "center", justifyContent: "center", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#059669", fontWeight: 700, textDecoration: "none" }}>⬇ 保存</a>}
-        <button onClick={() => setConf({ msg: `「${f.name}」\n\nこの操作は元に戻せません。\n削除しますか？`, onOk: () => { deleteFinFile(f.id); setConf(null); } })} style={{ flex: 1, padding: "8px 0", background: "none", border: "none", fontSize: 12, color: "#DC2626", fontWeight: 700, cursor: "pointer" }}>🗑 削除</button>
-      </div>
+      {f.url && f.url.startsWith("http") && (
+        <div style={{ borderTop: "1px solid #F3F4F6" }}>
+          <a href={f.url} download={f.name} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "8px 0", fontSize: 12, color: "#059669", fontWeight: 700, textDecoration: "none" }}>⬇ 保存</a>
+        </div>
+      )}
     </div>
   );
 
-  const renderFolderRows = (siblings, { onOpen }) => {
+  const renderFolderRows = (siblings, { onOpen, showVisibility = false }) => {
     const onDrop = makeDropHandler(siblings);
     const onTouchEnd = makeTouchEnd(siblings);
     return siblings.map((item, i) => {
+      const meta = folderMeta(item);
       const counts = countFolderContents(item);
-      const isCurrentYear = folderMeta(item).type === "year" && folderMeta(item).year === cy;
-      const isCurrentMonth = folderMeta(item).type === "month" && folderMeta(item).year === cy && folderMeta(item).month === cm;
+      const isCurrentYear = meta.type === "year" && meta.year === cy;
+      const isCurrentMonth = meta.type === "month" && meta.year === cy && meta.month === cm;
+      const hidden = showVisibility && isFolderHidden(item.id);
       return (
         <div
           key={item.id}
           data-folder-row={i}
-          draggable
-          onDragStart={() => handleDragStart(i)}
+          draggable={!hidden}
+          onDragStart={() => !hidden && handleDragStart(i)}
           onDragOver={e => handleDragOver(e, i)}
           onDrop={() => onDrop(i)}
           onDragEnd={handleDragEnd}
@@ -418,29 +465,39 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
             display: "flex", alignItems: "center", gap: 14, padding: "14px 18px",
             borderBottom: i < siblings.length - 1 ? "1px solid #F3F4F6" : "none",
             background: overIdx === i && dragIdx !== i ? "#EFF6FF" : dragIdx === i ? "#F3F4F6" : "#fff",
-            transition: "background 0.15s",
-            opacity: dragIdx === i ? 0.5 : 1,
+            transition: "background 0.15s, opacity 0.15s",
+            opacity: hidden ? 0.35 : dragIdx === i ? 0.5 : 1,
             borderLeft: isCurrentYear ? "4px solid #1A3A5C" : isCurrentMonth ? "4px solid #E07B39" : "4px solid transparent",
           }}
         >
+          {!hidden && (
           <span
             style={{ fontSize: 18, color: "#D1D5DB", cursor: "grab", flexShrink: 0, userSelect: "none", touchAction: "none" }}
             onTouchStart={makeTouchStart(i)}
             onTouchMove={handleTouchMove}
             onTouchEnd={onTouchEnd}
           >☰</span>
-          <span style={{ fontSize: 26 }}>{displayFolderIcon(item, folderMeta(item))}</span>
-          <div style={{ flex: 1, cursor: "pointer" }} onClick={() => onOpen(item)}>
+          )}
+          {hidden && <span style={{ width: 18, flexShrink: 0 }} />}
+          <span style={{ fontSize: 26 }}>{displayFolderIcon(item, meta)}</span>
+          <div style={{ flex: 1, cursor: hidden ? "default" : "pointer" }} onClick={() => !hidden && onOpen(item)}>
             <div style={{ fontWeight: 700, fontSize: 14, color: "#1F2937", display: "flex", alignItems: "center", gap: 6 }}>
-              {item.label}
+              {displayFolderLabel(item, meta)}
               {isCurrentYear && <span style={{ fontSize: 10, background: "#1A3A5C", color: "#fff", borderRadius: 4, padding: "1px 6px", fontWeight: 700 }}>今年</span>}
               {isCurrentMonth && <span style={{ fontSize: 10, background: "#E07B39", color: "#fff", borderRadius: 4, padding: "1px 6px", fontWeight: 700 }}>今月</span>}
             </div>
             <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>{folderSubtitle(item, counts)}</div>
           </div>
           <div style={{ display: "flex", gap: 6 }}>
+            {showVisibility && (
+              <button
+                onClick={e => { e.stopPropagation(); toggleFolderVisibility(item.id); }}
+                title={hidden ? "表示する" : "非表示にする"}
+                style={{ background: hidden ? "#F3F4F6" : "#F0FDF4", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}
+              >{hidden ? "👁‍🗨" : "👁"}</button>
+            )}
             <button onClick={e => { e.stopPropagation(); setEditTarget({ ...item }); setFinModal("edit"); }} style={{ background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, color: "#1A3A5C", cursor: "pointer" }}>✏️</button>
-            <button onClick={e => { e.stopPropagation(); setConf({ msg: `「${item.label}」フォルダを削除しますか？\n\n中のサブフォルダも全て消えます。\nファイルは残りますが、フォルダは元に戻せません。`, onOk: () => { deleteFolder(item.id); setConf(null); } }); }} style={{ background: "#FEF2F2", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, color: "#DC2626", cursor: "pointer" }}>🗑</button>
+            <button onClick={e => { e.stopPropagation(); setConf({ msg: `「${displayFolderLabel(item, meta)}」フォルダを削除しますか？\n\n中のサブフォルダも全て消えます。\nファイルは残りますが、フォルダは元に戻せません。`, onOk: () => { deleteFolder(item.id); setConf(null); } }); }} style={{ background: "#FEF2F2", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, color: "#DC2626", cursor: "pointer" }}>🗑</button>
           </div>
           <span style={{ color: "#9CA3AF" }}>›</span>
         </div>
@@ -490,6 +547,11 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
             <Inp label="アイコン（絵文字）" value={editTarget.icon} onChange={e => setEditTarget({ ...editTarget, icon: e.target.value })} />
           )}
           <Inp label="フォルダ名 *" value={editTarget.label} onChange={e => setEditTarget({ ...editTarget, label: e.target.value })} />
+        </Modal>
+      )}
+      {finModal === "editFile" && editFileTarget && (
+        <Modal title="📄 ファイル名を編集" onClose={() => { setFinModal(null); setEditFileTarget(null); }} onSave={updateFinFile}>
+          <Inp label="ファイル名 *" value={editFileTarget.name} onChange={e => setEditFileTarget({ ...editFileTarget, name: e.target.value })} />
         </Modal>
       )}
       {opening && (
@@ -560,14 +622,14 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     const rootId = getRootItemId(finItem.id);
     const meta = folderMeta(finItem);
     const monthFiles = finFiles.filter(f => f.item_id === rootId && Number(f.year) === meta.year && Number(f.month) === meta.month);
-    const breadcrumb = [...folderPath, { id: finItem.id, label: finItem.label, icon: finItem.icon }];
+    const breadcrumb = [...folderPath, { id: finItem.id, label: displayFolderLabel(finItem, meta), icon: displayFolderIcon(finItem, meta) }];
 
     return layoutShell(
       <>
         <div style={{ background: "#1A3A5C", color: "#fff", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 50 }}>
           <button onClick={goBackFromFolder} style={{ background: "none", border: "none", color: "#fff", fontSize: 20, cursor: "pointer" }}>←</button>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 800, fontSize: 15 }}>{finItem.icon} {finItem.label}</div>
+            <div style={{ fontWeight: 800, fontSize: 15 }}>{displayFolderIcon(finItem, meta)} {displayFolderLabel(finItem, meta)}</div>
             {breadcrumbNav(breadcrumb)}
           </div>
           <label style={{ background: "#E07B39", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
@@ -589,15 +651,16 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
   if (finItem) {
     const siblings = childFolders(finItem.id);
     const directFiles = isYearFolder(finItem) ? [] : finFiles.filter(f => f.item_id === finItem.id && isDirectFile(f));
-    const breadcrumb = [...folderPath, { id: finItem.id, label: finItem.label, icon: finItem.icon }];
+    const breadcrumb = [...folderPath, { id: finItem.id, label: displayFolderLabel(finItem, folderMeta(finItem)), icon: displayFolderIcon(finItem, folderMeta(finItem)) }];
     const showAddFile = !isYearFolder(finItem);
+    const headerMeta = folderMeta(finItem);
 
     return layoutShell(
       <>
         <div style={{ background: "#1A3A5C", color: "#fff", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 50 }}>
           <button onClick={goBackFromFolder} style={{ background: "none", border: "none", color: "#fff", fontSize: 20, cursor: "pointer" }}>←</button>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 800, fontSize: 15 }}>{finItem.icon} {finItem.label}</div>
+            <div style={{ fontWeight: 800, fontSize: 15 }}>{displayFolderIcon(finItem, headerMeta)} {displayFolderLabel(finItem, headerMeta)}</div>
             {breadcrumbNav(breadcrumb)}
           </div>
           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
@@ -661,12 +724,13 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
       <div style={{ padding: isPC ? "14px 0" : 14 }}>
         {rootFolders.length > 1 && (
           <div style={{ fontSize: 11, color: "#9CA3AF", textAlign: "center", marginBottom: 8 }}>
-            ☰ を長押し（スマホ）またはドラッグ（PC）で並べ替え
+            ☰ を長押し（スマホ）またはドラッグ（PC）で並べ替え　・　👁 で非表示切替
           </div>
         )}
         <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
           {renderFolderRows(rootFolders, {
-            onOpen: (item) => { setFinItem(item); setFolderPath([]); },
+            onOpen: (item) => { if (!isFolderHidden(item.id)) { setFinItem(item); setFolderPath([]); } },
+            showVisibility: true,
           })}
           {rootFolders.length === 0 && !initializing && (
             <div style={{ textAlign: "center", padding: 40, color: "#9CA3AF" }}>
