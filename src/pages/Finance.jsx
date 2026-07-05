@@ -18,24 +18,26 @@ const DEFAULT_FINANCE_ITEMS = [
 const normParent = (id) => id || null;
 const isDirectFile = (f) => (f.year == null || f.year === 0) && (f.month == null || f.month === 0);
 
-const yearFolderId = (rootId, year) => `ym-y-${rootId}-${year}`;
-const monthFolderId = (yearFolderIdVal, month) => `ym-m-${yearFolderIdVal}-${month}`;
-
 const parseFolderMeta = (folder, allFolders = []) => {
   if (!folder) return { type: "normal", year: null, month: null };
-  if (folder.folder_type === "year") return { type: "year", year: folder.year_num, month: null };
-  if (folder.folder_type === "month") return { type: "month", year: folder.year_num, month: folder.month_num };
-
-  const yearMatch = folder.id?.match(/^ym-y-(.+)-(\d+)$/);
-  if (yearMatch) return { type: "year", year: Number(yearMatch[2]), month: null };
-
-  const monthMatch = folder.id?.match(/^ym-m-(.+)-(\d+)$/);
-  if (monthMatch) {
-    const yearFolder = allFolders.find(f => f.id === monthMatch[1]);
-    const yMeta = yearFolder ? parseFolderMeta(yearFolder, allFolders) : { year: null };
-    return { type: "month", year: yMeta.year, month: Number(monthMatch[2]) };
+  const icon = folder.icon || "";
+  if (icon.startsWith("Y:")) {
+    const year = Number(icon.slice(2));
+    if (!Number.isNaN(year)) return { type: "year", year, month: null };
+  }
+  if (icon.startsWith("M:")) {
+    const month = Number(icon.slice(2));
+    const parent = allFolders.find(f => f.id === folder.parent_id);
+    const pMeta = parent ? parseFolderMeta(parent, allFolders) : { year: null };
+    return { type: "month", year: pMeta.year, month: Number.isNaN(month) ? null : month };
   }
   return { type: "normal", year: null, month: null };
+};
+
+const displayFolderIcon = (folder, meta) => {
+  if (meta.type === "year") return "📁";
+  if (meta.type === "month") return "📅";
+  return folder.icon || "📁";
 };
 
 const genYM = () => {
@@ -113,13 +115,12 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     const created = [];
 
     for (const y of Object.keys(ymData).map(Number).sort((a, b) => b - a)) {
-      if (finFolders.some(f => f.id === yearFolderId(rootId, y))) continue;
+      if (childFolders(rootId).some(f => folderMeta(f).type === "year" && folderMeta(f).year === y)) continue;
       const siblings = childFolders(rootId);
-      const { data, error } = await supabase.from("finance_folders").upsert([{
-        id: yearFolderId(rootId, y),
-        parent_id: rootId, label: `${y}年`, icon: "📁",
+      const { data, error } = await supabase.from("finance_folders").insert([{
+        parent_id: rootId, label: `${y}年`, icon: `Y:${y}`,
         sort_order: siblings.length + created.length, is_default: false,
-      }], { onConflict: "id" }).select();
+      }]).select();
       if (error) { console.warn("年フォルダ作成エラー:", error.message); continue; }
       if (data) created.push(data[0]);
     }
@@ -139,13 +140,12 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     const created = [];
 
     for (const m of months) {
-      if (finFolders.some(f => f.id === monthFolderId(yearFolder.id, m))) continue;
+      if (childFolders(yearFolder.id).some(f => folderMeta(f).type === "month" && folderMeta(f).month === m)) continue;
       const siblings = childFolders(yearFolder.id);
-      const { data, error } = await supabase.from("finance_folders").upsert([{
-        id: monthFolderId(yearFolder.id, m),
-        parent_id: yearFolder.id, label: `${m}月`, icon: "📅",
+      const { data, error } = await supabase.from("finance_folders").insert([{
+        parent_id: yearFolder.id, label: `${m}月`, icon: `M:${m}`,
         sort_order: siblings.length + created.length, is_default: false,
-      }], { onConflict: "id" }).select();
+      }]).select();
       if (error) { console.warn("月フォルダ作成エラー:", error.message); continue; }
       if (data) created.push(data[0]);
     }
@@ -248,9 +248,13 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
 
   const updateFolder = async () => {
     if (!editTarget) return;
-    await supabase.from("finance_folders").update({ label: editTarget.label, icon: editTarget.icon }).eq("id", editTarget.id);
-    setFinFolders(prev => prev.map(f => f.id === editTarget.id ? { ...f, ...editTarget } : f));
-    if (finItem?.id === editTarget.id) setFinItem(prev => ({ ...prev, ...editTarget }));
+    const meta = folderMeta(editTarget);
+    const payload = meta.type === "normal"
+      ? { label: editTarget.label, icon: editTarget.icon }
+      : { label: editTarget.label };
+    await supabase.from("finance_folders").update(payload).eq("id", editTarget.id);
+    setFinFolders(prev => prev.map(f => f.id === editTarget.id ? { ...f, ...payload } : f));
+    if (finItem?.id === editTarget.id) setFinItem(prev => ({ ...prev, ...payload }));
     setEditTarget(null);
     setFinModal(null);
   };
@@ -425,7 +429,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
             onTouchMove={handleTouchMove}
             onTouchEnd={onTouchEnd}
           >☰</span>
-          <span style={{ fontSize: 26 }}>{item.icon}</span>
+          <span style={{ fontSize: 26 }}>{displayFolderIcon(item, folderMeta(item))}</span>
           <div style={{ flex: 1, cursor: "pointer" }} onClick={() => onOpen(item)}>
             <div style={{ fontWeight: 700, fontSize: 14, color: "#1F2937", display: "flex", alignItems: "center", gap: 6 }}>
               {item.label}
@@ -482,7 +486,9 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
       )}
       {finModal === "edit" && editTarget && (
         <Modal title="📁 フォルダを編集" onClose={() => { setFinModal(null); setEditTarget(null); }} onSave={updateFolder}>
-          <Inp label="アイコン（絵文字）" value={editTarget.icon} onChange={e => setEditTarget({ ...editTarget, icon: e.target.value })} />
+          {folderMeta(editTarget).type === "normal" && (
+            <Inp label="アイコン（絵文字）" value={editTarget.icon} onChange={e => setEditTarget({ ...editTarget, icon: e.target.value })} />
+          )}
           <Inp label="フォルダ名 *" value={editTarget.label} onChange={e => setEditTarget({ ...editTarget, label: e.target.value })} />
         </Modal>
       )}
