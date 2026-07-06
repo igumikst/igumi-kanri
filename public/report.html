@@ -829,10 +829,9 @@ async function buildUnionPhotoSheets(wb, mincho, thin, hair) {
     ws.pageSetup.paperSize=9;ws.pageSetup.orientation='portrait';
     ws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
     // 印刷範囲A1:L37＋1ページに収める（正解準拠・空白ページ防止）
+    // scale=91で縮小（fitToPageはExcelJSで効かない。スマホExcelでも安定）
+    ws.pageSetup.scale=91;
     ws.pageSetup.printArea='A1:L37';
-    ws.pageSetup.fitToPage=true;
-    ws.pageSetup.fitToWidth=1;
-    ws.pageSetup.fitToHeight=1;
 
     // 列幅（エクレール正解ファイル準拠）
     ws.getColumn('A').width=2.87;
@@ -879,13 +878,7 @@ async function buildUnionPhotoSheets(wb, mincho, thin, hair) {
       }
 
       if(p.dataUrl){
-        const imgBase64=await toJpegBase64(p.dataUrl,quality);
-        const imgId=wb.addImage({base64:imgBase64,extension:'jpeg'});
-        ws.addImage(imgId,{
-          tl:{col:1, row:blk.imgTlRow},
-          br:{col:7, row:blk.imgBrRow},
-          editAs:'twoCell'
-        });
+        await embedPhotoImage(ws,wb,p.dataUrl,blk,7,quality);
       }
       document.getElementById('loading-s').textContent=`ページ${pg+1}/${pageCount} 写真${bi+1}/3`;
       await sleep(5);
@@ -913,10 +906,9 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
     const ws=wb.addWorksheet(String(pg+1).padStart(3,'0'));
     ws.pageSetup.paperSize=9;ws.pageSetup.orientation='portrait';
     ws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
+    // scale=91で縮小（fitToPageはExcelJSで効かない。ライオンズOKファイルと同じ方式）
+    ws.pageSetup.scale=91;
     ws.pageSetup.printArea='A1:L37';
-    ws.pageSetup.fitToPage=true;
-    ws.pageSetup.fitToWidth=1;
-    ws.pageSetup.fitToHeight=1;
 
     // 列幅
     const photoCols={A:2.875,B:9,C:9,D:9,E:9,F:9,G:9,H:11.875,I:4.5,J:9,K:7,L:7};
@@ -944,13 +936,13 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
       const noCell=ws.getCell(blk.noRow,10);
       noCell.value='No.';
       noCell.font=minchoFont(14);
-      noCell.alignment={vertical:'center'};
+      noCell.alignment={vertical:'middle'};
       noCell.border={bottom:thin};
 
       const noValCell=ws.getCell(blk.noRow,11);
       noValCell.value=globalNo;
       noValCell.font=minchoFont(14);
-      noValCell.alignment={vertical:'center'};
+      noValCell.alignment={vertical:'middle'};
       noValCell.border={bottom:thin};
 
       // キャプション欄（J:L結合・各行・下線hair）→ 実物通り
@@ -962,20 +954,14 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
         const cell=ws.getCell(r1,10);
         cell.value=capLines[li]||'';
         cell.font=minchoFont(11);
-        cell.alignment={vertical:'center',wrapText:true};
+        cell.alignment={vertical:'middle',wrapText:true};
         // 全行 bottom:hair のみ（top+bottomの重複で太く見えるのを防ぐ）
         cell.border={bottom:hair};
       }
 
       // 写真埋め込み（B列col1〜H列col8、行はブロック全体）
       if(p.dataUrl){
-        const imgBase64=await toJpegBase64(p.dataUrl,quality);
-        const imgId=wb.addImage({base64:imgBase64,extension:'jpeg'});
-        ws.addImage(imgId,{
-          tl:{col:1, row:blk.imgTlRow},
-          br:{col:8, row:blk.imgBrRow},
-          editAs:'oneCell'
-        });
+        await embedPhotoImage(ws,wb,p.dataUrl,blk,8,quality);
       }
       document.getElementById('loading-s').textContent=`ページ${pg+1}/${pageCount} 写真${bi+1}/3`;
       await sleep(5);
@@ -1033,25 +1019,56 @@ function loadData(e){
   reader.readAsText(file);e.target.value='';
 }
 
-function toJpegBase64(dataUrl,q){
-  return new Promise((resolve)=>{
+function toJpegBase64(dataUrl,q,maxPx){
+  return new Promise((resolve,reject)=>{
     const img=new Image();
+    img.onerror=()=>reject(new Error('画像の読み込みに失敗しました'));
     img.onload=()=>{
-      const canvas=document.createElement('canvas');canvas.width=img.width;canvas.height=img.height;
-      canvas.getContext('2d').drawImage(img,0,0);
+      let w=img.width,h=img.height;
+      const limit=maxPx||960;
+      if(w>limit||h>limit){
+        if(w>=h){h=Math.round(h*limit/w);w=limit;}
+        else{w=Math.round(w*limit/h);h=limit;}
+      }
+      const canvas=document.createElement('canvas');
+      canvas.width=w;canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
       resolve(canvas.toDataURL('image/jpeg',q||0.85).replace(/^data:image\/jpeg;base64,/,''));
-    };img.src=dataUrl;
+    };
+    img.src=dataUrl;
   });
 }
 
-// キャプションをmaxLen文字ごとに分割（最大3行）
-function splitCaption(caption,maxLen=12){
+// 写真エリアのピクセルサイズを列幅・行高から算出
+function calcImageExtents(ws,tlCol,tlRow,brCol,brRow){
+  let width=0,height=0;
+  for(let c=tlCol;c<brCol;c++){
+    const w=ws.getColumn(c+1).width||9;
+    width+=Math.round(w*7+5);
+  }
+  for(let r=tlRow;r<brRow;r++){
+    const h=ws.getRow(r+1).height||15;
+    height+=Math.round(h*96/72);
+  }
+  return{width:Math.max(width,50),height:Math.max(height,50)};
+}
+
+// スマホExcel向け: oneCellAnchor+extで画像埋め込み（twoCellAnchorはモバイルで非表示になりやすい）
+async function embedPhotoImage(ws,wb,dataUrl,blk,brCol,q){
+  const imgBase64=await toJpegBase64(dataUrl,q);
+  const imgId=wb.addImage({base64:imgBase64,extension:'jpeg'});
+  const ext=calcImageExtents(ws,1,blk.imgTlRow,brCol,blk.imgBrRow);
+  ws.addImage(imgId,{tl:{col:1,row:blk.imgTlRow},ext,editAs:'oneCell'});
+}
+
+// 改行を尊重しつつmaxLen文字で折り返し（最大3行）
+function splitCaption(caption,maxLen=12,maxLines=3){
   if(!caption)return[''];
-  const maxLines=3;
-  const text=String(caption);
   const lines=[];
-  for(let i=0;i<text.length&&lines.length<maxLines;i+=maxLen){
-    lines.push(text.slice(i,i+maxLen));
+  for(const raw of String(caption).split(/\n/)){
+    if(lines.length>=maxLines)break;
+    if(raw.length<=maxLen){lines.push(raw);}
+    else{for(let i=0;i<raw.length&&lines.length<maxLines;i+=maxLen){lines.push(raw.slice(i,i+maxLen));}}
   }
   return lines.length>0?lines:[''];
 }
