@@ -6,6 +6,8 @@
 <title>工事写真報告書作成ツール</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 :root{
   --navy:#1A3A5C;--orange:#E07B39;--bg:#F0F4F8;--white:#fff;
@@ -111,6 +113,34 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
 .filename-note{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.7}
 .filename-note .example{font-weight:700;color:var(--text)}
 .filename-note .caution{color:var(--orange);font-weight:700;margin-top:4px;display:block}
+.export-note{font-size:11px;color:var(--muted);line-height:1.7;margin:-4px 0 10px;padding:10px 12px;background:#F8FAFC;border-radius:10px;border:1px solid var(--border)}
+.export-note strong{color:var(--navy)}
+.btn-orange{background:var(--orange);color:#fff;font-size:16px;padding:15px}
+#pdf-render-root{position:fixed;left:-12000px;top:0;z-index:-1;pointer-events:none}
+.pdf-page{width:794px;height:1123px;padding:36px 44px;background:#fff;box-sizing:border-box;font-family:'Hiragino Mincho ProN','Yu Mincho','MS PMincho',serif;color:#111;overflow:hidden}
+.pdf-cover-title{text-align:center;font-size:28px;font-weight:700;letter-spacing:.35em;padding:14px 0;margin:80px auto 60px;border:3px double #111;width:88%}
+.pdf-cover-row{display:flex;align-items:center;border-bottom:1px solid #333;min-height:52px;margin-bottom:2px;font-size:15px}
+.pdf-cover-lbl{width:110px;flex-shrink:0;font-size:14px;letter-spacing:.1em}
+.pdf-cover-val{flex:1;padding-left:8px}
+.pdf-photo-row{display:flex;border-bottom:1px solid #ccc;height:310px}
+.pdf-photo-row:last-child{border-bottom:none}
+.pdf-photo-img{width:62%;height:100%;background:#f1f5f9;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.pdf-photo-img img{width:100%;height:100%;object-fit:cover;display:block}
+.pdf-photo-info{flex:1;border-left:1px solid #ccc;padding:10px 12px;display:flex;flex-direction:column}
+.pdf-photo-no-lbl{font-size:10px;color:#666}
+.pdf-photo-no{font-size:26px;font-weight:900;color:#1A3A5C;line-height:1.1}
+.pdf-photo-cap{font-size:11px;line-height:1.6;margin-top:6px;border-top:1px solid #ddd;padding-top:6px;white-space:pre-wrap;word-break:break-all;flex:1}
+.pdf-union-cover{display:flex;flex-direction:column;height:100%;border:1px solid #333;padding:28px 24px;box-sizing:border-box}
+.pdf-union-building{text-align:center;font-size:22px;font-weight:700;margin:60px 0 40px}
+.pdf-union-work{text-align:center;font-size:20px;font-weight:700;margin-bottom:auto;padding:0 20px}
+.pdf-union-date{text-align:center;font-size:18px;font-weight:700;margin-bottom:80px}
+.pdf-union-company{text-align:center;font-size:18px;font-weight:700;margin-top:auto}
+.pdf-report-title{text-align:center;font-size:22px;font-weight:700;border:1px solid #333;padding:12px;margin-bottom:20px}
+.pdf-report-row{display:flex;border:1px solid #333;border-top:none;min-height:40px;font-size:13px}
+.pdf-report-row:first-of-type{border-top:1px solid #333}
+.pdf-report-lbl{width:100px;border-right:1px solid #333;padding:8px 10px;background:#f8fafc;flex-shrink:0}
+.pdf-report-val{flex:1;padding:8px 12px}
+.pdf-report-content{margin-top:16px;border:1px solid #333;padding:12px;font-size:12px;line-height:1.8;min-height:200px;white-space:pre-wrap}
 </style>
 </head>
 <body>
@@ -234,6 +264,8 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
   <div class="card" id="card-export">
     <div class="card-ttl">📤 出力・保存</div>
     <button class="btn btn-blue" onclick="aiReviewReport()" style="margin-bottom:10px">🧭 AIに精査してもらう</button>
+    <button class="btn btn-orange" onclick="exportPdf()" style="margin-bottom:8px">📄 PDFで報告書を出力</button>
+    <p class="export-note"><strong>LINEで送ってそのまま見せる場合はPDFをご利用ください。</strong><br>XLSXはExcelアプリでの編集・印刷用です（LINE内プレビューでは画像や表紙が正しく表示されません）。</p>
     <button class="btn btn-green" onclick="exportXlsx()" style="margin-bottom:10px">📊 XLSXで報告書を出力</button>
     <button class="btn btn-ghost" onclick="saveToArchive()" style="margin-bottom:10px">💾 保管箱に保存</button>
     <div class="divider"></div>
@@ -247,6 +279,8 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
   </div>
 
 </div>
+
+<div id="pdf-render-root"></div>
 
 <div class="loading" id="loading" style="display:none">
   <div class="spinner"></div>
@@ -451,21 +485,157 @@ function refreshPreview(){
 }
 
 // ============================================================
-// XLSX EXPORT
+// 共通：出力前バリデーション・ファイル名
 // ============================================================
-async function exportXlsx() {
-  const customFn=document.getElementById('filename').value.trim();
-
+function validateReportForExport(){
   if(reportType==='union'){
     const uBuilding=document.getElementById('u-building').value.trim();
     const uWorkname=document.getElementById('u-workname').value.trim();
-    if(!uBuilding||!uWorkname){showToast('⚠️ 建築物名称と工事名称を入力してください');return;}
-  } else {
+    if(!uBuilding||!uWorkname){showToast('⚠️ 建築物名称と工事名称を入力してください');return false;}
+  }else{
     const propName=document.getElementById('prop-name').value.trim();
     const workName=document.getElementById('work-name').value.trim();
-    if(!propName||!workName){showToast('⚠️ 物件名と件名を入力してください');return;}
+    if(!propName||!workName){showToast('⚠️ 物件名と件名を入力してください');return false;}
   }
-  if(photos.length===0){showToast('⚠️ 写真を1枚以上追加してください');return;}
+  if(photos.length===0){showToast('⚠️ 写真を1枚以上追加してください');return false;}
+  return true;
+}
+
+function formatDateJa(dateStr,spaced=true){
+  if(!dateStr)return'';
+  const d=new Date(dateStr);
+  const y=d.getFullYear(),m=d.getMonth()+1,day=d.getDate();
+  return spaced?`${y}年 ${m}月${day}日`:`${y}年${m}月${day}日`;
+}
+
+function getExportFilename(ext){
+  const customFn=document.getElementById('filename').value.trim();
+  if(customFn){
+    let name=customFn.replace(/[\\/:*?"<>|]/g,'');
+    if(!name.toLowerCase().endsWith('.'+ext))name+='.'+ext;
+    return name;
+  }
+  const safe=s=>s.replace(/[\\/:*?"<>|]/g,'').substring(0,20);
+  const propName=reportType==='union'?document.getElementById('u-building').value.trim():document.getElementById('prop-name').value.trim();
+  const workName=reportType==='union'?document.getElementById('u-workname').value.trim():document.getElementById('work-name').value.trim();
+  const workDate=reportType==='union'?document.getElementById('u-date').value:document.getElementById('work-date').value;
+  const datePart=workDate?workDate.replace(/-/g,''):'';
+  const prefix=reportType==='union'?'調査報告書':reportType==='tama'?'報告書_多摩':'報告書';
+  return `${prefix}_${safe(propName)}_${safe(workName)}_${datePart}.${ext}`;
+}
+
+// ============================================================
+// PDF EXPORT（LINE等でそのまま閲覧可能）
+// ============================================================
+function buildPdfCoverRow(label,value){
+  return `<div class="pdf-cover-row"><div class="pdf-cover-lbl">${esc(label)}</div><div class="pdf-cover-val">${esc(value)}</div></div>`;
+}
+
+function buildPdfPagesHtml(){
+  const pages=[];
+  if(reportType==='union'){
+    const building=document.getElementById('u-building').value.trim();
+    const workname=document.getElementById('u-workname').value.trim();
+    const uDate=document.getElementById('u-date').value;
+    const company=document.getElementById('u-company').value.trim();
+    let uDateStr='';
+    if(uDate){const d=new Date(uDate);uDateStr=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+    pages.push(`<div class="pdf-page"><div class="pdf-union-cover">
+      <div class="pdf-union-building">${esc(building)}</div>
+      <div class="pdf-union-work">${esc(workname)}</div>
+      <div class="pdf-union-date">${esc(uDateStr)}</div>
+      <div class="pdf-union-company">${esc(company)}</div>
+    </div></div>`);
+    const address=document.getElementById('u-address').value.trim();
+    const worker=document.getElementById('u-worker').value.trim();
+    const content=document.getElementById('u-content').value.trim();
+    pages.push(`<div class="pdf-page">
+      <div class="pdf-report-title">調査報告書</div>
+      ${[['建築物名称',building],['住所',address],['工事名称',workname],['作業実施日',uDateStr],['作業者',worker]].map(([l,v])=>`<div class="pdf-report-row"><div class="pdf-report-lbl">${esc(l)}</div><div class="pdf-report-val">${esc(v)}</div></div>`).join('')}
+      <div style="text-align:center;font-size:13px;font-weight:700;margin:18px 0 8px">【　作　業　内　容　】</div>
+      <div class="pdf-report-content">${esc(content)}</div>
+      <div style="text-align:center;font-size:12px;margin-top:16px">（別紙写真添付参照）</div>
+      <div style="text-align:center;font-size:12px;margin-top:24px">上記の作業を実施いたしました。</div>
+      <div style="text-align:right;font-size:12px;margin-top:20px;padding-right:20px">以上</div>
+    </div>`);
+  }else{
+    const propName=document.getElementById('prop-name').value.trim();
+    const address=document.getElementById('prop-address').value.trim();
+    const workName=document.getElementById('work-name').value.trim();
+    const workDate=document.getElementById('work-date').value;
+    const worker=document.getElementById('worker').value.trim();
+    const workContent=document.getElementById('work-content').value.trim();
+    const dateStr=formatDateJa(workDate);
+    let rows=[['物　　件　　名',propName],['住　　　　　所',address],['件　　　　　名',workName],['作　　業　　日',dateStr],['施　　工　　者',worker]];
+    if(reportType==='tama'&&workContent.trim())rows.push(['内　　　　　容',workContent]);
+    pages.push(`<div class="pdf-page">
+      <div class="pdf-cover-title">工　事　写　真　帳</div>
+      ${rows.map(([l,v])=>buildPdfCoverRow(l,v)).join('')}
+    </div>`);
+  }
+  const pageCount=Math.ceil(photos.length/3);
+  for(let pg=0;pg<pageCount;pg++){
+    const pagePh=photos.slice(pg*3,pg*3+3);
+    let rows='';
+    for(let i=0;i<3;i++){
+      const p=pagePh[i];
+      const globalNo=pg*3+i+1;
+      if(p){
+        rows+=`<div class="pdf-photo-row">
+          <div class="pdf-photo-img">${p.dataUrl?`<img src="${p.dataUrl}" alt="">`:''}</div>
+          <div class="pdf-photo-info">
+            <div class="pdf-photo-no-lbl">No.</div>
+            <div class="pdf-photo-no">${globalNo}</div>
+            <div class="pdf-photo-cap">${esc(p.caption||'')}</div>
+          </div>
+        </div>`;
+      }else{
+        rows+=`<div class="pdf-photo-row" style="opacity:.25"><div class="pdf-photo-img"></div><div class="pdf-photo-info"></div></div>`;
+      }
+    }
+    pages.push(`<div class="pdf-page">${rows}</div>`);
+  }
+  return pages.join('');
+}
+
+async function waitForImages(el){
+  const imgs=el.querySelectorAll('img');
+  await Promise.all([...imgs].map(img=>img.complete?Promise.resolve():new Promise(r=>{img.onload=img.onerror=r;})));
+}
+
+async function exportPdf(){
+  if(!validateReportForExport())return;
+  showLoading('PDF生成中...','ページを描画中...');await sleep(80);
+  const root=document.getElementById('pdf-render-root');
+  try{
+    root.innerHTML=buildPdfPagesHtml();
+    const pageEls=root.querySelectorAll('.pdf-page');
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    for(let i=0;i<pageEls.length;i++){
+      await waitForImages(pageEls[i]);
+      document.getElementById('loading-s').textContent=`${i+1}/${pageEls.length}ページを変換中`;
+      const canvas=await html2canvas(pageEls[i],{scale:2,useCORS:true,backgroundColor:'#ffffff',logging:false});
+      const imgData=canvas.toDataURL('image/jpeg',0.92);
+      if(i>0)pdf.addPage();
+      pdf.addImage(imgData,'JPEG',0,0,210,297);
+      await sleep(10);
+    }
+    root.innerHTML='';
+    const filename=getExportFilename('pdf');
+    pdf.save(filename);
+    hideLoading();showToast(`✅ ${filename} を出力しました`);
+  }catch(err){
+    root.innerHTML='';
+    hideLoading();console.error(err);showToast('❌ エラー: '+err.message);
+  }
+}
+
+// ============================================================
+// XLSX EXPORT
+// ============================================================
+async function exportXlsx() {
+  if(!validateReportForExport())return;
 
   showLoading('XLSX生成中...',`${photos.length}枚を埋め込み中...`);await sleep(80);
 
@@ -483,17 +653,7 @@ async function exportXlsx() {
 
     const buf=await wb.xlsx.writeBuffer();
     const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-    let filename;
-    if(customFn){filename=customFn.replace(/[\\/:*?"<>|]/g,'');if(!filename.toLowerCase().endsWith('.xlsx'))filename+='.xlsx';}
-    else{
-      const safe=s=>s.replace(/[\\/:*?"<>|]/g,'').substring(0,20);
-      let propName=reportType==='union'?document.getElementById('u-building').value.trim():document.getElementById('prop-name').value.trim();
-      let workName=reportType==='union'?document.getElementById('u-workname').value.trim():document.getElementById('work-name').value.trim();
-      let workDate=reportType==='union'?document.getElementById('u-date').value:document.getElementById('work-date').value;
-      const datePart=workDate?workDate.replace(/-/g,''):'';
-      const prefix=reportType==='union'?'調査報告書':reportType==='tama'?'報告書_多摩':'報告書';
-      filename=`${prefix}_${safe(propName)}_${safe(workName)}_${datePart}.xlsx`;
-    }
+    const filename=getExportFilename('xlsx');
     saveAs(blob,filename);hideLoading();showToast(`✅ ${filename} を出力しました`);
   }catch(err){hideLoading();console.error(err);showToast('❌ エラー: '+err.message);}
 }
