@@ -660,6 +660,45 @@ async function exportXlsx() {
 }
 
 // ============================================================
+// 表紙シート用ヘルパー（シティフロント等・LINEプレビュー対応）
+// ============================================================
+function ensureRowCells(ws,row,fromCol,toCol){
+  for(let c=fromCol.charCodeAt(0);c<=toCol.charCodeAt(0);c++)ws.getCell(String.fromCharCode(c)+row);
+}
+
+function setupNormalCoverSheet(cws,minchoFont){
+  cws.pageSetup.paperSize=9;cws.pageSetup.orientation='portrait';
+  cws.pageSetup.scale=91;
+  cws.pageSetup.printArea='A1:L28';
+  cws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
+
+  // 列幅（シティフロント正解ファイル準拠）
+  const coverCols={A:4.3984375,B:10.09765625,C:8.09765625,D:8.09765625,E:8.09765625,F:8.09765625,G:8.09765625,H:10.69921875,I:4,J:8.09765625,K:8.09765625,L:4.3984375};
+  Object.entries(coverCols).forEach(([c,w])=>{cws.getColumn(c).width=w;});
+
+  // 行高（正解ファイル準拠）
+  [1,2,3,4,5,11,21,22,27,28,29,30,31,32,33,34].forEach(r=>{cws.getRow(r).height=30;});
+  cws.getRow(6).height=45.75;
+  cws.getRow(7).height=13.8;
+  cws.getRow(10).height=16.2;
+  [12,14,16,18,20].forEach(r=>{cws.getRow(r).height=65.1;});
+  [13,15,17,19].forEach(r=>{cws.getRow(r).height=20.1;});
+
+  // A〜L列を行1〜34まで埋める（スマホプレビューでグリッドが崩れないよう）
+  for(let r=1;r<=34;r++){
+    ensureRowCells(cws,r,'A','L');
+    if(r<=5||r>=32)cws.mergeCells(`J${r}:L${r}`);
+  }
+
+  // タイトル（罫線は結合後に消えるため fixCoverSheetXml で後処理）
+  cws.mergeCells('C6:J6');
+  const titleCell=cws.getCell('C6');
+  titleCell.value='工　事　写　真　帳';
+  titleCell.font=minchoFont(30,true);
+  titleCell.alignment={horizontal:'center',vertical:'middle'};
+}
+
+// ============================================================
 // 通常・多摩用ワークブック生成
 // ============================================================
 async function buildNormalWorkbook(wb, minchoFont, thin, double) {
@@ -673,34 +712,8 @@ async function buildNormalWorkbook(wb, minchoFont, thin, double) {
   let dateStr='';
   if(workDate){const d=new Date(workDate);dateStr=`${d.getFullYear()}年 ${d.getMonth()+1}月${d.getDate()}日`;}
 
-  // ─── 表紙シート ───
   const cws=wb.addWorksheet('表紙');
-  cws.pageSetup.paperSize=9;cws.pageSetup.orientation='portrait';
-  cws.pageSetup.scale=91;
-  cws.pageSetup.printArea='A1:L28';
-  cws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
-
-  const coverCols={A:4.875,B:11.25,C:9,D:13,E:13,F:13,G:13,H:11.875,I:4.5,J:9,K:13,L:4.875};
-  Object.entries(coverCols).forEach(([c,w])=>{cws.getColumn(c).width=w;});
-
-  [1,2,3,4,5].forEach(r=>{cws.getRow(r).height=30;});
-  cws.getRow(6).height=45.75;
-  cws.getRow(7).height=14.25;
-  cws.getRow(10).height=17.25;
-  cws.getRow(11).height=30;
-  cws.getRow(12).height=65.1; cws.getRow(13).height=20.1;
-  cws.getRow(14).height=65.1; cws.getRow(15).height=20.1;
-  cws.getRow(16).height=65.1; cws.getRow(17).height=20.1;
-  cws.getRow(18).height=65.1; cws.getRow(19).height=20.1;
-  cws.getRow(20).height=65.1;
-  // 行21・22は多摩の内容欄として後で上書きするので初期値は設定しない
-
-  cws.mergeCells('C6:J6');
-  const titleCell=cws.getCell('C6');
-  titleCell.value='工　事　写　真　帳';
-  titleCell.font=minchoFont(30,true);
-  titleCell.alignment={horizontal:'center',vertical:'middle'};
-  titleCell.border={left:double,right:double,top:double,bottom:double};
+  setupNormalCoverSheet(cws,minchoFont);
 
   const items=[
     ['B12','物　　件　　名','D12:K12',propName],
@@ -712,6 +725,7 @@ async function buildNormalWorkbook(wb, minchoFont, thin, double) {
 
   if(reportType==='tama' && workContent.trim()){
     cws.getRow(22).height=65.1; cws.getRow(23).height=20.1;
+    ensureRowCells(cws,22,'A','L'); ensureRowCells(cws,23,'A','L');
     items.push(['B22','内　　　　　容','D22:K22',workContent]);
   }
 
@@ -724,10 +738,7 @@ async function buildNormalWorkbook(wb, minchoFont, thin, double) {
     vc.border={bottom:thin};
   });
 
-  // 自由シート（空）
   wb.addWorksheet('自由シート');
-
-  // 写真シート
   await buildPhotoSheets(wb,minchoFont,thin);
 }
 
@@ -1235,11 +1246,38 @@ function fixDrawingXml(xml){
 
 function fixCoverSheetXml(xml){
   let out=xml.replace(/<pageSetup[^>]*\/>/,'<pageSetup paperSize="9" scale="91" orientation="portrait"/>');
+  out=out.replace(/<dimension ref="[^"]*"/,'<dimension ref="A1:L34"');
   out=out.replace(/ fitToWidth="[^"]*"/g,'').replace(/ fitToHeight="[^"]*"/g,'');
   out=out.replace(/ horizontalDpi="[^"]*"/g,'').replace(/ verticalDpi="[^"]*"/g,'');
   if(!out.includes('pageSetUpPr')){
     out=out.replace(/<worksheet([^>]*)>/,'<worksheet$1><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>');
   }
+  // タイトル行を正解ファイル形式に補正（各セル独立＋行の太線、LINEプレビュー対策）
+  const titleMatch=out.match(/<c r="C6"[^>]*t="s"[^>]*><v>(\d+)<\/v><\/c>/);
+  const titleInline=out.match(/<c r="C6"[^>]*>[\s\S]*?<\/c>/);
+  let titleCellXml;
+  if(titleInline)titleCellXml=titleInline[0];
+  else titleCellXml='<c r="C6" t="inlineStr"><is><t>工　事　写　真　帳</t></is></c>';
+  const row6Cells=['A6','B6','C6','D6','E6','F6','G6','H6','I6','J6','K6','L6'].map((ref)=>{
+    if(ref==='C6')return titleCellXml;
+    return `<c r="${ref}"/>`;
+  }).join('');
+  out=out.replace(/<row r="6"[^>]*>[\s\S]*?<\/row>/,
+    `<row r="6" spans="1:12" ht="45.75" customHeight="1" thickTop="1" thickBot="1">${row6Cells}</row>`);
+  // 行1〜5・32〜34 にセルが不足していれば補完
+  [1,2,3,4,5,32,33,34].forEach(r=>{
+    const rowRe=new RegExp(`<row r="${r}"([^>]*)>([\\s\\S]*?)<\\/row>`);
+    out=out.replace(rowRe,(full,attrs,body)=>{
+      let newBody=body;
+      'ABCDEFGHIJKL'.split('').forEach(col=>{
+        if(!new RegExp(`r="${col}${r}"`).test(newBody))newBody+=`<c r="${col}${r}"/>`;
+      });
+      let newAttrs=attrs;
+      if(!newAttrs.includes('spans'))newAttrs+=' spans="1:12"';
+      if(r<=5&&!newAttrs.includes('ht='))newAttrs+=' ht="30" customHeight="1"';
+      return `<row r="${r}"${newAttrs}>${newBody}</row>`;
+    });
+  });
   return out;
 }
 
