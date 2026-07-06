@@ -6,6 +6,7 @@
 <title>工事写真報告書作成ツール</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
@@ -265,7 +266,7 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
     <div class="card-ttl">📤 出力・保存</div>
     <button class="btn btn-blue" onclick="aiReviewReport()" style="margin-bottom:10px">🧭 AIに精査してもらう</button>
     <button class="btn btn-orange" onclick="exportPdf()" style="margin-bottom:8px">📄 PDFで報告書を出力</button>
-    <p class="export-note"><strong>LINEで送ってそのまま見せる場合はPDFをご利用ください。</strong><br>XLSXはExcelアプリでの編集・印刷用です（LINE内プレビューでは画像や表紙が正しく表示されません）。</p>
+    <p class="export-note"><strong>LINEで送ってそのまま見せる場合</strong>はPDF、または下のXLSX（シティフロント等と同形式）をご利用ください。<br>Excelでの編集が必要な場合もXLSXをお使いください。</p>
     <button class="btn btn-green" onclick="exportXlsx()" style="margin-bottom:10px">📊 XLSXで報告書を出力</button>
     <button class="btn btn-ghost" onclick="saveToArchive()" style="margin-bottom:10px">💾 保管箱に保存</button>
     <div class="divider"></div>
@@ -651,7 +652,7 @@ async function exportXlsx() {
       await buildNormalWorkbook(wb,minchoFont,thin,double);
     }
 
-    const buf=await wb.xlsx.writeBuffer();
+    const buf=await fixXlsxForPreview(await wb.xlsx.writeBuffer());
     const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     const filename=getExportFilename('xlsx');
     saveAs(blob,filename);hideLoading();showToast(`✅ ${filename} を出力しました`);
@@ -675,6 +676,8 @@ async function buildNormalWorkbook(wb, minchoFont, thin, double) {
   // ─── 表紙シート ───
   const cws=wb.addWorksheet('表紙');
   cws.pageSetup.paperSize=9;cws.pageSetup.orientation='portrait';
+  cws.pageSetup.scale=91;
+  cws.pageSetup.printArea='A1:L28';
   cws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
 
   const coverCols={A:4.875,B:11.25,C:9,D:13,E:13,F:13,G:13,H:11.875,I:4.5,J:9,K:13,L:4.875};
@@ -989,8 +992,8 @@ async function buildUnionPhotoSheets(wb, mincho, thin, hair) {
     ws.pageSetup.paperSize=9;ws.pageSetup.orientation='portrait';
     ws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
     // 印刷範囲A1:L37＋1ページに収める（正解準拠・空白ページ防止）
-    // scale=91で縮小（fitToPageはExcelJSで効かない。スマホExcelでも安定）
-    ws.pageSetup.scale=91;
+    // scale=88（シティフロント等の閲覧可能ファイルと同じ）
+    ws.pageSetup.scale=88;
     ws.pageSetup.printArea='A1:L37';
 
     // 列幅（エクレール正解ファイル準拠）
@@ -1066,8 +1069,8 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
     const ws=wb.addWorksheet(String(pg+1).padStart(3,'0'));
     ws.pageSetup.paperSize=9;ws.pageSetup.orientation='portrait';
     ws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
-    // scale=91で縮小（fitToPageはExcelJSで効かない。ライオンズOKファイルと同じ方式）
-    ws.pageSetup.scale=91;
+    // scale=88（シティフロント等の閲覧可能ファイルと同じ）
+    ws.pageSetup.scale=88;
     ws.pageSetup.printArea='A1:L37';
 
     // 列幅
@@ -1199,26 +1202,86 @@ function toJpegBase64(dataUrl,q,maxPx){
   });
 }
 
-// 写真エリアのピクセルサイズを列幅・行高から算出
-function calcImageExtents(ws,tlCol,tlRow,brCol,brRow){
-  let width=0,height=0;
-  for(let c=tlCol;c<brCol;c++){
-    const w=ws.getColumn(c+1).width||9;
-    width+=Math.round(w*7+5);
-  }
-  for(let r=tlRow;r<brRow;r++){
-    const h=ws.getRow(r+1).height||15;
-    height+=Math.round(h*96/72);
-  }
-  return{width:Math.max(width,50),height:Math.max(height,50)};
+// シティフロント等・閲覧可能な正解ファイル準拠の画像レイアウト定数
+const REF_IMG_CX=4584700,REF_IMG_CY=3276600,REF_TO_COL_OFF=20320,REF_TO_ROW_OFF=22860;
+const REF_IMG_OFF_Y={2:335280,14:4091940,26:7848600};
+const REF_IMG_OFF_X=205740;
+const USE_LOCAL_DPI_XML='<a:extLst><a:ext uri="{28A0092B-C50C-407E-A947-70E740481C1C}"><a14:useLocalDpi xmlns:a14="http://schemas.microsoft.com/office/drawing/2010/main" val="0"/></a:ext></a:extLst>';
+
+function fixDrawingXml(xml){
+  let i=0;
+  return xml.replace(/<xdr:twoCellAnchor[\s\S]*?<\/xdr:twoCellAnchor>/g,(anchor)=>{
+    const fromRow=parseInt((anchor.match(/<xdr:from>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/)||[])[1]||'2',10);
+    const offY=REF_IMG_OFF_Y[fromRow]||REF_IMG_OFF_Y[2+(i%3)*12];
+    i++;
+    let fixed=anchor
+      .replace(/(<xdr:to>[\s\S]*?<xdr:colOff>)0(<\/xdr:colOff>[\s\S]*?<xdr:rowOff>)0(<\/xdr:rowOff>)/,`$1${REF_TO_COL_OFF}$2${REF_TO_ROW_OFF}$3`)
+      .replace(/<a:off x="0" y="0"\/><a:ext cx="0" cy="0"\/>/,`<a:off x="${REF_IMG_OFF_X}" y="${offY}"/><a:ext cx="${REF_IMG_CX}" cy="${REF_IMG_CY}"/>`)
+      .replace(/<a:picLocks noChangeAspect="1"\/>/g,'<a:picLocks/>');
+    if(!fixed.includes('useLocalDpi')){
+      fixed=fixed.replace(/<a:blip([^>]*r:embed="[^"]+"[^>]*)\/>/,`<a:blip$1>${USE_LOCAL_DPI_XML}</a:blip>`);
+      fixed=fixed.replace(/<a:blip([^>]*r:embed="[^"]+"[^>]*)><a:stretch>/,`<a:blip$1>${USE_LOCAL_DPI_XML}<a:stretch>`);
+    }
+    return fixed;
+  }).replace(/<xdr:oneCellAnchor[\s\S]*?<\/xdr:oneCellAnchor>/g,(anchor)=>{
+    // oneCellAnchorもtwoCell+offset形式へ寄せるのは困難なので spPr/ext のみ補正
+    const fromRow=parseInt((anchor.match(/<xdr:from>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/)||[])[1]||'2',10);
+    const offY=REF_IMG_OFF_Y[fromRow]||REF_IMG_OFF_Y[2];
+    return anchor
+      .replace(/<a:off x="0" y="0"\/>/,`<a:off x="${REF_IMG_OFF_X}" y="${offY}"/>`)
+      .replace(/<a:picLocks noChangeAspect="1"\/>/g,'<a:picLocks/>');
+  });
 }
 
-// スマホExcel向け: oneCellAnchor+extで画像埋め込み（twoCellAnchorはモバイルで非表示になりやすい）
+function fixCoverSheetXml(xml){
+  let out=xml.replace(/<pageSetup[^>]*\/>/,'<pageSetup paperSize="9" scale="91" orientation="portrait"/>');
+  out=out.replace(/ fitToWidth="[^"]*"/g,'').replace(/ fitToHeight="[^"]*"/g,'');
+  out=out.replace(/ horizontalDpi="[^"]*"/g,'').replace(/ verticalDpi="[^"]*"/g,'');
+  if(!out.includes('pageSetUpPr')){
+    out=out.replace(/<worksheet([^>]*)>/,'<worksheet$1><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>');
+  }
+  return out;
+}
+
+function fixPhotoSheetXml(xml){
+  let out=xml.replace(/<pageSetup[^>]*\/>/,'<pageSetup paperSize="9" scale="88" orientation="portrait"/>');
+  out=out.replace(/ fitToWidth="[^"]*"/g,'').replace(/ fitToHeight="[^"]*"/g,'');
+  out=out.replace(/ horizontalDpi="[^"]*"/g,'').replace(/ verticalDpi="[^"]*"/g,'');
+  if(!out.includes('pageSetUpPr')){
+    out=out.replace(/<worksheet([^>]*)>/,'<worksheet$1><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>');
+  }
+  return out;
+}
+
+async function fixXlsxForPreview(arrayBuffer){
+  const zip=await JSZip.loadAsync(arrayBuffer);
+  await Promise.all(Object.keys(zip.files).map(async(path)=>{
+    if(/xl\/drawings\/drawing\d+\.xml$/.test(path)){
+      const xml=await zip.file(path).async('string');
+      zip.file(path,fixDrawingXml(xml));
+    }
+  }));
+  const wbXml=await zip.file('xl/workbook.xml').async('string');
+  const relsXml=await zip.file('xl/_rels/workbook.xml.rels').async('string');
+  const relMap={};
+  for(const m of relsXml.matchAll(/Id="([^"]+)"[^>]*Target="([^"]+)"/g))relMap[m[1]]=m[2];
+  for(const m of wbXml.matchAll(/<sheet[^>]*name="([^"]+)"[^>]*r:id="([^"]+)"/g)){
+    const name=m[1],target=relMap[m[2]];
+    if(!target)continue;
+    const path='xl/'+target.replace(/^\//,'');
+    if(!zip.file(path))continue;
+    let xml=await zip.file(path).async('string');
+    if(name==='表紙')xml=fixCoverSheetXml(xml);
+    else if(/^\d{3}$/.test(name))xml=fixPhotoSheetXml(xml);
+    zip.file(path,xml);
+  }
+  return zip.generateAsync({type:'arraybuffer',compression:'DEFLATE'});
+}
+
 async function embedPhotoImage(ws,wb,dataUrl,blk,brCol,q){
   const imgBase64=await toJpegBase64(dataUrl,q);
   const imgId=wb.addImage({base64:imgBase64,extension:'jpeg'});
-  const ext=calcImageExtents(ws,1,blk.imgTlRow,brCol,blk.imgBrRow);
-  ws.addImage(imgId,{tl:{col:1,row:blk.imgTlRow},ext,editAs:'oneCell'});
+  ws.addImage(imgId,{tl:{col:1,row:blk.imgTlRow},br:{col:brCol,row:blk.imgBrRow},editAs:'oneCell'});
 }
 
 // 改行を尊重しつつmaxLen文字で折り返し（最大3行）
