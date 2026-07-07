@@ -1201,8 +1201,10 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
       header:0,
       footer:0
     };
-    ws.pageSetup.scale=88;
+    ws.pageSetup.scale=100;
     ws.pageSetup.fitToPage=false;
+    ws.pageSetup.fitToWidth=0;
+    ws.pageSetup.fitToHeight=0;
     ws.pageSetup.printArea=`A1:L${PHOTO_SHEET_ROWS}`;
     ws.pageSetup.horizontalCentered=true;
     ws.pageSetup.verticalCentered=true;
