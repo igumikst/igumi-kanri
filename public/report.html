@@ -743,6 +743,7 @@ function setupNormalCoverSheet(cws,minchoFont,double){
   cws.pageSetup.fitToPage=false;
   cws.pageSetup.printArea='A1:L34';
   cws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
+  cws.pageSetup.horizontalCentered=true;
   cws.pageSetup.verticalCentered=true;
   Object.entries(NORMAL_COVER_COLS).forEach(([col,w])=>{cws.getColumn(col).width=w;});
   applyNormalCoverRowHeights(cws);
@@ -843,6 +844,8 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   cws.pageSetup.fitToPage=true;
   cws.pageSetup.fitToWidth=1;
   cws.pageSetup.fitToHeight=1;
+  cws.pageSetup.horizontalCentered=true;
+  cws.pageSetup.verticalCentered=true;
 
   cws.getColumn('A').width=3.49;
   cws.getColumn('B').width=4.62;
@@ -953,6 +956,8 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   rws.pageSetup.fitToPage=true;
   rws.pageSetup.fitToWidth=1;
   rws.pageSetup.fitToHeight=1;
+  rws.pageSetup.horizontalCentered=true;
+  rws.pageSetup.verticalCentered=true;
 
   rws.getColumn('A').width=4.62;
   // B〜T列を13.0に（正解準拠・これが抜けてて列幅がズレてた）
@@ -1155,6 +1160,8 @@ async function buildUnionPhotoSheets(wb, mincho, thin, hair) {
     ws.pageSetup.scale=88;
     ws.pageSetup.fitToPage=false;
     ws.pageSetup.printArea=`A1:L${PHOTO_SHEET_ROWS}`;
+    ws.pageSetup.horizontalCentered=true;
+    ws.pageSetup.verticalCentered=true;
 
     applyPhotoSheetColWidths(ws);
     ensurePhotoSheetGrid(ws);
@@ -1190,6 +1197,8 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
     ws.pageSetup.scale=88;
     ws.pageSetup.fitToPage=false;
     ws.pageSetup.printArea=`A1:L${PHOTO_SHEET_ROWS}`;
+    ws.pageSetup.horizontalCentered=true;
+    ws.pageSetup.verticalCentered=true;
 
     applyPhotoSheetColWidths(ws);
     ensurePhotoSheetGrid(ws);
