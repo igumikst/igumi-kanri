@@ -720,7 +720,7 @@ function applyNormalCoverRowHeights(ws){
   ws.getRow(6).height=45.75;
   ws.getRow(7).height=13.8;
   ws.getRow(10).height=16.2;
-  [12,14,16,18,20].forEach(r=>{ws.getRow(r).height=65.1;});
+  [12,14,16,18,20].forEach(r=>{ws.getRow(r).height=80;});
   [13,15,17,19].forEach(r=>{ws.getRow(r).height=20.1;});
   ws.getRow(26).height=16.2;
 }
@@ -766,7 +766,7 @@ function fillNormalCoverItemRow(cws,row,label,value,minchoFont,thin){
   labelCell.alignment={vertical:'middle'};
   cws.mergeCells(`D${row}:K${row}`);
   const valueCell=cws.getCell(`D${row}`);
-  valueCell.value=safeCellStr(value);
+  valueCell.value=value?'　'+safeCellStr(value):'';
   valueCell.font=minchoFont(14);
   valueCell.alignment={vertical:'middle'};
   for(let ci='D'.charCodeAt(0);ci<='K'.charCodeAt(0);ci++){
