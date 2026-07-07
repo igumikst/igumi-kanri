@@ -1086,7 +1086,7 @@ const PHOTO_IMAGE_BR_COL=10; // B〜J（0-indexed br）
 const PHOTO_BLOCKS=[
   {noRow:1,imgTlRow:1,imgBrRow:9,captStart:1,captEnd:9},
   {noRow:10,imgTlRow:10,imgBrRow:18,captStart:10,captEnd:18},
-  {noRow:19,imgTlRow:19,imgBrRow:27,captStart:19,captEnd:27},
+  {noRow:19,imgTlRow:19,imgBrRow:35,captStart:19,captEnd:35},
 ];
 
 function excelColWidthToPx(w){
@@ -1208,7 +1208,7 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
     };
     ws.pageSetup.horizontalCentered=false;
     ws.pageSetup.verticalCentered=false;
-    ws.pageSetup.printArea=`A1:N27`;
+    ws.pageSetup.printArea=`A1:N35`;
 
     applyPhotoSheetColWidths(ws);
     ensurePhotoSheetGrid(ws);
