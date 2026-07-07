@@ -700,35 +700,50 @@ function ensurePhotoSheetGrid(ws){
   }
 }
 
+// 通常・多摩 表紙シート（正解ファイル準拠）
+const NORMAL_COVER_COLS={
+  A:4.3984375,B:10.09765625,C:8.09765625,D:13,E:13,F:13,G:13,
+  H:10.69921875,I:4,J:8.09765625,K:13,L:4.3984375,
+};
+const NORMAL_COVER_TITLE='報　　　告　　　書';
+const NORMAL_COVER_J_MERGE_ROWS=[1,2,3,4,5,32,33,34];
+const NORMAL_COVER_ITEM_ROWS=[
+  {row:12,label:'物　　件　　名',valueKey:'propName'},
+  {row:14,label:'住　　　　　所',valueKey:'address'},
+  {row:16,label:'件　　　　　名',valueKey:'workName'},
+  {row:18,label:'作　　業　　日',valueKey:'workDate'},
+  {row:20,label:'施　　工　　者',valueKey:'worker'},
+];
+
+function applyNormalCoverRowHeights(ws){
+  [1,2,3,4,5,11,21,22,27,28,29,30,31,32,33,34].forEach(r=>{ws.getRow(r).height=30;});
+  ws.getRow(6).height=45.75;
+  ws.getRow(7).height=13.8;
+  ws.getRow(10).height=16.2;
+  [12,14,16,18,20].forEach(r=>{ws.getRow(r).height=65.1;});
+  [13,15,17,19].forEach(r=>{ws.getRow(r).height=20.1;});
+  ws.getRow(26).height=16.2;
+}
+
 function setupNormalCoverSheet(cws,minchoFont,double){
   cws.views=[{state:'normal',showGridLines:false}];
-  cws.pageSetup.paperSize=9;cws.pageSetup.orientation='portrait';
+  cws.pageSetup.paperSize=9;
+  cws.pageSetup.orientation='portrait';
   cws.pageSetup.scale=91;
   cws.pageSetup.fitToPage=false;
-  cws.pageSetup.printArea='A1:L28';
+  cws.pageSetup.printArea='A1:L34';
   cws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
 
-  // 列幅（シティフロント正解ファイル準拠）
-  const coverCols={A:4.3984375,B:10.09765625,C:8.09765625,D:8.09765625,E:8.09765625,F:8.09765625,G:8.09765625,H:10.69921875,I:4,J:8.09765625,K:8.09765625,L:4.3984375};
-  Object.entries(coverCols).forEach(([c,w])=>{cws.getColumn(c).width=w;});
+  Object.entries(NORMAL_COVER_COLS).forEach(([col,w])=>{cws.getColumn(col).width=w;});
+  applyNormalCoverRowHeights(cws);
 
-  // 行高（正解ファイル準拠）
-  [1,2,3,4,5,11,21,22,27,28,29,30,31,32,33,34].forEach(r=>{cws.getRow(r).height=30;});
-  cws.getRow(6).height=52;
-  cws.getRow(7).height=13.8;
-  cws.getRow(10).height=16.2;
-  [12,14,16,18,20].forEach(r=>{cws.getRow(r).height=65.1;});
-  [13,15,17,19].forEach(r=>{cws.getRow(r).height=20.1;});
+  for(let r=1;r<=34;r++)ensureRowCells(cws,r,'A','L');
 
-  // A〜L列を行1〜34まで埋める（スマホプレビューでグリッドが崩れないよう）
-  for(let r=1;r<=34;r++){
-    ensureRowCells(cws,r,'A','L');
-    if(r<=5||r>=32)cws.mergeCells(`J${r}:L${r}`);
-  }
+  NORMAL_COVER_J_MERGE_ROWS.forEach(r=>{cws.mergeCells(`J${r}:L${r}`);});
 
-  // タイトル枠（セル単位の二重線→結合しても罫線が残る）
+  // タイトル枠 C6:J6（結合前にセル単位で二重線）
   'CDEFGHIJ'.split('').forEach(col=>{
-    const cell=cws.getCell(col+'6');
+    const cell=cws.getCell(`${col}6`);
     const b={top:double,bottom:double};
     if(col==='C')b.left=double;
     if(col==='J')b.right=double;
@@ -736,54 +751,60 @@ function setupNormalCoverSheet(cws,minchoFont,double){
   });
   cws.mergeCells('C6:J6');
   const titleCell=cws.getCell('C6');
-  titleCell.value='報　告　書';
-  titleCell.font=minchoFont(36,true);
+  titleCell.value=NORMAL_COVER_TITLE;
+  titleCell.font=minchoFont(30,true);
   titleCell.alignment={horizontal:'center',vertical:'middle'};
+}
+
+function formatNormalCoverDate(workDate){
+  if(!workDate)return'';
+  const d=new Date(workDate);
+  if(Number.isNaN(d.getTime()))return'';
+  return`${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
+}
+
+function fillNormalCoverItemRow(cws,row,label,value,minchoFont,thin){
+  const labelCell=cws.getCell(`B${row}`);
+  labelCell.value=label;
+  labelCell.font=minchoFont(14);
+  labelCell.alignment={vertical:'middle'};
+  cws.mergeCells(`D${row}:K${row}`);
+  const valueCell=cws.getCell(`D${row}`);
+  valueCell.value=safeCellStr(value);
+  valueCell.font=minchoFont(14);
+  valueCell.alignment={vertical:'middle'};
+  for(let ci='D'.charCodeAt(0);ci<='K'.charCodeAt(0);ci++){
+    cws.getCell(String.fromCharCode(ci)+row).border={bottom:thin};
+  }
 }
 
 // ============================================================
 // 通常・多摩用ワークブック生成
 // ============================================================
 async function buildNormalWorkbook(wb, minchoFont, thin, double) {
-  const propName=document.getElementById('prop-name').value.trim();
-  const address=document.getElementById('prop-address').value.trim();
-  const workName=document.getElementById('work-name').value.trim();
-  const workDate=document.getElementById('work-date').value;
-  const worker=document.getElementById('worker').value.trim();
-  const workContent=document.getElementById('work-content').value;
-
-  let dateStr='';
-  if(workDate){const d=new Date(workDate);dateStr=`${d.getFullYear()}年 ${d.getMonth()+1}月${d.getDate()}日`;}
+  const fieldValues={
+    propName:document.getElementById('prop-name').value.trim(),
+    address:document.getElementById('prop-address').value.trim(),
+    workName:document.getElementById('work-name').value.trim(),
+    workDate:formatNormalCoverDate(document.getElementById('work-date').value),
+    worker:document.getElementById('worker').value.trim(),
+    workContent:document.getElementById('work-content').value.trim(),
+  };
 
   const cws=wb.addWorksheet('表紙');
   setupNormalCoverSheet(cws,minchoFont,double);
 
-  const items=[
-    ['B12','物　　件　　名','D12:K12',propName],
-    ['B14','住　　　　　所','D14:K14',address],
-    ['B16','件　　　　　名','D16:K16',workName],
-    ['B18','作　　業　　日','D18:K18',dateStr],
-    ['B20','施　　工　　者','D20:K20',worker],
-  ];
-
-  if(reportType==='tama' && workContent.trim()){
-    cws.getRow(22).height=65.1; cws.getRow(23).height=20.1;
-    ensureRowCells(cws,22,'A','L'); ensureRowCells(cws,23,'A','L');
-    items.push(['B22','内　　　　　容','D22:K22',workContent]);
-  }
-
-  items.forEach(([lc,lv,mr,val])=>{
-    const row=lc.match(/\d+/)[0];
-    cws.mergeCells(`B${row}:C${row}`);
-    const c=cws.getCell(`B${row}`);
-    c.value=lv;c.font=minchoFont(14);c.alignment={vertical:'middle'};
-    cws.mergeCells(mr);
-    const vc=cws.getCell(mr.split(':')[0]);
-    vc.value=safeCellStr(val);vc.font=minchoFont(14);vc.alignment={vertical:'middle'};
-    for(let ci='D'.charCodeAt(0);ci<='K'.charCodeAt(0);ci++){
-      cws.getCell(String.fromCharCode(ci)+row).border={bottom:thin};
-    }
+  NORMAL_COVER_ITEM_ROWS.forEach(({row,label,valueKey})=>{
+    fillNormalCoverItemRow(cws,row,label,fieldValues[valueKey],minchoFont,thin);
   });
+
+  if(reportType==='tama'&&fieldValues.workContent){
+    cws.getRow(22).height=65.1;
+    cws.getRow(23).height=20.1;
+    ensureRowCells(cws,22,'A','L');
+    ensureRowCells(cws,23,'A','L');
+    fillNormalCoverItemRow(cws,22,'内　　　　　容',fieldValues.workContent,minchoFont,thin);
+  }
 
   await buildPhotoSheets(wb,minchoFont,thin);
 }
@@ -1394,11 +1415,10 @@ function fixCoverSheetXml(xml){
   if(!isNormalCoverSheet(xml))return fixPageSetupXml(xml,91);
   let out=fixPageSetupXml(xml,91);
   out=out.replace(/<dimension ref="[^"]*"/,'<dimension ref="A1:L34"');
-  // タイトル文字列を統一（旧「工事写真帳」等の残存を置換）
-  out=out.replace(/工　事　写　真　帳/g,'報　告　書');
+  out=out.replace(/工　事　写　真　帳/g,NORMAL_COVER_TITLE);
+  out=out.replace(/報　告　書/g,NORMAL_COVER_TITLE);
   let merges=parseMergeCells(out);
   out=fillCoverRows(out,merges,[1,2,3,4,5,6,32,33,34],{ht:30,htUntil:5});
-  // 項目行・余白行もセルを補完（LINEプレビューで左上に縮まるのを防ぐ）
   merges=parseMergeCells(out);
   out=fillCoverRows(out,merges,[12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28]);
   return out;
