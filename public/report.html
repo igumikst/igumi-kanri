@@ -691,7 +691,7 @@ function safeCellNum(val){
   return Number.isFinite(n)?n:0;
 }
 function ensurePhotoSheetGrid(ws){
-  for(let r=1;r<=27;r++){
+  for(let r=1;r<=PHOTO_SHEET_ROWS;r++){
     ensureRowCells(ws,r,'A','L');
     for(let c=1;c<=12;c++){
       const cell=ws.getCell(r,c);
@@ -1037,9 +1037,9 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   await buildUnionPhotoSheets(wb,mincho,thin,hair);
 }
 
-// 写真シート：27行構成（A4ぴったり）
+// 写真シート：30行構成
 const PHOTO_EXPORT_PX=960;
-const PHOTO_SHEET_ROWS=27;
+const PHOTO_SHEET_ROWS=30;
 const PHOTO_NO_ROW_H=16.2;
 const PHOTO_IMG_ROW_H=29.25;
 const PHOTO_MDW=7;
@@ -1051,9 +1051,9 @@ const PHOTO_NO_COL=11; // K
 const PHOTO_NO_VAL_COL=12; // L
 const PHOTO_IMAGE_BR_COL=8; // B〜H（0-indexed br）
 const PHOTO_BLOCKS=[
-  {noRow:1,imgTlRow:1,imgBrRow:9,captStart:2,captEnd:9},
-  {noRow:10,imgTlRow:10,imgBrRow:18,captStart:11,captEnd:18},
-  {noRow:19,imgTlRow:19,imgBrRow:27,captStart:20,captEnd:27},
+  {noRow:1,imgTlRow:2,imgBrRow:10,captStart:2,captEnd:9},
+  {noRow:11,imgTlRow:12,imgBrRow:20,captStart:12,captEnd:19},
+  {noRow:21,imgTlRow:22,imgBrRow:30,captStart:22,captEnd:29},
 ];
 
 function excelColWidthToPx(w){
@@ -1126,7 +1126,7 @@ async function buildUnionPhotoSheets(wb, mincho, thin, hair) {
     // 印刷範囲A1:L27（27行構成・A4ぴったり）
     ws.pageSetup.scale=88;
     ws.pageSetup.fitToPage=false;
-    ws.pageSetup.printArea='A1:L27';
+    ws.pageSetup.printArea=`A1:L${PHOTO_SHEET_ROWS}`;
 
     applyPhotoSheetColWidths(ws);
     ensurePhotoSheetGrid(ws);
@@ -1162,7 +1162,7 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
     ws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
     ws.pageSetup.scale=88;
     ws.pageSetup.fitToPage=false;
-    ws.pageSetup.printArea='A1:L27';
+    ws.pageSetup.printArea=`A1:L${PHOTO_SHEET_ROWS}`;
 
     applyPhotoSheetColWidths(ws);
     ensurePhotoSheetGrid(ws);
