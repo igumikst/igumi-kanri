@@ -1072,11 +1072,11 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
 
 // 写真シート：30行構成
 const PHOTO_EXPORT_PX=960;
-const PHOTO_SHEET_ROWS=35;
-const PHOTO_NO_ROW_H=16.2;
-const PHOTO_IMG_ROW_H=30;
+const PHOTO_SHEET_ROWS=33;
+const PHOTO_NO_ROW_H=12;
+const PHOTO_IMG_ROW_H=38;
 const PHOTO_MDW=7;
-const PHOTO_COLS={A:2.7,B:8.2,C:8.2,D:8.2,E:8.2,F:8.2,G:8.2,H:10.7,I:4.1,J:8.2};
+const PHOTO_COLS={A:2.7,B:8.2,C:8.2,D:8.2,E:8.2,F:8.2,G:8.2,H:10.7,I:4.1,J:15};
 const PHOTO_IMAGE_COLS=['B','C','D','E','F','G','H'];
 const PHOTO_CAPTION_COL_START=11; // K
 const PHOTO_CAPTION_COL_END=13; // M
@@ -1085,8 +1085,8 @@ const PHOTO_NO_VAL_COL=12; // L
 const PHOTO_IMAGE_BR_COL=10; // B〜J（0-indexed br）
 const PHOTO_BLOCKS=[
   {noRow:1,imgTlRow:2,imgBrRow:11,captStart:2,captEnd:9},
-  {noRow:13,imgTlRow:14,imgBrRow:23,captStart:14,captEnd:21},
-  {noRow:25,imgTlRow:26,imgBrRow:35,captStart:26,captEnd:33},
+  {noRow:12,imgTlRow:13,imgBrRow:22,captStart:13,captEnd:20},
+  {noRow:23,imgTlRow:24,imgBrRow:33,captStart:24,captEnd:31},
 ];
 
 function excelColWidthToPx(w){
