@@ -1415,10 +1415,8 @@ function fixCoverSheetXml(xml){
   if(!isNormalCoverSheet(xml))return fixPageSetupXml(xml,91);
   let out=fixPageSetupXml(xml,91);
   out=out.replace(/<dimension ref="[^"]*"/,'<dimension ref="A1:L34"');
-  out=out.replace(/工　事　写　真　帳/g,NORMAL_COVER_TITLE);
-  out=out.replace(/報　告　書/g,NORMAL_COVER_TITLE);
   let merges=parseMergeCells(out);
-  out=fillCoverRows(out,merges,[1,2,3,4,5,6,32,33,34],{ht:30,htUntil:5});
+  out=fillCoverRows(out,merges,[1,2,3,4,5,32,33,34],{ht:30,htUntil:5});
   merges=parseMergeCells(out);
   out=fillCoverRows(out,merges,[12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28]);
   return out;
