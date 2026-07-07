@@ -1192,22 +1192,22 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
   for(let pg=0;pg<pageCount;pg++){
     const pagePh=photos.slice(pg*3,pg*3+3);
     const ws=wb.addWorksheet(String(pg+1).padStart(3,'0'));
-    ws.pageSetup.paperSize=9;ws.pageSetup.orientation='portrait';
+    ws.pageSetup.paperSize=9;
+    ws.pageSetup.orientation='portrait';
+    ws.pageSetup.scale=100;
+    ws.pageSetup.fitToPage=true;
+    ws.pageSetup.fitToWidth=1;
+    ws.pageSetup.fitToHeight=1;
     ws.pageSetup.margins={
-      left:0.197,
-      right:0.197,
-      top:0.197,
-      bottom:0.197,
+      left:0,
+      right:0,
+      top:0,
+      bottom:0,
       header:0,
       footer:0
     };
-    ws.pageSetup.scale=100;
-    ws.pageSetup.fitToPage=false;
-    ws.pageSetup.fitToWidth=0;
-    ws.pageSetup.fitToHeight=0;
-    ws.pageSetup.printArea=`A1:L${PHOTO_SHEET_ROWS}`;
-    ws.pageSetup.horizontalCentered=true;
-    ws.pageSetup.verticalCentered=true;
+    ws.pageSetup.horizontalCentered=false;
+    ws.pageSetup.verticalCentered=false;
 
     applyPhotoSheetColWidths(ws);
     ensurePhotoSheetGrid(ws);
