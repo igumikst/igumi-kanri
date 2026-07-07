@@ -740,7 +740,9 @@ function setupNormalCoverSheet(cws,minchoFont,double){
   cws.pageSetup.paperSize=9;
   cws.pageSetup.orientation='portrait';
   cws.pageSetup.scale=91;
-  cws.pageSetup.fitToPage=false;
+  cws.pageSetup.fitToPage=true;
+  cws.pageSetup.fitToWidth=1;
+  cws.pageSetup.fitToHeight=0;
   cws.pageSetup.printArea='A1:M26';
   cws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
   cws.pageSetup.horizontalCentered=true;
@@ -1196,7 +1198,7 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
     ws.pageSetup.orientation='portrait';
     ws.pageSetup.fitToPage=true;
     ws.pageSetup.fitToWidth=1;
-    ws.pageSetup.fitToHeight=1;
+    ws.pageSetup.fitToHeight=0;
     ws.pageSetup.scale=100;
     ws.pageSetup.margins={
       left:0,
