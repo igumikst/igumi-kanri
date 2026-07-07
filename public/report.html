@@ -1078,10 +1078,10 @@ const PHOTO_IMG_ROW_H=40;
 const PHOTO_MDW=7;
 const PHOTO_COLS={A:2.7,B:8.2,C:8.2,D:8.2,E:8.2,F:8.2,G:8.2,H:10.7,I:4.1,J:8};
 const PHOTO_IMAGE_COLS=['B','C','D','E','F','G','H'];
-const PHOTO_CAPTION_COL_START=11; // K
-const PHOTO_CAPTION_COL_END=14; // N
-const PHOTO_NO_COL=11; // K
-const PHOTO_NO_VAL_COL=14; // N
+const PHOTO_CAPTION_COL_START=10; // J
+const PHOTO_CAPTION_COL_END=13; // M
+const PHOTO_NO_COL=10; // J
+const PHOTO_NO_VAL_COL=13; // M
 const PHOTO_IMAGE_BR_COL=10; // B〜J（0-indexed br）
 const PHOTO_BLOCKS=[
   {noRow:1,imgTlRow:2,imgBrRow:9,captStart:2,captEnd:9},
@@ -1208,7 +1208,7 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
     };
     ws.pageSetup.horizontalCentered=false;
     ws.pageSetup.verticalCentered=false;
-    ws.pageSetup.printArea=`A1:N27`;
+    ws.pageSetup.printArea=`A1:N29`;
 
     applyPhotoSheetColWidths(ws);
     ensurePhotoSheetGrid(ws);
@@ -1507,7 +1507,7 @@ async function fixXlsxForPreview(arrayBuffer){
 async function embedPhotoImage(ws,wb,dataUrl,blk,q){
   const imgBase64=await toJpegBase64(dataUrl,q||0.85);
   const imgId=wb.addImage({base64:imgBase64,extension:'jpeg'});
-  ws.addImage(imgId,{tl:{col:1,row:blk.imgTlRow},br:{col:9,row:blk.imgBrRow},editAs:'oneCell'});
+  ws.addImage(imgId,{tl:{col:1,row:blk.imgTlRow},br:{col:8,row:blk.imgBrRow},editAs:'oneCell'});
 }
 
 // 改行を尊重しつつmaxLen文字で折り返し（最大3行）
