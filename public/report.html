@@ -1222,10 +1222,10 @@ function loadData(e){
   reader.readAsText(file);e.target.value='';
 }
 
-// 中央クロップで幅5:高さ4に統一（引き伸ばしなし）
+// 中央クロップで幅1:高さ1の正方形に統一（引き伸ばしなし）
 function cropDrawImage54(img,ctx,outW,outH){
   const srcW=img.width,srcH=img.height;
-  const targetRatio=5/4,srcRatio=srcW/srcH;
+  const targetRatio=1/1,srcRatio=srcW/srcH;
   let cropW,cropH,sx,sy;
   if(srcRatio>targetRatio){
     cropH=srcH;
@@ -1248,7 +1248,7 @@ function toJpegBase64(dataUrl,q,maxPx){
     img.onload=()=>{
       const limit=maxPx||960;
       const outW=limit;
-      const outH=Math.round(limit*4/5);
+      const outH=limit;
       const canvas=document.createElement('canvas');
       canvas.width=outW;
       canvas.height=outH;
