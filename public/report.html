@@ -682,6 +682,23 @@ async function exportXlsx() {
 function ensureRowCells(ws,row,fromCol,toCol){
   for(let c=fromCol.charCodeAt(0);c<=toCol.charCodeAt(0);c++)ws.getCell(String.fromCharCode(c)+row);
 }
+function safeCellStr(val){
+  if(val==null)return'';
+  return String(val);
+}
+function safeCellNum(val){
+  const n=Number(val);
+  return Number.isFinite(n)?n:0;
+}
+function ensurePhotoSheetGrid(ws){
+  for(let r=1;r<=27;r++){
+    ensureRowCells(ws,r,'A','L');
+    for(let c=1;c<=12;c++){
+      const cell=ws.getCell(r,c);
+      if(cell.value==null)cell.value='';
+    }
+  }
+}
 
 function setupNormalCoverSheet(cws,minchoFont,double){
   cws.views=[{state:'normal',showGridLines:false}];
@@ -762,7 +779,7 @@ async function buildNormalWorkbook(wb, minchoFont, thin, double) {
     c.value=lv;c.font=minchoFont(14);c.alignment={vertical:'middle'};
     cws.mergeCells(mr);
     const vc=cws.getCell(mr.split(':')[0]);
-    vc.value=val;vc.font=minchoFont(14);vc.alignment={vertical:'middle'};
+    vc.value=safeCellStr(val);vc.font=minchoFont(14);vc.alignment={vertical:'middle'};
     for(let ci='D'.charCodeAt(0);ci<='K'.charCodeAt(0);ci++){
       cws.getCell(String.fromCharCode(ci)+row).border={bottom:thin};
     }
@@ -857,28 +874,28 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   // 建物名称 E11:P13（ゴシック20pt太字・中央）罫線はマップで適用
   cws.mergeCells('E11:P13');
   const buildingCell=cws.getCell('E11');
-  buildingCell.value=uBuilding;
+  buildingCell.value=safeCellStr(uBuilding);
   buildingCell.font=gothicC(20,true);
   buildingCell.alignment={horizontal:'center',vertical:'middle'};
 
   // 工事名称 D15:Q18（ＭＳ Ｐ明朝22pt太字・中央下）
   cws.mergeCells('D15:Q18');
   const worknameCell=cws.getCell('D15');
-  worknameCell.value=uWorkname;
+  worknameCell.value=safeCellStr(uWorkname);
   worknameCell.font=mincho(22,true);
   worknameCell.alignment={horizontal:'center',vertical:'bottom'};
 
   // 作業日 F41:O43（ＭＳ Ｐ明朝20pt太字・中央下）
   cws.mergeCells('F41:O43');
   const dateCell=cws.getCell('F41');
-  dateCell.value=uDateStr;
+  dateCell.value=safeCellStr(uDateStr);
   dateCell.font=mincho(20,true);
   dateCell.alignment={horizontal:'center',vertical:'bottom'};
 
   // 会社名 F52:O54（ゴシック20pt太字・中央下）
   cws.mergeCells('F52:O54');
   const companyCell=cws.getCell('F52');
-  companyCell.value=uCompany;
+  companyCell.value=safeCellStr(uCompany);
   companyCell.font=gothicC(20,true);
   companyCell.alignment={horizontal:'center',vertical:'bottom'};
 
@@ -949,7 +966,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     rws.mergeCells(`H${r0}:S${r2}`);
     const vc=rws.getCell(`H${r0}`);
     if(typeof val==='object'&&val.formula){vc.value={formula:val.formula};}
-    else{vc.value=val;}
+    else{vc.value=safeCellStr(val);}
     vc.font=(valFont==='m')?mincho(12):gothicC(12);
     vc.alignment={horizontal:valAlign,vertical:'middle'};
   });
@@ -969,7 +986,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     const cc=rws.getCell(`C${r}`);
     const line=contentLines[r-23];
     if(line!==undefined){
-      cc.value=line;
+      cc.value=safeCellStr(line);
       cc.font=/号室/.test(line)?mincho(12):gothicC(12);
     }
     cc.alignment={vertical:'bottom'};
@@ -1020,33 +1037,24 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   await buildUnionPhotoSheets(wb,mincho,thin,hair);
 }
 
-// 写真シート：実物ファイル準拠
+// 写真シート：27行構成（A4ぴったり）
 const PHOTO_EXPORT_PX=960;
-const PHOTO_PAGE_TARGET_PT=756;
+const PHOTO_SHEET_ROWS=27;
 const PHOTO_NO_ROW_H=16.2;
-const PHOTO_GAP_ROW_H=1;
-const PHOTO_MARGIN_ROW_H=1;
+const PHOTO_IMG_ROW_H=29.25;
 const PHOTO_MDW=7;
 const PHOTO_COLS={A:2.7,B:8.2,C:8.2,D:8.2,E:8.2,F:8.2,G:8.2,H:10.7,I:4.1,J:8.2};
-const PHOTO_IMAGE_COLS=['B','C','D','E','F','G','H','I','J'];
+const PHOTO_IMAGE_COLS=['B','C','D','E','F','G','H'];
 const PHOTO_CAPTION_COL_START=11; // K
 const PHOTO_CAPTION_COL_END=12; // L
 const PHOTO_NO_COL=11; // K
 const PHOTO_NO_VAL_COL=12; // L
-const PHOTO_IMAGE_BR_COL=10; // B〜J（0-indexed br）
+const PHOTO_IMAGE_BR_COL=8; // B〜H（0-indexed br）
 const PHOTO_BLOCKS=[
-  {noRow:3,imgTlRow:3,imgBrRow:11,captStart:4,captEnd:11},
-  {noRow:15,imgTlRow:15,imgBrRow:23,captStart:16,captEnd:23},
-  {noRow:27,imgTlRow:27,imgBrRow:35,captStart:28,captEnd:35},
+  {noRow:1,imgTlRow:1,imgBrRow:9,captStart:2,captEnd:9},
+  {noRow:10,imgTlRow:10,imgBrRow:18,captStart:11,captEnd:18},
+  {noRow:19,imgTlRow:19,imgBrRow:27,captStart:20,captEnd:27},
 ];
-const PHOTO_GAP_ROWS=[12,13,24,25,36,37];
-const PHOTO_MARGIN_ROWS=[1,2,14,26];
-const PHOTO_IMG_ROW_H=(()=>{
-  const fixed=PHOTO_BLOCKS.length*PHOTO_NO_ROW_H
-    +PHOTO_GAP_ROWS.length*PHOTO_GAP_ROW_H
-    +PHOTO_MARGIN_ROWS.length*PHOTO_MARGIN_ROW_H;
-  return (PHOTO_PAGE_TARGET_PT-fixed)/(PHOTO_BLOCKS.length*8);
-})();
 
 function excelColWidthToPx(w){
   return Math.trunc(((256*w+Math.trunc(128/PHOTO_MDW))/256)*PHOTO_MDW);
@@ -1060,13 +1068,11 @@ function calcColsSpanEMU(cols,imageColLetters){
 function calcRowsSpanEMU(rowCount,rowHPt){
   return rowCount*rowHPt*12700;
 }
-function applyPhotoSheetRowHeights(ws,blocks,gapRows){
-  PHOTO_MARGIN_ROWS.forEach(r=>{ws.getRow(r).height=PHOTO_MARGIN_ROW_H;});
+function applyPhotoSheetRowHeights(ws,blocks){
   blocks.forEach(blk=>{
     ws.getRow(blk.noRow).height=PHOTO_NO_ROW_H;
     for(let r=blk.captStart;r<=blk.captEnd;r++)ws.getRow(r).height=PHOTO_IMG_ROW_H;
   });
-  gapRows.forEach(r=>{ws.getRow(r).height=PHOTO_GAP_ROW_H;});
 }
 function imageColsFromAnchor(fromCol,toCol){
   const cols=[];
@@ -1075,6 +1081,35 @@ function imageColsFromAnchor(fromCol,toCol){
 }
 function applyPhotoSheetColWidths(ws){
   Object.entries(PHOTO_COLS).forEach(([c,w])=>{ws.getColumn(c).width=w;});
+}
+
+async function fillPhotoBlock(ws,wb,p,blk,globalNo,{minchoFont,thin,hair,unionFont}){
+  const noFont=unionFont?{name:'ＭＳ 明朝',size:14}:minchoFont(14);
+  const noCell=ws.getCell(blk.noRow,PHOTO_NO_COL);
+  noCell.value='No.';
+  noCell.font=noFont;
+  noCell.alignment={vertical:'middle'};
+  noCell.border={bottom:thin};
+  const noValCell=ws.getCell(blk.noRow,PHOTO_NO_VAL_COL);
+  noValCell.value=safeCellNum(globalNo);
+  noValCell.font=noFont;
+  noValCell.alignment={vertical:'middle'};
+  noValCell.border={bottom:thin};
+
+  const capLines=splitCaption(safeCellStr(p.caption),12,8);
+  for(let r1=blk.captStart;r1<=blk.captEnd;r1++){
+    ws.mergeCells(r1,PHOTO_CAPTION_COL_START,r1,PHOTO_CAPTION_COL_END);
+    const cell=ws.getCell(r1,PHOTO_CAPTION_COL_START);
+    const line=safeCellStr(capLines[r1-blk.captStart]??'');
+    cell.value=line;
+    cell.font=unionFont?(/号室/.test(line)?{name:'ＭＳ 明朝',size:11}:{name:'ＭＳ ゴシック',size:11}):minchoFont(11);
+    cell.alignment={vertical:'middle',wrapText:true};
+    cell.border={bottom:hair};
+  }
+
+  if(p.dataUrl){
+    await embedPhotoImage(ws,wb,p.dataUrl,blk,quality);
+  }
 }
 
 // ============================================================
@@ -1088,43 +1123,20 @@ async function buildUnionPhotoSheets(wb, mincho, thin, hair) {
     const ws=wb.addWorksheet(String(pg+1).padStart(3,'0'));
     ws.pageSetup.paperSize=9;ws.pageSetup.orientation='portrait';
     ws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
-    // 印刷範囲A1:L37＋1ページに収める（正解準拠・空白ページ防止）
-    // scale=88（シティフロント等の閲覧可能ファイルと同じ）
+    // 印刷範囲A1:L27（27行構成・A4ぴったり）
     ws.pageSetup.scale=88;
     ws.pageSetup.fitToPage=false;
-    ws.pageSetup.printArea='A1:L37';
+    ws.pageSetup.printArea='A1:L27';
 
     applyPhotoSheetColWidths(ws);
-    applyPhotoSheetRowHeights(ws,PHOTO_BLOCKS,PHOTO_GAP_ROWS);
-
-    const blocks=PHOTO_BLOCKS;
+    ensurePhotoSheetGrid(ws);
+    applyPhotoSheetRowHeights(ws,PHOTO_BLOCKS);
 
     for(let bi=0;bi<pagePh.length;bi++){
       const p=pagePh[bi];
-      const blk=blocks[bi];
+      const blk=PHOTO_BLOCKS[bi];
       const globalNo=pg*3+bi+1;
-
-      const noCell=ws.getCell(blk.noRow,PHOTO_NO_COL);
-      noCell.value='No.';noCell.font={name:'ＭＳ 明朝',size:14};
-      noCell.alignment={vertical:'middle'};noCell.border={bottom:thin};
-      const noValCell=ws.getCell(blk.noRow,PHOTO_NO_VAL_COL);
-      noValCell.value=globalNo;noValCell.font={name:'ＭＳ 明朝',size:14};
-      noValCell.alignment={vertical:'middle'};noValCell.border={bottom:thin};
-
-      const capLines=splitCaption(p.caption||'',12,8);
-      for(let r1=blk.captStart;r1<=blk.captEnd;r1++){
-        ws.mergeCells(r1,PHOTO_CAPTION_COL_START,r1,PHOTO_CAPTION_COL_END);
-        const cell=ws.getCell(r1,PHOTO_CAPTION_COL_START);
-        const li=r1-blk.captStart;
-        cell.value=capLines[li]||'';
-        cell.font=/号室/.test(capLines[li]||'')?{name:'ＭＳ 明朝',size:11}:{name:'ＭＳ ゴシック',size:11};
-        cell.alignment={vertical:'middle',wrapText:true};
-        cell.border={bottom:hair};
-      }
-
-      if(p.dataUrl){
-        await embedPhotoImage(ws,wb,p.dataUrl,blk,quality);
-      }
+      await fillPhotoBlock(ws,wb,p,blk,globalNo,{minchoFont:null,thin,hair,unionFont:true});
       document.getElementById('loading-s').textContent=`ページ${pg+1}/${pageCount} 写真${bi+1}/3`;
       await sleep(5);
     }
@@ -1134,11 +1146,10 @@ async function buildUnionPhotoSheets(wb, mincho, thin, hair) {
 // ============================================================
 // 通常・多摩 写真シート生成（実物ファイル準拠）
 // ============================================================
-// 【レイアウト】実物ファイル準拠
-// 列幅: A=2.7 B〜J=写真エリア H=10.7 I=4.1 J=8.2 K以降=デフォルト
-// 行高: No.16.2pt + 写真行 PHOTO_IMG_ROW_H pt×8（A4約756ptに合わせて自動計算）
-// キャプション・No.: K〜L列
-// 写真: B〜J列・No.行の次8行
+// 【レイアウト】27行構成（A4ぴったり）
+// ブロック1: 行1(No.16.2pt)+行2〜9(写真29.25pt×8)
+// ブロック2: 行10+行11〜18 / ブロック3: 行19+行20〜27
+// 写真: B〜H列(col1〜8) / キャプション・No.: K〜L列
 // ============================================================
 async function buildPhotoSheets(wb, minchoFont, thin) {
   const hair={style:'hair'};
@@ -1151,44 +1162,17 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
     ws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
     ws.pageSetup.scale=88;
     ws.pageSetup.fitToPage=false;
-    ws.pageSetup.printArea='A1:L37';
+    ws.pageSetup.printArea='A1:L27';
 
     applyPhotoSheetColWidths(ws);
-    applyPhotoSheetRowHeights(ws,PHOTO_BLOCKS,PHOTO_GAP_ROWS);
-
-    const blocks=PHOTO_BLOCKS;
+    ensurePhotoSheetGrid(ws);
+    applyPhotoSheetRowHeights(ws,PHOTO_BLOCKS);
 
     for(let bi=0;bi<pagePh.length;bi++){
       const p=pagePh[bi];
-      const blk=blocks[bi];
+      const blk=PHOTO_BLOCKS[bi];
       const globalNo=pg*3+bi+1;
-
-      const noCell=ws.getCell(blk.noRow,PHOTO_NO_COL);
-      noCell.value='No.';
-      noCell.font=minchoFont(14);
-      noCell.alignment={vertical:'middle'};
-      noCell.border={bottom:thin};
-
-      const noValCell=ws.getCell(blk.noRow,PHOTO_NO_VAL_COL);
-      noValCell.value=globalNo;
-      noValCell.font=minchoFont(14);
-      noValCell.alignment={vertical:'middle'};
-      noValCell.border={bottom:thin};
-
-      const capLines=splitCaption(p.caption||'',12,8);
-      for(let r1=blk.captStart;r1<=blk.captEnd;r1++){
-        ws.mergeCells(r1,PHOTO_CAPTION_COL_START,r1,PHOTO_CAPTION_COL_END);
-        const cell=ws.getCell(r1,PHOTO_CAPTION_COL_START);
-        const li=r1-blk.captStart;
-        cell.value=capLines[li]||'';
-        cell.font=minchoFont(11);
-        cell.alignment={vertical:'middle',wrapText:true};
-        cell.border={bottom:hair};
-      }
-
-      if(p.dataUrl){
-        await embedPhotoImage(ws,wb,p.dataUrl,blk,quality);
-      }
+      await fillPhotoBlock(ws,wb,p,blk,globalNo,{minchoFont,thin,hair,unionFont:false});
       document.getElementById('loading-s').textContent=`ページ${pg+1}/${pageCount} 写真${bi+1}/3`;
       await sleep(5);
     }
@@ -1432,7 +1416,18 @@ function fixCoverSheetXml(xml){
 }
 
 function fixPhotoSheetXml(xml){
-  return fixPageSetupXml(xml,88);
+  let out=fixPageSetupXml(xml,88);
+  out=out.replace(/<dimension ref="[^"]*"/,`<dimension ref="A1:L${PHOTO_SHEET_ROWS}"`);
+  out=out.replace(/<row r="(2[89]|[3-9]\d|\d{3,})"[^>]*>[\s\S]*?<\/row>\s*/g,'');
+  out=out.replace(/<mergeCell ref="[^"]*:[^"]*"/g,(m)=>{
+    const ref=m.match(/ref="([^"]+)"/)[1];
+    const brRow=parseInt((ref.split(':')[1]||ref).replace(/[A-Z]+/,''),10);
+    return brRow>PHOTO_SHEET_ROWS?'':m;
+  });
+  out=updateMergeCellsCount(out);
+  let merges=parseMergeCells(out);
+  out=fillCoverRows(out,merges,Array.from({length:PHOTO_SHEET_ROWS},(_,i)=>i+1));
+  return updateMergeCellsCount(out);
 }
 
 async function fixXlsxForPreview(arrayBuffer){
@@ -1464,7 +1459,7 @@ async function fixXlsxForPreview(arrayBuffer){
 }
 
 async function embedPhotoImage(ws,wb,dataUrl,blk,q){
-  const imgBase64=await toJpegBase64(dataUrl,q);
+  const imgBase64=await toJpegBase64(dataUrl,q||0.85);
   const imgId=wb.addImage({base64:imgBase64,extension:'jpeg'});
   ws.addImage(imgId,{tl:{col:1,row:blk.imgTlRow},br:{col:PHOTO_IMAGE_BR_COL,row:blk.imgBrRow},editAs:'oneCell'});
 }
