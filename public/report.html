@@ -735,15 +735,16 @@ function setupNormalCoverSheet(cws,minchoFont,double){
   cws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
   Object.entries(NORMAL_COVER_COLS).forEach(([col,w])=>{cws.getColumn(col).width=w;});
   applyNormalCoverRowHeights(cws);
-
-  // ①先に結合セルを全部登録する（ensureRowCellsより前）
-  NORMAL_COVER_J_MERGE_ROWS.forEach(r=>{cws.mergeCells(`J${r}:L${r}`);});
+  cws.mergeCells('J1:L1');
+  cws.mergeCells('J2:L2');
+  cws.mergeCells('J3:L3');
+  cws.mergeCells('J4:L4');
+  cws.mergeCells('J5:L5');
+  cws.mergeCells('J32:L32');
+  cws.mergeCells('J33:L33');
+  cws.mergeCells('J34:L34');
   cws.mergeCells('C6:J6');
-
-  // ②結合後にセルを埋める
   for(let r=1;r<=34;r++)ensureRowCells(cws,r,'A','L');
-
-  // ③タイトル設定（borderなし・ExcelJSのmerge後に設定）
   const titleCell=cws.getCell('C6');
   titleCell.value=NORMAL_COVER_TITLE;
   titleCell.font=minchoFont(30,true);
