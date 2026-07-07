@@ -743,6 +743,7 @@ function setupNormalCoverSheet(cws,minchoFont,double){
   cws.pageSetup.fitToPage=false;
   cws.pageSetup.printArea='A1:L34';
   cws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
+  cws.pageSetup.verticalCentered=true;
   Object.entries(NORMAL_COVER_COLS).forEach(([col,w])=>{cws.getColumn(col).width=w;});
   applyNormalCoverRowHeights(cws);
   cws.mergeCells('J1:L1');
