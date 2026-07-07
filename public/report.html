@@ -1074,7 +1074,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
 const PHOTO_EXPORT_PX=960;
 const PHOTO_SHEET_ROWS=30;
 const PHOTO_NO_ROW_H=12;
-const PHOTO_IMG_ROW_H=42;
+const PHOTO_IMG_ROW_H=48;
 const PHOTO_MDW=7;
 const PHOTO_COLS={A:2.7,B:8.2,C:8.2,D:8.2,E:8.2,F:8.2,G:8.2,H:10.7,I:4.1,J:15};
 const PHOTO_IMAGE_COLS=['B','C','D','E','F','G','H'];
@@ -1084,9 +1084,9 @@ const PHOTO_NO_COL=11; // K
 const PHOTO_NO_VAL_COL=12; // L
 const PHOTO_IMAGE_BR_COL=10; // B〜J（0-indexed br）
 const PHOTO_BLOCKS=[
-  {noRow:1,imgTlRow:2,imgBrRow:11,captStart:2,captEnd:9},
-  {noRow:12,imgTlRow:13,imgBrRow:22,captStart:13,captEnd:20},
-  {noRow:23,imgTlRow:24,imgBrRow:33,captStart:24,captEnd:31},
+  {noRow:1,imgTlRow:2,imgBrRow:10,captStart:2,captEnd:9},
+  {noRow:11,imgTlRow:12,imgBrRow:20,captStart:12,captEnd:19},
+  {noRow:21,imgTlRow:22,imgBrRow:30,captStart:22,captEnd:29},
 ];
 
 function excelColWidthToPx(w){
