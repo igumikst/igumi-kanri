@@ -1194,10 +1194,10 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
     const ws=wb.addWorksheet(String(pg+1).padStart(3,'0'));
     ws.pageSetup.paperSize=9;ws.pageSetup.orientation='portrait';
     ws.pageSetup.margins={
-      left:0.1,
-      right:0.1,
-      top:0.1,
-      bottom:0.1,
+      left:0.05,
+      right:0.05,
+      top:0.05,
+      bottom:0.05,
       header:0,
       footer:0
     };
