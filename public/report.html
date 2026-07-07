@@ -1222,10 +1222,11 @@ function loadData(e){
   reader.readAsText(file);e.target.value='';
 }
 
-// 中央クロップで幅1:高さ1の正方形に統一（引き伸ばしなし）
-function cropDrawImage54(img,ctx,outW,outH){
+// 中央クロップ（出力サイズの縦横比に合わせる・引き伸ばしなし）
+function cropDrawImage(img,ctx,outW,outH){
   const srcW=img.width,srcH=img.height;
-  const targetRatio=1/1,srcRatio=srcW/srcH;
+  const targetRatio=outW/outH;
+  const srcRatio=srcW/srcH;
   let cropW,cropH,sx,sy;
   if(srcRatio>targetRatio){
     cropH=srcH;
@@ -1252,7 +1253,7 @@ function toJpegBase64(dataUrl,q,maxPx){
       const canvas=document.createElement('canvas');
       canvas.width=outW;
       canvas.height=outH;
-      cropDrawImage54(img,canvas.getContext('2d'),outW,outH);
+      cropDrawImage(img,canvas.getContext('2d'),outW,outH);
       resolve(canvas.toDataURL('image/jpeg',q||0.85).replace(/^data:image\/jpeg;base64,/,''));
     };
     img.src=dataUrl;
