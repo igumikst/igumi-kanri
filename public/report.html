@@ -768,7 +768,7 @@ function fillNormalCoverItemRow(cws,row,label,value,minchoFont,thin){
   const valueCell=cws.getCell(`D${row}`);
   valueCell.value=value?'　'+safeCellStr(value):'';
   valueCell.font=minchoFont(14);
-  valueCell.alignment={vertical:'middle'};
+  valueCell.alignment={vertical:'middle',wrapText:true};
   for(let ci='D'.charCodeAt(0);ci<='K'.charCodeAt(0);ci++){
     cws.getCell(String.fromCharCode(ci)+row).border={bottom:thin};
   }
