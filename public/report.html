@@ -772,7 +772,8 @@ function formatNormalCoverDate(workDate){
 }
 
 function fillNormalCoverItemRow(cws,row,label,value,minchoFont,thin){
-  const labelCell=cws.getCell(`B${row}`);
+  cws.mergeCells(`A${row}:C${row}`);
+  const labelCell=cws.getCell(`A${row}`);
   labelCell.value=label;
   labelCell.font=minchoFont(14);
   labelCell.alignment={vertical:'middle'};
