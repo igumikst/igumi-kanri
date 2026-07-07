@@ -41,7 +41,6 @@ const Pill = ({ children, onClick }) => (
 
 export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, setTileEdit, saveTileConf, saveCustomize, weather, weekWeather, fishWeather, isPC, pp, nav, setModal, setEc, ec, rpOpen, setRpOpen, finFiles, tmplFiles, SB_W, RP_W, boardPosts, calls, setCalls }) {
   const [editTile, setEditTile] = useState(null);
-  const [showInfo, setShowInfo] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [pwModal, setPwModal] = useState(false);
   const [akPwModal, setAkPwModal] = useState(false);
@@ -573,7 +572,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
 
   const NewHomePage = () => (
     <div style={{ padding: "16px 16px 30px" }}>
-      {!isPC && <IgumiHeader />}
       <ScheduleBanner />
 
       <FeatureCard
@@ -639,7 +637,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
 
   const OldHomePage = () => (
     <div style={{ padding: "14px 14px 30px" }}>
-
       {calls && calls.length > 0 && (
         <div style={{ background: "linear-gradient(135deg, #1e3a5f, #2563eb)", borderRadius: 14, padding: "14px 18px", marginBottom: 16, boxShadow: "0 4px 12px rgba(37,99,235,0.25)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -820,38 +817,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
       {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} />}
       {(cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
 
-      {!isPC && currentPage === 1 && (
-        <div style={{ background: cust.c1, color: "#fff", padding: "12px 16px", position: "sticky", top: 0, zIndex: 50 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 800, fontSize: 15, lineHeight: 1.2 }}>{cust.sys}</div>
-            </div>
-            {weather && (
-              <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: "rgba(255,255,255,0.9)" }}>
-                <span>{weather.icon}</span>
-                <span style={{ fontWeight: 700 }}>{weather.temp}°C</span>
-              </div>
-            )}
-            <button onClick={refreshCalls} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "5px 8px", fontSize: 14, cursor: "pointer" }}>{refreshing ? "⏳" : "🔄"}</button>
-            <button onClick={() => { setEc({ ...cust }); setModal("cust"); }} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "5px 8px", fontSize: 12, cursor: "pointer", fontWeight: 700 }}>⚙ 編集</button>
-          </div>
-          <div onClick={() => setShowInfo(p => !p)} style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6, cursor: "pointer", opacity: 0.75 }}>
-            <span style={{ fontSize: 11 }}>{pjs.length}件 | {cos.length}社 | {new Date().toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "short" })}</span>
-            <span style={{ fontSize: 10 }}>{showInfo ? "▲" : "▼"}</span>
-          </div>
-          {showInfo && (
-            <div style={{ marginTop: 8, padding: "10px 12px", background: "rgba(0,0,0,0.2)", borderRadius: 10, fontSize: 12 }}>
-              <div style={{ marginBottom: 4, color: "rgba(255,255,255,0.8)" }}>{cust.name}</div>
-              <div style={{ color: "rgba(255,255,255,0.7)", marginBottom: 6 }}>{new Date().toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric", weekday: "short" })}</div>
-              <div style={{ display: "flex", gap: 12, color: "rgba(255,255,255,0.9)", fontWeight: 700 }}>
-                <span>案件 {pjs.length}件</span>
-                <span>取引先 {cos.length}社</span>
-                <span>未完了タスク {pending.length}件</span>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      {!isPC && <IgumiHeader />}
 
       <div onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} style={{ overflow: "hidden" }}>
         <div style={{ display: "flex", transform: `translateX(-${currentPage * 100}%)`, transition: "transform 0.3s ease", willChange: "transform" }}>
