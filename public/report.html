@@ -693,17 +693,6 @@ function safeCellNum(val){
   const n=Number(val);
   return Number.isFinite(n)?n:0;
 }
-function ensurePhotoSheetGrid(ws){
-  for(let r=1;r<=PHOTO_SHEET_ROWS;r++){
-    ensureRowCells(ws,r,'A','L');
-    for(let c=1;c<=12;c++){
-      const cell=ws.getCell(r,c);
-      if(cell.value==null)cell.value='';
-    }
-  }
-}
-
-// 通常・多摩 表紙シート（大森山王リハイム正解ファイル準拠）
 const NORMAL_COVER_COLS={
   A:4.3984375,
   B:10.09765625,
@@ -713,10 +702,11 @@ const NORMAL_COVER_COLS={
   F:13,
   G:13,
   H:10.69921875,
-  I:4,
+  I:4.0,
   J:8.09765625,
   K:13,
-  L:4.3984375
+  L:4.3984375,
+  M:8.09765625
 };
 const NORMAL_COVER_TITLE='報　　　告　　　書';
 const NORMAL_COVER_J_MERGE_ROWS=[1,2,3,4,5,32,33,34];
@@ -744,7 +734,7 @@ function setupNormalCoverSheet(cws,minchoFont,double){
   cws.pageSetup.orientation='portrait';
   cws.pageSetup.scale=91;
   cws.pageSetup.fitToPage=false;
-  cws.pageSetup.printArea='A1:L34';
+  cws.pageSetup.printArea='A1:L28';
   cws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
 
   Object.entries(NORMAL_COVER_COLS).forEach(([col,w])=>{cws.getColumn(col).width=w;});
@@ -782,12 +772,24 @@ function fillNormalCoverItemRow(cws,row,label,value,minchoFont,thin){
   labelCell.alignment={vertical:'middle',horizontal:'center'};
   cws.mergeCells(`D${row}:K${row}`);
   const valueCell=cws.getCell(`D${row}`);
-  valueCell.value=value?'　'+safeCellStr(value):'';
+  valueCell.value=value?safeCellStr(value):'';
   valueCell.font=minchoFont(14);
   valueCell.alignment={vertical:'middle',horizontal:'left',wrapText:false,shrinkToFit:true};
   for(let ci='D'.charCodeAt(0);ci<='K'.charCodeAt(0);ci++){
     cws.getCell(String.fromCharCode(ci)+row).border={bottom:thin};
   }
+}
+
+const FREE_SHEET_COLS={
+  A:4.19921875,
+  B:13,
+  C:4.19921875,
+  D:4.19921875,
+  E:13,F:13,G:13,H:13,I:13,J:13,K:13,L:13,M:13
+};
+function setupFreeSheet(wb){
+  const ws=wb.addWorksheet('自由シート');
+  Object.entries(FREE_SHEET_COLS).forEach(([col,w])=>{ws.getColumn(col).width=w;});
 }
 
 // ============================================================
@@ -817,6 +819,8 @@ async function buildNormalWorkbook(wb, minchoFont, thin, double) {
     ensureRowCells(cws,23,'A','L');
     fillNormalCoverItemRow(cws,22,'内　　　容',fieldValues.workContent,minchoFont,thin);
   }
+
+  setupFreeSheet(wb);
 
   await buildPhotoSheets(wb,minchoFont,thin);
 }
@@ -1074,24 +1078,36 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   await buildUnionPhotoSheets(wb,mincho,thin,hair);
 }
 
-// 写真シート：30行構成
-const PHOTO_EXPORT_PX=960;
-const PHOTO_SHEET_ROWS=29;
-const PHOTO_NO_ROW_H=12;
-const PHOTO_IMG_ROW_H=40;
-const PHOTO_MDW=7;
-const PHOTO_COLS={A:2.7,B:8.2,C:8.2,D:8.2,E:8.2,F:8.2,G:8.2,H:10.7,I:4.1,J:8,N:6};
-const PHOTO_IMAGE_COLS=['B','C','D','E','F','G','H'];
-const PHOTO_CAPTION_COL_START=10; // J
-const PHOTO_CAPTION_COL_END=13; // M
-const PHOTO_NO_COL=10; // J
-const PHOTO_NO_VAL_COL=13; // M
-const PHOTO_IMAGE_BR_COL=10; // B〜J（0-indexed br）
-const PHOTO_BLOCKS=[
+// ユニオン写真シート（旧レイアウト・変更なし）
+const UNION_PHOTO_SHEET_ROWS=29;
+const UNION_PHOTO_IMG_ROW_H=40;
+const UNION_PHOTO_COLS={A:2.7,B:8.2,C:8.2,D:8.2,E:8.2,F:8.2,G:8.2,H:10.7,I:4.1,J:8,N:6};
+const UNION_PHOTO_IMAGE_COLS=['B','C','D','E','F','G','H'];
+const UNION_PHOTO_CAPTION_COL_START=10;
+const UNION_PHOTO_CAPTION_COL_END=13;
+const UNION_PHOTO_NO_COL=10;
+const UNION_PHOTO_IMAGE_BR_COL=10;
+const UNION_PHOTO_BLOCKS=[
   {noRow:1,imgTlRow:2,imgBrRow:9,captStart:2,captEnd:9},
   {noRow:10,imgTlRow:11,imgBrRow:18,captStart:11,captEnd:18},
   {noRow:19,imgTlRow:20,imgBrRow:27,captStart:20,captEnd:27},
 ];
+// 通常・多摩写真シート（正解ファイル準拠・1ページ37行）
+const NORMAL_PHOTO_SHEET_ROWS=37;
+const NORMAL_PHOTO_IMG_ROW_H=30;
+const NORMAL_PHOTO_NO_ROW_H=16.2;
+const NORMAL_PHOTO_COLS={
+  A:2.69921875,B:8.19921875,C:13,D:13,E:13,F:13,G:13,
+  H:10.69921875,I:4.09765625,J:8.19921875,K:13,L:13,M:8.09765625
+};
+const NORMAL_PHOTO_IMAGE_COLS=['B','C','D','E','F','G','H'];
+const NORMAL_PHOTO_BLOCKS=[
+  {noRow:3,captStart:4,captEnd:11,imgTlRow:2,imgBrRow:11},
+  {noRow:15,captStart:16,captEnd:23,imgTlRow:14,imgBrRow:23},
+  {noRow:27,captStart:28,captEnd:35,imgTlRow:26,imgBrRow:35},
+];
+const PHOTO_EXPORT_PX=960;
+const PHOTO_MDW=7;
 
 function excelColWidthToPx(w){
   return Math.trunc(((256*w+Math.trunc(128/PHOTO_MDW))/256)*PHOTO_MDW);
@@ -1105,10 +1121,16 @@ function calcColsSpanEMU(cols,imageColLetters){
 function calcRowsSpanEMU(rowCount,rowHPt){
   return rowCount*rowHPt*12700;
 }
-function applyPhotoSheetRowHeights(ws,blocks){
+function applyUnionPhotoSheetRowHeights(ws,blocks){
   blocks.forEach(blk=>{
     ws.getRow(blk.noRow).height=4;
-    for(let r=blk.captStart;r<=blk.captEnd;r++)ws.getRow(r).height=PHOTO_IMG_ROW_H;
+    for(let r=blk.captStart;r<=blk.captEnd;r++)ws.getRow(r).height=UNION_PHOTO_IMG_ROW_H;
+  });
+}
+function applyNormalPhotoSheetRowHeights(ws,blocks){
+  blocks.forEach(blk=>{
+    ws.getRow(blk.noRow).height=NORMAL_PHOTO_NO_ROW_H;
+    for(let r=blk.captStart;r<=blk.captEnd;r++)ws.getRow(r).height=NORMAL_PHOTO_IMG_ROW_H;
   });
 }
 function imageColsFromAnchor(fromCol,toCol){
@@ -1116,18 +1138,39 @@ function imageColsFromAnchor(fromCol,toCol){
   for(let c=fromCol;c<toCol;c++)cols.push(String.fromCharCode(65+c));
   return cols;
 }
-function applyPhotoSheetColWidths(ws){
-  Object.entries(PHOTO_COLS).forEach(([c,w])=>{ws.getColumn(c).width=w;});
+function applyUnionPhotoSheetColWidths(ws){
+  Object.entries(UNION_PHOTO_COLS).forEach(([c,w])=>{ws.getColumn(c).width=w;});
+}
+function applyNormalPhotoSheetColWidths(ws){
+  Object.entries(NORMAL_PHOTO_COLS).forEach(([c,w])=>{ws.getColumn(c).width=w;});
+}
+function ensureUnionPhotoSheetGrid(ws){
+  for(let r=1;r<=UNION_PHOTO_SHEET_ROWS;r++){
+    ensureRowCells(ws,r,'A','L');
+    for(let c=1;c<=12;c++){
+      const cell=ws.getCell(r,c);
+      if(cell.value==null)cell.value='';
+    }
+  }
+}
+function ensureNormalPhotoSheetGrid(ws){
+  for(let r=1;r<=NORMAL_PHOTO_SHEET_ROWS;r++){
+    ensureRowCells(ws,r,'A','M');
+    for(let c=1;c<=13;c++){
+      const cell=ws.getCell(r,c);
+      if(cell.value==null)cell.value='';
+    }
+  }
 }
 
-async function fillPhotoBlock(ws,wb,p,blk,globalNo,{minchoFont,thin,hair,unionFont}){
+async function fillUnionPhotoBlock(ws,wb,p,blk,globalNo,{minchoFont,thin,hair,unionFont}){
   const noFont=unionFont?{name:'ＭＳ 明朝',size:14}:minchoFont(14);
-  const noCell=ws.getCell(blk.captStart,PHOTO_NO_COL);
+  const noCell=ws.getCell(blk.captStart,UNION_PHOTO_NO_COL);
   noCell.value='No.';
   noCell.font=noFont;
   noCell.alignment={vertical:'middle'};
   noCell.border={bottom:thin};
-  const noValCell=ws.getCell(blk.captStart,PHOTO_NO_COL+1);
+  const noValCell=ws.getCell(blk.captStart,UNION_PHOTO_NO_COL+1);
   noValCell.value=safeCellNum(globalNo);
   noValCell.font=noFont;
   noValCell.alignment={vertical:'middle'};
@@ -1135,8 +1178,8 @@ async function fillPhotoBlock(ws,wb,p,blk,globalNo,{minchoFont,thin,hair,unionFo
 
   const capLines=splitCaption(safeCellStr(p.caption),12,8);
   for(let r1=blk.captStart+1;r1<=blk.captEnd;r1++){
-    ws.mergeCells(r1,PHOTO_CAPTION_COL_START,r1,PHOTO_CAPTION_COL_END);
-    const cell=ws.getCell(r1,PHOTO_CAPTION_COL_START);
+    ws.mergeCells(r1,UNION_PHOTO_CAPTION_COL_START,r1,UNION_PHOTO_CAPTION_COL_END);
+    const cell=ws.getCell(r1,UNION_PHOTO_CAPTION_COL_START);
     const line=safeCellStr(capLines[r1-blk.captStart-1]??'');
     cell.value=line;
     cell.font=unionFont?(/号室/.test(line)?{name:'ＭＳ 明朝',size:11}:{name:'ＭＳ ゴシック',size:11}):minchoFont(11);
@@ -1145,7 +1188,41 @@ async function fillPhotoBlock(ws,wb,p,blk,globalNo,{minchoFont,thin,hair,unionFo
   }
 
   if(p.dataUrl){
-    await embedPhotoImage(ws,wb,p.dataUrl,blk,quality);
+    await embedUnionPhotoImage(ws,wb,p.dataUrl,blk,quality);
+  }
+}
+
+async function fillNormalPhotoBlock(ws,wb,p,blk,globalNo,minchoFont,thin,hair){
+  const noFont=minchoFont(14);
+  const capFont=minchoFont(11);
+  const noCol=10;
+  const noValCol=11;
+  const capColStart=10;
+  const capColEnd=12;
+
+  const noCell=ws.getCell(blk.noRow,noCol);
+  noCell.value='No.';
+  noCell.font=noFont;
+  noCell.alignment={vertical:'middle'};
+  noCell.border={bottom:thin};
+  const noValCell=ws.getCell(blk.noRow,noValCol);
+  noValCell.value=safeCellNum(globalNo);
+  noValCell.font=noFont;
+  noValCell.alignment={vertical:'middle'};
+  noValCell.border={bottom:thin};
+
+  const capLines=splitCaption(safeCellStr(p.caption),12,blk.captEnd-blk.captStart+1);
+  for(let r=blk.captStart;r<=blk.captEnd;r++){
+    ws.mergeCells(r,capColStart,r,capColEnd);
+    const cell=ws.getCell(r,capColStart);
+    cell.value=safeCellStr(capLines[r-blk.captStart]??'');
+    cell.font=capFont;
+    cell.alignment={vertical:'middle',wrapText:true};
+    cell.border=r===blk.captStart?{bottom:hair}:{top:hair,bottom:hair};
+  }
+
+  if(p.dataUrl){
+    await embedNormalPhotoImage(ws,wb,p.dataUrl,blk,quality);
   }
 }
 
@@ -1163,19 +1240,19 @@ async function buildUnionPhotoSheets(wb, mincho, thin, hair) {
     // 印刷範囲A1:L30
     ws.pageSetup.scale=88;
     ws.pageSetup.fitToPage=false;
-    ws.pageSetup.printArea=`A1:L${PHOTO_SHEET_ROWS}`;
+    ws.pageSetup.printArea=`A1:L${UNION_PHOTO_SHEET_ROWS}`;
     ws.pageSetup.horizontalCentered=true;
     ws.pageSetup.verticalCentered=true;
 
-    applyPhotoSheetColWidths(ws);
-    ensurePhotoSheetGrid(ws);
-    applyPhotoSheetRowHeights(ws,PHOTO_BLOCKS);
+    applyUnionPhotoSheetColWidths(ws);
+    ensureUnionPhotoSheetGrid(ws);
+    applyUnionPhotoSheetRowHeights(ws,UNION_PHOTO_BLOCKS);
 
     for(let bi=0;bi<pagePh.length;bi++){
       const p=pagePh[bi];
-      const blk=PHOTO_BLOCKS[bi];
+      const blk=UNION_PHOTO_BLOCKS[bi];
       const globalNo=pg*3+bi+1;
-      await fillPhotoBlock(ws,wb,p,blk,globalNo,{minchoFont:null,thin,hair,unionFont:true});
+      await fillUnionPhotoBlock(ws,wb,p,blk,globalNo,{minchoFont:null,thin,hair,unionFont:true});
       document.getElementById('loading-s').textContent=`ページ${pg+1}/${pageCount} 写真${bi+1}/3`;
       await sleep(5);
     }
@@ -1183,11 +1260,7 @@ async function buildUnionPhotoSheets(wb, mincho, thin, hair) {
 }
 
 // ============================================================
-// 通常・多摩 写真シート生成（実物ファイル準拠）
-// ============================================================
-// 【レイアウト】30行構成
-// ブロック1: 行1(No.)+行2〜9(写真) / ブロック2: 行11+行12〜19 / ブロック3: 行21+行22〜29
-// 写真: B〜H列(col1〜8) / キャプション・No.: K〜L列
+// 通常・多摩 写真シート生成（正解ファイル準拠・37行）
 // ============================================================
 async function buildPhotoSheets(wb, minchoFont, thin) {
   const hair={style:'hair'};
@@ -1198,31 +1271,20 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
     const ws=wb.addWorksheet(String(pg+1).padStart(3,'0'));
     ws.pageSetup.paperSize=9;
     ws.pageSetup.orientation='portrait';
-    ws.pageSetup.fitToPage=true;
-    ws.pageSetup.fitToWidth=1;
-    ws.pageSetup.fitToHeight=1;
-    ws.pageSetup.scale=100;
-    ws.pageSetup.margins={
-      left:0,
-      right:0,
-      top:0,
-      bottom:0,
-      header:0,
-      footer:0
-    };
-    ws.pageSetup.horizontalCentered=false;
-    ws.pageSetup.verticalCentered=false;
-    ws.pageSetup.printArea=`A1:N29`;
+    ws.pageSetup.scale=88;
+    ws.pageSetup.fitToPage=false;
+    ws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
+    ws.pageSetup.printArea='A1:L37';
 
-    applyPhotoSheetColWidths(ws);
-    ensurePhotoSheetGrid(ws);
-    applyPhotoSheetRowHeights(ws,PHOTO_BLOCKS);
+    applyNormalPhotoSheetColWidths(ws);
+    ensureNormalPhotoSheetGrid(ws);
+    applyNormalPhotoSheetRowHeights(ws,NORMAL_PHOTO_BLOCKS);
 
     for(let bi=0;bi<pagePh.length;bi++){
       const p=pagePh[bi];
-      const blk=PHOTO_BLOCKS[bi];
+      const blk=NORMAL_PHOTO_BLOCKS[bi];
       const globalNo=pg*3+bi+1;
-      await fillPhotoBlock(ws,wb,p,blk,globalNo,{minchoFont,thin,hair,unionFont:false});
+      await fillNormalPhotoBlock(ws,wb,p,blk,globalNo,minchoFont,thin,hair);
       document.getElementById('loading-s').textContent=`ページ${pg+1}/${pageCount} 写真${bi+1}/3`;
       await sleep(5);
     }
@@ -1393,55 +1455,45 @@ async function buildMediaDimCache(zip,relsXml){
   return cache;
 }
 
-function anchorFromRowCol(xml){
-  const row=parseInt((xml.match(/<xdr:from>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/)||[])[1]||'0',10);
-  const col=parseInt((xml.match(/<xdr:from>[\s\S]*?<xdr:col>(\d+)<\/xdr:col>/)||[])[1]||'0',10);
-  return{row,col};
-}
-function convertTwoCellAnchor(anchor,mediaDims){
-  const fromCol=parseInt((anchor.match(/<xdr:from>[\s\S]*?<xdr:col>(\d+)<\/xdr:col>/)||[])[1]||'1',10);
-  const toCol=parseInt((anchor.match(/<xdr:to>[\s\S]*?<xdr:col>(\d+)<\/xdr:col>/)||[])[1]||'7',10);
-  const fromRow=parseInt((anchor.match(/<xdr:from>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/)||[])[1]||'3',10);
-  const toRow=parseInt((anchor.match(/<xdr:to>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/)||[])[1]||'11',10);
-  const imageCols=imageColsFromAnchor(fromCol,toCol);
-  const maxCx=calcColsSpanEMU(PHOTO_COLS,imageCols.length?imageCols:PHOTO_IMAGE_COLS);
+function photoLayoutFromAnchor(fromRow,toRow){
   const rowCount=Math.max(toRow-fromRow,1);
-  const maxCy=calcRowsSpanEMU(rowCount,PHOTO_IMG_ROW_H);
-  const embed=(anchor.match(/r:embed="([^"]+)"/)||[])[1];
-  const dims=embed&&mediaDims?mediaDims[embed]:null;
-  const fit=fitContainEmu(dims?.width||0,dims?.height||0,maxCx,maxCy);
-  const fromBlock=(anchor.match(/<xdr:from>[\s\S]*?<\/xdr:from>/)||[])[0]||'';
-  let picBlock=(anchor.match(/<xdr:pic>[\s\S]*?<\/xdr:pic>/)||[])[0]||'';
-  picBlock=picBlock
-    .replace(/<a:off x="[^"]*" y="[^"]*"\/>/,`<a:off x="${fit.padX}" y="${fit.padY}"/>`)
-    .replace(/<a:ext cx="[^"]*" cy="[^"]*"\/>/,`<a:ext cx="${fit.cx}" cy="${fit.cy}"/>`)
-    .replace(/<a:picLocks[^>]*\/>/g,'<a:picLocks noChangeAspect="1"/>');
-  if(!picBlock.includes('useLocalDpi')){
-    picBlock=picBlock.replace(/<a:blip([^>]*r:embed="[^"]+"[^>]*)\/>/,`<a:blip$1>${USE_LOCAL_DPI_XML}</a:blip>`);
-    picBlock=picBlock.replace(/<a:blip([^>]*r:embed="[^"]+"[^>]*)><a:stretch>/,`<a:blip$1>${USE_LOCAL_DPI_XML}<a:stretch>`);
+  if(rowCount>=9){
+    return{photoCols:NORMAL_PHOTO_COLS,imgRowH:NORMAL_PHOTO_IMG_ROW_H,imageCols:NORMAL_PHOTO_IMAGE_COLS};
   }
-  return `<xdr:oneCellAnchor>${fromBlock}<xdr:ext cx="${fit.cx}" cy="${fit.cy}"/>${picBlock}<xdr:clientData/></xdr:oneCellAnchor>`;
-}
-function fixOneCellAnchor(anchor){
-  return anchor.replace(/<a:picLocks[^>]*\/>/g,'<a:picLocks noChangeAspect="1"/>');
+  return{photoCols:UNION_PHOTO_COLS,imgRowH:UNION_PHOTO_IMG_ROW_H,imageCols:UNION_PHOTO_IMAGE_COLS};
 }
 function fixDrawingXml(xml,mediaDims){
-  const anchorRe=/<xdr:(?:twoCell|oneCell)Anchor[\s\S]*?<\/xdr:(?:twoCell|oneCell)Anchor>/g;
-  const anchors=[];
-  const stripped=xml.replace(anchorRe,(anchor)=>{
-    anchors.push(anchor);
-    return '';
+  return xml.replace(/<xdr:twoCellAnchor[\s\S]*?<\/xdr:twoCellAnchor>/g,(anchor)=>{
+    const fromCol=parseInt((anchor.match(/<xdr:from>[\s\S]*?<xdr:col>(\d+)<\/xdr:col>/)||[])[1]||'1',10);
+    const toCol=parseInt((anchor.match(/<xdr:to>[\s\S]*?<xdr:col>(\d+)<\/xdr:col>/)||[])[1]||'7',10);
+    const fromRow=parseInt((anchor.match(/<xdr:from>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/)||[])[1]||'3',10);
+    const toRow=parseInt((anchor.match(/<xdr:to>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/)||[])[1]||'11',10);
+    const layout=photoLayoutFromAnchor(fromRow,toRow);
+    const imageCols=imageColsFromAnchor(fromCol,toCol);
+    const maxCx=calcColsSpanEMU(layout.photoCols,imageCols.length?imageCols:layout.imageCols);
+    const rowCount=Math.max(toRow-fromRow,1);
+    const maxCy=calcRowsSpanEMU(rowCount,layout.imgRowH);
+    const embed=(anchor.match(/r:embed="([^"]+)"/)||[])[1];
+    const dims=embed&&mediaDims?mediaDims[embed]:null;
+    const fit=fitContainEmu(dims?.width||0,dims?.height||0,maxCx,maxCy);
+    let fixed=anchor
+      .replace(/(<xdr:to>[\s\S]*?<xdr:colOff>)\d+(<\/xdr:colOff>[\s\S]*?<xdr:rowOff>)\d+(<\/xdr:rowOff>)/,'$10$20$3')
+      .replace(/<a:off x="[^"]*" y="[^"]*"\/>/,`<a:off x="${fit.padX}" y="${fit.padY}"/>`)
+      .replace(/<a:ext cx="[^"]*" cy="[^"]*"\/>/,`<a:ext cx="${fit.cx}" cy="${fit.cy}"/>`)
+      .replace(/<a:picLocks[^>]*\/>/g,'<a:picLocks noChangeAspect="1"/>');
+    if(!fixed.includes('useLocalDpi')){
+      fixed=fixed.replace(/<a:blip([^>]*r:embed="[^"]+"[^>]*)\/>/,`<a:blip$1>${USE_LOCAL_DPI_XML}</a:blip>`);
+      fixed=fixed.replace(/<a:blip([^>]*r:embed="[^"]+"[^>]*)><a:stretch>/,`<a:blip$1>${USE_LOCAL_DPI_XML}<a:stretch>`);
+    }
+    if(/editAs="/.test(fixed)){
+      fixed=fixed.replace(/editAs="[^"]*"/,'editAs="oneCell"');
+    }else{
+      fixed=fixed.replace('<xdr:twoCellAnchor','<xdr:twoCellAnchor editAs="oneCell"');
+    }
+    return fixed;
+  }).replace(/<xdr:oneCellAnchor[\s\S]*?<\/xdr:oneCellAnchor>/g,(anchor)=>{
+    return anchor.replace(/<a:picLocks[^>]*\/>/g,'<a:picLocks noChangeAspect="1"/>');
   });
-  const fixedAnchors=anchors.map((anchor)=>{
-    if(anchor.startsWith('<xdr:twoCellAnchor'))return convertTwoCellAnchor(anchor,mediaDims);
-    return fixOneCellAnchor(anchor);
-  }).sort((a,b)=>{
-    const pa=anchorFromRowCol(a),pb=anchorFromRowCol(b);
-    if(pa.row!==pb.row)return pa.row-pb.row;
-    return pa.col-pb.col;
-  });
-  if(fixedAnchors.length===0)return xml;
-  return stripped.replace('</xdr:wsDr>',fixedAnchors.join('')+'</xdr:wsDr>');
 }
 
 function getCellStyleAttr(rowXml,ref){
@@ -1455,18 +1507,20 @@ function updateMergeCellsCount(xml){
   return xml.replace(/<mergeCells count="\d+"/,`<mergeCells count="${cells.length}"`);
 }
 function fillCoverRows(out,merges,rows,opts={}){
+  const cols=(opts.cols||'ABCDEFGHIJKL').split('');
+  const spanEnd=opts.spanEnd||12;
   rows.forEach(r=>{
     const rowRe=new RegExp(`<row r="${r}"([^>]*)>([\\s\\S]*?)<\\/row>`);
     out=out.replace(rowRe,(full,attrs,body)=>{
       let newBody=body.replace(/<c r="([A-Z]+\d+)"(?:\/>|>[\s\S]*?<\/c>)/g,(cellFull,ref)=>{
         return isMergePrimary(ref,merges)?cellFull:'';
       });
-      'ABCDEFGHIJKL'.split('').forEach(col=>{
+      cols.forEach(col=>{
         const ref=`${col}${r}`;
         if(isMergePrimary(ref,merges)&&!new RegExp(`<c r="${ref}"`).test(newBody))newBody+=`<c r="${ref}"/>`;
       });
       let newAttrs=attrs;
-      if(!newAttrs.includes('spans'))newAttrs+=' spans="1:12"';
+      if(!newAttrs.includes('spans'))newAttrs+=` spans="1:${spanEnd}"`;
       if(opts.ht&&r<=opts.htUntil&&!newAttrs.includes('ht='))newAttrs+=` ht="${opts.ht}" customHeight="1"`;
       return `<row r="${r}"${newAttrs}>${newBody}</row>`;
     });
@@ -1478,18 +1532,32 @@ function fixCoverSheetXml(xml){
   return fixPageSetupXml(xml,91);
 }
 
-function fixPhotoSheetXml(xml){
-  let out=fixPageSetupXml(xml,100);
-  out=out.replace(/<dimension ref="[^"]*"/,`<dimension ref="A1:L${PHOTO_SHEET_ROWS}"`);
+function fixUnionPhotoSheetXml(xml){
+  let out=fixPageSetupXml(xml,88);
+  out=out.replace(/<dimension ref="[^"]*"/,`<dimension ref="A1:L${UNION_PHOTO_SHEET_ROWS}"`);
   out=out.replace(/<row r="(2[89]|[3-9]\d|\d{3,})"[^>]*>[\s\S]*?<\/row>\s*/g,'');
   out=out.replace(/<mergeCell ref="[^"]*:[^"]*"/g,(m)=>{
     const ref=m.match(/ref="([^"]+)"/)[1];
     const brRow=parseInt((ref.split(':')[1]||ref).replace(/[A-Z]+/,''),10);
-    return brRow>PHOTO_SHEET_ROWS?'':m;
+    return brRow>UNION_PHOTO_SHEET_ROWS?'':m;
   });
   out=updateMergeCellsCount(out);
   let merges=parseMergeCells(out);
-  out=fillCoverRows(out,merges,Array.from({length:PHOTO_SHEET_ROWS},(_,i)=>i+1));
+  out=fillCoverRows(out,merges,Array.from({length:UNION_PHOTO_SHEET_ROWS},(_,i)=>i+1));
+  return updateMergeCellsCount(out);
+}
+
+function fixNormalPhotoSheetXml(xml){
+  let out=fixPageSetupXml(xml,88);
+  out=out.replace(/<dimension ref="[^"]*"/,`<dimension ref="A1:L${NORMAL_PHOTO_SHEET_ROWS}"`);
+  out=out.replace(/<mergeCell ref="[^"]*:[^"]*"/g,(m)=>{
+    const ref=m.match(/ref="([^"]+)"/)[1];
+    const brRow=parseInt((ref.split(':')[1]||ref).replace(/[A-Z]+/,''),10);
+    return brRow>NORMAL_PHOTO_SHEET_ROWS?'':m;
+  });
+  out=updateMergeCellsCount(out);
+  let merges=parseMergeCells(out);
+  out=fillCoverRows(out,merges,Array.from({length:NORMAL_PHOTO_SHEET_ROWS},(_,i)=>i+1),{cols:'ABCDEFGHIJKLM',spanEnd:13});
   return updateMergeCellsCount(out);
 }
 
@@ -1515,16 +1583,23 @@ async function fixXlsxForPreview(arrayBuffer){
     if(!zip.file(path))continue;
     let xml=await zip.file(path).async('string');
     if(name==='表紙')xml=fixCoverSheetXml(xml);
-    else if(/^\d{3}$/.test(name))xml=fixPhotoSheetXml(xml);
+    else if(name==='自由シート')xml=fixPageSetupXml(xml,91);
+    else if(/^\d{3}$/.test(name))xml=reportType==='union'?fixUnionPhotoSheetXml(xml):fixNormalPhotoSheetXml(xml);
     zip.file(path,xml);
   }
   return zip.generateAsync({type:'arraybuffer',compression:'DEFLATE'});
 }
 
-async function embedPhotoImage(ws,wb,dataUrl,blk,q){
+async function embedUnionPhotoImage(ws,wb,dataUrl,blk,q){
   const imgBase64=await toJpegBase64(dataUrl,q||0.85);
   const imgId=wb.addImage({base64:imgBase64,extension:'jpeg'});
-  ws.addImage(imgId,{tl:{col:1,row:blk.imgTlRow},br:{col:PHOTO_IMAGE_BR_COL,row:blk.imgBrRow},editAs:'oneCell'});
+  ws.addImage(imgId,{tl:{col:1,row:blk.imgTlRow},br:{col:UNION_PHOTO_IMAGE_BR_COL,row:blk.imgBrRow},editAs:'oneCell'});
+}
+
+async function embedNormalPhotoImage(ws,wb,dataUrl,blk,q){
+  const imgBase64=await toJpegBase64(dataUrl,q||0.85);
+  const imgId=wb.addImage({base64:imgBase64,extension:'jpeg'});
+  ws.addImage(imgId,{tl:{col:1,row:blk.imgTlRow},br:{col:8,row:blk.imgBrRow},editAs:'oneCell'});
 }
 
 // 改行を尊重しつつmaxLen文字で折り返し（最大3行）
