@@ -1074,7 +1074,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
 const PHOTO_EXPORT_PX=960;
 const PHOTO_SHEET_ROWS=27;
 const PHOTO_NO_ROW_H=12;
-const PHOTO_IMG_ROW_H=48;
+const PHOTO_IMG_ROW_H=45;
 const PHOTO_MDW=7;
 const PHOTO_COLS={A:2.7,B:8.2,C:8.2,D:8.2,E:8.2,F:8.2,G:8.2,H:10.7,I:4.1,J:8};
 const PHOTO_IMAGE_COLS=['B','C','D','E','F','G','H'];
@@ -1461,7 +1461,7 @@ function fixCoverSheetXml(xml){
 }
 
 function fixPhotoSheetXml(xml){
-  let out=fixPageSetupXml(xml,88);
+  let out=fixPageSetupXml(xml,100);
   out=out.replace(/<dimension ref="[^"]*"/,`<dimension ref="A1:L${PHOTO_SHEET_ROWS}"`);
   out=out.replace(/<row r="(2[89]|[3-9]\d|\d{3,})"[^>]*>[\s\S]*?<\/row>\s*/g,'');
   out=out.replace(/<mergeCell ref="[^"]*:[^"]*"/g,(m)=>{
