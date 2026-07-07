@@ -726,15 +726,7 @@ function setupNormalCoverSheet(cws,minchoFont,double){
     if(r<=5||r>=32)cws.mergeCells(`J${r}:L${r}`);
   }
 
-  // タイトル枠（セル単位の二重線→結合しても罫線が残る）
-  'CDEFGHIJ'.split('').forEach(col=>{
-    const cell=cws.getCell(col+'6');
-    const b={top:double,bottom:double};
-    if(col==='C')b.left=double;
-    if(col==='J')b.right=double;
-    cell.border=b;
-  });
-  cws.mergeCells('C6:J6');
+  // タイトル（罫線・結合はfixCoverSheetXmlでXML処理）
   const titleCell=cws.getCell('C6');
   titleCell.value='報　告　書';
   titleCell.font=minchoFont(36,true);
@@ -1123,7 +1115,7 @@ async function buildUnionPhotoSheets(wb, mincho, thin, hair) {
     const ws=wb.addWorksheet(String(pg+1).padStart(3,'0'));
     ws.pageSetup.paperSize=9;ws.pageSetup.orientation='portrait';
     ws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
-    // 印刷範囲A1:L27（27行構成・A4ぴったり）
+    // 印刷範囲A1:L30
     ws.pageSetup.scale=88;
     ws.pageSetup.fitToPage=false;
     ws.pageSetup.printArea=`A1:L${PHOTO_SHEET_ROWS}`;
@@ -1146,9 +1138,8 @@ async function buildUnionPhotoSheets(wb, mincho, thin, hair) {
 // ============================================================
 // 通常・多摩 写真シート生成（実物ファイル準拠）
 // ============================================================
-// 【レイアウト】27行構成（A4ぴったり）
-// ブロック1: 行1(No.16.2pt)+行2〜9(写真29.25pt×8)
-// ブロック2: 行10+行11〜18 / ブロック3: 行19+行20〜27
+// 【レイアウト】30行構成
+// ブロック1: 行1(No.)+行2〜9(写真) / ブロック2: 行11+行12〜19 / ブロック3: 行21+行22〜29
 // 写真: B〜H列(col1〜8) / キャプション・No.: K〜L列
 // ============================================================
 async function buildPhotoSheets(wb, minchoFont, thin) {
