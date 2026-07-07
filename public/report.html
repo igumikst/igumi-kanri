@@ -1208,6 +1208,7 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
     };
     ws.pageSetup.horizontalCentered=false;
     ws.pageSetup.verticalCentered=false;
+    ws.pageSetup.printArea=`A1:N27`;
 
     applyPhotoSheetColWidths(ws);
     ensurePhotoSheetGrid(ws);
