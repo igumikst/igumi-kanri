@@ -746,9 +746,10 @@ function setupNormalCoverSheet(cws,minchoFont,double){
   cws.mergeCells('C6:J6');
   for(let r=1;r<=34;r++)ensureRowCells(cws,r,'A','L');
   const titleCell=cws.getCell('C6');
-  titleCell.value=NORMAL_COVER_TITLE;
+  titleCell.value='報　　　告　　　書';
   titleCell.font=minchoFont(30,true);
   titleCell.alignment={horizontal:'center',vertical:'middle'};
+  titleCell.border={top:double,bottom:double,left:double,right:double};
 }
 
 function formatNormalCoverDate(workDate){
