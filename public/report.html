@@ -1103,8 +1103,10 @@ function calcRowsSpanEMU(rowCount,rowHPt){
 }
 function applyPhotoSheetRowHeights(ws,blocks){
   blocks.forEach(blk=>{
-    ws.getRow(blk.noRow).height=4;
-    for(let r=blk.captStart;r<=blk.captEnd;r++)ws.getRow(r).height=PHOTO_IMG_ROW_H;
+    ws.getRow(blk.noRow).height=2;
+    for(let r=blk.captStart;r<=blk.captEnd;r++){
+      ws.getRow(r).height=PHOTO_IMG_ROW_H;
+    }
   });
 }
 function imageColsFromAnchor(fromCol,toCol){
