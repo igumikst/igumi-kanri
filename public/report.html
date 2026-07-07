@@ -1072,9 +1072,9 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
 
 // 写真シート：30行構成
 const PHOTO_EXPORT_PX=960;
-const PHOTO_SHEET_ROWS=30;
+const PHOTO_SHEET_ROWS=35;
 const PHOTO_NO_ROW_H=16.2;
-const PHOTO_IMG_ROW_H=38;
+const PHOTO_IMG_ROW_H=30;
 const PHOTO_MDW=7;
 const PHOTO_COLS={A:2.7,B:8.2,C:8.2,D:8.2,E:8.2,F:8.2,G:8.2,H:10.7,I:4.1,J:8.2};
 const PHOTO_IMAGE_COLS=['B','C','D','E','F','G','H'];
@@ -1084,9 +1084,9 @@ const PHOTO_NO_COL=11; // K
 const PHOTO_NO_VAL_COL=12; // L
 const PHOTO_IMAGE_BR_COL=10; // B〜J（0-indexed br）
 const PHOTO_BLOCKS=[
-  {noRow:1,imgTlRow:2,imgBrRow:10,captStart:2,captEnd:9},
-  {noRow:11,imgTlRow:12,imgBrRow:20,captStart:12,captEnd:19},
-  {noRow:21,imgTlRow:22,imgBrRow:30,captStart:22,captEnd:29},
+  {noRow:3,imgTlRow:3,imgBrRow:11,captStart:4,captEnd:11},
+  {noRow:15,imgTlRow:15,imgBrRow:23,captStart:16,captEnd:23},
+  {noRow:27,imgTlRow:27,imgBrRow:35,captStart:28,captEnd:35},
 ];
 
 function excelColWidthToPx(w){
@@ -1194,10 +1194,10 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
     const ws=wb.addWorksheet(String(pg+1).padStart(3,'0'));
     ws.pageSetup.paperSize=9;ws.pageSetup.orientation='portrait';
     ws.pageSetup.margins={
-      left:0.05,
-      right:0.05,
-      top:0.05,
-      bottom:0.05,
+      left:0.197,
+      right:0.197,
+      top:0.197,
+      bottom:0.197,
       header:0,
       footer:0
     };
@@ -1504,7 +1504,7 @@ async function fixXlsxForPreview(arrayBuffer){
 async function embedPhotoImage(ws,wb,dataUrl,blk,q){
   const imgBase64=await toJpegBase64(dataUrl,q||0.85);
   const imgId=wb.addImage({base64:imgBase64,extension:'jpeg'});
-  ws.addImage(imgId,{tl:{col:1,row:blk.imgTlRow},br:{col:10,row:blk.imgBrRow},editAs:'oneCell'});
+  ws.addImage(imgId,{tl:{col:1,row:blk.imgTlRow},br:{col:8,row:blk.imgBrRow},editAs:'oneCell'});
 }
 
 // 改行を尊重しつつmaxLen文字で折り返し（最大3行）
