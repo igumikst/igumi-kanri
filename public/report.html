@@ -733,23 +733,17 @@ function setupNormalCoverSheet(cws,minchoFont,double){
   cws.pageSetup.fitToPage=false;
   cws.pageSetup.printArea='A1:L34';
   cws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
-
   Object.entries(NORMAL_COVER_COLS).forEach(([col,w])=>{cws.getColumn(col).width=w;});
   applyNormalCoverRowHeights(cws);
 
+  // ①先に結合セルを全部登録する（ensureRowCellsより前）
+  NORMAL_COVER_J_MERGE_ROWS.forEach(r=>{cws.mergeCells(`J${r}:L${r}`);});
+  cws.mergeCells('C6:J6');
+
+  // ②結合後にセルを埋める
   for(let r=1;r<=34;r++)ensureRowCells(cws,r,'A','L');
 
-  NORMAL_COVER_J_MERGE_ROWS.forEach(r=>{cws.mergeCells(`J${r}:L${r}`);});
-
-  // タイトル枠 C6:J6（結合前にセル単位で二重線）
-  'CDEFGHIJ'.split('').forEach(col=>{
-    const cell=cws.getCell(`${col}6`);
-    const b={top:double,bottom:double};
-    if(col==='C')b.left=double;
-    if(col==='J')b.right=double;
-    cell.border=b;
-  });
-  cws.mergeCells('C6:J6');
+  // ③タイトル設定（borderなし・ExcelJSのmerge後に設定）
   const titleCell=cws.getCell('C6');
   titleCell.value=NORMAL_COVER_TITLE;
   titleCell.font=minchoFont(30,true);
