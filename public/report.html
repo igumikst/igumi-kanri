@@ -1123,7 +1123,7 @@ async function fillPhotoBlock(ws,wb,p,blk,globalNo,{minchoFont,thin,hair,unionFo
   noCell.font=noFont;
   noCell.alignment={vertical:'middle'};
   noCell.border={bottom:thin};
-  const noValCell=ws.getCell(blk.captStart,12);
+  const noValCell=ws.getCell(blk.captStart,PHOTO_NO_VAL_COL);
   noValCell.value=safeCellNum(globalNo);
   noValCell.font=noFont;
   noValCell.alignment={vertical:'middle'};
