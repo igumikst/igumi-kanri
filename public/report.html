@@ -1086,7 +1086,7 @@ const PHOTO_IMAGE_BR_COL=10; // B〜J（0-indexed br）
 const PHOTO_BLOCKS=[
   {noRow:1,imgTlRow:2,imgBrRow:10,captStart:2,captEnd:9},
   {noRow:11,imgTlRow:12,imgBrRow:20,captStart:12,captEnd:19},
-  {noRow:21,imgTlRow:22,imgBrRow:34,captStart:22,captEnd:31},
+  {noRow:21,imgTlRow:22,imgBrRow:34,captStart:22,captEnd:33},
 ];
 
 function excelColWidthToPx(w){
@@ -1103,8 +1103,10 @@ function calcRowsSpanEMU(rowCount,rowHPt){
 }
 function applyPhotoSheetRowHeights(ws,blocks){
   blocks.forEach(blk=>{
+    const captStart=blk.imgTlRow;
+    const captEnd=blk.imgBrRow-1;
     ws.getRow(blk.noRow).height=PHOTO_NO_ROW_H;
-    for(let r=blk.captStart;r<=blk.captEnd;r++)ws.getRow(r).height=PHOTO_IMG_ROW_H;
+    for(let r=captStart;r<=captEnd;r++)ws.getRow(r).height=PHOTO_IMG_ROW_H;
   });
 }
 function imageColsFromAnchor(fromCol,toCol){
@@ -1130,10 +1132,12 @@ async function fillPhotoBlock(ws,wb,p,blk,globalNo,{minchoFont,thin,hair,unionFo
   noValCell.border={bottom:thin};
 
   const capLines=splitCaption(safeCellStr(p.caption),12,8);
-  for(let r1=blk.captStart;r1<=blk.captEnd;r1++){
+  const captStart=blk.imgTlRow;
+  const captEnd=blk.imgBrRow-1;
+  for(let r1=captStart;r1<=captEnd;r1++){
     ws.mergeCells(r1,PHOTO_CAPTION_COL_START,r1,PHOTO_CAPTION_COL_END);
     const cell=ws.getCell(r1,PHOTO_CAPTION_COL_START);
-    const line=safeCellStr(capLines[r1-blk.captStart]??'');
+    const line=safeCellStr(capLines[r1-captStart]??'');
     cell.value=line;
     cell.font=unionFont?(/号室/.test(line)?{name:'ＭＳ 明朝',size:11}:{name:'ＭＳ ゴシック',size:11}):minchoFont(11);
     cell.alignment={vertical:'middle',wrapText:true};
