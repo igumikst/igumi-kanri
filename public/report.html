@@ -1507,7 +1507,7 @@ async function fixXlsxForPreview(arrayBuffer){
 async function embedPhotoImage(ws,wb,dataUrl,blk,q){
   const imgBase64=await toJpegBase64(dataUrl,q||0.85);
   const imgId=wb.addImage({base64:imgBase64,extension:'jpeg'});
-  ws.addImage(imgId,{tl:{col:1,row:blk.imgTlRow},br:{col:8,row:blk.imgBrRow},editAs:'oneCell'});
+  ws.addImage(imgId,{tl:{col:1,row:blk.imgTlRow},br:{col:8,row:blk.imgBrRow},editAs:'absolute'});
 }
 
 // 改行を尊重しつつmaxLen文字で折り返し（最大3行）
