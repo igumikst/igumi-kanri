@@ -772,15 +772,16 @@ function formatNormalCoverDate(workDate){
 }
 
 function fillNormalCoverItemRow(cws,row,label,value,minchoFont,thin){
+  cws.mergeCells(`B${row}:C${row}`);
   const labelCell=cws.getCell(`B${row}`);
   labelCell.value=label;
   labelCell.font=minchoFont(14);
   labelCell.alignment={vertical:'middle'};
   cws.mergeCells(`D${row}:K${row}`);
-  const valueCell=cws.getCell(`D${row}`);
-  valueCell.value=value?'　'+safeCellStr(value):'';
-  valueCell.font=minchoFont(14);
-  valueCell.alignment={vertical:'middle',wrapText:true};
+  const vc=cws.getCell(`D${row}`);
+  vc.value=value?'　'+safeCellStr(value):'';
+  vc.font=minchoFont(14);
+  vc.alignment={vertical:'middle',wrapText:false,shrinkToFit:true};
   for(let ci='D'.charCodeAt(0);ci<='K'.charCodeAt(0);ci++){
     cws.getCell(String.fromCharCode(ci)+row).border={bottom:thin};
   }
