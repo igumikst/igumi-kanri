@@ -1073,8 +1073,8 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
 // 写真シート：30行構成
 const PHOTO_EXPORT_PX=960;
 const PHOTO_SHEET_ROWS=30;
-const PHOTO_NO_ROW_H=10;
-const PHOTO_IMG_ROW_H=35;
+const PHOTO_NO_ROW_H=8;
+const PHOTO_IMG_ROW_H=40;
 const PHOTO_MDW=7;
 const PHOTO_COLS={A:2.7,B:8.2,C:8.2,D:8.2,E:8.2,F:8.2,G:8.2,H:10.7,I:4.1,J:8.2};
 const PHOTO_IMAGE_COLS=['B','C','D','E','F','G','H'];
@@ -1272,13 +1272,24 @@ function loadData(e){
   reader.readAsText(file);e.target.value='';
 }
 
-// 縦横比維持でリサイズ（トリミングなし）
-function scaleDrawImage(img,maxPx){
+// 中央クロップ（出力サイズの縦横比に合わせる・引き伸ばしなし）
+function cropDrawImage(img,ctx,outW,outH){
   const srcW=img.width,srcH=img.height;
-  const scale=Math.min(maxPx/srcW,maxPx/srcH,1);
-  const outW=Math.max(1,Math.round(srcW*scale));
-  const outH=Math.max(1,Math.round(srcH*scale));
-  return{outW,outH};
+  const targetRatio=outW/outH;
+  const srcRatio=srcW/srcH;
+  let cropW,cropH,sx,sy;
+  if(srcRatio>targetRatio){
+    cropH=srcH;
+    cropW=Math.round(srcH*targetRatio);
+    sx=Math.round((srcW-cropW)/2);
+    sy=0;
+  }else{
+    cropW=srcW;
+    cropH=Math.round(srcW/targetRatio);
+    sx=0;
+    sy=Math.round((srcH-cropH)/2);
+  }
+  ctx.drawImage(img,sx,sy,cropW,cropH,0,0,outW,outH);
 }
 
 function toJpegBase64(dataUrl,q,maxPx){
@@ -1287,11 +1298,12 @@ function toJpegBase64(dataUrl,q,maxPx){
     img.onerror=()=>reject(new Error('画像の読み込みに失敗しました'));
     img.onload=()=>{
       const limit=maxPx||PHOTO_EXPORT_PX;
-      const{outW,outH}=scaleDrawImage(img,limit);
+      const outW=limit;
+      const outH=Math.round(limit*1.2);
       const canvas=document.createElement('canvas');
       canvas.width=outW;
       canvas.height=outH;
-      canvas.getContext('2d').drawImage(img,0,0,outW,outH);
+      cropDrawImage(img,canvas.getContext('2d'),outW,outH);
       resolve(canvas.toDataURL('image/jpeg',q||0.85).replace(/^data:image\/jpeg;base64,/,''));
     };
     img.src=dataUrl;
