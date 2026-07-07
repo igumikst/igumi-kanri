@@ -281,6 +281,9 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
       <button class="btn btn-ghost btn-sm" onclick="document.getElementById('load-input').click()" style="flex:1">📂 読込</button>
       <button class="btn btn-red-soft btn-sm" onclick="confirmReset()" style="flex:1">🗑 リセット</button>
     </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-ghost btn-sm" onclick="loadSampleData()" style="flex:1">🧪 サンプル読込</button>
+    </div>
     <input type="file" id="load-input" accept=".json" style="display:none" onchange="loadData(event)">
   </div>
 
@@ -1402,20 +1405,19 @@ function fixDrawingXml(xml,mediaDims){
     const embed=(anchor.match(/r:embed="([^"]+)"/)||[])[1];
     const dims=embed&&mediaDims?mediaDims[embed]:null;
     const fit=fitContainEmu(dims?.width||0,dims?.height||0,maxCx,maxCy);
-    let fixed=anchor
-      .replace(/(<xdr:to>[\s\S]*?<xdr:colOff>)\d+(<\/xdr:colOff>[\s\S]*?<xdr:rowOff>)\d+(<\/xdr:rowOff>)/,'$10$20$3')
+    const fromBlock=(anchor.match(/<xdr:from>[\s\S]*?<\/xdr:from>/)||[])[0]||'';
+    let picBlock=(anchor.match(/<xdr:pic>[\s\S]*?<\/xdr:pic>/)||[])[0]||'';
+    picBlock=picBlock
       .replace(/<a:off x="[^"]*" y="[^"]*"\/>/,`<a:off x="${fit.padX}" y="${fit.padY}"/>`)
       .replace(/<a:ext cx="[^"]*" cy="[^"]*"\/>/,`<a:ext cx="${fit.cx}" cy="${fit.cy}"/>`)
       .replace(/<a:picLocks[^>]*\/>/g,'<a:picLocks noChangeAspect="1"/>');
-    if(!fixed.includes('useLocalDpi')){
-      fixed=fixed.replace(/<a:blip([^>]*r:embed="[^"]+"[^>]*)\/>/,`<a:blip$1>${USE_LOCAL_DPI_XML}</a:blip>`);
-      fixed=fixed.replace(/<a:blip([^>]*r:embed="[^"]+"[^>]*)><a:stretch>/,`<a:blip$1>${USE_LOCAL_DPI_XML}<a:stretch>`);
+    if(!picBlock.includes('useLocalDpi')){
+      picBlock=picBlock.replace(/<a:blip([^>]*r:embed="[^"]+"[^>]*)\/>/,`<a:blip$1>${USE_LOCAL_DPI_XML}</a:blip>`);
+      picBlock=picBlock.replace(/<a:blip([^>]*r:embed="[^"]+"[^>]*)><a:stretch>/,`<a:blip$1>${USE_LOCAL_DPI_XML}<a:stretch>`);
     }
-    return fixed;
+    return `<xdr:oneCellAnchor>${fromBlock}<xdr:ext cx="${fit.cx}" cy="${fit.cy}"/>${picBlock}<xdr:clientData/></xdr:oneCellAnchor>`;
   }).replace(/<xdr:oneCellAnchor[\s\S]*?<\/xdr:oneCellAnchor>/g,(anchor)=>{
-    return anchor
-      .replace(/<a:off x="[^"]*" y="[^"]*"\/>/,`<a:off x="0" y="0"/>`)
-      .replace(/<a:picLocks[^>]*\/>/g,'<a:picLocks noChangeAspect="1"/>');
+    return anchor.replace(/<a:picLocks[^>]*\/>/g,'<a:picLocks noChangeAspect="1"/>');
   });
 }
 
@@ -1450,15 +1452,7 @@ function fillCoverRows(out,merges,rows,opts={}){
 }
 
 function fixCoverSheetXml(xml){
-  const isNormal=isNormalCoverSheet(xml)||xml.includes('報　　　告　　　書')||xml.includes(NORMAL_COVER_TITLE);
-  if(!isNormal)return fixPageSetupXml(xml,91);
-  let out=fixPageSetupXml(xml,91);
-  out=out.replace(/<dimension ref="[^"]*"/,'<dimension ref="A1:L34"');
-  let merges=parseMergeCells(out);
-  out=fillCoverRows(out,merges,[1,2,3,4,5,32,33,34],{ht:30,htUntil:5});
-  merges=parseMergeCells(out);
-  out=fillCoverRows(out,merges,[12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28]);
-  return out;
+  return fixPageSetupXml(xml,91);
 }
 
 function fixPhotoSheetXml(xml){
@@ -1634,6 +1628,61 @@ function confirmReset(){
     closeModal();showToast('🗑 リセットしました');
   };
   document.getElementById('modal').style.display='flex';
+}
+
+function hasSampleOverwriteData(){
+  const ids=['prop-name','prop-address','work-name','worker','work-content','u-building','u-address','u-workname','u-worker','u-company','u-content'];
+  if(ids.some(id=>document.getElementById(id).value.trim()))return true;
+  return photos.length>0;
+}
+
+function generateSamplePhotoDataUrl(bgColor,label){
+  const canvas=document.createElement('canvas');
+  canvas.width=800;
+  canvas.height=600;
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle=bgColor;
+  ctx.fillRect(0,0,800,600);
+  ctx.fillStyle='#fff';
+  ctx.font='bold 72px "Hiragino Sans","Yu Gothic","Meiryo",sans-serif';
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.fillText(label,400,300);
+  return canvas.toDataURL('image/jpeg',quality);
+}
+
+function loadSampleData(){
+  if(hasSampleOverwriteData()&&!confirm('入力内容を上書きします。よろしいですか？'))return;
+  const today=new Date().toISOString().split('T')[0];
+  const sampleNums=['①','②','③','④','⑤','⑥'];
+  const sampleColors=['#4a90d9','#e8862e','#22a06b','#7c5cd6','#d94a6b','#888888'];
+  if(reportType==='union'){
+    document.getElementById('u-building').value='サンプルマンション';
+    document.getElementById('u-address').value='東京都八王子市上柚木428';
+    document.getElementById('u-workname').value='402号室・501号室　漏水調査';
+    document.getElementById('u-date').value=today;
+    document.getElementById('u-worker').value='崎岡';
+    document.getElementById('u-company').value='株式会社IGUMI';
+    document.getElementById('u-content').value='402号室天井裏の給水管を調査\n501号室浴室配管の通水試験を実施';
+  }else{
+    document.getElementById('prop-name').value='サンプルマンション';
+    document.getElementById('prop-address').value='東京都八王子市上柚木428';
+    document.getElementById('work-name').value='漏水調査に伴う復旧工事';
+    document.getElementById('work-date').value=today;
+    document.getElementById('worker').value='株式会社IGUMI';
+    document.getElementById('work-content').value=reportType==='tama'?'3階天井給水管ピンホール補修':'';
+  }
+  photos=[];
+  sampleNums.forEach((num,i)=>{
+    photos.push({
+      id:nextId++,
+      dataUrl:generateSamplePhotoDataUrl(sampleColors[i],`サンプル${num}`),
+      caption:`サンプル写真${num}の説明`
+    });
+  });
+  rebuildGrid();
+  refreshPreview();
+  showToast('🧪 サンプルデータを読み込みました');
 }
 </script>
 </body>
