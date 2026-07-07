@@ -1020,19 +1020,23 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   await buildUnionPhotoSheets(wb,mincho,thin,hair);
 }
 
-// 写真シート：列幅に合わせた正方形(1:1)行高・画像EMU計算
+// 写真シート：実物ファイル準拠
 const PHOTO_EXPORT_PX=960;
-const PHOTO_NO_ROW_H=17.25;
+const PHOTO_NO_ROW_H=16.2;
+const PHOTO_IMG_ROW_H=30;
 const PHOTO_GAP_ROW_H=6;
 const PHOTO_MDW=7;
-const NORMAL_PHOTO_COLS={A:2.875,B:9,C:9,D:9,E:9,F:9,G:9,H:11.875,I:4.5,J:9,K:7,L:7};
-const NORMAL_PHOTO_IMAGE_COLS=['B','C','D','E','F','G','H'];
-const UNION_PHOTO_COLS={A:2.87,B:8.99,C:9,D:9,E:9,F:9,G:9,H:11.87,I:4.49,J:8.99,K:7};
-const UNION_PHOTO_IMAGE_COLS=['B','C','D','E','F','G'];
+const PHOTO_COLS={A:2.7,B:8.2,C:8.2,D:8.2,E:8.2,F:8.2,G:8.2,H:10.7,I:4.1,J:8.2};
+const PHOTO_IMAGE_COLS=['B','C','D','E','F','G'];
+const PHOTO_CAPTION_COL_START=8; // H
+const PHOTO_CAPTION_COL_END=10; // J
+const PHOTO_NO_COL=8; // H
+const PHOTO_NO_VAL_COL=9; // I
+const PHOTO_IMAGE_BR_COL=7; // B〜G（0-indexed br）
 const PHOTO_BLOCKS=[
-  {imgTlRow:2,imgBrRow:11,noRow:3,captStart:4,captEnd:11},
-  {imgTlRow:14,imgBrRow:23,noRow:15,captStart:16,captEnd:23},
-  {imgTlRow:26,imgBrRow:35,noRow:27,captStart:28,captEnd:35},
+  {noRow:3,imgTlRow:3,imgBrRow:11,captStart:4,captEnd:11},
+  {noRow:15,imgTlRow:15,imgBrRow:23,captStart:16,captEnd:23},
+  {noRow:27,imgTlRow:27,imgBrRow:35,captStart:28,captEnd:35},
 ];
 const PHOTO_GAP_ROWS=[12,13,24,25,36,37];
 
@@ -1042,27 +1046,26 @@ function excelColWidthToPx(w){
 function excelColWidthToEMU(w){
   return excelColWidthToPx(w)*9525;
 }
-function calcSquareImageSpanEMU(photoCols,imageCols){
-  return imageCols.reduce((s,col)=>s+excelColWidthToEMU(photoCols[col]??9),0);
+function calcColsSpanEMU(cols,imageColLetters){
+  return imageColLetters.reduce((s,col)=>s+excelColWidthToEMU(cols[col]??8.2),0);
 }
-function calcPhotoBlockRowHeights(imgTlRow,imgBrRow,noRow,totalHeightPt,noRowH){
-  const heights={};
-  const bodyRows=[];
-  for(let r=imgTlRow;r<=imgBrRow;r++){
-    if(r===noRow)heights[r]=noRowH;
-    else bodyRows.push(r);
-  }
-  const eachPt=Math.max(totalHeightPt-noRowH,0)/bodyRows.length;
-  bodyRows.forEach(r=>{heights[r]=eachPt;});
-  return heights;
+function calcRowsSpanEMU(rowCount,rowHPt){
+  return rowCount*rowHPt*12700;
 }
-function applyPhotoSheetRowHeights(ws,photoCols,imageCols,blocks,gapRows){
-  const totalHeightPt=calcSquareImageSpanEMU(photoCols,imageCols)/12700;
+function applyPhotoSheetRowHeights(ws,blocks,gapRows){
   blocks.forEach(blk=>{
-    const heights=calcPhotoBlockRowHeights(blk.imgTlRow,blk.imgBrRow,blk.noRow,totalHeightPt,PHOTO_NO_ROW_H);
-    Object.entries(heights).forEach(([r,h])=>{ws.getRow(+r).height=h;});
+    ws.getRow(blk.noRow).height=PHOTO_NO_ROW_H;
+    for(let r=blk.captStart;r<=blk.captEnd;r++)ws.getRow(r).height=PHOTO_IMG_ROW_H;
   });
   gapRows.forEach(r=>{ws.getRow(r).height=PHOTO_GAP_ROW_H;});
+}
+function imageColsFromAnchor(fromCol,toCol){
+  const cols=[];
+  for(let c=fromCol;c<toCol;c++)cols.push(String.fromCharCode(65+c));
+  return cols;
+}
+function applyPhotoSheetColWidths(ws){
+  Object.entries(PHOTO_COLS).forEach(([c,w])=>{ws.getColumn(c).width=w;});
 }
 
 // ============================================================
@@ -1082,9 +1085,8 @@ async function buildUnionPhotoSheets(wb, mincho, thin, hair) {
     ws.pageSetup.fitToPage=false;
     ws.pageSetup.printArea='A1:L37';
 
-    // 列幅（エクレール正解ファイル準拠）
-    Object.entries(UNION_PHOTO_COLS).forEach(([c,w])=>{ws.getColumn(c).width=w;});
-    applyPhotoSheetRowHeights(ws,UNION_PHOTO_COLS,UNION_PHOTO_IMAGE_COLS,PHOTO_BLOCKS,PHOTO_GAP_ROWS);
+    applyPhotoSheetColWidths(ws);
+    applyPhotoSheetRowHeights(ws,PHOTO_BLOCKS,PHOTO_GAP_ROWS);
 
     const blocks=PHOTO_BLOCKS;
 
@@ -1093,17 +1095,17 @@ async function buildUnionPhotoSheets(wb, mincho, thin, hair) {
       const blk=blocks[bi];
       const globalNo=pg*3+bi+1;
 
-      const noCell=ws.getCell(blk.noRow,10);
+      const noCell=ws.getCell(blk.noRow,PHOTO_NO_COL);
       noCell.value='No.';noCell.font={name:'ＭＳ 明朝',size:14};
       noCell.alignment={vertical:'middle'};noCell.border={bottom:thin};
-      const noValCell=ws.getCell(blk.noRow,11);
+      const noValCell=ws.getCell(blk.noRow,PHOTO_NO_VAL_COL);
       noValCell.value=globalNo;noValCell.font={name:'ＭＳ 明朝',size:14};
       noValCell.alignment={vertical:'middle'};noValCell.border={bottom:thin};
 
       const capLines=splitCaption(p.caption||'',12,8);
       for(let r1=blk.captStart;r1<=blk.captEnd;r1++){
-        ws.mergeCells(r1,10,r1,12);
-        const cell=ws.getCell(r1,10);
+        ws.mergeCells(r1,PHOTO_CAPTION_COL_START,r1,PHOTO_CAPTION_COL_END);
+        const cell=ws.getCell(r1,PHOTO_CAPTION_COL_START);
         const li=r1-blk.captStart;
         cell.value=capLines[li]||'';
         cell.font=/号室/.test(capLines[li]||'')?{name:'ＭＳ 明朝',size:11}:{name:'ＭＳ ゴシック',size:11};
@@ -1112,7 +1114,7 @@ async function buildUnionPhotoSheets(wb, mincho, thin, hair) {
       }
 
       if(p.dataUrl){
-        await embedPhotoImage(ws,wb,p.dataUrl,blk,7,quality);
+        await embedPhotoImage(ws,wb,p.dataUrl,blk,quality);
       }
       document.getElementById('loading-s').textContent=`ページ${pg+1}/${pageCount} 写真${bi+1}/3`;
       await sleep(5);
@@ -1123,13 +1125,14 @@ async function buildUnionPhotoSheets(wb, mincho, thin, hair) {
 // ============================================================
 // 通常・多摩 写真シート生成（実物ファイル準拠）
 // ============================================================
-// 【レイアウト】
-// 列幅: A=2.875 B〜G=9 H=11.875 I=4.5 J=9 K=5 L=5
-// ブロック1: No.行=行3(17.25pt)  写真行=行4〜11(30pt×8)
-// ブロック2: No.行=行15         写真行=行16〜23
-// ブロック3: No.行=行27         写真行=行28〜35
-// No.行(J・K列): ＭＳ明朝14pt・下線thin
-// キャプション欄(J:L結合・各行): ＭＳ明朝11pt・下線hair
+// 【レイアウト】実物ファイル準拠
+// 列幅: A=2.7 B〜G=8.2 H=10.7 I=4.1 J=8.2 K以降=デフォルト
+// ブロック1: 行3(No.16.2pt) + 行4〜11(写真30pt×8)
+// ブロック2: 行15 + 行16〜23
+// ブロック3: 行27 + 行28〜35
+// No.行(H・I列): ＭＳ明朝14pt・下線thin
+// キャプション欄(H:J結合): ＭＳ明朝/ゴシック11pt・下線hair
+// 写真: B〜G列・No.行の次8行・元画像の縦横比維持
 // ============================================================
 async function buildPhotoSheets(wb, minchoFont, thin) {
   const hair={style:'hair'};
@@ -1140,14 +1143,12 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
     const ws=wb.addWorksheet(String(pg+1).padStart(3,'0'));
     ws.pageSetup.paperSize=9;ws.pageSetup.orientation='portrait';
     ws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
-    // scale=88（シティフロント等の閲覧可能ファイルと同じ）
     ws.pageSetup.scale=88;
     ws.pageSetup.fitToPage=false;
     ws.pageSetup.printArea='A1:L37';
 
-    // 列幅
-    Object.entries(NORMAL_PHOTO_COLS).forEach(([c,w])=>{ws.getColumn(c).width=w;});
-    applyPhotoSheetRowHeights(ws,NORMAL_PHOTO_COLS,NORMAL_PHOTO_IMAGE_COLS,PHOTO_BLOCKS,PHOTO_GAP_ROWS);
+    applyPhotoSheetColWidths(ws);
+    applyPhotoSheetRowHeights(ws,PHOTO_BLOCKS,PHOTO_GAP_ROWS);
 
     const blocks=PHOTO_BLOCKS;
 
@@ -1156,25 +1157,22 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
       const blk=blocks[bi];
       const globalNo=pg*3+bi+1;
 
-      // No.（J列）・番号（K列）→ ＭＳ明朝14pt・下線thin（実物通り）
-      const noCell=ws.getCell(blk.noRow,10);
+      const noCell=ws.getCell(blk.noRow,PHOTO_NO_COL);
       noCell.value='No.';
       noCell.font=minchoFont(14);
       noCell.alignment={vertical:'middle'};
       noCell.border={bottom:thin};
 
-      const noValCell=ws.getCell(blk.noRow,11);
+      const noValCell=ws.getCell(blk.noRow,PHOTO_NO_VAL_COL);
       noValCell.value=globalNo;
       noValCell.font=minchoFont(14);
       noValCell.alignment={vertical:'middle'};
       noValCell.border={bottom:thin};
 
-      // キャプション欄（J:L結合・各行・下線hair）→ 実物通り
       const capLines=splitCaption(p.caption||'',12,8);
       for(let r1=blk.captStart;r1<=blk.captEnd;r1++){
-        if(r1>blk.captEnd)break;
-        ws.mergeCells(r1,10,r1,12);
-        const cell=ws.getCell(r1,10);
+        ws.mergeCells(r1,PHOTO_CAPTION_COL_START,r1,PHOTO_CAPTION_COL_END);
+        const cell=ws.getCell(r1,PHOTO_CAPTION_COL_START);
         const li=r1-blk.captStart;
         cell.value=capLines[li]||'';
         cell.font=minchoFont(11);
@@ -1182,9 +1180,8 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
         cell.border={bottom:hair};
       }
 
-      // 写真埋め込み（B列col1〜H列col8、行はブロック全体）
       if(p.dataUrl){
-        await embedPhotoImage(ws,wb,p.dataUrl,blk,8,quality);
+        await embedPhotoImage(ws,wb,p.dataUrl,blk,quality);
       }
       document.getElementById('loading-s').textContent=`ページ${pg+1}/${pageCount} 写真${bi+1}/3`;
       await sleep(5);
@@ -1242,24 +1239,13 @@ function loadData(e){
   reader.readAsText(file);e.target.value='';
 }
 
-// 中央クロップ（出力サイズの縦横比に合わせる・引き伸ばしなし）
-function cropDrawImage(img,ctx,outW,outH){
+// 縦横比維持でリサイズ（トリミングなし）
+function scaleDrawImage(img,maxPx){
   const srcW=img.width,srcH=img.height;
-  const targetRatio=outW/outH;
-  const srcRatio=srcW/srcH;
-  let cropW,cropH,sx,sy;
-  if(srcRatio>targetRatio){
-    cropH=srcH;
-    cropW=Math.round(srcH*targetRatio);
-    sx=Math.round((srcW-cropW)/2);
-    sy=0;
-  }else{
-    cropW=srcW;
-    cropH=Math.round(srcW/targetRatio);
-    sx=0;
-    sy=Math.round((srcH-cropH)/2);
-  }
-  ctx.drawImage(img,sx,sy,cropW,cropH,0,0,outW,outH);
+  const scale=Math.min(maxPx/srcW,maxPx/srcH,1);
+  const outW=Math.max(1,Math.round(srcW*scale));
+  const outH=Math.max(1,Math.round(srcH*scale));
+  return{outW,outH};
 }
 
 function toJpegBase64(dataUrl,q,maxPx){
@@ -1267,25 +1253,18 @@ function toJpegBase64(dataUrl,q,maxPx){
     const img=new Image();
     img.onerror=()=>reject(new Error('画像の読み込みに失敗しました'));
     img.onload=()=>{
-      const limit=maxPx||960;
-      const outW=limit;
-      const outH=limit;
+      const limit=maxPx||PHOTO_EXPORT_PX;
+      const{outW,outH}=scaleDrawImage(img,limit);
       const canvas=document.createElement('canvas');
       canvas.width=outW;
       canvas.height=outH;
-      cropDrawImage(img,canvas.getContext('2d'),outW,outH);
+      canvas.getContext('2d').drawImage(img,0,0,outW,outH);
       resolve(canvas.toDataURL('image/jpeg',q||0.85).replace(/^data:image\/jpeg;base64,/,''));
     };
     img.src=dataUrl;
   });
 }
 
-// シティフロント等・閲覧可能な正解ファイル準拠の画像レイアウト定数
-const REF_IMG_CX=calcSquareImageSpanEMU(NORMAL_PHOTO_COLS,NORMAL_PHOTO_IMAGE_COLS);
-const REF_IMG_CY=REF_IMG_CX;
-const REF_TO_COL_OFF=20320,REF_TO_ROW_OFF=22860;
-const REF_IMG_OFF_Y={2:335280,14:4091940,26:7848600};
-const REF_IMG_OFF_X=205740;
 const USE_LOCAL_DPI_XML='<a:extLst><a:ext uri="{28A0092B-C50C-407E-A947-70E740481C1C}"><a14:useLocalDpi xmlns:a14="http://schemas.microsoft.com/office/drawing/2010/main" val="0"/></a:ext></a:extLst>';
 
 function colToNum(col){let n=0;for(const ch of col)n=n*26+ch.charCodeAt(0)-64;return n;}
@@ -1363,22 +1342,21 @@ async function buildMediaDimCache(zip,relsXml){
 }
 
 function fixDrawingXml(xml,mediaDims){
-  let i=0;
   return xml.replace(/<xdr:twoCellAnchor[\s\S]*?<\/xdr:twoCellAnchor>/g,(anchor)=>{
-    const fromRow=parseInt((anchor.match(/<xdr:from>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/)||[])[1]||'2',10);
-    const baseY=REF_IMG_OFF_Y[fromRow]||REF_IMG_OFF_Y[2+(i%3)*12];
-    i++;
+    const fromCol=parseInt((anchor.match(/<xdr:from>[\s\S]*?<xdr:col>(\d+)<\/xdr:col>/)||[])[1]||'1',10);
+    const toCol=parseInt((anchor.match(/<xdr:to>[\s\S]*?<xdr:col>(\d+)<\/xdr:col>/)||[])[1]||'7',10);
+    const fromRow=parseInt((anchor.match(/<xdr:from>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/)||[])[1]||'3',10);
+    const toRow=parseInt((anchor.match(/<xdr:to>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/)||[])[1]||'11',10);
+    const imageCols=imageColsFromAnchor(fromCol,toCol);
+    const maxCx=calcColsSpanEMU(PHOTO_COLS,imageCols.length?imageCols:PHOTO_IMAGE_COLS);
+    const rowCount=Math.max(toRow-fromRow,1);
+    const maxCy=calcRowsSpanEMU(rowCount,PHOTO_IMG_ROW_H);
     const embed=(anchor.match(/r:embed="([^"]+)"/)||[])[1];
     const dims=embed&&mediaDims?mediaDims[embed]:null;
-    const isSquare=dims&&dims.width===dims.height;
-    const fit=isSquare
-      ?{cx:REF_IMG_CX,cy:REF_IMG_CY,padX:0,padY:0}
-      :fitContainEmu(dims?.width||0,dims?.height||0,REF_IMG_CX,REF_IMG_CY);
-    const offX=REF_IMG_OFF_X+fit.padX;
-    const offY=baseY+fit.padY;
+    const fit=fitContainEmu(dims?.width||0,dims?.height||0,maxCx,maxCy);
     let fixed=anchor
-      .replace(/(<xdr:to>[\s\S]*?<xdr:colOff>)0(<\/xdr:colOff>[\s\S]*?<xdr:rowOff>)0(<\/xdr:rowOff>)/,`$1${REF_TO_COL_OFF}$2${REF_TO_ROW_OFF}$3`)
-      .replace(/<a:off x="[^"]*" y="[^"]*"\/>/,`<a:off x="${offX}" y="${offY}"/>`)
+      .replace(/(<xdr:to>[\s\S]*?<xdr:colOff>)\d+(<\/xdr:colOff>[\s\S]*?<xdr:rowOff>)\d+(<\/xdr:rowOff>)/,'$10$20$3')
+      .replace(/<a:off x="[^"]*" y="[^"]*"\/>/,`<a:off x="${fit.padX}" y="${fit.padY}"/>`)
       .replace(/<a:ext cx="[^"]*" cy="[^"]*"\/>/,`<a:ext cx="${fit.cx}" cy="${fit.cy}"/>`)
       .replace(/<a:picLocks[^>]*\/>/g,'<a:picLocks noChangeAspect="1"/>');
     if(!fixed.includes('useLocalDpi')){
@@ -1387,10 +1365,8 @@ function fixDrawingXml(xml,mediaDims){
     }
     return fixed;
   }).replace(/<xdr:oneCellAnchor[\s\S]*?<\/xdr:oneCellAnchor>/g,(anchor)=>{
-    const fromRow=parseInt((anchor.match(/<xdr:from>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/)||[])[1]||'2',10);
-    const offY=REF_IMG_OFF_Y[fromRow]||REF_IMG_OFF_Y[2];
     return anchor
-      .replace(/<a:off x="[^"]*" y="[^"]*"\/>/,`<a:off x="${REF_IMG_OFF_X}" y="${offY}"/>`)
+      .replace(/<a:off x="[^"]*" y="[^"]*"\/>/,`<a:off x="0" y="0"/>`)
       .replace(/<a:picLocks[^>]*\/>/g,'<a:picLocks noChangeAspect="1"/>');
   });
 }
@@ -1481,10 +1457,10 @@ async function fixXlsxForPreview(arrayBuffer){
   return zip.generateAsync({type:'arraybuffer',compression:'DEFLATE'});
 }
 
-async function embedPhotoImage(ws,wb,dataUrl,blk,brCol,q){
+async function embedPhotoImage(ws,wb,dataUrl,blk,q){
   const imgBase64=await toJpegBase64(dataUrl,q);
   const imgId=wb.addImage({base64:imgBase64,extension:'jpeg'});
-  ws.addImage(imgId,{tl:{col:1,row:blk.imgTlRow},br:{col:brCol,row:blk.imgBrRow},editAs:'oneCell'});
+  ws.addImage(imgId,{tl:{col:1,row:blk.imgTlRow},br:{col:PHOTO_IMAGE_BR_COL,row:blk.imgBrRow},editAs:'oneCell'});
 }
 
 // 改行を尊重しつつmaxLen文字で折り返し（最大3行）
