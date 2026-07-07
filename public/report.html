@@ -1222,10 +1222,10 @@ function loadData(e){
   reader.readAsText(file);e.target.value='';
 }
 
-// 中央クロップで4:3に統一（引き伸ばしなし）
-function cropDrawImage43(img,ctx,outW,outH){
+// 中央クロップで幅7:高さ5に統一（引き伸ばしなし）
+function cropDrawImage75(img,ctx,outW,outH){
   const srcW=img.width,srcH=img.height;
-  const targetRatio=4/3,srcRatio=srcW/srcH;
+  const targetRatio=7/5,srcRatio=srcW/srcH;
   let cropW,cropH,sx,sy;
   if(srcRatio>targetRatio){
     cropH=srcH;
@@ -1248,11 +1248,11 @@ function toJpegBase64(dataUrl,q,maxPx){
     img.onload=()=>{
       const limit=maxPx||960;
       const outW=limit;
-      const outH=Math.round(limit*3/4);
+      const outH=Math.round(limit*5/7);
       const canvas=document.createElement('canvas');
       canvas.width=outW;
       canvas.height=outH;
-      cropDrawImage43(img,canvas.getContext('2d'),outW,outH);
+      cropDrawImage75(img,canvas.getContext('2d'),outW,outH);
       resolve(canvas.toDataURL('image/jpeg',q||0.85).replace(/^data:image\/jpeg;base64,/,''));
     };
     img.src=dataUrl;
