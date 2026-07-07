@@ -1408,7 +1408,8 @@ function fillCoverRows(out,merges,rows,opts={}){
 }
 
 function fixCoverSheetXml(xml){
-  if(!isNormalCoverSheet(xml))return fixPageSetupXml(xml,91);
+  const isNormal=isNormalCoverSheet(xml)||xml.includes('報　　　告　　　書')||xml.includes(NORMAL_COVER_TITLE);
+  if(!isNormal)return fixPageSetupXml(xml,91);
   let out=fixPageSetupXml(xml,91);
   out=out.replace(/<dimension ref="[^"]*"/,'<dimension ref="A1:L34"');
   let merges=parseMergeCells(out);
