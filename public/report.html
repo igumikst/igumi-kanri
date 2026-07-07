@@ -702,8 +702,18 @@ function ensurePhotoSheetGrid(ws){
 
 // 通常・多摩 表紙シート（正解ファイル準拠）
 const NORMAL_COVER_COLS={
-  A:4.3984375,B:10.09765625,C:8.09765625,D:16,E:16,F:16,G:16,
-  H:8,I:4,J:5,K:13,L:4.3984375,
+  A:4.3984375,
+  B:10.09765625,
+  C:8.09765625,
+  D:8.09765625,
+  E:8.09765625,
+  F:8.09765625,
+  G:8.09765625,
+  H:8.09765625,
+  I:8.09765625,
+  J:8.09765625,
+  K:8.09765625,
+  L:4.3984375
 };
 const NORMAL_COVER_TITLE='報　　　告　　　書';
 const NORMAL_COVER_J_MERGE_ROWS=[1,2,3,4,5,32,33,34];
@@ -769,7 +779,7 @@ function fillNormalCoverItemRow(cws,row,label,value,minchoFont,thin){
   valueCell.value=value?'　'+safeCellStr(value):'';
   valueCell.font=minchoFont(14);
   valueCell.alignment={vertical:'middle',wrapText:true};
-  for(let ci='E'.charCodeAt(0);ci<='K'.charCodeAt(0);ci++){
+  for(let ci='D'.charCodeAt(0);ci<='K'.charCodeAt(0);ci++){
     cws.getCell(String.fromCharCode(ci)+row).border={bottom:thin};
   }
 }
