@@ -1222,20 +1222,37 @@ function loadData(e){
   reader.readAsText(file);e.target.value='';
 }
 
+// 中央クロップで4:3に統一（引き伸ばしなし）
+function cropDrawImage43(img,ctx,outW,outH){
+  const srcW=img.width,srcH=img.height;
+  const targetRatio=4/3,srcRatio=srcW/srcH;
+  let cropW,cropH,sx,sy;
+  if(srcRatio>targetRatio){
+    cropH=srcH;
+    cropW=Math.round(srcH*targetRatio);
+    sx=Math.round((srcW-cropW)/2);
+    sy=0;
+  }else{
+    cropW=srcW;
+    cropH=Math.round(srcW/targetRatio);
+    sx=0;
+    sy=Math.round((srcH-cropH)/2);
+  }
+  ctx.drawImage(img,sx,sy,cropW,cropH,0,0,outW,outH);
+}
+
 function toJpegBase64(dataUrl,q,maxPx){
   return new Promise((resolve,reject)=>{
     const img=new Image();
     img.onerror=()=>reject(new Error('画像の読み込みに失敗しました'));
     img.onload=()=>{
-      let w=img.width,h=img.height;
       const limit=maxPx||960;
-      if(w>limit||h>limit){
-        if(w>=h){h=Math.round(h*limit/w);w=limit;}
-        else{w=Math.round(w*limit/h);h=limit;}
-      }
+      const outW=limit;
+      const outH=Math.round(limit*3/4);
       const canvas=document.createElement('canvas');
-      canvas.width=w;canvas.height=h;
-      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      canvas.width=outW;
+      canvas.height=outH;
+      cropDrawImage43(img,canvas.getContext('2d'),outW,outH);
       resolve(canvas.toDataURL('image/jpeg',q||0.85).replace(/^data:image\/jpeg;base64,/,''));
     };
     img.src=dataUrl;
