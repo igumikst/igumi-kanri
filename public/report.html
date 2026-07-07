@@ -1020,6 +1020,51 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   await buildUnionPhotoSheets(wb,mincho,thin,hair);
 }
 
+// 写真シート：列幅に合わせた正方形(1:1)行高・画像EMU計算
+const PHOTO_EXPORT_PX=960;
+const PHOTO_NO_ROW_H=17.25;
+const PHOTO_GAP_ROW_H=6;
+const PHOTO_MDW=7;
+const NORMAL_PHOTO_COLS={A:2.875,B:9,C:9,D:9,E:9,F:9,G:9,H:11.875,I:4.5,J:9,K:7,L:7};
+const NORMAL_PHOTO_IMAGE_COLS=['B','C','D','E','F','G','H'];
+const UNION_PHOTO_COLS={A:2.87,B:8.99,C:9,D:9,E:9,F:9,G:9,H:11.87,I:4.49,J:8.99,K:7};
+const UNION_PHOTO_IMAGE_COLS=['B','C','D','E','F','G'];
+const PHOTO_BLOCKS=[
+  {imgTlRow:2,imgBrRow:11,noRow:3,captStart:4,captEnd:11},
+  {imgTlRow:14,imgBrRow:23,noRow:15,captStart:16,captEnd:23},
+  {imgTlRow:26,imgBrRow:35,noRow:27,captStart:28,captEnd:35},
+];
+const PHOTO_GAP_ROWS=[12,13,24,25,36,37];
+
+function excelColWidthToPx(w){
+  return Math.trunc(((256*w+Math.trunc(128/PHOTO_MDW))/256)*PHOTO_MDW);
+}
+function excelColWidthToEMU(w){
+  return excelColWidthToPx(w)*9525;
+}
+function calcSquareImageSpanEMU(photoCols,imageCols){
+  return imageCols.reduce((s,col)=>s+excelColWidthToEMU(photoCols[col]??9),0);
+}
+function calcPhotoBlockRowHeights(imgTlRow,imgBrRow,noRow,totalHeightPt,noRowH){
+  const heights={};
+  const bodyRows=[];
+  for(let r=imgTlRow;r<=imgBrRow;r++){
+    if(r===noRow)heights[r]=noRowH;
+    else bodyRows.push(r);
+  }
+  const eachPt=Math.max(totalHeightPt-noRowH,0)/bodyRows.length;
+  bodyRows.forEach(r=>{heights[r]=eachPt;});
+  return heights;
+}
+function applyPhotoSheetRowHeights(ws,photoCols,imageCols,blocks,gapRows){
+  const totalHeightPt=calcSquareImageSpanEMU(photoCols,imageCols)/12700;
+  blocks.forEach(blk=>{
+    const heights=calcPhotoBlockRowHeights(blk.imgTlRow,blk.imgBrRow,blk.noRow,totalHeightPt,PHOTO_NO_ROW_H);
+    Object.entries(heights).forEach(([r,h])=>{ws.getRow(+r).height=h;});
+  });
+  gapRows.forEach(r=>{ws.getRow(r).height=PHOTO_GAP_ROW_H;});
+}
+
 // ============================================================
 // ユニオン専用 写真シート生成（本物準拠）
 // ============================================================
@@ -1038,24 +1083,10 @@ async function buildUnionPhotoSheets(wb, mincho, thin, hair) {
     ws.pageSetup.printArea='A1:L37';
 
     // 列幅（エクレール正解ファイル準拠）
-    ws.getColumn('A').width=2.87;
-    ws.getColumn('B').width=8.99;
-    ws.getColumn('H').width=11.87;
-    ws.getColumn('I').width=4.49;
-    ws.getColumn('J').width=8.99;
-    ws.getColumn('K').width=7;
+    Object.entries(UNION_PHOTO_COLS).forEach(([c,w])=>{ws.getColumn(c).width=w;});
+    applyPhotoSheetRowHeights(ws,UNION_PHOTO_COLS,UNION_PHOTO_IMAGE_COLS,PHOTO_BLOCKS,PHOTO_GAP_ROWS);
 
-    [2,14,26].forEach(r=>{ws.getRow(r).height=13.5;});
-    [3,15,27].forEach(r=>{ws.getRow(r).height=17.25;});
-    [4,5,6,7,8,9,10,11,
-     16,17,18,19,20,21,22,23,
-     28,29,30,31,32,33,34,35].forEach(r=>{ws.getRow(r).height=30;});
-
-    const blocks=[
-      {imgTlRow:2, imgBrRow:11, noRow:3,  captStart:4,  captEnd:11},
-      {imgTlRow:14,imgBrRow:23, noRow:15, captStart:16, captEnd:23},
-      {imgTlRow:26,imgBrRow:35, noRow:27, captStart:28, captEnd:35},
-    ];
+    const blocks=PHOTO_BLOCKS;
 
     for(let bi=0;bi<pagePh.length;bi++){
       const p=pagePh[bi];
@@ -1115,21 +1146,10 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
     ws.pageSetup.printArea='A1:L37';
 
     // 列幅
-    const photoCols={A:2.875,B:9,C:9,D:9,E:9,F:9,G:9,H:11.875,I:4.5,J:9,K:7,L:7};
-    Object.entries(photoCols).forEach(([c,w])=>{ws.getColumn(c).width=w;});
+    Object.entries(NORMAL_PHOTO_COLS).forEach(([c,w])=>{ws.getColumn(c).width=w;});
+    applyPhotoSheetRowHeights(ws,NORMAL_PHOTO_COLS,NORMAL_PHOTO_IMAGE_COLS,PHOTO_BLOCKS,PHOTO_GAP_ROWS);
 
-    // 行高
-    [3,15,27].forEach(r=>{ws.getRow(r).height=17.25;});
-    [4,5,6,7,8,9,10,11,
-     16,17,18,19,20,21,22,23,
-     28,29,30,31,32,33,34,35].forEach(r=>{ws.getRow(r).height=30;});
-
-    // ブロック定義（実物通り）
-    const blocks=[
-      {imgTlRow:2,  imgBrRow:11, noRow:3,  captStart:4,  captEnd:11},
-      {imgTlRow:14, imgBrRow:23, noRow:15, captStart:16, captEnd:23},
-      {imgTlRow:26, imgBrRow:35, noRow:27, captStart:28, captEnd:35},
-    ];
+    const blocks=PHOTO_BLOCKS;
 
     for(let bi=0;bi<pagePh.length;bi++){
       const p=pagePh[bi];
@@ -1261,7 +1281,9 @@ function toJpegBase64(dataUrl,q,maxPx){
 }
 
 // シティフロント等・閲覧可能な正解ファイル準拠の画像レイアウト定数
-const REF_IMG_CX=4584700,REF_IMG_CY=3276600,REF_TO_COL_OFF=20320,REF_TO_ROW_OFF=22860;
+const REF_IMG_CX=calcSquareImageSpanEMU(NORMAL_PHOTO_COLS,NORMAL_PHOTO_IMAGE_COLS);
+const REF_IMG_CY=REF_IMG_CX;
+const REF_TO_COL_OFF=20320,REF_TO_ROW_OFF=22860;
 const REF_IMG_OFF_Y={2:335280,14:4091940,26:7848600};
 const REF_IMG_OFF_X=205740;
 const USE_LOCAL_DPI_XML='<a:extLst><a:ext uri="{28A0092B-C50C-407E-A947-70E740481C1C}"><a14:useLocalDpi xmlns:a14="http://schemas.microsoft.com/office/drawing/2010/main" val="0"/></a:ext></a:extLst>';
@@ -1348,7 +1370,10 @@ function fixDrawingXml(xml,mediaDims){
     i++;
     const embed=(anchor.match(/r:embed="([^"]+)"/)||[])[1];
     const dims=embed&&mediaDims?mediaDims[embed]:null;
-    const fit=fitContainEmu(dims?.width||0,dims?.height||0,REF_IMG_CX,REF_IMG_CY);
+    const isSquare=dims&&dims.width===dims.height;
+    const fit=isSquare
+      ?{cx:REF_IMG_CX,cy:REF_IMG_CY,padX:0,padY:0}
+      :fitContainEmu(dims?.width||0,dims?.height||0,REF_IMG_CX,REF_IMG_CY);
     const offX=REF_IMG_OFF_X+fit.padX;
     const offY=baseY+fit.padY;
     let fixed=anchor
