@@ -746,7 +746,7 @@ function setupNormalCoverSheet(cws,minchoFont,double){
   'CDEFGHIJ'.split('').forEach(col=>{
     const cell=cws.getCell(`${col}6`);
     const b={top:double,bottom:double};
-    if(col==='C')b.left=double;
+    if(col==='C'){b.left=double;b.right=double;}
     if(col==='J')b.right=double;
     cell.border=b;
   });
@@ -773,7 +773,7 @@ function fillNormalCoverItemRow(cws,row,label,value,minchoFont,thin,nextRowTop=t
   const valueCell=cws.getCell(`D${row}`);
   valueCell.value=value?safeCellStr(value):'';
   valueCell.font=minchoFont(14);
-  valueCell.alignment={vertical:'middle',wrapText:true};
+  valueCell.alignment=row===18?{horizontal:'left',vertical:'middle'}:{vertical:'middle'};
   for(let ci='D'.charCodeAt(0);ci<='K'.charCodeAt(0);ci++){
     cws.getCell(String.fromCharCode(ci)+row).border={bottom:thin};
   }
