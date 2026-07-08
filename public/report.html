@@ -945,29 +945,29 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   };
 
   // 建物名称 E11:P13（ゴシック20pt太字・中央）罫線はマップで適用
-  cws.mergeCells('E18:P20');
-  const buildingCell=cws.getCell('E18');
+  cws.mergeCells('E11:P13');
+  const buildingCell=cws.getCell('E11');
   buildingCell.value=safeCellStr(uBuilding);
   buildingCell.font=gothicC(20,true);
   buildingCell.alignment={horizontal:'center',vertical:'middle'};
 
   // 工事名称 D15:Q18（ＭＳ Ｐ明朝22pt太字・中央下）
-  cws.mergeCells('D22:Q25');
-  const worknameCell=cws.getCell('D22');
+  cws.mergeCells('D15:Q18');
+  const worknameCell=cws.getCell('D15');
   worknameCell.value=safeCellStr(uWorkname)+'報告書';
   worknameCell.font=mincho(22,true);
   worknameCell.alignment={horizontal:'center',vertical:'bottom',shrinkToFit:true};
 
   // 作業日 F41:O43（ＭＳ Ｐ明朝20pt太字・中央下）
-  cws.mergeCells('F38:O40');
-  const dateCell=cws.getCell('F38');
+  cws.mergeCells('F41:O43');
+  const dateCell=cws.getCell('F41');
   dateCell.value=safeCellStr(uDateStr);
   dateCell.font=mincho(20,true);
   dateCell.alignment={horizontal:'center',vertical:'bottom'};
 
   // 会社名 F52:O54（ゴシック20pt太字・中央下）
-  cws.mergeCells('F44:O46');
-  const companyCell=cws.getCell('F44');
+  cws.mergeCells('F52:O54');
+  const companyCell=cws.getCell('F52');
   companyCell.value=safeCellStr(uCompany);
   companyCell.font=gothicC(20,true);
   companyCell.alignment={horizontal:'center',vertical:'bottom'};
