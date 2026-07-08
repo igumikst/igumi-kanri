@@ -1577,7 +1577,8 @@ function fillCoverRows(out,merges,rows,opts={}){
 }
 
 function fixCoverSheetXml(xml){
-  return fixPageSetupXml(xml,91);
+  if(isNormalCoverSheet(xml))return fixPageSetupXml(xml,91);
+  return xml;
 }
 
 function fixUnionPhotoSheetXml(xml){
