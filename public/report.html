@@ -764,19 +764,23 @@ function formatNormalCoverDate(workDate){
   return`${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
 }
 
-function fillNormalCoverItemRow(cws,row,label,value,minchoFont,thin){
-  cws.mergeCells(`A${row}:C${row}`);
-  const labelCell=cws.getCell(`A${row}`);
+function fillNormalCoverItemRow(cws,row,label,value,minchoFont,thin,nextRowTop=true){
+  const labelCell=cws.getCell(`B${row}`);
   labelCell.value=label;
   labelCell.font=minchoFont(14);
-  labelCell.alignment={vertical:'middle',horizontal:'center'};
+  labelCell.alignment={vertical:'middle'};
   cws.mergeCells(`D${row}:K${row}`);
   const valueCell=cws.getCell(`D${row}`);
   valueCell.value=value?safeCellStr(value):'';
   valueCell.font=minchoFont(14);
-  valueCell.alignment={vertical:'middle',horizontal:'left',wrapText:false,shrinkToFit:true};
+  valueCell.alignment={vertical:'middle',wrapText:true};
   for(let ci='D'.charCodeAt(0);ci<='K'.charCodeAt(0);ci++){
     cws.getCell(String.fromCharCode(ci)+row).border={bottom:thin};
+  }
+  if(nextRowTop){
+    for(let ci='D'.charCodeAt(0);ci<='K'.charCodeAt(0);ci++){
+      cws.getCell(String.fromCharCode(ci)+(row+1)).border={top:thin};
+    }
   }
 }
 
@@ -785,11 +789,19 @@ const FREE_SHEET_COLS={
   B:13,
   C:4.19921875,
   D:4.19921875,
-  E:13,F:13,G:13,H:13,I:13,J:13,K:13,L:13,M:13
+  E:13,F:13,G:13,H:13,I:13,J:13,K:13,L:13,M:13,N:13,O:13,P:13,Q:13,R:13,S:13,T:13,U:13
 };
 function setupFreeSheet(wb){
   const ws=wb.addWorksheet('自由シート');
   Object.entries(FREE_SHEET_COLS).forEach(([col,w])=>{ws.getColumn(col).width=w;});
+  for(let r=1;r<=57;r++)ws.getRow(r).height=13.5;
+  for(let r=1;r<=65;r++)ensureRowCells(ws,r,'A','U');
+  ws.mergeCells('B2:T64');
+  ws.pageSetup.paperSize=9;
+  ws.pageSetup.scale=90;
+  ws.pageSetup.orientation='portrait';
+  ws.pageSetup.printArea='A1:U65';
+  ws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
 }
 
 // ============================================================
@@ -809,7 +821,7 @@ async function buildNormalWorkbook(wb, minchoFont, thin, double) {
   setupNormalCoverSheet(cws,minchoFont,double);
 
   NORMAL_COVER_ITEM_ROWS.forEach(({row,label,valueKey})=>{
-    fillNormalCoverItemRow(cws,row,label,fieldValues[valueKey],minchoFont,thin);
+    fillNormalCoverItemRow(cws,row,label,fieldValues[valueKey],minchoFont,thin,row!==20);
   });
 
   if(reportType==='tama'&&fieldValues.workContent){
@@ -817,7 +829,7 @@ async function buildNormalWorkbook(wb, minchoFont, thin, double) {
     cws.getRow(23).height=20.1;
     ensureRowCells(cws,22,'A','L');
     ensureRowCells(cws,23,'A','L');
-    fillNormalCoverItemRow(cws,22,'内　　　容',fieldValues.workContent,minchoFont,thin);
+    fillNormalCoverItemRow(cws,22,'内　　　容',fieldValues.workContent,minchoFont,thin,true);
   }
 
   setupFreeSheet(wb);
@@ -1602,7 +1614,7 @@ async function fixXlsxForPreview(arrayBuffer){
     if(!zip.file(path))continue;
     let xml=await zip.file(path).async('string');
     if(name==='表紙')xml=fixCoverSheetXml(xml);
-    else if(name==='自由シート')xml=fixPageSetupXml(xml,91);
+    else if(name==='自由シート')xml=fixPageSetupXml(xml,90);
     else if(/^\d{3}$/.test(name))xml=reportType==='union'?fixUnionPhotoSheetXml(xml):fixNormalPhotoSheetXml(xml);
     zip.file(path,xml);
   }
