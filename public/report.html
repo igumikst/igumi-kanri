@@ -953,7 +953,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   // 工事名称 D15:Q18（ＭＳ Ｐ明朝22pt太字・中央下）
   cws.mergeCells('D15:Q18');
   const worknameCell=cws.getCell('D15');
-  worknameCell.value=safeCellStr(uWorkname);
+  worknameCell.value=safeCellStr(uWorkname)+'報告書';
   worknameCell.font=mincho(22,true);
   worknameCell.alignment={horizontal:'center',vertical:'bottom'};
 
