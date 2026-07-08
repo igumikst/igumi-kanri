@@ -882,24 +882,23 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   const cws=wb.addWorksheet('表紙');
   cws.pageSetup.paperSize=9;cws.pageSetup.orientation='portrait';
   cws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
-  cws.pageSetup.printArea='B1:T56';
+  cws.pageSetup.printArea='B1:AI56';
   cws.pageSetup.fitToPage=true;
   cws.pageSetup.fitToWidth=1;
   cws.pageSetup.fitToHeight=1;
   cws.pageSetup.horizontalCentered=true;
   cws.pageSetup.verticalCentered=true;
 
-  cws.getColumn('A').width=3.49;
-  cws.getColumn('B').width=4.62;
-  // C〜R列を13.0に（正解準拠・抜けてた）
-  ['C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R'].forEach(col=>{
-    cws.getColumn(col).width=13.0;
+  cws.getColumn('A').width=3.09765625;
+  ['B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R'].forEach(col=>{
+    cws.getColumn(col).width=4.19921875;
   });
-  cws.getColumn('S').width=5.99;
-  cws.getColumn('T').width=4.62;
+  cws.getColumn('S').width=5.3984375;
+  ['T','U','V','W','X','Y','Z','AA','AB','AC','AD','AE','AF','AG','AH','AI'].forEach(col=>{
+    cws.getColumn(col).width=4.19921875;
+  });
 
-  for(let r=1;r<=56;r++){cws.getRow(r).height=13.5;}
-  [2,3,4,5].forEach(r=>{cws.getRow(r).height=12.75;});
+  cws.properties.defaultRowHeight=13.2;
 
   // ページ全体に外枠
   // 下辺：B〜S列、左辺：B列のleft、右辺：T列のleft、上辺：skipTopで制御
