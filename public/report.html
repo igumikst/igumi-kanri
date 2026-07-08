@@ -955,7 +955,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   const worknameCell=cws.getCell('D15');
   worknameCell.value=safeCellStr(uWorkname)+'報告書';
   worknameCell.font=mincho(22,true);
-  worknameCell.alignment={horizontal:'center',vertical:'bottom'};
+  worknameCell.alignment={horizontal:'center',vertical:'bottom',shrinkToFit:true};
 
   // 作業日 F41:O43（ＭＳ Ｐ明朝20pt太字・中央下）
   cws.mergeCells('F41:O43');
