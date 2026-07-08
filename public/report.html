@@ -935,6 +935,10 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     cws.getCell(`${col}49`).border={...cws.getCell(`${col}49`).border,bottom:thin2};
   }
 
+  // dimensionをAI列まで拡張（印刷範囲認識のため）
+  cws.getCell('AI1').value='';
+  cws.getCell('AI49').value='';
+
   // ─── 報告書シート ───
   const rws=wb.addWorksheet('報告書');
   rws.pageSetup.paperSize=9;rws.pageSetup.orientation='portrait';
