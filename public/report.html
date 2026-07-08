@@ -994,22 +994,20 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   rws.pageSetup.paperSize=9;rws.pageSetup.orientation='portrait';
   rws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
   rws.pageSetup.printArea='B1:T56';
-  rws.pageSetup.fitToPage=true;
-  rws.pageSetup.fitToWidth=1;
-  rws.pageSetup.fitToHeight=1;
-  rws.pageSetup.horizontalCentered=true;
-  rws.pageSetup.verticalCentered=true;
+  rws.pageSetup.fitToPage=false;
+  rws.pageSetup.fitToWidth=undefined;
+  rws.pageSetup.fitToHeight=undefined;
+  rws.pageSetup.horizontalCentered=false;
+  rws.pageSetup.verticalCentered=false;
 
-  rws.getColumn('A').width=4.62;
-  // B〜T列を13.0に（正解準拠・これが抜けてて列幅がズレてた）
-  ['B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T'].forEach(col=>{
-    rws.getColumn(col).width=13.0;
-  });
+  for(let ci=1;ci<=20;ci++){
+    const col=String.fromCharCode(64+ci);
+    rws.getColumn(col).width=4.19921875;
+  }
 
-  // 行高（正解準拠）：基本13.5、行2-5のみ12.75、作業内容ブロック等は14.25
-  for(let r=1;r<=56;r++){rws.getRow(r).height=13.5;}
-  [2,3,4,5].forEach(r=>{rws.getRow(r).height=12.75;});
-  [25,27,28,29,30,31,32,33,36,37,38,39].forEach(r=>{rws.getRow(r).height=14.25;});
+  rws.properties.defaultRowHeight=13.2;
+  [2,3,4,5,8,9,10,22,23,24,26,34,35,43,44].forEach(r=>{rws.getRow(r).height=1;});
+  [25,27,28,29,30,31,32,33,36,37,38,39].forEach(r=>{rws.getRow(r).height=14.4;});
 
   // タイトル「調査報告書」B2:S4（ゴシック22pt中央）
   rws.mergeCells('B2:S4');
