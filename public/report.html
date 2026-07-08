@@ -880,14 +880,13 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
 
   // ─── 表紙シート ───
   const cws=wb.addWorksheet('表紙');
-  cws.pageSetup.paperSize=9;cws.pageSetup.orientation='portrait';
+  cws.pageSetup.paperSize=9;
+  cws.pageSetup.orientation='portrait';
   cws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
   cws.pageSetup.printArea='B1:AI56';
   cws.pageSetup.fitToPage=true;
   cws.pageSetup.fitToWidth=1;
   cws.pageSetup.fitToHeight=1;
-  cws.pageSetup.horizontalCentered=true;
-  cws.pageSetup.verticalCentered=true;
 
   cws.getColumn('A').width=3.09765625;
   ['B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R'].forEach(col=>{
