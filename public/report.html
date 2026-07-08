@@ -1001,6 +1001,11 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   }
   rws.properties.defaultRowHeight=13.2;
 
+  // 作業内容行を広く・備考行は少し
+  for(let r=23;r<=36;r++){rws.getRow(r).height=20;}
+  rws.getRow(45).height=15;
+  rws.getRow(46).height=15;
+
   // タイトル「調査報告書」B2:S4
   rws.mergeCells('B2:S4');
   const rtitleCell=rws.getCell('B2');
