@@ -1640,7 +1640,7 @@ async function fixXlsxForPreview(arrayBuffer){
     let xml=await zip.file(path).async('string');
     if(name==='表紙')xml=fixCoverSheetXml(xml);
     else if(name==='自由シート')xml=fixPageSetupXml(xml,90);
-    else if(/^\d{3}$/.test(name))xml=reportType==='union'?fixUnionPhotoSheetXml(xml):fixNormalPhotoSheetXml(xml);
+    else if(/^\d{3}$/.test(name))xml=fixNormalPhotoSheetXml(xml);
     zip.file(path,xml);
   }
   return zip.generateAsync({type:'arraybuffer',compression:'DEFLATE'});
