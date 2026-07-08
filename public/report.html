@@ -991,68 +991,55 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
 
   // ─── 報告書シート ───
   const rws=wb.addWorksheet('報告書');
-  rws.getRow(1).height=13.2;
   rws.pageSetup.paperSize=9;rws.pageSetup.orientation='portrait';
-  rws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
+  rws.pageSetup.margins={left:0.64,right:0.25,top:0.984,bottom:0.88,header:0.512,footer:0.512};
   rws.pageSetup.printArea='B1:T56';
-  rws.pageSetup.fitToPage=false;
-  rws.pageSetup.fitToWidth=undefined;
-  rws.pageSetup.fitToHeight=undefined;
-  rws.pageSetup.horizontalCentered=false;
-  rws.pageSetup.verticalCentered=false;
 
   for(let ci=1;ci<=20;ci++){
     const col=String.fromCharCode(64+ci);
     rws.getColumn(col).width=4.19921875;
   }
-
   rws.properties.defaultRowHeight=13.2;
-  [2,3,4,5,8,9,10,22,23,24,26,34,35,43,44].forEach(r=>{rws.getRow(r).height=1;});
-  [25,27,28,29,30,31,32,33,36,37,38,39].forEach(r=>{rws.getRow(r).height=14.4;});
 
-  // タイトル「調査報告書」B2:S4（ゴシック22pt中央）
+  // タイトル「調査報告書」B2:S4
   rws.mergeCells('B2:S4');
   const rtitleCell=rws.getCell('B2');
   rtitleCell.value='調査報告書';
   rtitleCell.font=gothicC(22);
   rtitleCell.alignment={horizontal:'center',vertical:'middle'};
 
-  // 項目ブロック（値・フォント・結合・配置のみ。罫線は最後にマップ一括適用）
-  // [行, ラベル, 値, 値フォント('m'=明朝/'g'=ゴシック), 値の横配置]
-  const reportItems=[
-    [5,'建築物名称',{formula:`表紙!E11`},'m','general'],
-    [8,'住所',uAddress,'g','left'],
-    [11,'工事名称',{formula:`表紙!D15`},'m','general'],
-    [14,'作業実施日',{formula:`表紙!F41`},'m','left'],
-    [17,'作業者',uWorker,'g','general'],
+  // 項目ブロック（各3行結合）
+  const reportItems2=[
+    ['B5:B7','C5:E7','F5:F7','G5:G7','H5:S7','建築物名称',{formula:'表紙!E11'},'m'],
+    ['B8:B10','C8:E10','F8:F10','G8:G10','H8:S10','住所',uAddress,'g'],
+    ['B11:B13','C11:E13','F11:F13','G11:G13','H11:S13','工事名称',{formula:'表紙!D15'},'m'],
+    ['B14:B16','C14:E16','F14:F16','G14:G16','H14:S16','作業実施日',{formula:'表紙!F41'},'m'],
+    ['B17:B19','C17:E19','F17:F19','G17:G19','H17:S19','作業者',uWorker,'g'],
   ];
-
-  reportItems.forEach(([rowNum,label,val,valFont,valAlign])=>{
-    const r0=rowNum, r2=rowNum+2;
-    rws.mergeCells(`B${r0}:B${r2}`);
-    rws.mergeCells(`C${r0}:E${r2}`);
-    const lc=rws.getCell(`C${r0}`);
+  reportItems2.forEach(([bMerge,cMerge,fMerge,gMerge,hMerge,label,val,valFont])=>{
+    rws.mergeCells(bMerge);
+    rws.mergeCells(cMerge);
+    const lc=rws.getCell(cMerge.split(':')[0]);
     lc.value=label;lc.font=gothicC(12);
     lc.alignment={horizontal:'distributed',vertical:'middle'};
-    rws.mergeCells(`F${r0}:F${r2}`);
-    rws.mergeCells(`G${r0}:G${r2}`);
-    rws.mergeCells(`H${r0}:S${r2}`);
-    const vc=rws.getCell(`H${r0}`);
+    rws.mergeCells(fMerge);
+    rws.mergeCells(gMerge);
+    rws.mergeCells(hMerge);
+    const vc=rws.getCell(hMerge.split(':')[0]);
     if(typeof val==='object'&&val.formula){vc.value={formula:val.formula};}
     else{vc.value=safeCellStr(val);}
     vc.font=(valFont==='m')?mincho(12):gothicC(12);
-    vc.alignment={horizontal:valAlign,vertical:'middle'};
+    vc.alignment={horizontal:'left',vertical:'middle'};
   });
 
-  // 【作業内容】C21:G22（ゴシック12pt中央）
+  // 【作業内容】C21:G22
   rws.mergeCells('C21:G22');
   const contentTitleCell=rws.getCell('C21');
   contentTitleCell.value='【　作　業　内　容　】';
   contentTitleCell.font=gothicC(12);
   contentTitleCell.alignment={horizontal:'center',vertical:'middle'};
 
-  // 作業内容 C23:Q23〜C36:Q36（全14行を結合・正解準拠）
-  // 入力行は値を入れ、空行も結合だけする（号室含む行のみ明朝、他ゴシック）
+  // 作業内容 C23:Q23〜C36:Q36
   const contentLines=uContent.split('\n').filter(l=>l.trim());
   for(let r=23;r<=36;r++){
     rws.mergeCells(`C${r}:Q${r}`);
@@ -1065,36 +1052,35 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     cc.alignment={vertical:'bottom'};
   }
 
-  // （別紙写真添付参照）C37:I38（ゴシック12pt中央）
+  // （別紙写真添付参照）C37:I38
   rws.mergeCells('C37:I38');
   const refCell=rws.getCell('C37');
   refCell.value='（別紙写真添付参照）';
   refCell.font=gothicC(12);
   refCell.alignment={horizontal:'center',vertical:'middle'};
 
-  // 上記の作業を実施いたしました。J40:R41（ゴシック12pt中央）
+  // 上記の作業を実施いたしました。J40:R41
   rws.mergeCells('J40:R41');
   const doneCell=rws.getCell('J40');
   doneCell.value='上記の作業を実施いたしました。';
   doneCell.font=gothicC(12);
   doneCell.alignment={horizontal:'center',vertical:'middle'};
 
-  // 以上 P42:R43（ゴシック11pt中央）
+  // 以上 P42:R43
   rws.mergeCells('P42:R43');
   const ijoCell=rws.getCell('P42');
   ijoCell.value='以上';
   ijoCell.font=gothicC(11);
   ijoCell.alignment={horizontal:'center',vertical:'middle'};
 
-  // 【備考】C45:G46（ゴシック12pt中央）
+  // 【備考】C45:G46
   rws.mergeCells('C45:G46');
   const bikoCell=rws.getCell('C45');
   bikoCell.value='【　備　　　　　考　】';
   bikoCell.font=gothicC(12);
   bikoCell.alignment={horizontal:'center',vertical:'middle'};
 
-
-  // ─── 報告書の罫線をセル単位マップで完全適用（ドラゴン正解ファイル準拠）───
+  // 罫線マップ適用（REPORT_BDはそのまま使う）
   const REPORT_BD={"B2":"tblr","C2":"t","D2":"t","E2":"t","F2":"t","G2":"t","H2":"t","I2":"t","J2":"t","K2":"t","L2":"t","M2":"t","N2":"t","O2":"t","P2":"t","Q2":"t","R2":"t","S2":"tr","T2":"l","B3":"l","S3":"r","T3":"l","B4":"bl","C4":"b","D4":"b","E4":"b","F4":"b","G4":"b","H4":"b","I4":"b","J4":"b","K4":"b","L4":"b","M4":"b","N4":"b","O4":"b","P4":"b","Q4":"b","R4":"b","S4":"br","T4":"l","B5":"bl","C5":"b","F5":"b","G5":"tbl","H5":"tbr","I5":"t","J5":"t","K5":"t","L5":"t","M5":"t","N5":"t","O5":"t","P5":"t","Q5":"t","R5":"t","S5":"tr","T5":"l","B6":"l","G6":"l","S6":"r","T6":"l","B7":"bl","C7":"b","D7":"b","E7":"b","F7":"b","G7":"bl","H7":"b","I7":"b","J7":"b","K7":"b","L7":"b","M7":"b","N7":"b","O7":"b","P7":"b","Q7":"b","R7":"b","S7":"br","T7":"l","B8":"tbl","C8":"tb","D8":"t","E8":"t","F8":"tbr","G8":"tbl","H8":"tbr","I8":"t","J8":"t","K8":"t","L8":"t","M8":"t","N8":"t","O8":"t","P8":"t","Q8":"t","R8":"t","S8":"tr","T8":"l","B9":"l","F9":"r","G9":"l","S9":"r","T9":"l","B10":"bl","C10":"b","D10":"b","E10":"b","F10":"br","G10":"bl","H10":"b","I10":"b","J10":"b","K10":"b","L10":"b","M10":"b","N10":"b","O10":"b","P10":"b","Q10":"b","R10":"b","S10":"br","T10":"l","B11":"tbl","C11":"tb","D11":"t","E11":"t","F11":"tbr","G11":"tbl","H11":"tbr","I11":"t","J11":"t","K11":"t","L11":"t","M11":"t","N11":"t","O11":"t","P11":"t","Q11":"t","R11":"t","S11":"tr","T11":"l","B12":"l","F12":"r","G12":"l","S12":"r","T12":"l","B13":"bl","C13":"b","D13":"b","E13":"b","F13":"br","G13":"bl","H13":"b","I13":"b","J13":"b","K13":"b","L13":"b","M13":"b","N13":"b","O13":"b","P13":"b","Q13":"b","R13":"b","S13":"br","T13":"l","B14":"tbl","C14":"tb","D14":"t","E14":"t","F14":"tbr","G14":"tbl","H14":"tbr","I14":"t","J14":"t","K14":"t","L14":"t","M14":"t","N14":"t","O14":"t","P14":"t","Q14":"t","R14":"t","S14":"tr","T14":"l","B15":"l","F15":"r","G15":"l","S15":"r","T15":"l","B16":"bl","C16":"b","D16":"b","E16":"b","F16":"br","G16":"bl","H16":"b","I16":"b","J16":"b","K16":"b","L16":"b","M16":"b","N16":"b","O16":"b","P16":"b","Q16":"b","R16":"b","S16":"br","T16":"l","B17":"tbl","C17":"tb","D17":"t","E17":"t","F17":"tbr","G17":"tbl","H17":"tbr","I17":"t","J17":"t","K17":"t","L17":"t","M17":"t","N17":"t","O17":"t","P17":"t","Q17":"t","R17":"t","S17":"tr","T17":"l","B18":"l","F18":"r","G18":"l","S18":"r","T18":"l","B19":"bl","C19":"b","D19":"b","E19":"b","F19":"br","G19":"bl","H19":"b","I19":"b","J19":"b","K19":"b","L19":"b","M19":"b","N19":"b","O19":"b","P19":"b","Q19":"b","R19":"b","S19":"br","T19":"l","B20":"l","T20":"l","B21":"l","T21":"l","B22":"l","T22":"l","B23":"l","T23":"l","B24":"l","T24":"l","B25":"l","T25":"l","B26":"l","T26":"l","B27":"l","T27":"l","B28":"l","T28":"l","B29":"l","T29":"l","B30":"l","T30":"l","B31":"l","T31":"l","B32":"l","T32":"l","B33":"l","T33":"l","B34":"l","T34":"l","B35":"l","T35":"l","B36":"l","T36":"l","B37":"l","T37":"l","B38":"l","T38":"l","B39":"l","T39":"l","B40":"l","T40":"l","B41":"l","T41":"l","B42":"l","T42":"l","B43":"l","T43":"l","B44":"l","T44":"l","B45":"l","T45":"l","B46":"l","T46":"l","B47":"l","T47":"l","B48":"l","T48":"l","B49":"l","T49":"l","B50":"l","T50":"l","B51":"l","T51":"l","B52":"l","T52":"l","B53":"l","T53":"l","B54":"l","T54":"l","B55":"l","T55":"l","B56":"bl","C56":"b","D56":"b","E56":"b","F56":"b","G56":"b","H56":"b","I56":"b","J56":"b","K56":"b","L56":"b","M56":"b","N56":"b","O56":"b","P56":"b","Q56":"b","R56":"b","S56":"br","T56":"l"};
   Object.keys(REPORT_BD).forEach(coord=>{
     const sides=REPORT_BD[coord];
