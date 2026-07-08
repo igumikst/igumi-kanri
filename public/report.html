@@ -895,6 +895,21 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
 
   cws.properties.defaultRowHeight=13.2;
 
+  // 表紙：各ブロックの行高を広げて縦長に
+  cws.getRow(11).height=20;
+  cws.getRow(12).height=20;
+  cws.getRow(13).height=20;
+  cws.getRow(15).height=22;
+  cws.getRow(16).height=22;
+  cws.getRow(17).height=22;
+  cws.getRow(18).height=22;
+  cws.getRow(37).height=20;
+  cws.getRow(38).height=20;
+  cws.getRow(39).height=20;
+  cws.getRow(45).height=20;
+  cws.getRow(46).height=20;
+  cws.getRow(47).height=20;
+
   // 建物名称 E11:P13（ゴシック20pt太字・中央）
   cws.mergeCells('E11:P13');
   const buildingCell=cws.getCell('E11');
