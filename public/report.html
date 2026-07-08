@@ -991,6 +991,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
 
   // ─── 報告書シート ───
   const rws=wb.addWorksheet('報告書');
+  rws.getRow(1).height=13.2;
   rws.pageSetup.paperSize=9;rws.pageSetup.orientation='portrait';
   rws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
   rws.pageSetup.printArea='B1:T56';
