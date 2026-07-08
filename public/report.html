@@ -977,6 +977,17 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   cws.getCell('AI1').value='';
   cws.getCell('AI49').value='';
 
+  // 全セルをXMLに書き出す（iOSプレビュー対策）
+  for(let r=1;r<=49;r++){
+    const row=cws.getRow(r);
+    for(let c=2;c<=19;c++){
+      const cell=row.getCell(c);
+      if(!cell.font&&!cell.border&&!cell.alignment&&cell.value==null){
+        cell.font={name:'ＭＳ Ｐゴシック',size:11};
+      }
+    }
+  }
+
   // ─── 報告書シート ───
   const rws=wb.addWorksheet('報告書');
   rws.pageSetup.paperSize=9;rws.pageSetup.orientation='portrait';
