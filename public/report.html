@@ -887,6 +887,8 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   cws.pageSetup.fitToPage=true;
   cws.pageSetup.fitToWidth=1;
   cws.pageSetup.fitToHeight=1;
+  cws.pageSetup.horizontalCentered=true;
+  cws.pageSetup.verticalCentered=true;
 
   cws.getColumn('A').width=3.09765625;
   ['B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R'].forEach(col=>{
