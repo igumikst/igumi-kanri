@@ -972,23 +972,17 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   companyCell.font=gothicC(20,true);
   companyCell.alignment={horizontal:'center',vertical:'bottom'};
 
-  // 表紙の罫線をセル単位マップで完全適用（ドラゴン正解ファイル準拠）
-  const COVER_BD={"B2":"tl","T2":"l","B3":"l","T3":"l","B4":"l","T4":"l","B5":"l","T5":"l","B6":"l","T6":"l","B7":"l","T7":"l","B8":"l","T8":"l","B9":"l","T9":"l","B10":"l","T10":"l","B11":"l","E11":"tblr","F11":"t","G11":"t","H11":"t","I11":"t","J11":"t","K11":"t","L11":"t","M11":"t","N11":"t","O11":"t","P11":"tr","T11":"l","B12":"l","E12":"l","P12":"r","T12":"l","B13":"l","E13":"bl","F13":"b","G13":"b","H13":"b","I13":"b","J13":"b","K13":"b","L13":"b","M13":"b","N13":"b","O13":"b","P13":"br","T13":"l","B14":"l","T14":"l","B15":"l","D15":"b","T15":"l","B16":"l","T16":"l","B17":"l","T17":"l","B18":"l","D18":"b","E18":"b","F18":"b","G18":"b","H18":"b","I18":"b","J18":"b","K18":"b","L18":"b","M18":"b","N18":"b","O18":"b","P18":"b","Q18":"b","T18":"l","B19":"l","T19":"l","B20":"l","T20":"l","B21":"l","T21":"l","B22":"l","T22":"l","B23":"l","T23":"l","B24":"l","T24":"l","B25":"l","T25":"l","B26":"l","T26":"l","B27":"l","T27":"l","B28":"l","T28":"l","B29":"l","T29":"l","B30":"l","T30":"l","B31":"l","T31":"l","B32":"l","T32":"l","B33":"l","T33":"l","B34":"l","T34":"l","B35":"l","T35":"l","B36":"l","T36":"l","B37":"l","T37":"l","B38":"l","T38":"l","B39":"l","T39":"l","B40":"l","T40":"l","B41":"l","F41":"b","T41":"l","B42":"l","T42":"l","B43":"l","F43":"b","G43":"b","H43":"b","I43":"b","J43":"b","K43":"b","L43":"b","M43":"b","N43":"b","O43":"b","T43":"l","B44":"l","T44":"l","B45":"l","T45":"l","B46":"l","T46":"l","B47":"l","T47":"l","B48":"l","T48":"l","B49":"l","T49":"l","B50":"l","T50":"l","B51":"l","T51":"l","B52":"l","F52":"b","T52":"l","B53":"l","T53":"l","B54":"l","F54":"b","G54":"b","H54":"b","I54":"b","J54":"b","K54":"b","L54":"b","M54":"b","N54":"b","O54":"b","T54":"l","B55":"l","T55":"l","B56":"bl","C56":"b","D56":"b","E56":"b","F56":"b","G56":"b","H56":"b","I56":"b","J56":"b","K56":"b","L56":"b","M56":"b","N56":"b","O56":"b","P56":"b","Q56":"b","R56":"b","S56":"br","T56":"l"};
-  Object.keys(COVER_BD).forEach(coord=>{
-    const sides=COVER_BD[coord];
-    const cell=cws.getCell(coord);
-    const nb={...cell.border};
-    if(sides.includes('t'))nb.top=thin;
-    if(sides.includes('b'))nb.bottom=thin;
-    if(sides.includes('l'))nb.left=thin;
-    if(sides.includes('r'))nb.right=thin;
-    cell.border=nb;
-  });
-  // 表紙の上辺をC2〜S2にも引いて外枠を完成（正解は上辺省略されてるが見た目優先）
-  ['C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S'].forEach(col=>{
-    const cell=cws.getCell(`${col}2`);
-    cell.border={...cell.border,top:thin};
-  });
+  // 表紙外枠のみシンプルに引く
+  const thin2={style:'thin'};
+  for(let r=2;r<=56;r++){
+    cws.getCell(`B${r}`).border={...cws.getCell(`B${r}`).border, left:thin2};
+    cws.getCell(`T${r}`).border={...cws.getCell(`T${r}`).border, right:thin2};
+  }
+  for(let c=2;c<=20;c++){
+    const col=String.fromCharCode(64+c);
+    cws.getCell(`${col}2`).border={...cws.getCell(`${col}2`).border, top:thin2};
+    cws.getCell(`${col}56`).border={...cws.getCell(`${col}56`).border, bottom:thin2};
+  }
 
   // ─── 報告書シート ───
   const rws=wb.addWorksheet('報告書');
