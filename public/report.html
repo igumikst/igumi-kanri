@@ -923,16 +923,47 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   companyCell.font=gothicC(20,true);
   companyCell.alignment={horizontal:'center',vertical:'bottom'};
 
-  // 外枠のみ
+  // 罫線設定
   const thin2={style:'thin'};
-  for(let r=2;r<=49;r++){
+
+  // 外枠（B列left・T列right・1行top・49行bottom）
+  for(let r=1;r<=49;r++){
     cws.getCell(`B${r}`).border={...cws.getCell(`B${r}`).border,left:thin2};
     cws.getCell(`T${r}`).border={...cws.getCell(`T${r}`).border,right:thin2};
   }
   for(let c=2;c<=20;c++){
     const col=String.fromCharCode(64+c);
-    cws.getCell(`${col}2`).border={...cws.getCell(`${col}2`).border,top:thin2};
+    cws.getCell(`${col}1`).border={...cws.getCell(`${col}1`).border,top:thin2};
     cws.getCell(`${col}49`).border={...cws.getCell(`${col}49`).border,bottom:thin2};
+  }
+
+  // 建物名称枠（E11:P13）四角い枠
+  for(let c=5;c<=16;c++){
+    const col=String.fromCharCode(64+c);
+    cws.getCell(`${col}11`).border={...cws.getCell(`${col}11`).border,top:thin2};
+    cws.getCell(`${col}13`).border={...cws.getCell(`${col}13`).border,bottom:thin2};
+  }
+  for(let r=11;r<=13;r++){
+    cws.getCell(`E${r}`).border={...cws.getCell(`E${r}`).border,left:thin2};
+    cws.getCell(`P${r}`).border={...cws.getCell(`P${r}`).border,right:thin2};
+  }
+
+  // 工事名称下線（D15:Q18の最終行にbottom）
+  for(let c=4;c<=17;c++){
+    const col=String.fromCharCode(64+c);
+    cws.getCell(`${col}18`).border={...cws.getCell(`${col}18`).border,bottom:thin2};
+  }
+
+  // 作業日下線（F37:O39の最終行にbottom）
+  for(let c=6;c<=15;c++){
+    const col=String.fromCharCode(64+c);
+    cws.getCell(`${col}39`).border={...cws.getCell(`${col}39`).border,bottom:thin2};
+  }
+
+  // 会社名下線（F45:O47の最終行にbottom）
+  for(let c=6;c<=15;c++){
+    const col=String.fromCharCode(64+c);
+    cws.getCell(`${col}47`).border={...cws.getCell(`${col}47`).border,bottom:thin2};
   }
 
   // dimensionをAI列まで拡張（印刷範囲認識のため）
