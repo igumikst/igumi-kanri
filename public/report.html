@@ -802,6 +802,17 @@ function setupFreeSheet(wb){
   ws.pageSetup.orientation='portrait';
   ws.pageSetup.printArea='A1:U65';
   ws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
+
+  // 全セルをXMLに書き出させる(iOSプレビュー対策)
+  for(let r=1;r<=64;r++){
+    const row=ws.getRow(r);
+    for(let c=1;c<=20;c++){
+      const cell=row.getCell(c);
+      if(!cell.font&&!cell.border&&!cell.alignment&&cell.value==null){
+        cell.font={name:'ＭＳ 明朝',size:11};
+      }
+    }
+  }
 }
 
 // ============================================================
@@ -830,6 +841,17 @@ async function buildNormalWorkbook(wb, minchoFont, thin, double) {
     ensureRowCells(cws,22,'A','L');
     ensureRowCells(cws,23,'A','L');
     fillNormalCoverItemRow(cws,22,'内　　　容',fieldValues.workContent,minchoFont,thin,true);
+  }
+
+  // 全セルをXMLに書き出させる(iOSプレビュー対策)
+  for(let r=1;r<=34;r++){
+    const row=cws.getRow(r);
+    for(let c=1;c<=12;c++){
+      const cell=row.getCell(c);
+      if(!cell.font&&!cell.border&&!cell.alignment&&cell.value==null){
+        cell.font={name:'ＭＳ 明朝',size:11};
+      }
+    }
   }
 
   setupFreeSheet(wb);
