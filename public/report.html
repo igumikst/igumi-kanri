@@ -994,6 +994,9 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   rws.pageSetup.paperSize=9;rws.pageSetup.orientation='portrait';
   rws.pageSetup.margins={left:0.64,right:0.25,top:0.984,bottom:0.88,header:0.512,footer:0.512};
   rws.pageSetup.printArea='B1:T56';
+  rws.pageSetup.fitToPage=true;
+  rws.pageSetup.fitToWidth=1;
+  rws.pageSetup.fitToHeight=1;
 
   for(let ci=1;ci<=20;ci++){
     const col=String.fromCharCode(64+ci);
@@ -1002,7 +1005,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   rws.properties.defaultRowHeight=13.2;
 
   // 作業内容行を広く・備考行は少し
-  for(let r=23;r<=36;r++){rws.getRow(r).height=15;}
+  for(let r=23;r<=36;r++){rws.getRow(r).height=17;}
   rws.getRow(45).height=15;
   rws.getRow(46).height=15;
 
