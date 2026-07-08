@@ -728,8 +728,12 @@ function applyNormalCoverRowHeights(ws){
   ws.getRow(26).height=16.2;
 }
 
+const NORMAL_SHEET_VIEWS=[{style:'pageBreakPreview',zoomScale:85,zoomScaleNormal:100}];
+
 function setupNormalCoverSheet(cws,minchoFont,double){
-  cws.views=[{state:'normal',showGridLines:false}];
+  cws.views=NORMAL_SHEET_VIEWS;
+  cws.properties.defaultRowHeight=13.2;
+  cws.properties.defaultColWidth=8.09765625;
   cws.pageSetup.paperSize=9;
   cws.pageSetup.orientation='portrait';
   cws.pageSetup.scale=91;
@@ -793,6 +797,9 @@ const FREE_SHEET_COLS={
 };
 function setupFreeSheet(wb){
   const ws=wb.addWorksheet('自由シート');
+  ws.views=NORMAL_SHEET_VIEWS;
+  ws.properties.defaultRowHeight=13.2;
+  ws.properties.defaultColWidth=4.19921875;
   Object.entries(FREE_SHEET_COLS).forEach(([col,w])=>{ws.getColumn(col).width=w;});
   for(let r=1;r<=57;r++)ws.getRow(r).height=13.5;
   for(let r=1;r<=65;r++)ensureRowCells(ws,r,'A','U');
@@ -1281,6 +1288,9 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
   for(let pg=0;pg<pageCount;pg++){
     const pagePh=photos.slice(pg*3,pg*3+3);
     const ws=wb.addWorksheet(String(pg+1).padStart(3,'0'));
+    ws.views=NORMAL_SHEET_VIEWS;
+    ws.properties.defaultRowHeight=13.2;
+    ws.properties.defaultColWidth=8.09765625;
     ws.pageSetup.paperSize=9;
     ws.pageSetup.orientation='portrait';
     ws.pageSetup.scale=88;
