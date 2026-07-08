@@ -979,9 +979,9 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
 
   // 全セルをXMLに書き出す（iOSプレビュー対策）
   for(let r=1;r<=49;r++){
-    const row=cws.getRow(r);
     for(let c=2;c<=19;c++){
-      const cell=row.getCell(c);
+      const col=c<=26?String.fromCharCode(64+c):'A'+String.fromCharCode(64+c-26);
+      const cell=cws.getCell(`${col}${r}`);
       if(!cell.font&&!cell.border&&!cell.alignment&&cell.value==null){
         cell.font={name:'ＭＳ Ｐゴシック',size:11};
       }
