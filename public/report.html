@@ -896,7 +896,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
 
   cws.properties.defaultRowHeight=13.2;
 
-  [13,14,15,16,17,18,19,20,21,22,23].forEach(r=>{cws.getRow(r).height=18;});
+  [13,14,15,16,17,18,19,20,21,22,23].forEach(r=>{cws.getRow(r).height=13.2;});
 
   // 建物名称 C6:J8（ゴシック20pt太字・中央）
   cws.mergeCells('C6:J8');
@@ -939,10 +939,10 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     const cell=cws.getCell(`L${r}`);
     cell.border={...cell.border,right:thin2};
   }
-  // 上辺（1行目）
+  // 上辺（2行目）
   for(let c=1;c<=12;c++){
     const col=String.fromCharCode(64+c);
-    const cell=cws.getCell(`${col}1`);
+    const cell=cws.getCell(`${col}2`);
     cell.border={...cell.border,top:thin2};
   }
   // 下辺（50行目）
