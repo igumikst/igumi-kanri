@@ -889,7 +889,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   cws.pageSetup.scale=100;
 
   for(let ci=1;ci<=20;ci++){
-    cws.getColumn(String.fromCharCode(64+ci)).width=4.19921875;
+    cws.getColumn(String.fromCharCode(64+ci)).width=3.8;
   }
 
   cws.properties.defaultRowHeight=20;
@@ -906,21 +906,21 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   const worknameCell=cws.getCell('E15');
   worknameCell.value=safeCellStr(uWorkname);
   worknameCell.font=mincho(22,true);
-  worknameCell.alignment={horizontal:'center',vertical:'bottom'};
+  worknameCell.alignment={horizontal:'center',vertical:'middle'};
 
   // 作業日 G37:P39（明朝20pt太字・中央下）
   cws.mergeCells('G37:P39');
   const dateCell=cws.getCell('G37');
   dateCell.value=safeCellStr(uDateStr);
   dateCell.font=mincho(20,true);
-  dateCell.alignment={horizontal:'center',vertical:'bottom'};
+  dateCell.alignment={horizontal:'center',vertical:'middle'};
 
   // 会社名 G45:P47（ゴシック20pt太字・中央下）
   cws.mergeCells('G45:P47');
   const companyCell=cws.getCell('G45');
   companyCell.value=safeCellStr(uCompany);
   companyCell.font=gothicC(20,true);
-  companyCell.alignment={horizontal:'center',vertical:'bottom'};
+  companyCell.alignment={horizontal:'center',vertical:'middle'};
 
   // 罫線設定
   const thin2={style:'thin'};
@@ -1028,9 +1028,10 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     if(typeof val==='object'&&val.formula){vc.value={formula:val.formula};}
     else{vc.value=safeCellStr(val);}
     vc.font=(valFont==='m')?{name:'ＭＳ Ｐ明朝',size:12,bold:false}:{name:'ＭＳ Ｐゴシック',size:12,bold:false};
-    if(label==='住所'||label==='作業者')vc.font={name:'ＭＳ Ｐゴシック',size:12,bold:false};
     vc.alignment={horizontal:'left',vertical:'middle'};
   });
+  rws.getCell('H8').font={name:'ＭＳ Ｐゴシック',size:12,bold:false};
+  rws.getCell('H17').font={name:'ＭＳ Ｐゴシック',size:12,bold:false};
 
   // 【作業内容】C21:G22
   rws.mergeCells('C21:G22');
