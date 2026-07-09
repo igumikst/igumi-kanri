@@ -885,7 +885,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   cws.pageSetup.paperSize=9;
   cws.pageSetup.orientation='portrait';
   cws.pageSetup.margins={left:0.197,right:0.197,top:0.197,bottom:0.197,header:0,footer:0};
-  cws.pageSetup.printArea='A1:L40';
+  cws.pageSetup.printArea='A1:L50';
   cws.pageSetup.scale=88;
 
   cws.getColumn('A').width=2;
@@ -898,9 +898,9 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
 
   [13,14,15,16,17,18,19,20,21,22,23].forEach(r=>{cws.getRow(r).height=18;});
 
-  // 建物名称 C4:J6（ゴシック20pt太字・中央）
-  cws.mergeCells('C4:J6');
-  const buildingCell=cws.getCell('C4');
+  // 建物名称 C6:J8（ゴシック20pt太字・中央）
+  cws.mergeCells('C6:J8');
+  const buildingCell=cws.getCell('C6');
   buildingCell.value=safeCellStr(uBuilding);
   buildingCell.font=gothicC(20,true);
   buildingCell.alignment={horizontal:'center',vertical:'middle'};
@@ -912,16 +912,16 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   worknameCell.font=mincho(22,true);
   worknameCell.alignment={horizontal:'center',vertical:'bottom',shrinkToFit:true};
 
-  // 作業日 C24:J26（明朝20pt太字・中央下）
-  cws.mergeCells('C24:J26');
-  const dateCell=cws.getCell('C24');
+  // 作業日 C33:J35（明朝20pt太字・中央下）
+  cws.mergeCells('C33:J35');
+  const dateCell=cws.getCell('C33');
   dateCell.value=safeCellStr(uDateStr);
   dateCell.font=mincho(20,true);
   dateCell.alignment={horizontal:'center',vertical:'bottom'};
 
-  // 会社名 C30:J32（ゴシック20pt太字・中央下）
-  cws.mergeCells('C30:J32');
-  const companyCell=cws.getCell('C30');
+  // 会社名 C40:J42（ゴシック20pt太字・中央下）
+  cws.mergeCells('C40:J42');
+  const companyCell=cws.getCell('C40');
   companyCell.value=safeCellStr(uCompany);
   companyCell.font=gothicC(20,true);
   companyCell.alignment={horizontal:'center',vertical:'bottom'};
@@ -930,12 +930,12 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   const thin2={style:'thin'};
 
   // 左辺（A列）
-  for(let r=1;r<=40;r++){
+  for(let r=1;r<=50;r++){
     const cell=cws.getCell(`A${r}`);
     cell.border={...cell.border,left:thin2};
   }
   // 右辺（L列）
-  for(let r=1;r<=40;r++){
+  for(let r=1;r<=50;r++){
     const cell=cws.getCell(`L${r}`);
     cell.border={...cell.border,right:thin2};
   }
@@ -945,20 +945,20 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     const cell=cws.getCell(`${col}1`);
     cell.border={...cell.border,top:thin2};
   }
-  // 下辺（40行目）
+  // 下辺（50行目）
   for(let c=1;c<=12;c++){
     const col=String.fromCharCode(64+c);
-    const cell=cws.getCell(`${col}40`);
+    const cell=cws.getCell(`${col}50`);
     cell.border={...cell.border,bottom:thin2};
   }
 
-  // 建物名称枠（C4:J6）四角い枠
+  // 建物名称枠（C6:J8）四角い枠
   for(let c=3;c<=10;c++){
     const col=String.fromCharCode(64+c);
-    cws.getCell(`${col}4`).border={...cws.getCell(`${col}4`).border,top:thin2};
-    cws.getCell(`${col}6`).border={...cws.getCell(`${col}6`).border,bottom:thin2};
+    cws.getCell(`${col}6`).border={...cws.getCell(`${col}6`).border,top:thin2};
+    cws.getCell(`${col}8`).border={...cws.getCell(`${col}8`).border,bottom:thin2};
   }
-  for(let r=4;r<=6;r++){
+  for(let r=6;r<=8;r++){
     cws.getCell(`C${r}`).border={...cws.getCell(`C${r}`).border,left:thin2};
     cws.getCell(`J${r}`).border={...cws.getCell(`J${r}`).border,right:thin2};
   }
@@ -969,20 +969,20 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     cws.getCell(`${col}12`).border={...cws.getCell(`${col}12`).border,bottom:thin2};
   }
 
-  // 作業日下線（C24:J26の最終行にbottom）
+  // 作業日下線（C33:J35の最終行にbottom）
   for(let c=3;c<=10;c++){
     const col=String.fromCharCode(64+c);
-    cws.getCell(`${col}26`).border={...cws.getCell(`${col}26`).border,bottom:thin2};
+    cws.getCell(`${col}35`).border={...cws.getCell(`${col}35`).border,bottom:thin2};
   }
 
-  // 会社名下線（C30:J32の最終行にbottom）
+  // 会社名下線（C40:J42の最終行にbottom）
   for(let c=3;c<=10;c++){
     const col=String.fromCharCode(64+c);
-    cws.getCell(`${col}32`).border={...cws.getCell(`${col}32`).border,bottom:thin2};
+    cws.getCell(`${col}42`).border={...cws.getCell(`${col}42`).border,bottom:thin2};
   }
 
   // 全セルをXMLに書き出す（iOSプレビュー対策）
-  for(let r=1;r<=40;r++){
+  for(let r=1;r<=50;r++){
     for(let c=1;c<=12;c++){
       const col=String.fromCharCode(64+c);
       const cell=cws.getCell(`${col}${r}`);
@@ -994,7 +994,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
 
   // dimensionをL列まで拡張
   cws.getCell('L1').value='';
-  cws.getCell('L40').value='';
+  cws.getCell('L50').value='';
 
   // ─── 報告書シート ───
   const rws=wb.addWorksheet('報告書');
@@ -1025,10 +1025,10 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
 
   // 項目ブロック（各3行結合）
   const reportItems2=[
-    ['B5:B7','C5:E7','F5:F7','G5:G7','H5:S7','建築物名称',{formula:'表紙!C4'},'m'],
+    ['B5:B7','C5:E7','F5:F7','G5:G7','H5:S7','建築物名称',{formula:'表紙!C6'},'m'],
     ['B8:B10','C8:E10','F8:F10','G8:G10','H8:S10','住所',uAddress,'g'],
     ['B11:B13','C11:E13','F11:F13','G11:G13','H11:S13','工事名称',{formula:'表紙!B9'},'m'],
-    ['B14:B16','C14:E16','F14:F16','G14:G16','H14:S16','作業実施日',{formula:'表紙!C24'},'m'],
+    ['B14:B16','C14:E16','F14:F16','G14:G16','H14:S16','作業実施日',{formula:'表紙!C33'},'m'],
     ['B17:B19','C17:E19','F17:F19','G17:G19','H17:S19','作業者',uWorker,'g'],
   ];
   reportItems2.forEach(([bMerge,cMerge,fMerge,gMerge,hMerge,label,val,valFont])=>{
