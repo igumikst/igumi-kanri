@@ -888,14 +888,11 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
 
   cws.getColumn('A').width=3.09765625;
   for(let ci=2;ci<=18;ci++){
-    cws.getColumn(String.fromCharCode(64+ci)).width=4.19921875;
+    cws.getColumn(String.fromCharCode(64+ci)).width=7.5;
   }
   cws.getColumn('S').width=5.3984375;
 
   cws.properties.defaultRowHeight=13.2;
-  [2,3,4,5,15,16,17,18,21,22,23,26,27,28,29,30,31,32,33,34,35,36,38,39,40,41,42,43,44,45,46,47,48].forEach(r=>{
-    cws.getRow(r).height=1;
-  });
 
   // 建物名称 E11:P13（ゴシック20pt太字・中央）
   cws.mergeCells('E11:P13');
