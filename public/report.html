@@ -882,50 +882,42 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   const cws=wb.addWorksheet('表紙');
   cws.pageSetup.paperSize=9;
   cws.pageSetup.orientation='portrait';
-  cws.pageSetup.margins={left:0.64,right:0.25,top:0.984,bottom:0.984,header:0.512,footer:0.512};
-  cws.pageSetup.printArea='B1:S49';
+  cws.pageSetup.margins={left:0.64,right:0.64,top:0.984,bottom:0.984,header:0.512,footer:0.512};
+  cws.pageSetup.printArea='A1:L40';
+  cws.pageSetup.horizontalCentered=true;
 
-  cws.getColumn('A').width=3.09765625;
-  ['B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R'].forEach(col=>{
-    cws.getColumn(col).width=4.19921875;
+  cws.getColumn('A').width=2;
+  ['B','C','D','E','F','G','H','I','J','K'].forEach(col=>{
+    cws.getColumn(col).width=10;
   });
-  cws.getColumn('S').width=5.3984375;
-  ['T','U','V','W','X','Y','Z','AA','AB','AC','AD','AE','AF','AG','AH','AI'].forEach(col=>{
-    cws.getColumn(col).width=4.19921875;
-  });
+  cws.getColumn('L').width=2;
 
   cws.properties.defaultRowHeight=13.2;
 
-  // 表紙：各ブロックの行高を広げて縦長に
-  [11,12,13].forEach(r=>{cws.getRow(r).height=20;});
-  [15,16,17,18].forEach(r=>{cws.getRow(r).height=22;});
-  [37,38,39].forEach(r=>{cws.getRow(r).height=20;});
-  [45,46,47].forEach(r=>{cws.getRow(r).height=20;});
-
-  // 建物名称 E11:P13（ゴシック20pt太字・中央）
-  cws.mergeCells('E11:P13');
-  const buildingCell=cws.getCell('E11');
+  // 建物名称 C4:J6（ゴシック20pt太字・中央）
+  cws.mergeCells('C4:J6');
+  const buildingCell=cws.getCell('C4');
   buildingCell.value=safeCellStr(uBuilding);
   buildingCell.font=gothicC(20,true);
   buildingCell.alignment={horizontal:'center',vertical:'middle'};
 
-  // 工事名称 D15:Q18（明朝22pt太字・中央下・縮小）
-  cws.mergeCells('D15:Q18');
-  const worknameCell=cws.getCell('D15');
+  // 工事名称 B9:K12（明朝22pt太字・中央下・縮小）
+  cws.mergeCells('B9:K12');
+  const worknameCell=cws.getCell('B9');
   worknameCell.value=safeCellStr(uWorkname)+'報告書';
   worknameCell.font=mincho(22,true);
   worknameCell.alignment={horizontal:'center',vertical:'bottom',shrinkToFit:true};
 
-  // 作業日 F37:O39（明朝20pt太字・中央下）
-  cws.mergeCells('F37:O39');
-  const dateCell=cws.getCell('F37');
+  // 作業日 C24:J26（明朝20pt太字・中央下）
+  cws.mergeCells('C24:J26');
+  const dateCell=cws.getCell('C24');
   dateCell.value=safeCellStr(uDateStr);
   dateCell.font=mincho(20,true);
   dateCell.alignment={horizontal:'center',vertical:'bottom'};
 
-  // 会社名 F45:O47（ゴシック20pt太字・中央下）
-  cws.mergeCells('F45:O47');
-  const companyCell=cws.getCell('F45');
+  // 会社名 C30:J32（ゴシック20pt太字・中央下）
+  cws.mergeCells('C30:J32');
+  const companyCell=cws.getCell('C30');
   companyCell.value=safeCellStr(uCompany);
   companyCell.font=gothicC(20,true);
   companyCell.alignment={horizontal:'center',vertical:'bottom'};
@@ -933,60 +925,60 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   // 罫線設定
   const thin2={style:'thin'};
 
-  // 外枠（B列left・T列right・1行top・49行bottom）
-  for(let r=1;r<=49;r++){
-    cws.getCell(`B${r}`).border={...cws.getCell(`B${r}`).border,left:thin2};
-    cws.getCell(`S${r}`).border={...cws.getCell(`S${r}`).border,right:thin2};
+  // 外枠（A列left・L列right・1行top・40行bottom）
+  for(let r=1;r<=40;r++){
+    cws.getCell(`A${r}`).border={...cws.getCell(`A${r}`).border,left:thin2};
+    cws.getCell(`L${r}`).border={...cws.getCell(`L${r}`).border,right:thin2};
   }
-  for(let c=2;c<=20;c++){
+  for(let c=1;c<=12;c++){
     const col=String.fromCharCode(64+c);
     cws.getCell(`${col}1`).border={...cws.getCell(`${col}1`).border,top:thin2};
-    cws.getCell(`${col}49`).border={...cws.getCell(`${col}49`).border,bottom:thin2};
+    cws.getCell(`${col}40`).border={...cws.getCell(`${col}40`).border,bottom:thin2};
   }
 
-  // 建物名称枠（E11:P13）四角い枠
-  for(let c=5;c<=16;c++){
+  // 建物名称枠（C4:J6）四角い枠
+  for(let c=3;c<=10;c++){
     const col=String.fromCharCode(64+c);
-    cws.getCell(`${col}11`).border={...cws.getCell(`${col}11`).border,top:thin2};
-    cws.getCell(`${col}13`).border={...cws.getCell(`${col}13`).border,bottom:thin2};
+    cws.getCell(`${col}4`).border={...cws.getCell(`${col}4`).border,top:thin2};
+    cws.getCell(`${col}6`).border={...cws.getCell(`${col}6`).border,bottom:thin2};
   }
-  for(let r=11;r<=13;r++){
-    cws.getCell(`E${r}`).border={...cws.getCell(`E${r}`).border,left:thin2};
-    cws.getCell(`P${r}`).border={...cws.getCell(`P${r}`).border,right:thin2};
+  for(let r=4;r<=6;r++){
+    cws.getCell(`C${r}`).border={...cws.getCell(`C${r}`).border,left:thin2};
+    cws.getCell(`J${r}`).border={...cws.getCell(`J${r}`).border,right:thin2};
   }
 
-  // 工事名称下線（D15:Q18の最終行にbottom）
-  for(let c=4;c<=17;c++){
+  // 工事名称下線（B9:K12の最終行にbottom）
+  for(let c=2;c<=11;c++){
     const col=String.fromCharCode(64+c);
-    cws.getCell(`${col}18`).border={...cws.getCell(`${col}18`).border,bottom:thin2};
+    cws.getCell(`${col}12`).border={...cws.getCell(`${col}12`).border,bottom:thin2};
   }
 
-  // 作業日下線（F37:O39の最終行にbottom）
-  for(let c=6;c<=15;c++){
+  // 作業日下線（C24:J26の最終行にbottom）
+  for(let c=3;c<=10;c++){
     const col=String.fromCharCode(64+c);
-    cws.getCell(`${col}39`).border={...cws.getCell(`${col}39`).border,bottom:thin2};
+    cws.getCell(`${col}26`).border={...cws.getCell(`${col}26`).border,bottom:thin2};
   }
 
-  // 会社名下線（F45:O47の最終行にbottom）
-  for(let c=6;c<=15;c++){
+  // 会社名下線（C30:J32の最終行にbottom）
+  for(let c=3;c<=10;c++){
     const col=String.fromCharCode(64+c);
-    cws.getCell(`${col}47`).border={...cws.getCell(`${col}47`).border,bottom:thin2};
+    cws.getCell(`${col}32`).border={...cws.getCell(`${col}32`).border,bottom:thin2};
   }
-
-  // dimensionをAI列まで拡張（印刷範囲認識のため）
-  cws.getCell('AI1').value='';
-  cws.getCell('AI49').value='';
 
   // 全セルをXMLに書き出す（iOSプレビュー対策）
-  for(let r=1;r<=49;r++){
-    for(let c=2;c<=19;c++){
-      const col=c<=26?String.fromCharCode(64+c):'A'+String.fromCharCode(64+c-26);
+  for(let r=1;r<=40;r++){
+    for(let c=1;c<=12;c++){
+      const col=String.fromCharCode(64+c);
       const cell=cws.getCell(`${col}${r}`);
       if(!cell.font&&!cell.border&&!cell.alignment&&cell.value==null){
         cell.font={name:'ＭＳ Ｐゴシック',size:11};
       }
     }
   }
+
+  // dimensionをL列まで拡張
+  cws.getCell('L1').value='';
+  cws.getCell('L40').value='';
 
   // ─── 報告書シート ───
   const rws=wb.addWorksheet('報告書');
