@@ -889,11 +889,11 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   cws.pageSetup.scale=88;
   cws.pageSetup.horizontalCentered=true;
 
-  cws.getColumn('A').width=1.5;
+  cws.getColumn('A').width=2;
   ['B','C','D','E','F','G','H','I','J','K'].forEach(col=>{
-    cws.getColumn(col).width=6.5;
+    cws.getColumn(col).width=8.5;
   });
-  cws.getColumn('L').width=1.5;
+  cws.getColumn('L').width=2;
 
   cws.properties.defaultRowHeight=13.2;
 
