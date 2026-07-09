@@ -906,21 +906,21 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   const worknameCell=cws.getCell('B10');
   worknameCell.value=safeCellStr(uWorkname)+'報告書';
   worknameCell.font=mincho(22,true);
-  worknameCell.alignment={horizontal:'center',vertical:'middle',shrinkToFit:true};
+  worknameCell.alignment={horizontal:'center',vertical:'bottom',shrinkToFit:true};
 
   // 作業日 F32:O34（明朝20pt太字・中央）
   cws.mergeCells('F32:O34');
   const dateCell=cws.getCell('F32');
   dateCell.value=safeCellStr(uDateStr);
   dateCell.font=mincho(20,true);
-  dateCell.alignment={horizontal:'center',vertical:'middle'};
+  dateCell.alignment={horizontal:'center',vertical:'bottom'};
 
   // 会社名 F40:O42（ゴシック20pt太字・中央）
   cws.mergeCells('F40:O42');
   const companyCell=cws.getCell('F40');
   companyCell.value=safeCellStr(uCompany);
   companyCell.font=gothicC(20,true);
-  companyCell.alignment={horizontal:'center',vertical:'middle'};
+  companyCell.alignment={horizontal:'center',vertical:'bottom'};
 
   // 罫線設定
   const thin2={style:'thin'};
