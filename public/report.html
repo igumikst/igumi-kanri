@@ -895,6 +895,8 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
 
   cws.properties.defaultRowHeight=13.2;
 
+  [13,14,15,16,17,18,19,20,21,22,23].forEach(r=>{cws.getRow(r).height=18;});
+
   // 建物名称 C4:J6（ゴシック20pt太字・中央）
   cws.mergeCells('C4:J6');
   const buildingCell=cws.getCell('C4');
@@ -928,7 +930,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
 
   // 外枠（A列left・L列right・1行top・40行bottom）
   for(let r=1;r<=40;r++){
-    cws.getCell(`B${r}`).border={...cws.getCell(`B${r}`).border,left:thin2};
+    cws.getCell(`A${r}`).border={...cws.getCell(`A${r}`).border,left:thin2};
     cws.getCell(`K${r}`).border={...cws.getCell(`K${r}`).border,right:thin2};
   }
   for(let c=2;c<=11;c++){
