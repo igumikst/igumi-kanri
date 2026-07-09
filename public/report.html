@@ -522,7 +522,7 @@ function getExportFilename(ext){
   if(customFn){
     let name=customFn.replace(/[\\/:*?"<>|]/g,'');
     if(!name.toLowerCase().endsWith('.'+ext))name+='.'+ext;
-    name=name.normalize('NFC');
+    name=name.normalize('NFC').replace(/ /g,'　');
     return name;
   }
   const safe=s=>s.replace(/[\\/:*?"<>|]/g,'').substring(0,20);
@@ -532,7 +532,7 @@ function getExportFilename(ext){
   const datePart=workDate?workDate.replace(/-/g,''):'';
   const prefix=reportType==='union'?'調査報告書':reportType==='tama'?'報告書_多摩':'報告書';
   let fileName=`${prefix}_${safe(propName)}_${safe(workName)}_${datePart}.${ext}`;
-  fileName=fileName.normalize('NFC');
+  fileName=fileName.normalize('NFC').replace(/ /g,'　');
   return fileName;
 }
 
