@@ -930,15 +930,27 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   // 罫線設定
   const thin2={style:'thin'};
 
-  // 外枠（A列left・L列right・1行top・40行bottom）
+  // 左辺（A列）
   for(let r=1;r<=40;r++){
-    cws.getCell(`A${r}`).border={...cws.getCell(`A${r}`).border,left:thin2};
-    cws.getCell(`K${r}`).border={...cws.getCell(`K${r}`).border,right:thin2};
+    const cell=cws.getCell(`A${r}`);
+    cell.border={...cell.border,left:thin2};
   }
+  // 右辺（L列）
+  for(let r=1;r<=40;r++){
+    const cell=cws.getCell(`L${r}`);
+    cell.border={...cell.border,right:thin2};
+  }
+  // 上辺（1行目）
   for(let c=1;c<=12;c++){
     const col=String.fromCharCode(64+c);
-    cws.getCell(`${col}1`).border={...cws.getCell(`${col}1`).border,top:thin2};
-    cws.getCell(`${col}40`).border={...cws.getCell(`${col}40`).border,bottom:thin2};
+    const cell=cws.getCell(`${col}1`);
+    cell.border={...cell.border,top:thin2};
+  }
+  // 下辺（40行目）
+  for(let c=1;c<=12;c++){
+    const col=String.fromCharCode(64+c);
+    const cell=cws.getCell(`${col}40`);
+    cell.border={...cell.border,bottom:thin2};
   }
 
   // 建物名称枠（C4:J6）四角い枠
