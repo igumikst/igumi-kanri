@@ -1017,10 +1017,10 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
 
   // 項目ブロック（各3行結合）
   const reportItems2=[
-    ['B5:B7','C5:E7','F5:F7','G5:G7','H5:S7','建築物名称',{formula:'表紙!E11'},'m'],
+    ['B5:B7','C5:E7','F5:F7','G5:G7','H5:S7','建築物名称',{formula:'表紙!C4'},'m'],
     ['B8:B10','C8:E10','F8:F10','G8:G10','H8:S10','住所',uAddress,'g'],
-    ['B11:B13','C11:E13','F11:F13','G11:G13','H11:S13','工事名称',{formula:'表紙!D15'},'m'],
-    ['B14:B16','C14:E16','F14:F16','G14:G16','H14:S16','作業実施日',{formula:'表紙!F37'},'m'],
+    ['B11:B13','C11:E13','F11:F13','G11:G13','H11:S13','工事名称',{formula:'表紙!B9'},'m'],
+    ['B14:B16','C14:E16','F14:F16','G14:G16','H14:S16','作業実施日',{formula:'表紙!C24'},'m'],
     ['B17:B19','C17:E19','F17:F19','G17:G19','H17:S19','作業者',uWorker,'g'],
   ];
   reportItems2.forEach(([bMerge,cMerge,fMerge,gMerge,hMerge,label,val,valFont])=>{
