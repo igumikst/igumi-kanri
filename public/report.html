@@ -950,7 +950,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   // 工事名称下線（B10:S10）
   for(let c=2;c<=19;c++){
     const col=String.fromCharCode(64+c);
-    cws.getCell(`${col}10`).border={...cws.getCell(`${col}10`).border,bottom:thin2};
+    cws.getCell(`${col}10`).border={bottom:thin2};
   }
 
   // 作業日下線（F32:M32のみ）
