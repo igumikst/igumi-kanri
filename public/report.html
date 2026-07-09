@@ -904,9 +904,9 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   // 工事名称 D10:Q13（明朝22pt太字・中央）
   cws.mergeCells('D10:Q13');
   const worknameCell=cws.getCell('D10');
-  worknameCell.value=safeCellStr(uWorkname)+'　報告書';
+  worknameCell.value=safeCellStr(uWorkname)+'報告書';
   worknameCell.font=mincho(22,true);
-  worknameCell.alignment={horizontal:'center',vertical:'middle'};
+  worknameCell.alignment={horizontal:'center',vertical:'middle',shrinkToFit:true};
 
   // 作業日 F32:O34（明朝20pt太字・中央）
   cws.mergeCells('F32:O34');
@@ -947,10 +947,10 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     cws.getCell(`P${r}`).border={...cws.getCell(`P${r}`).border,right:thin2};
   }
 
-  // 工事名称下線（D10:Q13の最終行）
-  for(let c=4;c<=17;c++){
+  // 工事名称下線（B10:S10）
+  for(let c=2;c<=19;c++){
     const col=String.fromCharCode(64+c);
-    cws.getCell(`${col}13`).border={...cws.getCell(`${col}13`).border,bottom:thin2};
+    cws.getCell(`${col}10`).border={...cws.getCell(`${col}10`).border,bottom:thin2};
   }
 
   // 作業日下線（F32:M32のみ）
