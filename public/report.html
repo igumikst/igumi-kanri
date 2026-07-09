@@ -559,12 +559,14 @@ function buildPdfPagesHtml(){
     const company=document.getElementById('u-company').value.trim();
     let uDateStr='';
     if(uDate){const d=new Date(uDate);uDateStr=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
-    pages.push(`<div class="pdf-page"><div class="pdf-union-cover">
-      <div class="pdf-union-building">${esc(building)}</div>
-      <div class="pdf-union-work">${esc(workname)}</div>
-      <div class="pdf-union-date">${esc(uDateStr)}</div>
-      <div class="pdf-union-company">${esc(company)}</div>
-    </div></div>`);
+    pages.push(`<div class="pdf-page pdf-cover-page" style="justify-content:center;align-items:center;border:1px solid #333;">
+      <div style="border:1px solid #333;padding:40px 60px;width:80%;text-align:center;">
+        <div style="font-size:18px;font-weight:700;border:1px solid #333;padding:10px;margin-bottom:30px;">${esc(building)}</div>
+        <div style="font-size:20px;font-weight:700;border-bottom:1px solid #333;padding-bottom:20px;margin-bottom:60px;">${esc(workname)}</div>
+        <div style="font-size:16px;border-bottom:1px solid #333;padding-bottom:16px;margin-bottom:30px;">${esc(uDateStr)}</div>
+        <div style="font-size:16px;border-bottom:1px solid #333;padding-bottom:16px;">${esc(company)}</div>
+      </div>
+    </div>`);
     const address=document.getElementById('u-address').value.trim();
     const worker=document.getElementById('u-worker').value.trim();
     const content=document.getElementById('u-content').value.trim();
@@ -933,7 +935,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     cws.getCell(`A${r}`).border={...cws.getCell(`A${r}`).border,left:thin2};
     cws.getCell(`K${r}`).border={...cws.getCell(`K${r}`).border,right:thin2};
   }
-  for(let c=2;c<=11;c++){
+  for(let c=1;c<=12;c++){
     const col=String.fromCharCode(64+c);
     cws.getCell(`${col}1`).border={...cws.getCell(`${col}1`).border,top:thin2};
     cws.getCell(`${col}40`).border={...cws.getCell(`${col}40`).border,bottom:thin2};
