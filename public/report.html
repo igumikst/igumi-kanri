@@ -884,9 +884,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   cws.pageSetup.orientation='portrait';
   cws.pageSetup.margins={left:0.64,right:0.64,top:0.984,bottom:0.984,header:0.512,footer:0.512};
   cws.pageSetup.printArea='A1:L40';
-  cws.pageSetup.fitToPage=true;
-  cws.pageSetup.fitToWidth=1;
-  cws.pageSetup.fitToHeight=1;
+  cws.pageSetup.scale=95;
   cws.pageSetup.horizontalCentered=true;
 
   cws.getColumn('A').width=1.5;
@@ -930,10 +928,10 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
 
   // 外枠（A列left・L列right・1行top・40行bottom）
   for(let r=1;r<=40;r++){
-    cws.getCell(`A${r}`).border={...cws.getCell(`A${r}`).border,left:thin2};
-    cws.getCell(`L${r}`).border={...cws.getCell(`L${r}`).border,right:thin2};
+    cws.getCell(`B${r}`).border={...cws.getCell(`B${r}`).border,left:thin2};
+    cws.getCell(`K${r}`).border={...cws.getCell(`K${r}`).border,right:thin2};
   }
-  for(let c=1;c<=12;c++){
+  for(let c=2;c<=11;c++){
     const col=String.fromCharCode(64+c);
     cws.getCell(`${col}1`).border={...cws.getCell(`${col}1`).border,top:thin2};
     cws.getCell(`${col}40`).border={...cws.getCell(`${col}40`).border,bottom:thin2};
