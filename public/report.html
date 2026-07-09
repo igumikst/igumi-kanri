@@ -559,7 +559,7 @@ function buildPdfPagesHtml(){
     const company=document.getElementById('u-company').value.trim();
     let uDateStr='';
     if(uDate){const d=new Date(uDate);uDateStr=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
-    pages.push(`<div class="pdf-page"><div class="pdf-union-cover">
+    pages.push(`<div class="pdf-page" style="padding:0"><div class="pdf-union-cover">
       <div class="pdf-union-building">${esc(building)}</div>
       <div class="pdf-union-work">${esc(workname)}</div>
       <div class="pdf-union-date">${esc(uDateStr)}</div>
