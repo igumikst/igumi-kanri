@@ -885,43 +885,39 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   cws.pageSetup.paperSize=9;
   cws.pageSetup.orientation='portrait';
   cws.pageSetup.margins={left:0.64,right:0.25,top:0.984,bottom:0.984,header:0.512,footer:0.512};
-  cws.pageSetup.printArea='A1:S49';
-  cws.pageSetup.fitToPage=true;
-  cws.pageSetup.fitToWidth=1;
-  cws.pageSetup.fitToHeight=1;
-  cws.pageSetup.scale=undefined;
+  cws.pageSetup.printArea='A1:T49';
+  cws.pageSetup.scale=100;
 
-  cws.getColumn('A').width=3.5;
-  for(let ci=2;ci<=19;ci++){
-    cws.getColumn(String.fromCharCode(64+ci)).width=5.0;
+  for(let ci=1;ci<=20;ci++){
+    cws.getColumn(String.fromCharCode(64+ci)).width=4.19921875;
   }
 
   cws.properties.defaultRowHeight=20;
 
-  // 建物名称 E11:P13（ゴシック20pt太字・中央）
-  cws.mergeCells('E11:P13');
-  const buildingCell=cws.getCell('E11');
+  // 建物名称 F11:Q13（ゴシック20pt太字・中央）
+  cws.mergeCells('F11:Q13');
+  const buildingCell=cws.getCell('F11');
   buildingCell.value=safeCellStr(uBuilding);
   buildingCell.font=gothicC(20,true);
   buildingCell.alignment={horizontal:'center',vertical:'middle'};
 
-  // 工事名称 D15:Q18（明朝22pt太字・中央下）
-  cws.mergeCells('D15:Q18');
-  const worknameCell=cws.getCell('D15');
+  // 工事名称 E15:R18（明朝22pt太字・中央下）
+  cws.mergeCells('E15:R18');
+  const worknameCell=cws.getCell('E15');
   worknameCell.value=safeCellStr(uWorkname);
   worknameCell.font=mincho(22,true);
   worknameCell.alignment={horizontal:'center',vertical:'bottom'};
 
-  // 作業日 F37:O39（明朝20pt太字・中央下）
-  cws.mergeCells('F37:O39');
-  const dateCell=cws.getCell('F37');
+  // 作業日 G37:P39（明朝20pt太字・中央下）
+  cws.mergeCells('G37:P39');
+  const dateCell=cws.getCell('G37');
   dateCell.value=safeCellStr(uDateStr);
   dateCell.font=mincho(20,true);
   dateCell.alignment={horizontal:'center',vertical:'bottom'};
 
-  // 会社名 F45:O47（ゴシック20pt太字・中央下）
-  cws.mergeCells('F45:O47');
-  const companyCell=cws.getCell('F45');
+  // 会社名 G45:P47（ゴシック20pt太字・中央下）
+  cws.mergeCells('G45:P47');
+  const companyCell=cws.getCell('G45');
   companyCell.value=safeCellStr(uCompany);
   companyCell.font=gothicC(20,true);
   companyCell.alignment={horizontal:'center',vertical:'bottom'};
@@ -929,49 +925,49 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   // 罫線設定
   const thin2={style:'thin'};
 
-  // 外枠（A1:S49）
+  // 外枠（A1:T49）
   for(let r=1;r<=49;r++){
     cws.getCell(`A${r}`).border={...cws.getCell(`A${r}`).border,left:thin2};
-    cws.getCell(`S${r}`).border={...cws.getCell(`S${r}`).border,right:thin2};
+    cws.getCell(`T${r}`).border={...cws.getCell(`T${r}`).border,right:thin2};
   }
-  for(let c=1;c<=19;c++){
+  for(let c=1;c<=20;c++){
     const col=String.fromCharCode(64+c);
     cws.getCell(`${col}1`).border={...cws.getCell(`${col}1`).border,top:thin2};
     cws.getCell(`${col}49`).border={...cws.getCell(`${col}49`).border,bottom:thin2};
   }
 
-  // 建物名称枠（E11:P13）四辺thin
-  for(let c=5;c<=16;c++){
+  // 建物名称枠（F11:Q13）四辺thin
+  for(let c=6;c<=17;c++){
     const col=String.fromCharCode(64+c);
     cws.getCell(`${col}11`).border={...cws.getCell(`${col}11`).border,top:thin2};
     cws.getCell(`${col}13`).border={...cws.getCell(`${col}13`).border,bottom:thin2};
   }
   for(let r=11;r<=13;r++){
-    cws.getCell(`E${r}`).border={...cws.getCell(`E${r}`).border,left:thin2};
-    cws.getCell(`P${r}`).border={...cws.getCell(`P${r}`).border,right:thin2};
+    cws.getCell(`F${r}`).border={...cws.getCell(`F${r}`).border,left:thin2};
+    cws.getCell(`Q${r}`).border={...cws.getCell(`Q${r}`).border,right:thin2};
   }
 
-  // 工事名称下線（D15:Q18の最終行）
-  for(let c=4;c<=17;c++){
+  // 工事名称下線（E15:R18の最終行）
+  for(let c=5;c<=18;c++){
     const col=String.fromCharCode(64+c);
     cws.getCell(`${col}18`).border={...cws.getCell(`${col}18`).border,bottom:thin2};
   }
 
-  // 作業日下線（F37:O39の最終行）
-  for(let c=6;c<=15;c++){
+  // 作業日下線（G37:N37のみ）
+  for(let c=7;c<=14;c++){
     const col=String.fromCharCode(64+c);
-    cws.getCell(`${col}39`).border={...cws.getCell(`${col}39`).border,bottom:thin2};
+    cws.getCell(`${col}37`).border={...cws.getCell(`${col}37`).border,bottom:thin2};
   }
 
-  // 会社名下線（F45:O47の最終行）
-  for(let c=6;c<=15;c++){
+  // 会社名下線（G45:P47の最終行）
+  for(let c=7;c<=16;c++){
     const col=String.fromCharCode(64+c);
     cws.getCell(`${col}47`).border={...cws.getCell(`${col}47`).border,bottom:thin2};
   }
 
   // 全セルをXMLに書き出す（iOSプレビュー対策）
   for(let r=1;r<=49;r++){
-    for(let c=1;c<=19;c++){
+    for(let c=1;c<=20;c++){
       const col=String.fromCharCode(64+c);
       const cell=cws.getCell(`${col}${r}`);
       if(!cell.font&&!cell.border&&!cell.alignment&&cell.value==null){
@@ -980,9 +976,9 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     }
   }
 
-  // dimensionをS列まで拡張
-  cws.getCell('S1').value='';
-  cws.getCell('S49').value='';
+  // dimensionをT列まで拡張
+  cws.getCell('T1').value='';
+  cws.getCell('T49').value='';
 
   // ─── 報告書シート ───
   const rws=wb.addWorksheet('報告書');
@@ -1013,10 +1009,10 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
 
   // 項目ブロック（各3行結合）
   const reportItems2=[
-    ['B5:B7','C5:E7','F5:F7','G5:G7','H5:S7','建築物名称',{formula:'表紙!E11'},'m'],
+    ['B5:B7','C5:E7','F5:F7','G5:G7','H5:S7','建築物名称',{formula:'表紙!F11'},'m'],
     ['B8:B10','C8:E10','F8:F10','G8:G10','H8:S10','住所',uAddress,'g'],
-    ['B11:B13','C11:E13','F11:F13','G11:G13','H11:S13','工事名称',{formula:'表紙!D15'},'m'],
-    ['B14:B16','C14:E16','F14:F16','G14:G16','H14:S16','作業実施日',{formula:'表紙!F37'},'m'],
+    ['B11:B13','C11:E13','F11:F13','G11:G13','H11:S13','工事名称',{formula:'表紙!E15'},'m'],
+    ['B14:B16','C14:E16','F14:F16','G14:G16','H14:S16','作業実施日',{formula:'表紙!G37'},'m'],
     ['B17:B19','C17:E19','F17:F19','G17:G19','H17:S19','作業者',uWorker,'g'],
   ];
   reportItems2.forEach(([bMerge,cMerge,fMerge,gMerge,hMerge,label,val,valFont])=>{
@@ -1032,6 +1028,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     if(typeof val==='object'&&val.formula){vc.value={formula:val.formula};}
     else{vc.value=safeCellStr(val);}
     vc.font=(valFont==='m')?{name:'ＭＳ Ｐ明朝',size:12,bold:false}:{name:'ＭＳ Ｐゴシック',size:12,bold:false};
+    if(label==='住所'||label==='作業者')vc.font={name:'ＭＳ Ｐゴシック',size:12,bold:false};
     vc.alignment={horizontal:'left',vertical:'middle'};
   });
 
