@@ -97,6 +97,14 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
     return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   };
 
+  const normalizePhone = (num) => {
+    if (!num || typeof num !== "string") return "";
+    const trimmed = num.trim();
+    if (!trimmed) return "";
+    if (trimmed.startsWith("+81")) return "0" + trimmed.slice(3);
+    return trimmed;
+  };
+
   if (selected) return (
     <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
       <div style={{ background: `linear-gradient(135deg,${cust.c1},${cust.c2})`, padding: "16px 20px", position: "sticky", top: 0, zIndex: 50 }}>
@@ -205,6 +213,24 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
           )}
         </div>
 
+        {/* 折り返し電話 */}
+        <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
+          <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginBottom: 10 }}>📞 折返し先</div>
+          {normalizePhone(selected.phone_number) ? (
+            <>
+              <div style={{ fontSize: 15, color: "#1F2937", fontWeight: 800, marginBottom: 10 }}>
+                📞 {normalizePhone(selected.phone_number)} に折り返す
+              </div>
+              <a href={`tel:${normalizePhone(selected.phone_number)}`}
+                style={{ display: "block", background: `linear-gradient(135deg,#059669,#10b981)`, color: "#fff", borderRadius: 12, padding: "14px", textAlign: "center", fontWeight: 800, fontSize: 16, textDecoration: "none", boxShadow: "0 4px 12px rgba(16,185,129,0.35)" }}>
+                📞 折り返し電話する
+              </a>
+            </>
+          ) : (
+            <div style={{ fontSize: 13, color: "#9CA3AF", fontWeight: 600 }}>折返し先未取得</div>
+          )}
+        </div>
+
         {/* 基本情報 */}
         <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
           <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginBottom: 10 }}>📋 基本情報</div>
@@ -212,7 +238,6 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
             ["受付日時", formatDate(selected.received_at)],
             ["管理会社", selected.company_name],
             ["担当者名", selected.contact_name],
-            ["折返し先", selected.phone_number],
             ["物件名",   selected.property_name],
             ["部屋番号", selected.room_number],
             ["案件種別", selected.case_type],
@@ -246,13 +271,6 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
             <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginBottom: 8 }}>🎙 録音データ</div>
             <audio controls src={selected.recording_url ? `/api/recording-proxy?url=${encodeURIComponent(selected.recording_url)}` : ""} style={{ width: "100%", borderRadius: 8 }} />
           </div>
-        )}
-
-        {selected.phone_number && (
-          <a href={`tel:${selected.phone_number}`}
-            style={{ display: "block", background: `linear-gradient(135deg,${cust.c1},${cust.c2})`, color: "#fff", borderRadius: 14, padding: "14px", textAlign: "center", fontWeight: 800, fontSize: 16, textDecoration: "none", boxShadow: "0 4px 12px rgba(37,99,235,0.3)", marginBottom: 14 }}>
-            📞 折返し電話をする
-          </a>
         )}
       </div>
     </div>
@@ -359,6 +377,17 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
                       {call.ai_summary}
                     </div>
                   )}
+                  <div style={{ marginTop: 10 }} onClick={e => e.stopPropagation()}>
+                    {normalizePhone(call.phone_number) ? (
+                      <a href={`tel:${normalizePhone(call.phone_number)}`}
+                        style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "linear-gradient(135deg,#059669,#10b981)", color: "#fff", borderRadius: 10, padding: "10px 12px", fontWeight: 800, fontSize: 13, textDecoration: "none", boxShadow: "0 2px 8px rgba(16,185,129,0.3)" }}>
+                        📞 折り返し電話する
+                        <span style={{ fontWeight: 600, fontSize: 12, opacity: 0.95 }}>{normalizePhone(call.phone_number)}</span>
+                      </a>
+                    ) : (
+                      <div style={{ fontSize: 12, color: "#9CA3AF", fontWeight: 600 }}>折返し先未取得</div>
+                    )}
+                  </div>
                   <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 8, textAlign: "right" }}>{call.case_number} ›</div>
                 </div>
               );
