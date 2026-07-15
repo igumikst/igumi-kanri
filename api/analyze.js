@@ -46,18 +46,45 @@ async function resolveCallerNumber({ rawNumber, callSid }) {
   return "";
 }
 
+async function isBlockedNumber(phoneNumber) {
+  const phone = normalizePhoneNumber(phoneNumber);
+  if (!phone) return false;
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("blocked_numbers")
+    .select("id")
+    .eq("phone_number", phone)
+    .maybeSingle();
+  if (error) throw error;
+  return !!data;
+}
+
 async function analyzeAndRegister({ transcript, recordingUrl, callSid, fromNumber }) {
   const analysis = await analyzeWithClaude(transcript);
   console.log("[analyze] Claude analysis:", JSON.stringify(analysis));
 
   const caseNumber = await generateCaseNumber();
 
+  const resolvedPhone = (analysis.phone_number && String(analysis.phone_number).trim())
+    ? String(analysis.phone_number).trim()
+    : (fromNumber || "");
+
+  let isSalesSuspect = false;
+  try {
+    isSalesSuspect = await isBlockedNumber(resolvedPhone);
+    if (isSalesSuspect) {
+      console.log("[analyze] Blocked number matched:", normalizePhoneNumber(resolvedPhone));
+    }
+  } catch (err) {
+    console.warn("[analyze] Blocked number check failed:", err.message);
+  }
+
   const call = await registerToSupabase({
-    caseNumber, analysis, transcript, recordingUrl, fromNumber,
+    caseNumber, analysis, transcript, recordingUrl, fromNumber, isSalesSuspect,
   });
   console.log("[analyze] Registered to Supabase:", call.id);
 
-  await sendLineNotification({ caseNumber, analysis, fromNumber });
+  await sendLineNotification({ caseNumber, analysis, fromNumber, isSalesSuspect });
   console.log("[analyze] LINE notification sent");
 
   return call;
@@ -125,8 +152,12 @@ async function generateCaseNumber() {
   return `TEL-${dateStr}-${seq}`;
 }
 
-async function registerToSupabase({ caseNumber, analysis, transcript, recordingUrl, fromNumber }) {
+async function registerToSupabase({ caseNumber, analysis, transcript, recordingUrl, fromNumber, isSalesSuspect }) {
   const supabase = getSupabase();
+  const tags = Array.isArray(analysis.tags) ? [...analysis.tags] : [];
+  if (isSalesSuspect && !tags.includes("営業の可能性")) {
+    tags.push("営業の可能性");
+  }
   const record = {
     case_number: caseNumber,
     received_at: new Date().toISOString(),
@@ -144,7 +175,7 @@ async function registerToSupabase({ caseNumber, analysis, transcript, recordingU
     recording_url: recordingUrl,
     status: "未対応",
     billing_checked: false,
-    tags: analysis.tags || [],
+    tags,
   };
   // 同じ案件番号が既にあればスキップ
   const { data: existing } = await supabase
@@ -162,7 +193,7 @@ async function registerToSupabase({ caseNumber, analysis, transcript, recordingU
   return data;
 }
 
-async function sendLineNotification({ caseNumber, analysis, fromNumber }) {
+async function sendLineNotification({ caseNumber, analysis, fromNumber, isSalesSuspect }) {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   if (!token) {
     console.warn("[analyze] LINE credentials missing – skipping notification");
@@ -241,6 +272,7 @@ async function sendLineNotification({ caseNumber, analysis, fromNumber }) {
 
   const urgencyEmoji = analysis.urgency === "緊急" ? "🚨" : analysis.urgency === "通常" ? "⚡" : "📋";
   const message =
+    (isSalesSuspect ? "⚠️営業の可能性あり\n" : "") +
     `【IGUMI】新規案件が入電しました\n\n` +
     `📋 案件番号：${caseNumber}\n` +
     `🏢 管理会社：${analysis.company_name || "不明"}\n` +

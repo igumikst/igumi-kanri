@@ -28,6 +28,8 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
   const [assignees, setAssignees] = useState(DEFAULT_ASSIGNEES);
   const [showAssigneeEdit, setShowAssigneeEdit] = useState(false);
   const [assigneeInput, setAssigneeInput] = useState("");
+  const [isBlockedNumber, setIsBlockedNumber] = useState(false);
+  const [blockingNumber, setBlockingNumber] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -40,6 +42,23 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
     };
     load();
   }, []);
+
+  useEffect(() => {
+    const checkBlocked = async () => {
+      const phone = normalizePhone(selected?.phone_number);
+      if (!phone) {
+        setIsBlockedNumber(false);
+        return;
+      }
+      const { data } = await supabase
+        .from("blocked_numbers")
+        .select("id")
+        .eq("phone_number", phone)
+        .maybeSingle();
+      setIsBlockedNumber(!!data);
+    };
+    checkBlocked();
+  }, [selected?.id, selected?.phone_number]);
 
   const saveTags = async (list) => {
     setCustomTags(list);
@@ -105,6 +124,22 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
     return trimmed;
   };
 
+  const registerAsSales = async () => {
+    const phone = normalizePhone(selected?.phone_number);
+    if (!phone || blockingNumber) return;
+    setBlockingNumber(true);
+    const { error } = await supabase.from("blocked_numbers").insert([{
+      phone_number: phone,
+      label: "営業電話",
+    }]);
+    if (!error || error.code === "23505") {
+      setIsBlockedNumber(true);
+    } else {
+      alert("登録に失敗しました: " + error.message);
+    }
+    setBlockingNumber(false);
+  };
+
   if (selected) return (
     <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
       <div style={{ background: `linear-gradient(135deg,${cust.c1},${cust.c2})`, padding: "16px 20px", position: "sticky", top: 0, zIndex: 50 }}>
@@ -118,6 +153,11 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
             {STATUS_CONFIG[selected.status]?.icon} {selected.status}
           </div>
         </div>
+        {selected.tags?.includes("営業の可能性") && (
+          <div style={{ marginTop: 10, display: "inline-block", background: "#FFF7ED", color: "#EA580C", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 800, border: "1.5px solid #FDBA74" }}>
+            ⚠️営業の可能性
+          </div>
+        )}
       </div>
 
       <div style={{ padding: "16px 16px 40px" }}>
@@ -225,6 +265,18 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
                 style={{ display: "block", background: `linear-gradient(135deg,#059669,#10b981)`, color: "#fff", borderRadius: 12, padding: "14px", textAlign: "center", fontWeight: 800, fontSize: 16, textDecoration: "none", boxShadow: "0 4px 12px rgba(16,185,129,0.35)" }}>
                 📞 折り返し電話する
               </a>
+              <button
+                onClick={registerAsSales}
+                disabled={isBlockedNumber || blockingNumber}
+                style={{
+                  display: "block", width: "100%", marginTop: 10, borderRadius: 12, padding: "12px",
+                  fontWeight: 800, fontSize: 14, cursor: isBlockedNumber || blockingNumber ? "default" : "pointer",
+                  border: isBlockedNumber ? "1.5px solid #FDBA74" : "1.5px solid #E5E7EB",
+                  background: isBlockedNumber ? "#FFF7ED" : "#fff",
+                  color: isBlockedNumber ? "#EA580C" : "#6B7280",
+                }}>
+                {isBlockedNumber ? "✓ 営業として登録済み" : blockingNumber ? "登録中..." : "🚫 営業として登録"}
+              </button>
             </>
           ) : (
             <div style={{ fontSize: 13, color: "#9CA3AF", fontWeight: 600 }}>折返し先未取得</div>
@@ -362,7 +414,10 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
                       <span style={{ background: sc.bg, color: sc.color, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>{sc.icon} {call.status}</span>
                       {call.urgency && uc && <span style={{ background: uc.bg, color: uc.color, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>{call.urgency}</span>}
                       {call.assignee && <span style={{ background: "#F0FDF4", color: "#059669", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>👤 {call.assignee}</span>}
-                      {call.tags?.map(tag => (
+                      {call.tags?.includes("営業の可能性") && (
+                        <span style={{ background: "#FFF7ED", color: "#EA580C", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 800, border: "1px solid #FDBA74" }}>⚠️営業の可能性</span>
+                      )}
+                      {call.tags?.filter(tag => tag !== "営業の可能性").map(tag => (
                         <span key={tag} style={{ background: "#EFF6FF", color: "#2563eb", borderRadius: 6, padding: "2px 8px", fontSize: 10, fontWeight: 600 }}>🏷 {tag}</span>
                       ))}
                     </div>
