@@ -22,7 +22,7 @@ module.exports = async (req, res) => {
     return res.status(403).send("Forbidden");
   }
 
-  const { RecordingUrl, RecordingSid, CallSid, From, RecordingStatus } = req.body;
+  const { RecordingUrl, RecordingSid, CallSid, From, Caller, RecordingStatus } = req.body;
 
   if (RecordingStatus && RecordingStatus !== "completed") {
     console.log(`[recording] Status: ${RecordingStatus} – skipping`);
@@ -35,9 +35,20 @@ module.exports = async (req, res) => {
   }
 
   const recordingMp3 = `${RecordingUrl}.mp3`;
-  console.log(`[recording] New recording: ${RecordingSid} from ${From}`);
+  console.log(`[recording] New recording: ${RecordingSid} from ${From || Caller || "unknown"}`);
 
   try {
+    let fromNumber = "";
+    try {
+      const { resolveCallerNumber } = require("./analyze");
+      fromNumber = await resolveCallerNumber({ rawNumber: From || Caller, callSid: CallSid });
+      if (fromNumber) {
+        console.log(`[recording] Resolved caller number: ${fromNumber}`);
+      }
+    } catch (callerErr) {
+      console.warn("[recording] Failed to resolve caller number:", callerErr.message);
+    }
+
     console.log(`[recording] Starting transcription...`);
     const { transcribeRecording } = require("./transcribe");
     const transcript = await transcribeRecording(recordingMp3);
@@ -48,7 +59,7 @@ module.exports = async (req, res) => {
       transcript,
       recordingUrl: recordingMp3,
       callSid: CallSid,
-      fromNumber: From,
+      fromNumber,
     });
 
     console.log(`[recording] Pipeline complete!`);

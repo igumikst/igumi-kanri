@@ -1,6 +1,51 @@
 // /api/analyze.js
 const { createClient } = require("@supabase/supabase-js");
 
+function isUsablePhoneNumber(num) {
+  if (!num || typeof num !== "string") return false;
+  const trimmed = num.trim();
+  if (!trimmed || trimmed.toLowerCase() === "anonymous") return false;
+  return true;
+}
+
+function normalizePhoneNumber(num) {
+  if (!isUsablePhoneNumber(num)) return "";
+  const trimmed = num.trim();
+  if (trimmed.startsWith("+81")) {
+    return "0" + trimmed.slice(3);
+  }
+  return trimmed;
+}
+
+async function fetchCallerFromTwilio(callSid) {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  if (!accountSid || !authToken || !callSid) return "";
+
+  const auth = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
+  const response = await fetch(
+    `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Calls/${callSid}.json`,
+    { headers: { Authorization: `Basic ${auth}` } }
+  );
+  if (!response.ok) {
+    throw new Error(`Twilio API error ${response.status}`);
+  }
+  const data = await response.json();
+  return data.from || "";
+}
+
+async function resolveCallerNumber({ rawNumber, callSid }) {
+  let number = normalizePhoneNumber(rawNumber);
+  if (isUsablePhoneNumber(number)) return number;
+
+  if (callSid) {
+    const fromApi = await fetchCallerFromTwilio(callSid);
+    number = normalizePhoneNumber(fromApi);
+    if (isUsablePhoneNumber(number)) return number;
+  }
+  return "";
+}
+
 async function analyzeAndRegister({ transcript, recordingUrl, callSid, fromNumber }) {
   const analysis = await analyzeWithClaude(transcript);
   console.log("[analyze] Claude analysis:", JSON.stringify(analysis));
@@ -87,7 +132,9 @@ async function registerToSupabase({ caseNumber, analysis, transcript, recordingU
     received_at: new Date().toISOString(),
     company_name: analysis.company_name || "",
     contact_name: analysis.contact_name || "",
-    phone_number: analysis.phone_number || fromNumber || "",
+    phone_number: (analysis.phone_number && String(analysis.phone_number).trim())
+      ? String(analysis.phone_number).trim()
+      : (fromNumber || ""),
     property_name: analysis.property_name || "",
     room_number: analysis.room_number || "",
     case_type: analysis.case_type || "その他",
@@ -236,4 +283,4 @@ function getSupabase() {
   return _supabase;
 }
 
-module.exports = { analyzeAndRegister };
+module.exports = { analyzeAndRegister, resolveCallerNumber };
