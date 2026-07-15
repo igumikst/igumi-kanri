@@ -196,6 +196,16 @@ export const PCSidebar = ({ cust, tileConf, pjs, cos, pending, page, nav, setMod
               <div style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", whiteSpace: "nowrap" }}>社内限定</div>
             </div>
           </button>
+          <button onClick={() => nav("blocked-numbers")}
+            style={{ width: "100%", padding: "9px 16px", background: page === "blocked-numbers" ? "rgba(255,255,255,0.13)" : "transparent", border: "none", color: "#fff", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, borderLeft: `3px solid ${page === "blocked-numbers" ? "#EA580C" : "transparent"}` }}>
+            <span style={{ fontSize: 18, flexShrink: 0 }}>🚫</span>
+            <div style={{ overflow: "hidden", flex: 1 }}>
+              <div style={{ fontSize: 12, fontWeight: page === "blocked-numbers" ? 800 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                迷惑電話リスト
+              </div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", whiteSpace: "nowrap" }}>登録・編集</div>
+            </div>
+          </button>
         </div>
         <div style={{ padding: "12px 16px", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
           <button onClick={() => { setEc({ ...cust }); setModal("cust"); }} style={{ width: "100%", padding: "8px 12px", background: "rgba(255,255,255,0.1)", border: "none", color: "rgba(255,255,255,0.7)", borderRadius: 8, fontSize: 11, cursor: "pointer", fontWeight: 600, textAlign: "left" }}>⚙ カスタマイズ</button>

@@ -17,6 +17,7 @@ import Board from "./pages/Board";
 import Fishing from "./pages/Fishing";
 import AutoEdit from "./pages/AutoEdit";
 import CallsPage from "./pages/CallsPage";
+import BlockedNumbers from "./pages/BlockedNumbers";
 import LineSettings from "./pages/LineSettings";
 import SystemManual from "./pages/SystemManual";
 import UserManual from "./pages/UserManual";
@@ -176,6 +177,7 @@ export default function App() {
   if (page === "fishing") return <Fishing {...commonProps} fishBoats={fishBoats} saveFishBoats={saveFishBoats} />;
   if (page === "autoedit") return <AutoEdit {...commonProps} />;
   if (page === "calls") return <CallsPage {...commonProps} calls={calls} setCalls={setCalls} />;
+  if (page === "blocked-numbers") return <BlockedNumbers {...commonProps} />;
   if (page === "linesettings") return <LineSettings {...commonProps} />;
   if (page === "systemmanual") return <SystemManual {...commonProps} />;
   if (page === "usermanual") return <UserManual {...commonProps} />;

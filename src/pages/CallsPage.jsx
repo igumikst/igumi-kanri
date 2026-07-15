@@ -30,6 +30,9 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
   const [assigneeInput, setAssigneeInput] = useState("");
   const [isBlockedNumber, setIsBlockedNumber] = useState(false);
   const [blockingNumber, setBlockingNumber] = useState(false);
+  const [showBlockModal, setShowBlockModal] = useState(false);
+  const [blockLabel, setBlockLabel] = useState("営業電話");
+  const [blockMemo, setBlockMemo] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -124,16 +127,26 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
     return trimmed;
   };
 
-  const registerAsSales = async () => {
+  const BLOCK_LABELS = ["営業電話", "いたずら・無言", "間違い電話", "その他"];
+
+  const openBlockModal = () => {
+    setBlockLabel("営業電話");
+    setBlockMemo("");
+    setShowBlockModal(true);
+  };
+
+  const registerToBlockList = async () => {
     const phone = normalizePhone(selected?.phone_number);
     if (!phone || blockingNumber) return;
     setBlockingNumber(true);
     const { error } = await supabase.from("blocked_numbers").insert([{
       phone_number: phone,
-      label: "営業電話",
+      label: blockLabel || "営業電話",
+      memo: blockMemo.trim() || null,
     }]);
     if (!error || error.code === "23505") {
       setIsBlockedNumber(true);
+      setShowBlockModal(false);
     } else {
       alert("登録に失敗しました: " + error.message);
     }
@@ -255,18 +268,17 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
 
         {/* 折り返し電話 */}
         <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
-          <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginBottom: 10 }}>📞 折返し先</div>
+          <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 10, color: normalizePhone(selected.phone_number) ? "#1F2937" : "#9CA3AF" }}>
+            📞 折返し先:{normalizePhone(selected.phone_number) || "未取得"}
+          </div>
           {normalizePhone(selected.phone_number) ? (
             <>
-              <div style={{ fontSize: 15, color: "#1F2937", fontWeight: 800, marginBottom: 10 }}>
-                📞 {normalizePhone(selected.phone_number)} に折り返す
-              </div>
               <a href={`tel:${normalizePhone(selected.phone_number)}`}
                 style={{ display: "block", background: `linear-gradient(135deg,#059669,#10b981)`, color: "#fff", borderRadius: 12, padding: "14px", textAlign: "center", fontWeight: 800, fontSize: 16, textDecoration: "none", boxShadow: "0 4px 12px rgba(16,185,129,0.35)" }}>
                 📞 折り返し電話する
               </a>
               <button
-                onClick={registerAsSales}
+                onClick={isBlockedNumber ? undefined : openBlockModal}
                 disabled={isBlockedNumber || blockingNumber}
                 style={{
                   display: "block", width: "100%", marginTop: 10, borderRadius: 12, padding: "12px",
@@ -275,13 +287,39 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
                   background: isBlockedNumber ? "#FFF7ED" : "#fff",
                   color: isBlockedNumber ? "#EA580C" : "#6B7280",
                 }}>
-                {isBlockedNumber ? "✓ 営業として登録済み" : blockingNumber ? "登録中..." : "🚫 営業として登録"}
+                {isBlockedNumber ? "✓ 迷惑リスト登録済み" : "🚫 迷惑リストに登録"}
               </button>
             </>
-          ) : (
-            <div style={{ fontSize: 13, color: "#9CA3AF", fontWeight: 600 }}>折返し先未取得</div>
-          )}
+          ) : null}
         </div>
+
+        {showBlockModal && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+            <div style={{ background: "#fff", borderRadius: 16, padding: 20, width: "100%", maxWidth: 360, boxSizing: "border-box" }}>
+              <div style={{ fontWeight: 800, fontSize: 16, color: "#1F2937", marginBottom: 4 }}>🚫 迷惑リストに登録</div>
+              <div style={{ fontSize: 13, color: "#6B7280", marginBottom: 14 }}>{normalizePhone(selected.phone_number)}</div>
+              <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginBottom: 8 }}>ラベル</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+                {BLOCK_LABELS.map(label => (
+                  <button key={label} onClick={() => setBlockLabel(label)}
+                    style={{ padding: "6px 12px", borderRadius: 20, border: `1.5px solid ${blockLabel === label ? "#EA580C" : "#E5E7EB"}`, background: blockLabel === label ? "#FFF7ED" : "#fff", color: blockLabel === label ? "#EA580C" : "#6B7280", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginBottom: 8 }}>メモ（任意）</div>
+              <input value={blockMemo} onChange={e => setBlockMemo(e.target.value)} placeholder="例: 〇〇商事の営業"
+                style={{ width: "100%", border: "1.5px solid #E5E7EB", borderRadius: 8, padding: "10px 12px", fontSize: 13, outline: "none", color: "#1F2937", boxSizing: "border-box", marginBottom: 16 }} />
+              <div style={{ display: "flex", gap: 10 }}>
+                <button onClick={() => setShowBlockModal(false)} style={{ flex: 1, padding: 12, background: "#F3F4F6", border: "none", borderRadius: 10, fontWeight: 700, cursor: "pointer", color: "#374151" }}>キャンセル</button>
+                <button onClick={registerToBlockList} disabled={blockingNumber}
+                  style={{ flex: 1, padding: 12, background: "#EA580C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, cursor: "pointer" }}>
+                  {blockingNumber ? "登録中..." : "登録する"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 基本情報 */}
         <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
@@ -337,6 +375,9 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
             <div style={{ color: "#fff", fontWeight: 800, fontSize: 18 }}>📞 電話受付案件</div>
             <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, marginTop: 2 }}>全 {calls.length} 件</div>
           </div>
+          <button onClick={() => nav("blocked-numbers")} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 8, padding: "8px 10px", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>
+            🚫
+          </button>
           <button onClick={refreshCalls} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 8, padding: "8px 14px", fontSize: 15, cursor: "pointer", fontWeight: 700 }}>
             {refreshing ? "⏳" : "🔄 更新"}
           </button>
@@ -433,15 +474,15 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
                     </div>
                   )}
                   <div style={{ marginTop: 10 }} onClick={e => e.stopPropagation()}>
+                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: normalizePhone(call.phone_number) ? "#374151" : "#9CA3AF" }}>
+                      📞 折返し先:{normalizePhone(call.phone_number) || "未取得"}
+                    </div>
                     {normalizePhone(call.phone_number) ? (
                       <a href={`tel:${normalizePhone(call.phone_number)}`}
                         style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "linear-gradient(135deg,#059669,#10b981)", color: "#fff", borderRadius: 10, padding: "10px 12px", fontWeight: 800, fontSize: 13, textDecoration: "none", boxShadow: "0 2px 8px rgba(16,185,129,0.3)" }}>
                         📞 折り返し電話する
-                        <span style={{ fontWeight: 600, fontSize: 12, opacity: 0.95 }}>{normalizePhone(call.phone_number)}</span>
                       </a>
-                    ) : (
-                      <div style={{ fontSize: 12, color: "#9CA3AF", fontWeight: 600 }}>折返し先未取得</div>
-                    )}
+                    ) : null}
                   </div>
                   <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 8, textAlign: "right" }}>{call.case_number} ›</div>
                 </div>
