@@ -69,8 +69,15 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const [mailDetail, setMailDetail] = useState(null);
   const [mailDetailLoading, setMailDetailLoading] = useState(false);
   const [aiAssist, setAiAssist] = useState(null);
+  const [isWidePC, setIsWidePC] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1024);
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
+
+  useEffect(() => {
+    const onResize = () => setIsWidePC(window.innerWidth >= 1024);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const pending = tks.filter(t => !t.done);
   const active = pjs.filter(p => p.status !== "完了" && p.status !== "中断");
@@ -819,7 +826,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
 
       {!isPC && <IgumiHeader />}
 
-      <div onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} style={{ overflow: "hidden" }}>
+      <div onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} style={{ overflow: "hidden", position: "relative" }}>
         <div style={{ display: "flex", transform: `translateX(-${currentPage * 100}%)`, transition: "transform 0.3s ease", willChange: "transform" }}>
           <div style={{ minWidth: "100%", width: "100%" }}>
             <NewHomePage />
@@ -830,13 +837,68 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
         </div>
       </div>
 
-      {!isPC && (
-        <div style={{ display: "flex", justifyContent: "center", gap: 6, paddingBottom: 16, marginTop: -10 }}>
-          {[0, 1].map(i => (
-            <div key={i} onClick={() => setCurrentPage(i)} style={{ width: i === currentPage ? 20 : 8, height: 8, borderRadius: 4, background: i === currentPage ? NAVY : "#D1D5DB", cursor: "pointer", transition: "all 0.3s" }} />
-          ))}
-        </div>
+      {isWidePC && currentPage === 0 && (
+        <button
+          onClick={() => setCurrentPage(1)}
+          aria-label="次のホーム画面へ"
+          style={{
+            position: "fixed",
+            right: isPC && rpOpen ? (RP_W || 220) + 16 : 20,
+            top: "50%",
+            transform: "translateY(-50%)",
+            zIndex: 90,
+            width: 44,
+            height: 44,
+            borderRadius: "50%",
+            border: "none",
+            background: "rgba(26,58,92,0.55)",
+            color: "#fff",
+            fontSize: 18,
+            fontWeight: 800,
+            cursor: "pointer",
+            boxShadow: "0 2px 10px rgba(0,0,0,0.18)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          ▶
+        </button>
       )}
+      {isWidePC && currentPage === 1 && (
+        <button
+          onClick={() => setCurrentPage(0)}
+          aria-label="前のホーム画面へ"
+          style={{
+            position: "fixed",
+            left: isPC ? (SB_W || 180) + 16 : 20,
+            top: "50%",
+            transform: "translateY(-50%)",
+            zIndex: 90,
+            width: 44,
+            height: 44,
+            borderRadius: "50%",
+            border: "none",
+            background: "rgba(26,58,92,0.55)",
+            color: "#fff",
+            fontSize: 18,
+            fontWeight: 800,
+            cursor: "pointer",
+            boxShadow: "0 2px 10px rgba(0,0,0,0.18)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          ◀
+        </button>
+      )}
+
+      <div style={{ display: "flex", justifyContent: "center", gap: 6, paddingBottom: 16, marginTop: -10, position: "relative", zIndex: 5 }}>
+        {[0, 1].map(i => (
+          <div key={i} onClick={() => setCurrentPage(i)} style={{ width: i === currentPage ? 20 : 8, height: 8, borderRadius: 4, background: i === currentPage ? NAVY : "#D1D5DB", cursor: "pointer", transition: "all 0.3s" }} />
+        ))}
+      </div>
 
       <SideDrawer />
 
