@@ -608,10 +608,10 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
         ]}
       />
       <FeatureCard
-        icon="🏠" title="HP" desc="公式ホームページ" bg="#f0ecfa" accent="#7c5cd6"
+        icon="🏠" title="ホームページ" desc="公式サイトを見る" bg="#f0ecfa" accent="#7c5cd6"
         onCardClick={() => window.open(HOMEPAGE_URL, "_blank")}
         pills={[
-          <Pill key="l" onClick={() => window.open(HOMEPAGE_URL, "_blank")}>HPを見る</Pill>,
+          <Pill key="l" onClick={() => window.open(HOMEPAGE_URL, "_blank")}>ホームページを見る</Pill>,
         ]}
       />
 
