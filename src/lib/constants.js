@@ -53,6 +53,8 @@ export const DEFAULT_TILE_CONF = [
   {key:"systemmanual",icon:"📘",label:"システムマニュアル",sub:"会社保管用ドキュメント",color:"#1A3A5C",visible:true},
   {key:"usermanual",icon:"📗",label:"使い方マニュアル",sub:"社員向け操作ガイド",color:"#059669",visible:true},
 ];
+export const HOMEPAGE_URL = "https://www.igumi-inc.jp";
+export const BLOG_LIST_URL = "https://www.igumi-inc.jp/blog";
 export const DEFAULT_CUST = {name:"株式会社IGUMI",sys:"案件管理システム",c1:"#1A3A5C",c2:"#2563EB",acc:"#E07B39",bg:"#F0F4F8",showSidebar:true,showRightPanel:true,showLauncher:true};
 export const PRIO = {high:{l:"高",c:"#EF4444"},mid:{l:"中",c:"#F59E0B"},low:{l:"低",c:"#10B981"}};
 export const fmt = n => n?"¥"+Number(n).toLocaleString():"—";

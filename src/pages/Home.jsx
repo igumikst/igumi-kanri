@@ -3,6 +3,7 @@ import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { Modal, Inp } from "../components/UI";
 import AiAssistModal from "../components/AiAssistModal";
 import { supabase } from "../lib/supabase";
+import { HOMEPAGE_URL, BLOG_LIST_URL } from "../lib/constants";
 
 const NAVY = "#122a4a";
 const SCHEDULE_BLUE = "#1a56a0";
@@ -607,10 +608,10 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
         ]}
       />
       <FeatureCard
-        icon="✍️" title="ブログ" desc="記事一覧・下書き管理" bg="#f0ecfa" accent="#7c5cd6"
-        onCardClick={() => window.open("https://www.igumi-inc.jp/blog", "_blank")}
+        icon="🏠" title="HP" desc="公式ホームページ" bg="#f0ecfa" accent="#7c5cd6"
+        onCardClick={() => window.open(HOMEPAGE_URL, "_blank")}
         pills={[
-          <Pill key="l" onClick={() => window.open("https://www.igumi-inc.jp/blog", "_blank")}>記事一覧を見る</Pill>,
+          <Pill key="l" onClick={() => window.open(HOMEPAGE_URL, "_blank")}>HPを見る</Pill>,
         ]}
       />
 
@@ -618,7 +619,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
         <div style={{ marginBottom: 18 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>最新のブログ記事</div>
-            <button onClick={() => window.open("https://www.igumi-inc.jp/blog", "_blank")} style={{ fontSize: 11, color: "#6366F1", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>すべて見る →</button>
+            <button onClick={() => window.open(BLOG_LIST_URL, "_blank")} style={{ fontSize: 11, color: "#6366F1", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>すべて見る →</button>
           </div>
           <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
             {blogPosts.map((post, i) => (
