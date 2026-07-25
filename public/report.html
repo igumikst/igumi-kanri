@@ -1327,7 +1327,9 @@ function saveData(){
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
   const name=reportType==='union'?document.getElementById('u-building').value:document.getElementById('prop-name').value;
-  a.download=`報告書データ_${name||'untitled'}_${new Date().toISOString().split('T')[0]}.json`;
+  let jsonFileName=`報告書データ_${name||'untitled'}_${new Date().toISOString().split('T')[0]}.json`;
+  jsonFileName=jsonFileName.normalize('NFC').replace(/ /g,'　');
+  a.download=jsonFileName;
   a.href=url;a.click();URL.revokeObjectURL(url);showToast('💾 データを保存しました');
 }
 
