@@ -437,7 +437,8 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     if (meta.type === "year") {
       const subCnt = childFolders(folder.id).length;
       const ymCnt = finFiles.filter(f => f.item_id === rootId && Number(f.year) === meta.year && !isDirectFile(f)).length;
-      return { subCnt, fileCnt: 0, ymCnt };
+      const fileCnt = finFiles.filter(f => f.item_id === folder.id && isDirectFile(f)).length;
+      return { subCnt, fileCnt, ymCnt };
     }
     const subCnt = childFolders(folder.id).length;
     const fileCnt = finFiles.filter(f => f.item_id === folder.id && isDirectFile(f)).length;
@@ -450,6 +451,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
       const parts = [];
       if (subCnt > 0) parts.push(`${subCnt}ヶ月`);
       if (ymCnt > 0) parts.push(`${ymCnt}件`);
+      if (fileCnt > 0) parts.push(`${fileCnt}ファイル`);
       return parts.length ? parts.join("・") : "タップして管理";
     }
     const parts = [];
@@ -706,9 +708,8 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
   // ── フォルダ内容画面（サブフォルダ・年フォルダ・直下ファイル）──
   if (finItem) {
     const siblings = childFolders(finItem.id);
-    const directFiles = isYearFolder(finItem) ? [] : finFiles.filter(f => f.item_id === finItem.id && isDirectFile(f));
+    const directFiles = finFiles.filter(f => f.item_id === finItem.id && isDirectFile(f));
     const breadcrumb = [...folderPath, { id: finItem.id, label: displayFolderLabel(finItem, folderMeta(finItem)), icon: displayFolderIcon(finItem, folderMeta(finItem)) }];
-    const showAddFile = !isYearFolder(finItem);
     const headerMeta = folderMeta(finItem);
 
     return layoutShell(
@@ -726,12 +727,10 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
             {!isYearFolder(finItem) && (
               <button onClick={() => openAddFolder(finItem.id)} style={{ background: "#E07B39", border: "none", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer", fontWeight: 800 }}>＋ フォルダ</button>
             )}
-            {showAddFile && (
-              <label style={{ background: "#059669", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
-                ＋ ファイル
-                <input type="file" accept="image/*,application/pdf,.xlsx,.docx,.xls,.doc" multiple onChange={async e => { for (const f of Array.from(e.target.files)) { await uploadDirectFile(f, finItem.id); } e.target.value = ""; }} style={{ display: "none" }} />
-              </label>
-            )}
+            <label style={{ background: "#059669", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
+              ＋ ファイル
+              <input type="file" accept="image/*,application/pdf,.xlsx,.docx,.xls,.doc" multiple onChange={async e => { for (const f of Array.from(e.target.files)) { await uploadDirectFile(f, finItem.id); } e.target.value = ""; }} style={{ display: "none" }} />
+            </label>
           </div>
         </div>
 
