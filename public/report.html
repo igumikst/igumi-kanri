@@ -1011,11 +1011,14 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   rtitleCell.alignment={horizontal:'center',vertical:'middle'};
 
   // 項目ブロック（各3行結合）
+  // 建築物名称・工事名称・作業実施日は表紙セル参照（数式）だと、ExcelJSが計算結果を
+  // キャッシュしないため多くのビューアで空欄になる。住所・作業者と同様に直接書き込む。
+  // 工事名称は表紙が「〜報告書」付きのため、報告書シートにはフォーム値をそのまま使う。
   const reportItems2=[
-    ['B5:B7','C5:E7','F5:F7','G5:G7','H5:S7','建築物名称',{formula:'表紙!E6'},'m'],
+    ['B5:B7','C5:E7','F5:F7','G5:G7','H5:S7','建築物名称',uBuilding,'m'],
     ['B8:B10','C8:E10','F8:F10','G8:G10','H8:S10','住所',uAddress,'g'],
-    ['B11:B13','C11:E13','F11:F13','G11:G13','H11:S13','工事名称',{formula:'表紙!B10'},'m'],
-    ['B14:B16','C14:E16','F14:F16','G14:G16','H14:S16','作業実施日',{formula:'表紙!F32'},'m'],
+    ['B11:B13','C11:E13','F11:F13','G11:G13','H11:S13','工事名称',uWorkname,'m'],
+    ['B14:B16','C14:E16','F14:F16','G14:G16','H14:S16','作業実施日',uDateStr,'m'],
     ['B17:B19','C17:E19','F17:F19','G17:G19','H17:S19','作業者',uWorker,'g'],
   ];
   reportItems2.forEach(([bMerge,cMerge,fMerge,gMerge,hMerge,label,val,valFont])=>{
@@ -1028,8 +1031,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     rws.mergeCells(gMerge);
     rws.mergeCells(hMerge);
     const vc=rws.getCell(hMerge.split(':')[0]);
-    if(typeof val==='object'&&val.formula){vc.value={formula:val.formula};}
-    else{vc.value=safeCellStr(val);}
+    vc.value=safeCellStr(val);
     vc.font=(valFont==='m')?{name:'ＭＳ Ｐ明朝',size:12,bold:false}:{name:'ＭＳ Ｐゴシック',size:12,bold:false};
     if(label==='住所'||label==='作業者')vc.font={...vc.font,bold:false};
     vc.alignment={horizontal:'left',vertical:'middle'};
