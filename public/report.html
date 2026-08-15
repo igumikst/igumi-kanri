@@ -543,7 +543,7 @@ function buildPdfCoverRow(label,value){
   return `<div class="pdf-cover-row"><div class="pdf-cover-lbl">${esc(label)}</div><div class="pdf-cover-gap"></div><div class="pdf-cover-val">${esc(value)}</div></div>`;
 }
 function buildPdfPhotoLines(caption){
-  const capLines=splitCaption(caption||'',12,8);
+  const capLines=splitCaption(caption||'',11,8);
   const lineCount=8;
   let html='';
   for(let i=0;i<lineCount;i++){
@@ -1199,7 +1199,7 @@ async function fillUnionPhotoBlock(ws,wb,p,blk,globalNo,{minchoFont,thin,hair,un
   noValCell.alignment={vertical:'middle'};
   noValCell.border={bottom:thin};
 
-  const capLines=splitCaption(safeCellStr(p.caption),12,8);
+  const capLines=splitCaption(safeCellStr(p.caption),11,8);
   for(let r1=blk.captStart+1;r1<=blk.captEnd;r1++){
     ws.mergeCells(r1,UNION_PHOTO_CAPTION_COL_START,r1,UNION_PHOTO_CAPTION_COL_END);
     const cell=ws.getCell(r1,UNION_PHOTO_CAPTION_COL_START);
@@ -1234,7 +1234,7 @@ async function fillNormalPhotoBlock(ws,wb,p,blk,globalNo,minchoFont,thin,hair){
   noValCell.alignment={vertical:'middle'};
   noValCell.border={bottom:thin};
 
-  const capLines=splitCaption(safeCellStr(p.caption),12,blk.captEnd-blk.captStart+1);
+  const capLines=splitCaption(safeCellStr(p.caption),11,blk.captEnd-blk.captStart+1);
   for(let r=blk.captStart;r<=blk.captEnd;r++){
     ws.mergeCells(r,capColStart,r,capColEnd);
     const cell=ws.getCell(r,capColStart);
@@ -1650,7 +1650,7 @@ async function embedNormalPhotoImage(ws,wb,dataUrl,blk,q){
 }
 
 // 改行を尊重しつつmaxLen文字で折り返し（最大3行）
-function splitCaption(caption,maxLen=12,maxLines=3){
+function splitCaption(caption,maxLen=11,maxLines=3){
   if(!caption)return[''];
   const lines=[];
   for(const raw of String(caption).split(/\n/)){
