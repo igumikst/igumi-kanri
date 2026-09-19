@@ -115,8 +115,12 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
 .filename-note{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.7}
 .filename-note .example{font-weight:700;color:var(--text)}
 .filename-note .caution{color:var(--orange);font-weight:700;margin-top:4px;display:block}
-.check-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:10px;cursor:pointer;user-select:none}
-.check-row input{width:18px;height:18px;accent-color:var(--navy);cursor:pointer;flex-shrink:0}
+.check-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:10px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent}
+.check-row input[type="checkbox"]{
+  width:18px;height:18px;min-width:18px;margin:0;padding:0;
+  flex-shrink:0;cursor:pointer;accent-color:var(--navy);
+  -webkit-appearance:auto;appearance:auto;border:none;background:transparent;
+}
 .check-row .check-label{font-size:13px;font-weight:700;color:var(--text);line-height:1.4}
 .check-row .check-sub{font-size:11px;color:var(--muted);font-weight:600;margin-top:2px}
 .export-note{font-size:11px;color:var(--muted);line-height:1.7;margin:-4px 0 10px;padding:10px 12px;background:#F8FAFC;border-radius:10px;border:1px solid var(--border)}
@@ -260,8 +264,8 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
       </select>
     </div>
     <div class="field" style="margin-top:10px">
-      <label>自社案件ロゴ</label>
-      <label class="check-row" for="cover-logo">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:600">自社案件ロゴ</div>
+      <label class="check-row">
         <input type="checkbox" id="cover-logo">
         <span>
           <div class="check-label">表紙にIGUMIロゴを入れる</div>
