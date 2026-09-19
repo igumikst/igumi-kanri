@@ -115,12 +115,17 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
 .filename-note{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.7}
 .filename-note .example{font-weight:700;color:var(--text)}
 .filename-note .caution{color:var(--orange);font-weight:700;margin-top:4px;display:block}
+.check-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:10px;cursor:pointer;user-select:none}
+.check-row input{width:18px;height:18px;accent-color:var(--navy);cursor:pointer;flex-shrink:0}
+.check-row .check-label{font-size:13px;font-weight:700;color:var(--text);line-height:1.4}
+.check-row .check-sub{font-size:11px;color:var(--muted);font-weight:600;margin-top:2px}
 .export-note{font-size:11px;color:var(--muted);line-height:1.7;margin:-4px 0 10px;padding:10px 12px;background:#F8FAFC;border-radius:10px;border:1px solid var(--border)}
 .export-note strong{color:var(--navy)}
 .btn-orange{background:var(--orange);color:#fff;font-size:16px;padding:15px}
 #pdf-render-root{position:fixed;left:-12000px;top:0;z-index:-1;pointer-events:none}
 .pdf-page{width:794px;height:1123px;padding:36px 44px;background:#fff;box-sizing:border-box;font-family:'Hiragino Mincho ProN','Yu Mincho','MS PMincho',serif;color:#111;overflow:hidden}
-.pdf-page.pdf-cover-page{display:flex;flex-direction:column;padding:48px 56px 40px}
+.pdf-page.pdf-cover-page{display:flex;flex-direction:column;padding:48px 56px 40px;position:relative}
+.pdf-cover-logo{position:absolute;top:16px;left:20px;height:40px;width:auto;object-fit:contain;z-index:2}
 .pdf-cover-title{text-align:center;font-size:28px;font-weight:700;letter-spacing:.35em;padding:14px 0;margin:0 auto 48px;border:3px double #111;width:88%}
 .pdf-cover-body{flex:0 0 auto}
 .pdf-cover-row{display:flex;align-items:center;border-bottom:1px solid #333;min-height:48px;margin-bottom:0;font-size:15px}
@@ -253,6 +258,16 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
         <option value="960">中（960px）</option>
         <option value="640">小（640px）</option>
       </select>
+    </div>
+    <div class="field" style="margin-top:10px">
+      <label>自社案件ロゴ</label>
+      <label class="check-row" for="cover-logo">
+        <input type="checkbox" id="cover-logo">
+        <span>
+          <div class="check-label">表紙にIGUMIロゴを入れる</div>
+          <div class="check-sub">自社案件向け・表紙左上に小さく表示</div>
+        </span>
+      </label>
     </div>
   </div>
 
@@ -564,6 +579,42 @@ function formatDateJa(dateStr,spaced=true){
   return spaced?`${y}年 ${m}月${day}日`:`${y}年${m}月${day}日`;
 }
 
+const COVER_LOGO_URL='igumi-logo.jpg';
+let coverLogoBase64Cache=null;
+
+function isCoverLogoEnabled(){
+  return !!document.getElementById('cover-logo')?.checked;
+}
+
+function buildPdfCoverLogoHtml(){
+  if(!isCoverLogoEnabled())return'';
+  return`<img class="pdf-cover-logo" src="${COVER_LOGO_URL}" alt="株式会社IGUMI">`;
+}
+
+async function getCoverLogoBase64(){
+  if(coverLogoBase64Cache)return coverLogoBase64Cache;
+  const res=await fetch(COVER_LOGO_URL);
+  if(!res.ok)throw new Error('ロゴの読み込みに失敗しました');
+  const buf=await res.arrayBuffer();
+  const bytes=new Uint8Array(buf);
+  let binary='';
+  for(let i=0;i<bytes.length;i++)binary+=String.fromCharCode(bytes[i]);
+  coverLogoBase64Cache=btoa(binary);
+  return coverLogoBase64Cache;
+}
+
+async function embedCoverLogo(ws,wb){
+  if(!isCoverLogoEnabled())return;
+  const base64=await getCoverLogoBase64();
+  const imgId=wb.addImage({base64,extension:'jpeg'});
+  // 表紙左上・タイトルや本文と重ならない小さめサイズ（640x452 → 約118x83）
+  ws.addImage(imgId,{
+    tl:{col:0.12,row:0.12},
+    ext:{width:118,height:83},
+    editAs:'oneCell'
+  });
+}
+
 function getExportFilename(ext){
   const customFn=document.getElementById('filename').value.trim();
   if(customFn){
@@ -609,7 +660,8 @@ function buildPdfPagesHtml(){
     const company=document.getElementById('u-company').value.trim();
     let uDateStr='';
     if(uDate){const d=new Date(uDate);uDateStr=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
-    pages.push(`<div class="pdf-page" style="padding:0;border:1px solid #333;box-sizing:border-box;display:flex;flex-direction:column;width:794px;height:1123px;">
+    pages.push(`<div class="pdf-page" style="padding:0;border:1px solid #333;box-sizing:border-box;display:flex;flex-direction:column;width:794px;height:1123px;position:relative;">
+      ${buildPdfCoverLogoHtml()}
       <div style="width:794px;height:1123px;display:flex;flex-direction:column;justify-content:space-around;align-items:center;padding:60px;box-sizing:border-box;">
         <div style="text-align:center;font-size:22px;font-weight:700;">${esc(building)}</div>
         <div style="text-align:center;font-size:20px;font-weight:700;">${esc(workname)}</div>
@@ -640,6 +692,7 @@ function buildPdfPagesHtml(){
     let rows=[['物　件　名',propName],['住　　　所',address],['件　　　名',workName],['作　業　日',dateStr],['施　工　者',worker]];
     if(reportType==='tama'&&workContent.trim())rows.push(['内　　　容',workContent]);
     pages.push(`<div class="pdf-page pdf-cover-page">
+      ${buildPdfCoverLogoHtml()}
       <div class="pdf-cover-title">工　事　写　真　帳</div>
       <div class="pdf-cover-body">
       ${rows.map(([l,v])=>buildPdfCoverRow(l,v)).join('')}
@@ -882,6 +935,7 @@ async function buildNormalWorkbook(wb, minchoFont, thin, double) {
 
   const cws=wb.addWorksheet('表紙');
   setupNormalCoverSheet(cws,minchoFont,double);
+  await embedCoverLogo(cws,wb);
 
   NORMAL_COVER_ITEM_ROWS.forEach(({row,label,valueKey})=>{
     fillNormalCoverItemRow(cws,row,label,fieldValues[valueKey],minchoFont,thin,row!==20);
@@ -943,6 +997,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   }
 
   cws.properties.defaultRowHeight=20;
+  await embedCoverLogo(cws,wb);
 
   // 建物名称 E6:P8（ゴシック20pt太字・中央）
   cws.mergeCells('E6:P8');
@@ -1383,7 +1438,7 @@ function ensureThumb(p){
 
 function saveData(){
   const data={reportType,
-    cover:{propName:document.getElementById('prop-name').value,address:document.getElementById('prop-address').value,workName:document.getElementById('work-name').value,workDate:document.getElementById('work-date').value,worker:document.getElementById('worker').value,content:document.getElementById('work-content').value,filename:document.getElementById('filename').value},
+    cover:{propName:document.getElementById('prop-name').value,address:document.getElementById('prop-address').value,workName:document.getElementById('work-name').value,workDate:document.getElementById('work-date').value,worker:document.getElementById('worker').value,content:document.getElementById('work-content').value,filename:document.getElementById('filename').value,coverLogo:isCoverLogoEnabled()},
     union:{building:document.getElementById('u-building').value,address:document.getElementById('u-address').value,workname:document.getElementById('u-workname').value,date:document.getElementById('u-date').value,worker:document.getElementById('u-worker').value,company:document.getElementById('u-company').value,content:document.getElementById('u-content').value},
     quality,photos:photos.map(p=>({id:p.id,dataUrl:p.dataUrl,thumbUrl:p.thumbUrl||null,caption:p.caption})),nextId};
   const blob=new Blob([JSON.stringify(data)],{type:'application/json'});
@@ -1409,6 +1464,7 @@ function loadData(e){
         document.getElementById('worker').value=data.cover.worker||'';
         document.getElementById('work-content').value=data.cover.content||'';
         document.getElementById('filename').value=data.cover.filename||'';
+        document.getElementById('cover-logo').checked=!!data.cover.coverLogo;
       }
       if(data.union){
         document.getElementById('u-building').value=data.union.building||'';
@@ -1833,6 +1889,7 @@ function confirmReset(){
     ['prop-name','prop-address','work-name','worker','work-content','u-building','u-address','u-workname','u-worker','u-company','u-content'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('work-date').value=new Date().toISOString().split('T')[0];
     document.getElementById('u-date').value=new Date().toISOString().split('T')[0];
+    document.getElementById('cover-logo').checked=false;
     closeModal();showToast('🗑 リセットしました');
   };
   document.getElementById('modal').style.display='flex';
