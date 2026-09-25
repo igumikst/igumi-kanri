@@ -126,10 +126,10 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
 .export-note{font-size:11px;color:var(--muted);line-height:1.7;margin:-4px 0 10px;padding:10px 12px;background:#F8FAFC;border-radius:10px;border:1px solid var(--border)}
 .export-note strong{color:var(--navy)}
 .btn-orange{background:var(--orange);color:#fff;font-size:16px;padding:15px}
-#pdf-render-root{position:fixed;left:0;top:0;width:794px;transform:translateX(-100vw);z-index:-1;pointer-events:none;opacity:0;overflow:hidden}
+#pdf-render-root{position:fixed;left:-10000px;top:0;width:794px;z-index:-1;pointer-events:none}
 .pdf-page{width:794px;height:1123px;padding:36px 44px;background:#fff;box-sizing:border-box;font-family:'Hiragino Mincho ProN','Yu Mincho','MS PMincho',serif;color:#111;overflow:hidden}
 .pdf-page.pdf-cover-page{display:flex;flex-direction:column;padding:48px 56px 40px;position:relative}
-.pdf-cover-logo{position:absolute;top:16px;left:20px;height:40px;width:auto;object-fit:contain;z-index:2}
+.pdf-cover-logo{position:absolute;top:14px;left:18px;height:56px;width:auto;object-fit:contain;z-index:2}
 .pdf-cover-title{text-align:center;font-size:28px;font-weight:700;letter-spacing:.35em;padding:14px 0;margin:0 auto 48px;border:3px double #111;width:88%}
 .pdf-cover-body{flex:0 0 auto}
 .pdf-cover-row{display:flex;align-items:center;border-bottom:1px solid #333;min-height:48px;margin-bottom:0;font-size:15px}
@@ -583,7 +583,7 @@ function formatDateJa(dateStr,spaced=true){
   return spaced?`${y}年 ${m}月${day}日`:`${y}年${m}月${day}日`;
 }
 
-const COVER_LOGO_URL='igumi-logo.jpg';
+const COVER_LOGO_URL='/igumi-logo.jpg';
 let coverLogoBase64Cache=null;
 let coverLogoDataUrlCache=null;
 
@@ -598,7 +598,7 @@ function buildPdfCoverLogoHtml(logoSrc){
 
 async function getCoverLogoBase64(){
   if(coverLogoBase64Cache)return coverLogoBase64Cache;
-  const res=await fetch(COVER_LOGO_URL+(COVER_LOGO_URL.includes('?')?'&':'?')+'v=1');
+  const res=await fetch(COVER_LOGO_URL+'?v=2');
   if(!res.ok)throw new Error('ロゴの読み込みに失敗しました');
   const buf=await res.arrayBuffer();
   const bytes=new Uint8Array(buf);
@@ -622,10 +622,10 @@ async function embedCoverLogo(ws,wb){
   if(!isCoverLogoEnabled())return;
   const base64=await getCoverLogoBase64();
   const imgId=wb.addImage({base64,extension:'jpeg'});
-  // 表紙左上・タイトルや本文と重ならない小さめサイズ（640x452 → 約118x83）
+  // 表紙左上（読みやすいサイズ・タイトルと重ならない）
   ws.addImage(imgId,{
-    tl:{col:0.12,row:0.12},
-    ext:{width:118,height:83},
+    tl:{col:0.1,row:0.08},
+    ext:{width:200,height:141},
     editAs:'oneCell'
   });
 }
@@ -754,18 +754,36 @@ async function waitForImages(el,timeoutMs=5000){
 
 async function renderPdfPageCanvas(el){
   const isMobile=/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)||window.innerWidth<900;
-  const scale=isMobile?1.25:2;
+  const scale=isMobile?1:1.5;
   const render=html2canvas(el,{
     scale,
     useCORS:true,
-    allowTaint:true,
+    allowTaint:false,
     backgroundColor:'#ffffff',
     logging:false,
-    imageTimeout:4000,
-    removeContainer:true
+    imageTimeout:3000,
+    removeContainer:true,
+    foreignObjectRendering:false
   });
-  const timeout=new Promise((_,reject)=>setTimeout(()=>reject(new Error('ページ変換がタイムアウトしました。写真枚数を減らすか、XLSX出力をお試しください。')),18000));
+  const timeout=new Promise((_,reject)=>setTimeout(()=>reject(new Error('ページ変換がタイムアウトしました。写真枚数を減らすか、XLSX出力をお試しください。')),20000));
   return Promise.race([render,timeout]);
+}
+
+function downloadPdfBlob(pdf,filename){
+  const blob=pdf.output('blob');
+  if(typeof saveAs==='function'){
+    saveAs(blob,filename);
+    return;
+  }
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=filename;
+  a.rel='noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
 }
 
 async function exportPdf(){
@@ -783,23 +801,26 @@ async function exportPdf(){
     root.innerHTML=buildPdfPagesHtml('');
     const pageEls=root.querySelectorAll('.pdf-page');
     const {jsPDF}=window.jspdf;
-    const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});
     for(let i=0;i<pageEls.length;i++){
-      await waitForImages(pageEls[i],4000);
+      await waitForImages(pageEls[i],3000);
       document.getElementById('loading-s').textContent=`${i+1}/${pageEls.length}ページを変換中`;
+      await sleep(30);
       const canvas=await renderPdfPageCanvas(pageEls[i]);
-      const imgData=canvas.toDataURL('image/jpeg',0.88);
+      const imgData=canvas.toDataURL('image/jpeg',0.85);
       if(i>0)pdf.addPage();
-      pdf.addImage(imgData,'JPEG',0,0,210,297);
+      pdf.addImage(imgData,'JPEG',0,0,210,297,'page'+i,'FAST');
       if(i===0&&logoDataUrl){
-        // 表紙左上（A4: 210×297mm）
-        pdf.addImage(logoDataUrl,'JPEG',7,5,30,21);
+        // 表紙左上（読みやすいサイズ）
+        pdf.addImage(logoDataUrl,'JPEG',6,4,42,30);
       }
-      await sleep(20);
+      // メモリ解放を促す
+      try{canvas.width=0;canvas.height=0;}catch(_){}
+      await sleep(40);
     }
     root.innerHTML='';
     const filename=getExportFilename('pdf');
-    pdf.save(filename);
+    downloadPdfBlob(pdf,filename);
     hideLoading();showToast(`✅ ${filename} を出力しました`);
   }catch(err){
     root.innerHTML='';
@@ -863,7 +884,7 @@ const NORMAL_COVER_COLS={
   L:4.3984375
 };
 const NORMAL_COVER_TITLE='報　　　告　　　書';
-const NORMAL_COVER_J_MERGE_ROWS=[1,2,3,4,5,32,33,34];
+const NORMAL_COVER_J_MERGE_ROWS=[1,2,3,4,5];
 const NORMAL_COVER_ITEM_ROWS=[
   {row:12,label:'物　件　名',valueKey:'propName'},
   {row:14,label:'住　　　所',valueKey:'address'},
@@ -873,13 +894,15 @@ const NORMAL_COVER_ITEM_ROWS=[
 ];
 
 function applyNormalCoverRowHeights(ws){
-  [1,2,3,4,5,11,21,22,27,28,29,30,31,32,33,34].forEach(r=>{ws.getRow(r).height=30;});
+  // 印刷範囲はA1:L28。29行以降を高くするとExcel→PDF変換で空白ページが増える
+  [1,2,3,4,5,11,21,22,27,28].forEach(r=>{ws.getRow(r).height=30;});
   ws.getRow(6).height=45.75;
   ws.getRow(7).height=13.8;
   ws.getRow(10).height=16.2;
   [12,14,16,18,20].forEach(r=>{ws.getRow(r).height=65.1;});
   [13,15,17,19].forEach(r=>{ws.getRow(r).height=20.1;});
   ws.getRow(26).height=16.2;
+  for(let r=29;r<=34;r++)ws.getRow(r).height=1;
 }
 
 const NORMAL_SHEET_VIEWS=[{style:'pageBreakPreview',zoomScale:85,zoomScaleNormal:100}];
@@ -944,7 +967,8 @@ function fillNormalCoverItemRow(cws,row,label,value,minchoFont,thin,nextRowTop=t
 
 const FREE_SHEET_COLS=Object.fromEntries('ABCDEFGHIJKLMNOPQRSTU'.split('').map(c=>[c,4.19921875]));
 function setupFreeSheet(wb){
-  const ws=wb.addWorksheet('自由シート');
+  // Excel全体をPDF化すると空白ページ大量になるため非表示（必要なら再表示して利用）
+  const ws=wb.addWorksheet('自由シート',{state:'hidden'});
   ws.views=NORMAL_SHEET_VIEWS;
   ws.properties.defaultRowHeight=13.2;
   ws.properties.defaultColWidth=4.19921875;
@@ -955,7 +979,10 @@ function setupFreeSheet(wb){
   ws.pageSetup.paperSize=9;
   ws.pageSetup.scale=90;
   ws.pageSetup.orientation='portrait';
-  ws.pageSetup.printArea='A1:U65';
+  ws.pageSetup.printArea='A1:A1';
+  ws.pageSetup.fitToPage=true;
+  ws.pageSetup.fitToWidth=1;
+  ws.pageSetup.fitToHeight=1;
   ws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
 
   // 全セルをXMLに書き出させる(iOSプレビュー対策)
@@ -1329,9 +1356,10 @@ function ensureUnionPhotoSheetGrid(ws){
   }
 }
 function ensureNormalPhotoSheetGrid(ws){
+  // 印刷範囲はA1:L37。M列まで書くとExcel→PDFで見切れ・余分ページの原因になる
   for(let r=1;r<=NORMAL_PHOTO_SHEET_ROWS;r++){
-    ensureRowCells(ws,r,'A','M');
-    for(let c=1;c<=13;c++){
+    ensureRowCells(ws,r,'A','L');
+    for(let c=1;c<=12;c++){
       const cell=ws.getCell(r,c);
       if(cell.value==null)cell.value='';
     }
@@ -1455,6 +1483,8 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
     ws.pageSetup.fitToPage=false;
     ws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
     ws.pageSetup.printArea='A1:L37';
+    ws.pageSetup.horizontalCentered=false;
+    ws.pageSetup.verticalCentered=false;
 
     applyNormalPhotoSheetColWidths(ws);
     ensureNormalPhotoSheetGrid(ws);
@@ -1743,7 +1773,12 @@ function fillCoverRows(out,merges,rows,opts={}){
 }
 
 function fixCoverSheetXml(xml){
-  if(isNormalCoverSheet(xml))return fixPageSetupXml(xml,91);
+  if(isNormalCoverSheet(xml)){
+    let out=fixPageSetupXml(xml,91);
+    // 印刷範囲外の行を使ったused rangeだとExcel→PDFで空白ページが増える
+    out=out.replace(/<dimension ref="[^"]*"/,'<dimension ref="A1:L28"');
+    return out;
+  }
   xml=xml.replace(/<sheetPr>\s*<pageSetUpPr[^>]*\/>\s*<\/sheetPr>\s*/g,'');
   return xml;
 }
@@ -1773,7 +1808,7 @@ function fixNormalPhotoSheetXml(xml){
   });
   out=updateMergeCellsCount(out);
   let merges=parseMergeCells(out);
-  out=fillCoverRows(out,merges,Array.from({length:NORMAL_PHOTO_SHEET_ROWS},(_,i)=>i+1),{cols:'ABCDEFGHIJKLM',spanEnd:13});
+  out=fillCoverRows(out,merges,Array.from({length:NORMAL_PHOTO_SHEET_ROWS},(_,i)=>i+1),{cols:'ABCDEFGHIJKL',spanEnd:12});
   return updateMergeCellsCount(out);
 }
 
