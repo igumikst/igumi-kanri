@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
+import { markLeavingForTel, consumeResumeCallId } from "../lib/androidResume";
 
 const STATUS_CONFIG = {
   "未対応": { color: "#ef4444", bg: "#fef2f2", icon: "🔴" },
@@ -17,7 +18,49 @@ const URGENCY_CONFIG = {
 const DEFAULT_TAGS = ["漏水", "設備不具合", "緊急対応", "見積依頼", "定期点検", "その他"];
 const DEFAULT_ASSIGNEES = ["﨑岡", "後藤", "赤岡", "上村", "綱島", "伊藤"];
 
+const normalizeTags = (tags) => {
+  if (Array.isArray(tags)) return tags.filter(t => typeof t === "string");
+  if (typeof tags === "string" && tags.trim()) {
+    try {
+      const parsed = JSON.parse(tags);
+      if (Array.isArray(parsed)) return parsed.filter(t => typeof t === "string");
+    } catch {
+      return tags.split(",").map(t => t.trim()).filter(Boolean);
+    }
+  }
+  return [];
+};
+
+const RecordingPlayer = ({ recordingUrl }) => {
+  const [active, setActive] = useState(false);
+  if (!recordingUrl) return null;
+  const src = `/api/recording-proxy?url=${encodeURIComponent(recordingUrl)}`;
+  if (!active) {
+    return (
+      <button
+        type="button"
+        onClick={() => setActive(true)}
+        style={{ width: "100%", padding: "12px", borderRadius: 10, border: "1.5px solid #E5E7EB", background: "#F8FAFF", color: "#1A3A5C", fontWeight: 800, fontSize: 13, cursor: "pointer" }}
+      >
+        ▶️ 録音を再生する
+      </button>
+    );
+  }
+  return (
+    <audio
+      controls
+      preload="metadata"
+      playsInline
+      src={src}
+      style={{ width: "100%", borderRadius: 8 }}
+    />
+  );
+};
+
 export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
+  const safeCalls = Array.isArray(calls) ? calls : [];
+  const c1 = cust?.c1 || "#1A3A5C";
+  const c2 = cust?.c2 || "#2563EB";
   const [selected, setSelected] = useState(null);
   const [filterStatus, setFilterStatus] = useState("未対応");
   const [filterTag, setFilterTag] = useState("すべて");
@@ -46,6 +89,14 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
     load();
   }, []);
 
+  // Android で tel: 復帰リロード後に詳細画面を復元
+  useEffect(() => {
+    const callId = consumeResumeCallId();
+    if (!callId || !safeCalls.length) return;
+    const found = safeCalls.find(c => String(c.id) === String(callId));
+    if (found) setSelected(found);
+  }, [safeCalls.length]);
+
   useEffect(() => {
     const checkBlocked = async () => {
       const phone = normalizePhone(selected?.phone_number);
@@ -53,12 +104,16 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
         setIsBlockedNumber(false);
         return;
       }
-      const { data } = await supabase
-        .from("blocked_numbers")
-        .select("id")
-        .eq("phone_number", phone)
-        .maybeSingle();
-      setIsBlockedNumber(!!data);
+      try {
+        const { data } = await supabase
+          .from("blocked_numbers")
+          .select("id")
+          .eq("phone_number", phone)
+          .maybeSingle();
+        setIsBlockedNumber(!!data);
+      } catch {
+        setIsBlockedNumber(false);
+      }
     };
     checkBlocked();
   }, [selected?.id, selected?.phone_number]);
@@ -75,9 +130,9 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
 
   const allTags = ["すべて", ...customTags];
 
-  const filtered = calls
+  const filtered = safeCalls
     .filter(c => filterStatus === "すべて" || c.status === filterStatus)
-    .filter(c => filterTag === "すべて" || (c.tags && c.tags.includes(filterTag)));
+    .filter(c => filterTag === "すべて" || normalizeTags(c.tags).includes(filterTag));
 
   const refreshCalls = async () => {
     setRefreshing(true);
@@ -104,7 +159,7 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
   };
 
   const toggleTag = async (callId, tag, currentTags) => {
-    const tags = currentTags || [];
+    const tags = normalizeTags(currentTags);
     const newTags = tags.includes(tag) ? tags.filter(t => t !== tag) : [...tags, tag];
     const { error } = await supabase.from("calls").update({ tags: newTags }).eq("id", callId);
     if (!error) {
@@ -116,6 +171,7 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
   const formatDate = (iso) => {
     if (!iso) return "";
     const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
     return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   };
 
@@ -125,6 +181,10 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
     if (!trimmed) return "";
     if (trimmed.startsWith("+81")) return "0" + trimmed.slice(3);
     return trimmed;
+  };
+
+  const onTelClick = (callId) => {
+    markLeavingForTel("calls", callId);
   };
 
   const BLOCK_LABELS = ["営業電話", "いたずら・無言", "間違い電話", "その他"];
@@ -153,20 +213,23 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
     setBlockingNumber(false);
   };
 
+  const selectedTags = normalizeTags(selected?.tags);
+  const selectedStatus = STATUS_CONFIG[selected?.status] || STATUS_CONFIG["未対応"];
+
   if (selected) return (
-    <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
-      <div style={{ background: `linear-gradient(135deg,${cust.c1},${cust.c2})`, padding: "16px 20px", position: "sticky", top: 0, zIndex: 50 }}>
+    <div style={{ fontFamily: "system-ui,'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
+      <div style={{ background: `linear-gradient(135deg,${c1},${c2})`, padding: "16px 20px", position: "sticky", top: 0, zIndex: 50 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button onClick={() => setSelected(null)} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>← 戻る</button>
           <div style={{ flex: 1 }}>
             <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 11 }}>{selected.case_number}</div>
             <div style={{ color: "#fff", fontWeight: 800, fontSize: 16 }}>案件詳細</div>
           </div>
-          <div style={{ background: STATUS_CONFIG[selected.status]?.bg, color: STATUS_CONFIG[selected.status]?.color, borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 700 }}>
-            {STATUS_CONFIG[selected.status]?.icon} {selected.status}
+          <div style={{ background: selectedStatus.bg, color: selectedStatus.color, borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 700 }}>
+            {selectedStatus.icon} {selected.status || "未対応"}
           </div>
         </div>
-        {selected.tags?.includes("営業の可能性") && (
+        {selectedTags.includes("営業の可能性") && (
           <div style={{ marginTop: 10, display: "inline-block", background: "#FFF7ED", color: "#EA580C", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 800, border: "1.5px solid #FDBA74" }}>
             ⚠️営業の可能性
           </div>
@@ -174,7 +237,6 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
       </div>
 
       <div style={{ padding: "16px 16px 40px" }}>
-        {/* ステータス変更 */}
         <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
           <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginBottom: 10 }}>ステータス変更</div>
           <div style={{ display: "flex", gap: 8 }}>
@@ -187,24 +249,23 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
           </div>
         </div>
 
-        {/* 対応者選択 */}
         <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700 }}>👤 対応者</div>
-            <button onClick={() => setShowAssigneeEdit(p => !p)} style={{ fontSize: 11, color: cust.c1, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>✏️ 名前編集</button>
+            <button onClick={() => setShowAssigneeEdit(p => !p)} style={{ fontSize: 11, color: c1, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>✏️ 名前編集</button>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {assignees.map(name => {
               const isSelected = selected.assignee === name;
               return (
                 <button key={name} onClick={() => updateAssignee(selected.id, name)}
-                  style={{ padding: "7px 16px", borderRadius: 20, border: `2px solid ${isSelected ? cust.c1 : "#E5E7EB"}`, background: isSelected ? cust.c1 : "#fff", color: isSelected ? "#fff" : "#374151", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                  style={{ padding: "7px 16px", borderRadius: 20, border: `2px solid ${isSelected ? c1 : "#E5E7EB"}`, background: isSelected ? c1 : "#fff", color: isSelected ? "#fff" : "#374151", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
                   {isSelected ? "✓ " : ""}{name}
                 </button>
               );
             })}
           </div>
-          {selected.assignee && <div style={{ marginTop: 10, fontSize: 12, color: "#6B7280" }}>現在の対応者：<span style={{ fontWeight: 700, color: cust.c1 }}>{selected.assignee}</span></div>}
+          {selected.assignee && <div style={{ marginTop: 10, fontSize: 12, color: "#6B7280" }}>現在の対応者：<span style={{ fontWeight: 700, color: c1 }}>{selected.assignee}</span></div>}
           {showAssigneeEdit && (
             <div style={{ marginTop: 14, borderTop: "1px solid #F3F4F6", paddingTop: 14 }}>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
@@ -221,24 +282,23 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
                   placeholder="名前を追加..."
                   style={{ flex: 1, border: "1.5px solid #E5E7EB", borderRadius: 8, padding: "7px 12px", fontSize: 13, outline: "none", color: "#1F2937" }} />
                 <button onClick={() => { if (assigneeInput.trim()) { saveAssignees([...assignees, assigneeInput.trim()]); setAssigneeInput(""); }}}
-                  style={{ background: cust.c1, border: "none", color: "#fff", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>追加</button>
+                  style={{ background: c1, border: "none", color: "#fff", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>追加</button>
               </div>
             </div>
           )}
         </div>
 
-        {/* タグ */}
         <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700 }}>🏷 タグ</div>
-            <button onClick={() => setShowTagEdit(p => !p)} style={{ fontSize: 11, color: cust.c1, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>✏️ タグ編集</button>
+            <button onClick={() => setShowTagEdit(p => !p)} style={{ fontSize: 11, color: c1, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>✏️ タグ編集</button>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {customTags.map(tag => {
-              const active = selected.tags?.includes(tag);
+              const active = selectedTags.includes(tag);
               return (
                 <button key={tag} onClick={() => toggleTag(selected.id, tag, selected.tags)}
-                  style={{ padding: "5px 12px", borderRadius: 20, border: `1.5px solid ${active ? cust.c1 : "#E5E7EB"}`, background: active ? cust.c1 : "#fff", color: active ? "#fff" : "#6B7280", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                  style={{ padding: "5px 12px", borderRadius: 20, border: `1.5px solid ${active ? c1 : "#E5E7EB"}`, background: active ? c1 : "#fff", color: active ? "#fff" : "#6B7280", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
                   {active ? "✓ " : ""}{tag}
                 </button>
               );
@@ -260,21 +320,23 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
                   placeholder="新しいタグを入力..."
                   style={{ flex: 1, border: "1.5px solid #E5E7EB", borderRadius: 8, padding: "7px 12px", fontSize: 13, outline: "none", color: "#1F2937" }} />
                 <button onClick={() => { if (tagInput.trim()) { saveTags([...customTags, tagInput.trim()]); setTagInput(""); }}}
-                  style={{ background: cust.c1, border: "none", color: "#fff", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>追加</button>
+                  style={{ background: c1, border: "none", color: "#fff", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>追加</button>
               </div>
             </div>
           )}
         </div>
 
-        {/* 折り返し電話 */}
         <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
           <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 10, color: normalizePhone(selected.phone_number) ? "#1F2937" : "#9CA3AF" }}>
             📞 折返し先:{normalizePhone(selected.phone_number) || "未取得"}
           </div>
           {normalizePhone(selected.phone_number) ? (
             <>
-              <a href={`tel:${normalizePhone(selected.phone_number)}`}
-                style={{ display: "block", background: `linear-gradient(135deg,#059669,#10b981)`, color: "#fff", borderRadius: 12, padding: "14px", textAlign: "center", fontWeight: 800, fontSize: 16, textDecoration: "none", boxShadow: "0 4px 12px rgba(16,185,129,0.35)" }}>
+              <a
+                href={`tel:${normalizePhone(selected.phone_number)}`}
+                onClick={() => onTelClick(selected.id)}
+                style={{ display: "block", background: "linear-gradient(135deg,#059669,#10b981)", color: "#fff", borderRadius: 12, padding: "14px", textAlign: "center", fontWeight: 800, fontSize: 16, textDecoration: "none", boxShadow: "0 4px 12px rgba(16,185,129,0.35)" }}
+              >
                 📞 折り返し電話する
               </a>
               <button
@@ -321,7 +383,6 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
           </div>
         )}
 
-        {/* 基本情報 */}
         <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
           <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginBottom: 10 }}>📋 基本情報</div>
           {[
@@ -336,7 +397,7 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
             <div key={label} style={{ display: "flex", gap: 12, padding: "7px 0", borderBottom: "1px solid #F3F4F6" }}>
               <div style={{ fontSize: 12, color: "#9CA3AF", width: 72, flexShrink: 0 }}>{label}</div>
               <div style={{ fontSize: 13, color: "#1F2937", fontWeight: 600, flex: 1 }}>
-                {label === "緊急度" ? <span style={{ background: URGENCY_CONFIG[value]?.bg, color: URGENCY_CONFIG[value]?.color, borderRadius: 6, padding: "2px 8px", fontSize: 12, fontWeight: 700 }}>{value}</span> : value}
+                {label === "緊急度" ? <span style={{ background: URGENCY_CONFIG[value]?.bg || "#f9fafb", color: URGENCY_CONFIG[value]?.color || "#6B7280", borderRadius: 6, padding: "2px 8px", fontSize: 12, fontWeight: 700 }}>{value}</span> : value}
               </div>
             </div>
           ) : null)}
@@ -352,14 +413,14 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
         {selected.transcript && (
           <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
             <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginBottom: 8 }}>📝 文字起こし全文</div>
-            <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.8, background: "#F9FAFB", borderRadius: 10, padding: "12px 14px", whiteSpace: "pre-wrap" }}>{selected.transcript}</div>
+            <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.8, background: "#F9FAFB", borderRadius: 10, padding: "12px 14px", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{selected.transcript}</div>
           </div>
         )}
 
         {selected.recording_url && (
           <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
             <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginBottom: 8 }}>🎙 録音データ</div>
-            <audio controls src={selected.recording_url ? `/api/recording-proxy?url=${encodeURIComponent(selected.recording_url)}` : ""} style={{ width: "100%", borderRadius: 8 }} />
+            <RecordingPlayer recordingUrl={selected.recording_url} />
           </div>
         )}
       </div>
@@ -367,13 +428,13 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
   );
 
   return (
-    <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
-      <div style={{ background: `linear-gradient(135deg,${cust.c1},${cust.c2})`, padding: "16px 20px 24px", position: "sticky", top: 0, zIndex: 50 }}>
+    <div style={{ fontFamily: "system-ui,'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
+      <div style={{ background: `linear-gradient(135deg,${c1},${c2})`, padding: "16px 20px 24px", position: "sticky", top: 0, zIndex: 50 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
           <button onClick={() => nav("home")} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>← ホーム</button>
           <div style={{ flex: 1 }}>
             <div style={{ color: "#fff", fontWeight: 800, fontSize: 18 }}>📞 電話受付案件</div>
-            <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, marginTop: 2 }}>全 {calls.length} 件</div>
+            <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, marginTop: 2 }}>全 {safeCalls.length} 件</div>
           </div>
           <button onClick={() => nav("blocked-numbers")} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 8, padding: "8px 10px", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>
             🚫
@@ -385,7 +446,7 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
         <div style={{ display: "flex", gap: 8 }}>
           {Object.entries(STATUS_CONFIG).map(([s, conf]) => (
             <div key={s} style={{ flex: 1, background: "rgba(255,255,255,0.15)", borderRadius: 10, padding: "8px 4px", textAlign: "center" }}>
-              <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>{calls.filter(c => c.status === s).length}</div>
+              <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>{safeCalls.filter(c => c.status === s).length}</div>
               <div style={{ fontSize: 10, color: "rgba(255,255,255,0.75)", marginTop: 2 }}>{conf.icon} {s}</div>
             </div>
           ))}
@@ -396,7 +457,7 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
         <div style={{ display: "flex", gap: 8, marginBottom: 10, overflowX: "auto" }}>
           {["すべて", "未対応", "対応中", "完了"].map(s => (
             <button key={s} onClick={() => setFilterStatus(s)}
-              style={{ flexShrink: 0, padding: "6px 16px", borderRadius: 20, border: "none", fontWeight: 700, fontSize: 12, cursor: "pointer", background: filterStatus === s ? cust.c1 : "#fff", color: filterStatus === s ? "#fff" : "#6B7280", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
+              style={{ flexShrink: 0, padding: "6px 16px", borderRadius: 20, border: "none", fontWeight: 700, fontSize: 12, cursor: "pointer", background: filterStatus === s ? c1 : "#fff", color: filterStatus === s ? "#fff" : "#6B7280", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
               {s}
             </button>
           ))}
@@ -405,7 +466,7 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
         <div style={{ display: "flex", gap: 6, marginBottom: 16, overflowX: "auto", alignItems: "center" }}>
           {allTags.map(tag => (
             <button key={tag} onClick={() => setFilterTag(tag)}
-              style={{ flexShrink: 0, padding: "4px 12px", borderRadius: 20, border: `1.5px solid ${filterTag === tag ? cust.c1 : "#E5E7EB"}`, fontWeight: 600, fontSize: 11, cursor: "pointer", background: filterTag === tag ? cust.c1 : "#fff", color: filterTag === tag ? "#fff" : "#9CA3AF" }}>
+              style={{ flexShrink: 0, padding: "4px 12px", borderRadius: 20, border: `1.5px solid ${filterTag === tag ? c1 : "#E5E7EB"}`, fontWeight: 600, fontSize: 11, cursor: "pointer", background: filterTag === tag ? c1 : "#fff", color: filterTag === tag ? "#fff" : "#9CA3AF" }}>
               🏷 {tag}
             </button>
           ))}
@@ -432,7 +493,7 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
                 placeholder="新しいタグを入力..."
                 style={{ flex: 1, border: "1.5px solid #E5E7EB", borderRadius: 8, padding: "7px 12px", fontSize: 13, outline: "none", color: "#1F2937" }} />
               <button onClick={() => { if (tagInput.trim()) { saveTags([...customTags, tagInput.trim()]); setTagInput(""); }}}
-                style={{ background: cust.c1, border: "none", color: "#fff", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>追加</button>
+                style={{ background: c1, border: "none", color: "#fff", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>追加</button>
             </div>
           </div>
         )}
@@ -447,6 +508,7 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
             {filtered.map(call => {
               const sc = STATUS_CONFIG[call.status] || STATUS_CONFIG["未対応"];
               const uc = URGENCY_CONFIG[call.urgency];
+              const tags = normalizeTags(call.tags);
               return (
                 <div key={call.id} onClick={() => setSelected(call)}
                   style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", cursor: "pointer", borderLeft: `4px solid ${sc.color}` }}>
@@ -455,10 +517,10 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
                       <span style={{ background: sc.bg, color: sc.color, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>{sc.icon} {call.status}</span>
                       {call.urgency && uc && <span style={{ background: uc.bg, color: uc.color, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>{call.urgency}</span>}
                       {call.assignee && <span style={{ background: "#F0FDF4", color: "#059669", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>👤 {call.assignee}</span>}
-                      {call.tags?.includes("営業の可能性") && (
+                      {tags.includes("営業の可能性") && (
                         <span style={{ background: "#FFF7ED", color: "#EA580C", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 800, border: "1px solid #FDBA74" }}>⚠️営業の可能性</span>
                       )}
-                      {call.tags?.filter(tag => tag !== "営業の可能性").map(tag => (
+                      {tags.filter(tag => tag !== "営業の可能性").map(tag => (
                         <span key={tag} style={{ background: "#EFF6FF", color: "#2563eb", borderRadius: 6, padding: "2px 8px", fontSize: 10, fontWeight: 600 }}>🏷 {tag}</span>
                       ))}
                     </div>
@@ -478,8 +540,11 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
                       📞 折返し先:{normalizePhone(call.phone_number) || "未取得"}
                     </div>
                     {normalizePhone(call.phone_number) ? (
-                      <a href={`tel:${normalizePhone(call.phone_number)}`}
-                        style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "linear-gradient(135deg,#059669,#10b981)", color: "#fff", borderRadius: 10, padding: "10px 12px", fontWeight: 800, fontSize: 13, textDecoration: "none", boxShadow: "0 2px 8px rgba(16,185,129,0.3)" }}>
+                      <a
+                        href={`tel:${normalizePhone(call.phone_number)}`}
+                        onClick={() => onTelClick(call.id)}
+                        style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "linear-gradient(135deg,#059669,#10b981)", color: "#fff", borderRadius: 10, padding: "10px 12px", fontWeight: 800, fontSize: 13, textDecoration: "none", boxShadow: "0 2px 8px rgba(16,185,129,0.3)" }}
+                      >
                         📞 折り返し電話する
                       </a>
                     ) : null}
