@@ -8,7 +8,6 @@ import { HOMEPAGE_URL, BLOG_LIST_URL } from "../lib/constants";
 const NAVY = "#122a4a";
 const SCHEDULE_BLUE = "#1a56a0";
 const BG = "#eef1f6";
-const WD = ["日", "月", "火", "水", "木", "金", "土"];
 
 const CAT_COLOR_MAP = {
   "現調": "#2563eb", "調査": "#16a34a", "工事": "#9333ea",
@@ -96,7 +95,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const storageP = Math.min((totalMB / 1024) * 100, 100);
   const storageCol = storageP > 80 ? "#EF4444" : storageP > 50 ? "#F59E0B" : "#059669";
   const fmtMB = mb => mb < 1 ? `${(mb * 1024).toFixed(0)}KB` : `${mb.toFixed(1)}MB`;
-  const weatherIcon = code => code === 0 ? "☀️" : code <= 2 ? "🌤" : code === 3 ? "☁️" : code <= 48 ? "🌫" : code <= 55 ? "🌦" : code <= 65 ? "🌧" : code <= 75 ? "🌨" : code <= 82 ? "🌦" : code <= 99 ? "⛈" : "🌡";
 
   useEffect(() => {
     const fetch7Days = async () => {
