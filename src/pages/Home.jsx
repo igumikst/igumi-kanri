@@ -55,7 +55,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const [showStorage, setShowStorage] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [bannerMode, setBannerMode] = useState("schedule");
   const [calBase, setCalBase] = useState(0);
   const [weekSchedules, setWeekSchedules] = useState([]);
   const [todaySchedules, setTodaySchedules] = useState([]);
@@ -417,7 +416,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
     </div>
   );
 
-  const ScheduleCalendar = ({ showDashToggle = false }) => {
+  const ScheduleCalendar = () => {
     const WD_JP = ["日", "月", "火", "水", "木", "金", "土"];
     const days = [0, 1, 2, 3].map(i => {
       const d = new Date(); d.setDate(d.getDate() + calBase + i);
@@ -428,9 +427,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
         <div style={{ background: SCHEDULE_BLUE, padding: "9px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ color: "#fff", fontWeight: 800, fontSize: 14 }}>📅 スケジュール</span>
-            {showDashToggle && (
-              <button onClick={() => setBannerMode("dashboard")} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 5, padding: "2px 7px", fontSize: 11, cursor: "pointer" }}>📊</button>
-            )}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <button onClick={() => setCalBase(b => Math.max(0, b - 4))} disabled={calBase === 0}
@@ -478,42 +474,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
       </div>
     );
   };
-
-  const DashboardBanner = () => (
-    <div style={{ background: "linear-gradient(135deg, #1A3A5C, #2563EB)", borderRadius: 16, padding: "18px 20px", marginBottom: 16, boxShadow: "0 4px 16px rgba(37,99,235,0.25)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <div style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>📊 今日の状況</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 11 }}>{new Date().toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "short" })}</div>
-          <button onClick={() => setCurrentPage(1)} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "rgba(255,255,255,0.85)", borderRadius: 6, padding: "3px 8px", fontSize: 11, cursor: "pointer", marginLeft: 4 }}>📅</button>
-        </div>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        {[
-          { label: "進行中案件", value: `${active.length}件`, color: "#60A5FA", action: () => nav("projects") },
-          { label: "未完了タスク", value: `${pending.length}件`, color: "#F87171", action: () => nav("tasks") },
-          { label: "未対応電話", value: `${pendingCallsCount}件`, color: "#FBBF24", action: () => nav("calls") },
-          { label: "取引先", value: `${cos.length}社`, color: "#34D399", action: () => nav("companies") },
-        ].map(item => (
-          <div key={item.label} onClick={item.action} style={{ background: "rgba(255,255,255,0.1)", borderRadius: 12, padding: "12px", cursor: "pointer" }}>
-            <div style={{ fontSize: 20, fontWeight: 900, color: item.color }}>{item.value}</div>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.65)", marginTop: 2 }}>{item.label}</div>
-          </div>
-        ))}
-      </div>
-      {weekWeather && (
-        <div style={{ marginTop: 12, display: "flex", gap: 4, overflowX: "auto" }}>
-          {weekWeather.map((d, i) => (
-            <div key={i} style={{ flex: 1, minWidth: 32, textAlign: "center" }}>
-              <div style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>{i === 0 ? "今日" : WD[d.weekday]}</div>
-              <div style={{ fontSize: 14 }}>{weatherIcon(d.code)}</div>
-              <div style={{ fontSize: 9, fontWeight: 700, color: "#fff" }}>{d.max}°</div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 
   const FeatureCard = ({ icon, title, desc, bg, accent, onCardClick, pills, extraLink }) => (
     <div onClick={onCardClick} style={{ background: bg, borderRadius: 14, padding: "14px 16px", marginBottom: 10, cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.04)", borderLeft: `4px solid ${accent}` }}>
@@ -624,28 +584,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
 
   const NewHomePage = () => (
     <div style={{ padding: "16px 16px 30px" }}>
-      {bannerMode === "dashboard" ? (
-        <DashboardBanner />
-      ) : (
-        <div
-          onClick={() => setCurrentPage(1)}
-          style={{ background: SCHEDULE_BLUE, borderRadius: 14, padding: "12px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10, cursor: "pointer", boxShadow: "0 2px 10px rgba(26,86,160,0.2)" }}
-        >
-          <span style={{ fontSize: 18 }}>📅</span>
-          <div style={{ flex: 1 }}>
-            <div style={{ color: "#fff", fontWeight: 800, fontSize: 14 }}>スケジュール</div>
-            <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, marginTop: 2 }}>
-              {todaySchedules.length > 0 ? `今日 ${todaySchedules.length}件 · 左にフリックで開く` : "左にフリックで開く"}
-            </div>
-          </div>
-          <button
-            onClick={(e) => { e.stopPropagation(); setBannerMode("dashboard"); }}
-            style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer" }}
-          >📊</button>
-          <span style={{ color: "rgba(255,255,255,0.85)", fontSize: 16, fontWeight: 700 }}>›</span>
-        </div>
-      )}
-
       <FeatureCard
         icon="📸" title="報告書作成" desc="現場の記録を作成・管理します" bg="#e8f7f0" accent="#22a06b"
         onCardClick={() => window.open("/report.html", "_blank")}
