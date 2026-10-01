@@ -375,13 +375,14 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
     touchStartY.current = e.touches[0].clientY;
   };
 
+  const HOME_PAGE_COUNT = 3;
   const handleTouchEnd = (e) => {
     if (touchStartX.current === null) return;
     const dx = e.changedTouches[0].clientX - touchStartX.current;
     const dy = e.changedTouches[0].clientY - touchStartY.current;
     if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
-      if (dx < 0 && currentPage < 1) setCurrentPage(1);
-      if (dx > 0 && currentPage > 0) setCurrentPage(0);
+      if (dx < 0 && currentPage < HOME_PAGE_COUNT - 1) setCurrentPage(p => p + 1);
+      if (dx > 0 && currentPage > 0) setCurrentPage(p => p - 1);
     }
     touchStartX.current = null;
     touchStartY.current = null;
@@ -416,103 +417,103 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
     </div>
   );
 
-  const ScheduleBanner = () => {
-    if (bannerMode === "schedule") {
-      const WD_JP = ["日", "月", "火", "水", "木", "金", "土"];
-      const days = [0, 1, 2, 3].map(i => {
-        const d = new Date(); d.setDate(d.getDate() + calBase + i);
-        return d;
-      });
-      return (
-        <div style={{ background: "#fff", borderRadius: 16, marginBottom: 16, boxShadow: "0 2px 12px rgba(0,0,0,0.08)", overflow: "hidden" }}>
-          <div style={{ background: SCHEDULE_BLUE, padding: "9px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ color: "#fff", fontWeight: 800, fontSize: 14 }}>📅 スケジュール</span>
+  const ScheduleCalendar = ({ showDashToggle = false }) => {
+    const WD_JP = ["日", "月", "火", "水", "木", "金", "土"];
+    const days = [0, 1, 2, 3].map(i => {
+      const d = new Date(); d.setDate(d.getDate() + calBase + i);
+      return d;
+    });
+    return (
+      <div style={{ background: "#fff", borderRadius: 16, marginBottom: 16, boxShadow: "0 2px 12px rgba(0,0,0,0.08)", overflow: "hidden" }}>
+        <div style={{ background: SCHEDULE_BLUE, padding: "9px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ color: "#fff", fontWeight: 800, fontSize: 14 }}>📅 スケジュール</span>
+            {showDashToggle && (
               <button onClick={() => setBannerMode("dashboard")} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 5, padding: "2px 7px", fontSize: 11, cursor: "pointer" }}>📊</button>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              <button onClick={() => setCalBase(b => Math.max(0, b - 4))} disabled={calBase === 0}
-                style={{ background: "rgba(255,255,255,0.2)", border: "none", color: calBase === 0 ? "rgba(255,255,255,0.3)" : "#fff", borderRadius: 5, padding: "2px 8px", fontSize: 12, cursor: calBase === 0 ? "default" : "pointer" }}>◀</button>
-              <button onClick={() => setCalBase(b => b + 4)}
-                style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 5, padding: "2px 8px", fontSize: 12, cursor: "pointer" }}>▶</button>
-              <button onClick={() => nav("schedule")} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 5, padding: "2px 8px", fontSize: 11, cursor: "pointer" }}>全て →</button>
-              <button onClick={() => nav("schedule")} style={{ background: "#fff", border: "none", color: SCHEDULE_BLUE, borderRadius: 5, padding: "2px 8px", fontSize: 11, cursor: "pointer", fontWeight: 700 }}>＋</button>
-            </div>
+            )}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
-            {days.map((d, i) => {
-              const offset = calBase + i;
-              const isToday = offset === 0;
-              const isSun = d.getDay() === 0;
-              const isSat = d.getDay() === 6;
-              const daySchs = getScForDay(offset);
-              return (
-                <div key={i} style={{ borderRight: i < 3 ? "1px solid #e5e7eb" : "none" }}>
-                  <div style={{ textAlign: "center", padding: "6px 2px", borderBottom: "1px solid #e5e7eb", background: isToday ? "#eff6ff" : "#f8fafc" }}>
-                    <div style={{ fontSize: 9, color: isSun ? "#dc2626" : isSat ? "#2563eb" : "#6b7280", fontWeight: 600 }}>{WD_JP[d.getDay()]}</div>
-                    <div style={{ width: 22, height: 22, borderRadius: "50%", margin: "2px auto", background: isToday ? SCHEDULE_BLUE : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: isToday ? "#fff" : isSun ? "#dc2626" : isSat ? "#2563eb" : "#1f2937" }}>{d.getDate()}</span>
-                    </div>
-                  </div>
-                  <div style={{ padding: "3px 2px", maxHeight: 180, overflowY: "auto" }}>
-                    {daySchs.map((sc) => (
-                      <div key={sc.id} onClick={() => setDetailSc(sc)}
-                        style={{ background: getCatColor(sc) + "18", borderLeft: `3px solid ${getCatColor(sc)}`, borderRadius: 3, padding: "2px 3px", marginBottom: 2, cursor: "pointer" }}>
-                        {!sc.all_day && (
-                          <div style={{ fontSize: 8, color: "#555", fontWeight: 600, lineHeight: 1.3 }}>{formatTime(sc.start_at)}{sc.end_at ? `-${formatTime(sc.end_at)}` : ""}</div>
-                        )}
-                        <div style={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "flex-start" }}>
-                          <span style={{ background: getCatColor(sc), color: "#fff", borderRadius: 2, padding: "0 3px", fontSize: 8, fontWeight: 700, flexShrink: 0, lineHeight: 1.6 }}>{sc.category}</span>
-                          <span style={{ fontSize: 9, color: "#1f2937", fontWeight: 600, lineHeight: 1.4, wordBreak: "break-all" }}>{sc.title}</span>
-                        </div>
-                      </div>
-                    ))}
-                    <button onClick={() => nav("schedule")} style={{ width: "100%", background: "none", border: "1px dashed #e2e8f0", borderRadius: 3, color: "#cbd5e1", fontSize: 12, padding: "1px 0", cursor: "pointer", marginTop: 1 }}>＋</button>
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <button onClick={() => setCalBase(b => Math.max(0, b - 4))} disabled={calBase === 0}
+              style={{ background: "rgba(255,255,255,0.2)", border: "none", color: calBase === 0 ? "rgba(255,255,255,0.3)" : "#fff", borderRadius: 5, padding: "2px 8px", fontSize: 12, cursor: calBase === 0 ? "default" : "pointer" }}>◀</button>
+            <button onClick={() => setCalBase(b => b + 4)}
+              style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 5, padding: "2px 8px", fontSize: 12, cursor: "pointer" }}>▶</button>
+            <button onClick={() => nav("schedule")} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 5, padding: "2px 8px", fontSize: 11, cursor: "pointer" }}>全て →</button>
+            <button onClick={() => nav("schedule")} style={{ background: "#fff", border: "none", color: SCHEDULE_BLUE, borderRadius: 5, padding: "2px 8px", fontSize: 11, cursor: "pointer", fontWeight: 700 }}>＋</button>
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
+          {days.map((d, i) => {
+            const offset = calBase + i;
+            const isToday = offset === 0;
+            const isSun = d.getDay() === 0;
+            const isSat = d.getDay() === 6;
+            const daySchs = getScForDay(offset);
+            return (
+              <div key={i} style={{ borderRight: i < 3 ? "1px solid #e5e7eb" : "none" }}>
+                <div style={{ textAlign: "center", padding: "6px 2px", borderBottom: "1px solid #e5e7eb", background: isToday ? "#eff6ff" : "#f8fafc" }}>
+                  <div style={{ fontSize: 9, color: isSun ? "#dc2626" : isSat ? "#2563eb" : "#6b7280", fontWeight: 600 }}>{WD_JP[d.getDay()]}</div>
+                  <div style={{ width: 22, height: 22, borderRadius: "50%", margin: "2px auto", background: isToday ? SCHEDULE_BLUE : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: isToday ? "#fff" : isSun ? "#dc2626" : isSat ? "#2563eb" : "#1f2937" }}>{d.getDate()}</span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div style={{ background: "linear-gradient(135deg, #1A3A5C, #2563EB)", borderRadius: 16, padding: "18px 20px", marginBottom: 16, boxShadow: "0 4px 16px rgba(37,99,235,0.25)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <div style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>📊 今日の状況</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 11 }}>{new Date().toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "short" })}</div>
-            <button onClick={() => setBannerMode("schedule")} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "rgba(255,255,255,0.85)", borderRadius: 6, padding: "3px 8px", fontSize: 11, cursor: "pointer", marginLeft: 4 }}>📅</button>
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          {[
-            { label: "進行中案件", value: `${active.length}件`, color: "#60A5FA", action: () => nav("projects") },
-            { label: "未完了タスク", value: `${pending.length}件`, color: "#F87171", action: () => nav("tasks") },
-            { label: "未対応電話", value: `${pendingCallsCount}件`, color: "#FBBF24", action: () => nav("calls") },
-            { label: "取引先", value: `${cos.length}社`, color: "#34D399", action: () => nav("companies") },
-          ].map(item => (
-            <div key={item.label} onClick={item.action} style={{ background: "rgba(255,255,255,0.1)", borderRadius: 12, padding: "12px", cursor: "pointer" }}>
-              <div style={{ fontSize: 20, fontWeight: 900, color: item.color }}>{item.value}</div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.65)", marginTop: 2 }}>{item.label}</div>
-            </div>
-          ))}
-        </div>
-        {weekWeather && (
-          <div style={{ marginTop: 12, display: "flex", gap: 4, overflowX: "auto" }}>
-            {weekWeather.map((d, i) => (
-              <div key={i} style={{ flex: 1, minWidth: 32, textAlign: "center" }}>
-                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>{i === 0 ? "今日" : WD[d.weekday]}</div>
-                <div style={{ fontSize: 14 }}>{weatherIcon(d.code)}</div>
-                <div style={{ fontSize: 9, fontWeight: 700, color: "#fff" }}>{d.max}°</div>
+                <div style={{ padding: "3px 2px", maxHeight: 180, overflowY: "auto" }}>
+                  {daySchs.map((sc) => (
+                    <div key={sc.id} onClick={() => setDetailSc(sc)}
+                      style={{ background: getCatColor(sc) + "18", borderLeft: `3px solid ${getCatColor(sc)}`, borderRadius: 3, padding: "2px 3px", marginBottom: 2, cursor: "pointer" }}>
+                      {!sc.all_day && (
+                        <div style={{ fontSize: 8, color: "#555", fontWeight: 600, lineHeight: 1.3 }}>{formatTime(sc.start_at)}{sc.end_at ? `-${formatTime(sc.end_at)}` : ""}</div>
+                      )}
+                      <div style={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "flex-start" }}>
+                        <span style={{ background: getCatColor(sc), color: "#fff", borderRadius: 2, padding: "0 3px", fontSize: 8, fontWeight: 700, flexShrink: 0, lineHeight: 1.6 }}>{sc.category}</span>
+                        <span style={{ fontSize: 9, color: "#1f2937", fontWeight: 600, lineHeight: 1.4, wordBreak: "break-all" }}>{sc.title}</span>
+                      </div>
+                    </div>
+                  ))}
+                  <button onClick={() => nav("schedule")} style={{ width: "100%", background: "none", border: "1px dashed #e2e8f0", borderRadius: 3, color: "#cbd5e1", fontSize: 12, padding: "1px 0", cursor: "pointer", marginTop: 1 }}>＋</button>
+                </div>
               </div>
-            ))}
-          </div>
-        )}
+            );
+          })}
+        </div>
       </div>
     );
   };
+
+  const DashboardBanner = () => (
+    <div style={{ background: "linear-gradient(135deg, #1A3A5C, #2563EB)", borderRadius: 16, padding: "18px 20px", marginBottom: 16, boxShadow: "0 4px 16px rgba(37,99,235,0.25)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>📊 今日の状況</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 11 }}>{new Date().toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "short" })}</div>
+          <button onClick={() => setCurrentPage(1)} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "rgba(255,255,255,0.85)", borderRadius: 6, padding: "3px 8px", fontSize: 11, cursor: "pointer", marginLeft: 4 }}>📅</button>
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        {[
+          { label: "進行中案件", value: `${active.length}件`, color: "#60A5FA", action: () => nav("projects") },
+          { label: "未完了タスク", value: `${pending.length}件`, color: "#F87171", action: () => nav("tasks") },
+          { label: "未対応電話", value: `${pendingCallsCount}件`, color: "#FBBF24", action: () => nav("calls") },
+          { label: "取引先", value: `${cos.length}社`, color: "#34D399", action: () => nav("companies") },
+        ].map(item => (
+          <div key={item.label} onClick={item.action} style={{ background: "rgba(255,255,255,0.1)", borderRadius: 12, padding: "12px", cursor: "pointer" }}>
+            <div style={{ fontSize: 20, fontWeight: 900, color: item.color }}>{item.value}</div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.65)", marginTop: 2 }}>{item.label}</div>
+          </div>
+        ))}
+      </div>
+      {weekWeather && (
+        <div style={{ marginTop: 12, display: "flex", gap: 4, overflowX: "auto" }}>
+          {weekWeather.map((d, i) => (
+            <div key={i} style={{ flex: 1, minWidth: 32, textAlign: "center" }}>
+              <div style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>{i === 0 ? "今日" : WD[d.weekday]}</div>
+              <div style={{ fontSize: 14 }}>{weatherIcon(d.code)}</div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: "#fff" }}>{d.max}°</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   const FeatureCard = ({ icon, title, desc, bg, accent, onCardClick, pills, extraLink }) => (
     <div onClick={onCardClick} style={{ background: bg, borderRadius: 14, padding: "14px 16px", marginBottom: 10, cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.04)", borderLeft: `4px solid ${accent}` }}>
@@ -551,9 +552,8 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           </div>
           <div style={sectionTitle}>メインメニュー</div>
           {item("🏠 ホーム", () => drawerNav(() => setCurrentPage(0)))}
-          {item("📅 スケジュール", () => drawerNav(() => nav("schedule")))}
+          {item("📅 スケジュール", () => drawerNav(() => setCurrentPage(1)))}
           {item("📸 報告書作成", () => drawerNav(() => window.open("/report.html", "_blank")))}
-          {item("📝 見積書作成", () => drawerNav(() => nav("estimate")))}
           {item("📋 案件", () => drawerNav(() => nav("projects")))}
           {item("✅ タスク", () => drawerNav(() => nav("tasks")))}
           {item("🏢 取引先", () => drawerNav(() => nav("companies")))}
@@ -578,9 +578,73 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
     );
   };
 
+  const ScheduleSwipePage = () => (
+    <div style={{ padding: "16px 16px 30px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, color: "#64748B", fontSize: 12, fontWeight: 600 }}>
+        <span>← ホームに戻る</span>
+        <span style={{ flex: 1 }} />
+        <span>メニュー →</span>
+      </div>
+      <ScheduleCalendar />
+      {todaySchedules.length > 0 && (
+        <div style={{ marginTop: 4 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 8 }}>今日の予定</div>
+          <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            {todaySchedules.map((sc, i) => (
+              <div key={sc.id} onClick={() => setDetailSc(sc)}
+                style={{ padding: "12px 14px", borderBottom: i < todaySchedules.length - 1 ? "1px solid #F3F4F6" : "none", cursor: "pointer", display: "flex", gap: 10, alignItems: "flex-start" }}>
+                <div style={{ width: 4, alignSelf: "stretch", borderRadius: 2, background: getCatColor(sc), flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 2 }}>
+                    <span style={{ background: getCatColor(sc), color: "#fff", borderRadius: 4, padding: "1px 6px", fontSize: 10, fontWeight: 700 }}>{sc.category}</span>
+                    {!sc.all_day && (
+                      <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 600 }}>
+                        {formatTime(sc.start_at)}{sc.end_at ? `–${formatTime(sc.end_at)}` : ""}
+                      </span>
+                    )}
+                    {sc.all_day && <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 600 }}>終日</span>}
+                  </div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#1f2937" }}>{sc.title}</div>
+                  {sc.assignees?.[0] && <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>{sc.assignees[0]}</div>}
+                </div>
+                <span style={{ color: "#9ca3af", fontSize: 14 }}>›</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <button
+        onClick={() => nav("schedule")}
+        style={{ width: "100%", marginTop: 16, padding: "14px 0", background: SCHEDULE_BLUE, color: "#fff", border: "none", borderRadius: 12, fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 4px 12px rgba(26,86,160,0.25)" }}
+      >
+        📅 スケジュールを詳しく見る・編集する
+      </button>
+    </div>
+  );
+
   const NewHomePage = () => (
     <div style={{ padding: "16px 16px 30px" }}>
-      <ScheduleBanner />
+      {bannerMode === "dashboard" ? (
+        <DashboardBanner />
+      ) : (
+        <div
+          onClick={() => setCurrentPage(1)}
+          style={{ background: SCHEDULE_BLUE, borderRadius: 14, padding: "12px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10, cursor: "pointer", boxShadow: "0 2px 10px rgba(26,86,160,0.2)" }}
+        >
+          <span style={{ fontSize: 18 }}>📅</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ color: "#fff", fontWeight: 800, fontSize: 14 }}>スケジュール</div>
+            <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, marginTop: 2 }}>
+              {todaySchedules.length > 0 ? `今日 ${todaySchedules.length}件 · 左にフリックで開く` : "左にフリックで開く"}
+            </div>
+          </div>
+          <button
+            onClick={(e) => { e.stopPropagation(); setBannerMode("dashboard"); }}
+            style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer" }}
+          >📊</button>
+          <span style={{ color: "rgba(255,255,255,0.85)", fontSize: 16, fontWeight: 700 }}>›</span>
+        </div>
+      )}
 
       <FeatureCard
         icon="📸" title="報告書作成" desc="現場の記録を作成・管理します" bg="#e8f7f0" accent="#22a06b"
@@ -598,14 +662,6 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
             📦 保管箱
           </button>
         }
-      />
-      <FeatureCard
-        icon="📝" title="見積書作成" desc="見積書の作成・管理を行います" bg="#fef3e8" accent="#e8862e"
-        onCardClick={() => nav("estimate")}
-        pills={[
-          <Pill key="m" onClick={() => openAiAssist("mentor", "estimate")}>🧭 AIメンター</Pill>,
-          <Pill key="r" onClick={() => openAiAssist("review", "estimate")}>🛡️ AIレビュー</Pill>,
-        ]}
       />
       <FeatureCard
         icon="🏠" title="ホームページ" desc="公式サイトを見る" bg="#f0ecfa" accent="#7c5cd6"
@@ -833,15 +889,18 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
             <NewHomePage />
           </div>
           <div style={{ minWidth: "100%", width: "100%" }}>
+            <ScheduleSwipePage />
+          </div>
+          <div style={{ minWidth: "100%", width: "100%" }}>
             <OldHomePage />
           </div>
         </div>
       </div>
 
-      {isWidePC && currentPage === 0 && (
+      {isWidePC && currentPage < HOME_PAGE_COUNT - 1 && (
         <button
-          onClick={() => setCurrentPage(1)}
-          aria-label="次のホーム画面へ"
+          onClick={() => setCurrentPage(p => Math.min(HOME_PAGE_COUNT - 1, p + 1))}
+          aria-label="次の画面へ"
           style={{
             position: "fixed",
             right: isPC && rpOpen ? (RP_W || 220) + 16 : 20,
@@ -866,10 +925,10 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
           ▶
         </button>
       )}
-      {isWidePC && currentPage === 1 && (
+      {isWidePC && currentPage > 0 && (
         <button
-          onClick={() => setCurrentPage(0)}
-          aria-label="前のホーム画面へ"
+          onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+          aria-label="前の画面へ"
           style={{
             position: "fixed",
             left: isPC ? (SB_W || 180) + 16 : 20,
@@ -896,7 +955,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
       )}
 
       <div style={{ display: "flex", justifyContent: "center", gap: 6, paddingBottom: 16, marginTop: -10, position: "relative", zIndex: 5 }}>
-        {[0, 1].map(i => (
+        {Array.from({ length: HOME_PAGE_COUNT }, (_, i) => (
           <div key={i} onClick={() => setCurrentPage(i)} style={{ width: i === currentPage ? 20 : 8, height: 8, borderRadius: 4, background: i === currentPage ? NAVY : "#D1D5DB", cursor: "pointer", transition: "all 0.3s" }} />
         ))}
       </div>
