@@ -580,10 +580,10 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
 
   const ScheduleSwipePage = () => (
     <div style={{ padding: "16px 16px 30px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, color: "#64748B", fontSize: 12, fontWeight: 600 }}>
-        <span>← ホームに戻る</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, fontSize: 12, fontWeight: 600 }}>
+        <button onClick={() => setCurrentPage(0)} style={{ background: "none", border: "none", color: "#64748B", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>← ホームに戻る</button>
         <span style={{ flex: 1 }} />
-        <span>メニュー →</span>
+        <button onClick={() => setCurrentPage(2)} style={{ background: "none", border: "none", color: "#64748B", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>メニュー →</button>
       </div>
       <ScheduleCalendar />
       {todaySchedules.length > 0 && (
