@@ -52,7 +52,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const [savedPw, setSavedPw] = useState(null);
   const [pwLoaded, setPwLoaded] = useState(false);
   const [showStorage, setShowStorage] = useState(false);
-  const [currentPage, setCurrentPage] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [calBase, setCalBase] = useState(0);
   const [weekSchedules, setWeekSchedules] = useState([]);
@@ -373,6 +373,8 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   };
 
   const HOME_PAGE_COUNT = 3;
+  const HOME_PAGE_INDEX = 1;
+  const SCHEDULE_PAGE_INDEX = 0;
   const handleTouchEnd = (e) => {
     if (touchStartX.current === null) return;
     const dx = e.changedTouches[0].clientX - touchStartX.current;
@@ -509,8 +511,8 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
             <button onClick={() => setDrawerOpen(false)} style={{ background: "rgba(255,255,255,0.12)", border: "none", color: "#fff", borderRadius: 8, width: 32, height: 32, fontSize: 16, cursor: "pointer" }}>✕</button>
           </div>
           <div style={sectionTitle}>メインメニュー</div>
-          {item("🏠 ホーム", () => drawerNav(() => setCurrentPage(0)))}
-          {item("📅 スケジュール", () => drawerNav(() => setCurrentPage(1)))}
+          {item("🏠 ホーム", () => drawerNav(() => setCurrentPage(HOME_PAGE_INDEX)))}
+          {item("📅 スケジュール", () => drawerNav(() => setCurrentPage(SCHEDULE_PAGE_INDEX)))}
           {item("📸 報告書作成", () => drawerNav(() => window.open("/report.html", "_blank")))}
           {item("📋 案件", () => drawerNav(() => nav("projects")))}
           {item("✅ タスク", () => drawerNav(() => nav("tasks")))}
@@ -539,9 +541,8 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   const ScheduleSwipePage = () => (
     <div style={{ padding: "16px 16px 30px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, fontSize: 12, fontWeight: 600 }}>
-        <button onClick={() => setCurrentPage(0)} style={{ background: "none", border: "none", color: "#64748B", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>← ホームに戻る</button>
         <span style={{ flex: 1 }} />
-        <button onClick={() => setCurrentPage(2)} style={{ background: "none", border: "none", color: "#64748B", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>メニュー →</button>
+        <button onClick={() => setCurrentPage(HOME_PAGE_INDEX)} style={{ background: "none", border: "none", color: "#64748B", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>ホームへ →</button>
       </div>
       <ScheduleCalendar />
       {todaySchedules.length > 0 && (
@@ -812,7 +813,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   );
 
   return (
-    <div translate="no" className="notranslate" style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: currentPage === 0 ? BG : "#F0F4F8", minHeight: "100vh", ...pp }}>
+    <div translate="no" className="notranslate" style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: currentPage === HOME_PAGE_INDEX ? BG : "#F0F4F8", minHeight: "100vh", ...pp }}>
       {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="home" nav={nav} setModal={setModal} setEc={setEc} SB_W={SB_W} />}
       {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} />}
       {(cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
@@ -822,10 +823,10 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
       <div onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} style={{ overflow: "hidden", position: "relative" }}>
         <div style={{ display: "flex", transform: `translateX(-${currentPage * 100}%)`, transition: "transform 0.3s ease", willChange: "transform" }}>
           <div style={{ minWidth: "100%", width: "100%" }}>
-            <NewHomePage />
+            <ScheduleSwipePage />
           </div>
           <div style={{ minWidth: "100%", width: "100%" }}>
-            <ScheduleSwipePage />
+            <NewHomePage />
           </div>
           <div style={{ minWidth: "100%", width: "100%" }}>
             <OldHomePage />
