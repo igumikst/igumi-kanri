@@ -128,7 +128,8 @@ export default function App() {
       if (tilesRow?.value && Array.isArray(tilesRow.value) && tilesRow.value.length > 0) {
         const saved = tilesRow.value;
         const savedKeys = new Set(saved.map(t => t.key));
-        const merged = [...saved, ...DEFAULT_TILE_CONF.filter(t => !savedKeys.has(t.key))];
+        const merged = [...saved, ...DEFAULT_TILE_CONF.filter(t => !savedKeys.has(t.key))]
+          .map(t => t.key === "estimate" ? { ...t, visible: false } : t);
         setTileConf(merged);
       }
       if (custRow?.value && Object.keys(custRow.value).length > 0) { setCust(custRow.value); setEc(custRow.value); }
