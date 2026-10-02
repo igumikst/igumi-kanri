@@ -26,6 +26,7 @@ import AiKnowledge from "./pages/AiKnowledge";
 import Reports from "./pages/Reports";
 import Dashboard from "./pages/Dashboard";
 import Quotes from "./pages/Quotes";
+import PriceAdmin from "./pages/PriceAdmin";
 
 export default function App() {
   const [page, setPage] = useState("home");
@@ -174,6 +175,7 @@ export default function App() {
   if (page === "dashboard") return <Dashboard {...commonProps} />;
   if (page === "projects") return <Projects {...commonProps} setPjs={setPjs} setCos={setCos} setQuoteProjectId={setQuoteProjectId} />;
   if (page === "quotes") return <Quotes {...quoteProps} />;
+  if (page === "priceadmin") return <PriceAdmin {...commonProps} />;
   if (page === "companies") return <Companies {...commonProps} setCos={setCos} />;
   if (page === "tasks") return <Tasks {...commonProps} setTks={setTks} />;
   if (page === "links") return <Links {...commonProps} setLinks={setLinks} />;
