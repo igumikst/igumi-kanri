@@ -15,7 +15,7 @@ const statusStyle = key => QUOTE_STATUS.find(s => s.key === key) || QUOTE_STATUS
 const blankEd = { id: null, quote_no: null, title: "", price_set_id: "", status: "draft", lines: [] };
 const newKey = () => "l" + Date.now() + Math.random().toString(36).slice(2);
 
-export default function Quotes({ pjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteProjectId }) {
+export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteProjectId }) {
   const project = pjs.find(p => p.id === quoteProjectId);
   const pending = tks.filter(t => !t.done);
 
@@ -102,6 +102,50 @@ export default function Quotes({ pjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpe
   const delQuote = async id => {
     await supabase.from("quotes").delete().eq("id", id);
     setQuotes(quotes.filter(q => q.id !== id));
+  };
+
+  const computeQuoteTotals = async quote => {
+    const { data: itemsData } = await supabase.from("quote_items").select("*").eq("quote_id", quote.id);
+    const ids = (itemsData || []).map(r => r.id);
+    const { data: costsData } = ids.length ? await supabase.from("quote_item_costs").select("*").in("quote_item_id", ids) : { data: [] };
+    const costsByItem = Object.fromEntries((costsData || []).map(c => [c.quote_item_id, c]));
+    const total = quote.total_amount || 0;
+    const costTotal = (itemsData || []).reduce((s, r) => s + (Number(r.qty) || 0) * (Number(costsByItem[r.id]?.cost_price) || 0), 0);
+    const gp = total - costTotal;
+    const hasUnconfirmed = (itemsData || []).some(r => !costsByItem[r.id]?.cost_confirmed || costsByItem[r.id]?.cost_price == null);
+    return { total, costTotal, gp, hasUnconfirmed };
+  };
+
+  const adoptQuote = async quote => {
+    const { total, gp, hasUnconfirmed } = await computeQuoteTotals(quote);
+    const prevAdopted = quotes.find(q => q.is_adopted && q.id !== quote.id);
+    const msg = [
+      `「${quote.title}」を採用します`,
+      prevAdopted ? `(現在「${prevAdopted.title}」が採用中です。切り替えます)` : "",
+      "",
+      `受注金額: ${fmt(project.amount)} → ${fmt(total)}`,
+      `粗利: ${fmt(project.gp)} → ${fmt(gp)}`,
+      hasUnconfirmed ? "⚠️ 原価が未確認の明細があります。粗利は暫定です" : "",
+      "",
+      "案件の値を上書きします。元に戻せません。",
+      "よろしいですか？",
+    ].filter(Boolean).join("\n");
+    setConf({ msg, okLabel: "採用する", okColor: "#059669", onOk: async () => {
+      setConf(null);
+      if (prevAdopted) await supabase.from("quotes").update({ is_adopted: false }).eq("id", prevAdopted.id);
+      await supabase.from("quotes").update({ is_adopted: true }).eq("id", quote.id);
+      await supabase.from("projects").update({ amount: Math.round(total), grossProfit: Math.round(gp) }).eq("id", quoteProjectId);
+      setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, amount: Math.round(total), gp: Math.round(gp) } : p));
+      await loadQuotes();
+    } });
+  };
+
+  const unadoptQuote = quote => {
+    setConf({ msg: `「${quote.title}」の採用を解除します\n\n案件の受注金額・粗利はそのまま残ります(自動では戻りません)\n\nよろしいですか？`, okLabel: "解除する", okColor: "#9A3412", onOk: async () => {
+      setConf(null);
+      await supabase.from("quotes").update({ is_adopted: false }).eq("id", quote.id);
+      await loadQuotes();
+    } });
   };
 
   const addItemLine = item => {
@@ -221,7 +265,7 @@ export default function Quotes({ pjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpe
             ) : (
               <>
                 <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
-                  <div style={{ fontSize: 11, color: "#9CA3AF", marginBottom: 2 }}>現在の案件の値(見積は未反映)</div>
+                  <div style={{ fontSize: 11, color: "#9CA3AF", marginBottom: 2 }}>{quotes.some(q => q.is_adopted) ? "現在の案件の値(採用中の見積を反映済み)" : "現在の案件の値(見積は未反映)"}</div>
                   <div style={{ display: "flex", gap: 16 }}>
                     <div><span style={{ fontSize: 12, color: "#6B7280" }}>受注金額 </span><span style={{ fontWeight: 800, color: "#E07B39" }}>{fmt(project.amount)}</span></div>
                     <div><span style={{ fontSize: 12, color: "#6B7280" }}>粗利 </span><span style={{ fontWeight: 800, color: "#059669" }}>{fmt(project.gp)}</span></div>
@@ -243,12 +287,20 @@ export default function Quotes({ pjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpe
                           <div onClick={() => openQuote(q)} style={{ padding: "13px 14px", cursor: "pointer" }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 5 }}>
                               <div style={{ fontWeight: 700, fontSize: 14, flex: 1, marginRight: 8, color: "#1F2937" }}>No.{q.quote_no} {q.title}</div>
-                              <span style={{ background: st.bg, color: st.text, border: `1px solid ${st.border}`, borderRadius: 6, padding: "2px 9px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>{st.label}</span>
+                              <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                                {q.is_adopted && <span style={{ background: "#D1FAE5", color: "#065F46", border: "1px solid #34D399", borderRadius: 6, padding: "2px 9px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>✅ 採用中</span>}
+                                <span style={{ background: st.bg, color: st.text, border: `1px solid ${st.border}`, borderRadius: 6, padding: "2px 9px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>{st.label}</span>
+                              </div>
                             </div>
                             <div style={{ fontSize: 15, fontWeight: 800, color: "#E07B39" }}>{fmt(q.total_amount)}</div>
                           </div>
                           <div style={{ display: "flex", borderTop: "1px solid #F3F4F6" }}>
                             <button onClick={() => openQuote(q)} style={{ flex: 1, padding: "8px 0", background: "none", border: "none", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#1A3A5C", fontWeight: 700, cursor: "pointer" }}>開く →</button>
+                            {q.is_adopted ? (
+                              <button onClick={() => unadoptQuote(q)} style={{ flex: 1, padding: "8px 0", background: "none", border: "none", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#9A3412", fontWeight: 700, cursor: "pointer" }}>採用を解除</button>
+                            ) : (
+                              <button onClick={() => adoptQuote(q)} style={{ flex: 1, padding: "8px 0", background: "none", border: "none", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#059669", fontWeight: 700, cursor: "pointer" }}>✅ 採用にする</button>
+                            )}
                             <button onClick={() => setConf({ msg: `「${q.title}」\n\nこの操作は元に戻せません。\n削除しますか？`, onOk: () => { delQuote(q.id); setConf(null); } })} style={{ padding: "8px 16px", background: "none", border: "none", fontSize: 12, color: "#DC2626", fontWeight: 700, cursor: "pointer" }}>🗑</button>
                           </div>
                         </div>
@@ -427,7 +479,7 @@ export default function Quotes({ pjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpe
           </div>
         </>
       )}
-      {conf && <Confirm msg={conf.msg} onCancel={() => setConf(null)} onOk={conf.onOk} />}
+      {conf && <Confirm msg={conf.msg} onCancel={() => setConf(null)} onOk={conf.onOk} okLabel={conf.okLabel} okColor={conf.okColor} />}
     </div>
   );
 }

@@ -29,7 +29,7 @@ export const Hdr = ({title,back,right}) => (
   </div>
 );
 
-export const Confirm = ({msg,onCancel,onOk}) => (
+export const Confirm = ({msg,onCancel,onOk,okLabel="削除する",okColor="#DC2626"}) => (
   <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 24px"}}>
     <div style={{background:"#fff",borderRadius:16,padding:24,width:"100%",maxWidth:320}}>
       <div style={{fontSize:24,textAlign:"center",marginBottom:12}}>⚠️</div>
@@ -38,7 +38,7 @@ export const Confirm = ({msg,onCancel,onOk}) => (
       ))}
       <div style={{display:"flex",gap:10}}>
         <button onClick={onCancel} style={{flex:1,padding:12,background:"#F3F4F6",border:"none",borderRadius:10,fontWeight:700,cursor:"pointer"}}>キャンセル</button>
-        <button onClick={onOk} style={{flex:1,padding:12,background:"#DC2626",color:"#fff",border:"none",borderRadius:10,fontWeight:800,cursor:"pointer"}}>削除する</button>
+        <button onClick={onOk} style={{flex:1,padding:12,background:okColor,color:"#fff",border:"none",borderRadius:10,fontWeight:800,cursor:"pointer"}}>{okLabel}</button>
       </div>
     </div>
   </div>
