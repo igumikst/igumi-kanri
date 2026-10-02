@@ -3,7 +3,7 @@ import { Hdr } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { STATUS_STYLE, fmt } from "../lib/constants";
 
-const DASHBOARD_STATUSES = ["発注待ち", "着工", "完了"];
+const DASHBOARD_STATUSES = ["発注待ち", "失注", "着工", "完了"];
 
 const PERIOD_OPTIONS = [
   { key: "all", label: "全期間" },
@@ -84,7 +84,10 @@ export default function Dashboard({ pjs, cos, tks, links, cust, isPC, pp, nav, r
   const confirmedAmt = confirmed.reduce((s, p) => s + (p.amount || 0), 0);
   const totalGp = confirmed.reduce((s, p) => s + (p.gp || 0), 0);
   const gpRate = confirmedAmt ? totalGp / confirmedAmt * 100 : null;
-  const orderRateRef = filtered.length ? filtered.filter(p => p.status === "着工" || p.status === "完了").length / filtered.length * 100 : null;
+  const wonCount = filtered.filter(p => p.status === "着工" || p.status === "完了").length;
+  const lostCount = filtered.filter(p => p.status === "失注").length;
+  const decidedCount = wonCount + lostCount;
+  const winRate = decidedCount ? wonCount / decidedCount * 100 : null;
 
   const statusBreakdown = DASHBOARD_STATUSES.map(s => {
     const list = filtered.filter(p => p.status === s);
@@ -109,7 +112,9 @@ export default function Dashboard({ pjs, cos, tks, links, cust, isPC, pp, nav, r
       const confirmedAmtG = confirmedList.reduce((s, p) => s + (p.amount || 0), 0);
       const gp = confirmedList.reduce((s, p) => s + (p.gp || 0), 0);
       const gpRateG = confirmedAmtG ? gp / confirmedAmtG * 100 : null;
-      const orderRate = count ? list.filter(p => p.status === "着工" || p.status === "完了").length / count * 100 : null;
+      const wonN = list.filter(p => p.status === "着工" || p.status === "完了").length;
+      const lostN = list.filter(p => p.status === "失注").length;
+      const orderRate = (wonN + lostN) ? wonN / (wonN + lostN) * 100 : null;
       return { key, name, clientName, count, amt, gp, gpRate: gpRateG, orderRate };
     });
   }, [filtered, coMap, repCompanyMap]);
@@ -191,7 +196,7 @@ export default function Dashboard({ pjs, cos, tks, links, cust, isPC, pp, nav, r
             );
           })}
           <div style={{ marginTop: 12, fontSize: 11, color: "#9CA3AF" }}>
-            発注率(参考): {pctLabel(orderRateRef)} ※暫定値です。「失注」ステータスがまだないため、発注待ちの中に失注分が混ざっている可能性があります
+            受注率: {pctLabel(winRate)}(着工+完了 ÷ 着工+完了+失注。発注待ち・見積中は未決着のため対象外)
           </div>
         </div>
 
@@ -207,7 +212,7 @@ export default function Dashboard({ pjs, cos, tks, links, cust, isPC, pp, nav, r
                   <Th label="売上合計" k="amt" sort={sort} onSort={toggleSort} />
                   <Th label="粗利合計" k="gp" sort={sort} onSort={toggleSort} />
                   <Th label="粗利率" k="gpRate" sort={sort} onSort={toggleSort} />
-                  <Th label="発注率(参考)" k="orderRate" sort={sort} onSort={toggleSort} />
+                  <Th label="受注率" k="orderRate" sort={sort} onSort={toggleSort} />
                 </tr>
               </thead>
               <tbody>

@@ -1,8 +1,9 @@
-export const STATUSES = ["発注待ち","見積中","着工","進行中","完了","中断"];
+export const STATUSES = ["発注待ち","失注","見積中","着工","進行中","完了","中断"];
 export const COMPANY_TYPES = ["取引先","協力業者","その他"];
 export const CONTACT_ROLES = ["営業","現場監督","職人","事務","その他"];
 export const STATUS_STYLE = {
   "発注待ち":{bg:"#FFF3CD",text:"#856404",border:"#FFCA2C"},
+  "失注":{bg:"#FEE2E2",text:"#991B1B",border:"#F87171"},
   "見積中":{bg:"#E0F0FF",text:"#0B4F8A",border:"#60A5FA"},
   "着工":{bg:"#D1FAE5",text:"#065F46",border:"#34D399"},
   "進行中":{bg:"#D1E7DD",text:"#0A3622",border:"#20C997"},
