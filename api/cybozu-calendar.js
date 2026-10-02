@@ -87,7 +87,8 @@ function inferCategory(summary) {
   if (s.startsWith("打ち合わせ") || s.startsWith("打合")) return "打ち合わせ";
   if (s.startsWith("緊急")) return "緊急当番";
   if (s.startsWith("事務")) return "事務";
-  if (s.startsWith("外出") || s.startsWith("他社")) return "外出";
+  if (s.startsWith("外出")) return "外出";
+  if (s.startsWith("他社")) return "他社";
   if (s.startsWith("休み")) return "休み";
   if (s.startsWith("その他")) return "その他";
   return "サイボウズ";

@@ -10,9 +10,9 @@ const SCHEDULE_BLUE = "#1a56a0";
 const BG = "#eef1f6";
 
 const CAT_COLOR_MAP = {
-  "現調": "#2563eb", "調査": "#16a34a", "工事": "#9333ea",
-  "打ち合わせ": "#0891b2", "緊急当番": "#dc2626", "事務": "#78716c",
-  "外出": "#92400e", "休み": "#db2777", "その他": "#6b7280", "サイボウズ": "#0F766E",
+  "現調": "#3b82f6", "調査": "#22c55e", "工事": "#a78bfa",
+  "打ち合わせ": "#06b6d4", "緊急当番": "#ef4444", "事務": "#94a3b8",
+  "外出": "#a16207", "他社": "#c4a484", "休み": "#f87171", "その他": "#e879f9", "サイボウズ": "#0F766E",
 };
 const getCatColor = (sc) => sc.color || CAT_COLOR_MAP[sc.category] || (sc.source === "cybozu" ? "#0F766E" : "#6b7280");
 
@@ -465,20 +465,47 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
                     <span style={{ fontSize: 11, fontWeight: 700, color: isToday ? "#fff" : isSun ? "#dc2626" : isSat ? "#2563eb" : "#1f2937" }}>{d.getDate()}</span>
                   </div>
                 </div>
-                <div style={{ padding: "3px 2px", maxHeight: 180, overflowY: "auto" }}>
-                  {daySchs.map((sc) => (
-                    <div key={sc.id} onClick={() => setDetailSc(sc)}
-                      style={{ background: getCatColor(sc) + "18", borderLeft: `3px solid ${getCatColor(sc)}`, borderRadius: 3, padding: "2px 3px", marginBottom: 2, cursor: "pointer" }}>
-                      {!sc.all_day && (
-                        <div style={{ fontSize: 8, color: "#555", fontWeight: 600, lineHeight: 1.3 }}>{formatTime(sc.start_at)}{sc.end_at ? `-${formatTime(sc.end_at)}` : ""}</div>
-                      )}
-                      <div style={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "flex-start" }}>
-                        <span style={{ background: getCatColor(sc), color: "#fff", borderRadius: 2, padding: "0 3px", fontSize: 8, fontWeight: 700, flexShrink: 0, lineHeight: 1.6 }}>{sc.source === "cybozu" ? "サイボウズ" : sc.category}</span>
-                        <span style={{ fontSize: 9, color: "#1f2937", fontWeight: 600, lineHeight: 1.4, wordBreak: "break-all" }}>{sc.title}</span>
+                <div style={{ padding: "0", maxHeight: 220, overflowY: "auto", background: isSun ? "#fff5f5" : isSat ? "#f0f7ff" : "#fff" }}>
+                  {daySchs.map((sc) => {
+                    const raw = String(sc.title || "");
+                    const prefixes = ["現調", "調査", "工事", "報告済", "他社", "休み", "事務", "その他", "外出", "打ち合わせ", "緊急当番"];
+                    let cat = sc.category || "その他";
+                    let title = raw;
+                    for (const p of prefixes) {
+                      if (raw.startsWith(p + ":") || raw.startsWith(p + "：")) {
+                        cat = p === "報告済" ? "工事" : p;
+                        title = raw.slice(p.length + 1).trim();
+                        break;
+                      }
+                    }
+                    const color = CAT_COLOR_MAP[cat] || getCatColor(sc);
+                    const fmtT = (iso) => {
+                      if (!iso) return "";
+                      const d = new Date(iso);
+                      if (Number.isNaN(d.getTime())) return "";
+                      const parts = new Intl.DateTimeFormat("en-GB", {
+                        timeZone: "Asia/Tokyo", hour: "numeric", minute: "2-digit", hour12: false,
+                      }).formatToParts(d);
+                      const h = parts.find((p) => p.type === "hour")?.value?.replace(/^0/, "") || "0";
+                      const m = parts.find((p) => p.type === "minute")?.value || "00";
+                      return `${h}:${m}`;
+                    };
+                    return (
+                      <div key={sc.id} onClick={() => setDetailSc(sc)}
+                        style={{ borderBottom: "1px solid #e8e8e8", padding: "4px 3px 5px", cursor: "pointer", background: cat === "休み" ? "#fff1f2" : "transparent" }}>
+                        {!sc.all_day && (
+                          <div style={{ fontSize: 8, color: "#222", fontWeight: 600, lineHeight: 1.2, marginBottom: 2 }}>
+                            {fmtT(sc.start_at)}{sc.end_at ? `-${fmtT(sc.end_at)}` : ""}
+                          </div>
+                        )}
+                        <div style={{ display: "flex", gap: 3, flexWrap: "wrap", alignItems: "flex-start" }}>
+                          <span style={{ background: color, color: "#fff", borderRadius: 2, padding: "0 4px", fontSize: 8, fontWeight: 800, flexShrink: 0, lineHeight: 1.5 }}>{cat}</span>
+                          <span style={{ fontSize: 9, color: "#2563eb", fontWeight: 700, lineHeight: 1.35, wordBreak: "break-all", textDecoration: "underline", textUnderlineOffset: 1 }}>{title || raw}</span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                  <button onClick={() => nav("schedule")} style={{ width: "100%", background: "none", border: "1px dashed #e2e8f0", borderRadius: 3, color: "#cbd5e1", fontSize: 12, padding: "1px 0", cursor: "pointer", marginTop: 1 }}>＋</button>
+                    );
+                  })}
+                  <button onClick={() => nav("schedule")} style={{ width: "100%", background: "none", border: "none", borderTop: "1px solid #e8e8e8", color: "#22c55e", fontSize: 14, padding: "3px 0", cursor: "pointer", fontWeight: 700 }}>＋</button>
                 </div>
               </div>
             );
