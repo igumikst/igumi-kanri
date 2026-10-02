@@ -81,6 +81,7 @@ function consumeTelFlag() {
 
 export function installAndroidResumeGuard() {
   let hiddenAt = 0;
+  let bootChecked = false;
 
   const recover = (reason) => {
     try {
@@ -93,11 +94,24 @@ export function installAndroidResumeGuard() {
     window.location.reload();
   };
 
+  // 初回 pageshow 時点では React 未マウントで root が空なのが正常。
+  // bfcache 復帰、または tel: 発信からの復帰のみ即リロードする。
   window.addEventListener("pageshow", (event) => {
-    if (event.persisted || rootLooksEmpty()) {
-      recover(event.persisted ? "bfcache" : "empty-root-pageshow");
+    if (event.persisted) {
+      recover("bfcache");
+      return;
+    }
+    if (rootLooksEmpty() && consumeTelFlag()) {
+      recover("empty-root-pageshow-tel");
     }
   });
+
+  // 起動後しばらく空のままなら（描画失敗）一度だけ復帰を試みる
+  window.setTimeout(() => {
+    if (bootChecked) return;
+    bootChecked = true;
+    if (rootLooksEmpty()) recover("empty-root-boot");
+  }, 4000);
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {

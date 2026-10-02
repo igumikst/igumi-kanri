@@ -286,9 +286,13 @@ export default function Schedule({ nav }) {
   const ScChip = ({ sc }) => {
     const { category, title, sub } = parseEventDisplay(sc);
     const color = getCategoryColor(category);
+    const startT = formatTime(sc.start_at);
+    const endT = sc.end_at ? formatTime(sc.end_at) : "";
     const timeLabel = sc.all_day
       ? "終日"
-      : `${formatTime(sc.start_at)}${sc.end_at ? `-${formatTime(sc.end_at)}` : ""}`;
+      : endT && endT !== startT
+        ? `${startT}-${endT}`
+        : startT;
     return (
       <div
         onClick={() => openEdit(sc)}

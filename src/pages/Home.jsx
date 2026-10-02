@@ -495,7 +495,11 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
                         style={{ borderBottom: "1px solid #e8e8e8", padding: "4px 3px 5px", cursor: "pointer", background: cat === "休み" ? "#fff1f2" : "transparent" }}>
                         {!sc.all_day && (
                           <div style={{ fontSize: 8, color: "#222", fontWeight: 600, lineHeight: 1.2, marginBottom: 2 }}>
-                            {fmtT(sc.start_at)}{sc.end_at ? `-${fmtT(sc.end_at)}` : ""}
+                            {(() => {
+                              const t = fmtT(sc.start_at);
+                              const e = sc.end_at ? fmtT(sc.end_at) : "";
+                              return e && e !== t ? `${t}-${e}` : t;
+                            })()}
                           </div>
                         )}
                         <div style={{ display: "flex", gap: 3, flexWrap: "wrap", alignItems: "flex-start" }}>
