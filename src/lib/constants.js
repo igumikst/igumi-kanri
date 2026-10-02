@@ -34,6 +34,7 @@ export const DEFAULT_LINKS = [
   {id:"l4",cat:"Google",label:"Google ToDo",url:"https://tasks.google.com",icon:"✅"},
 ];
 export const DEFAULT_TILE_CONF = [
+  {key:"dashboard",icon:"🧭",label:"ダッシュボード",sub:"案件の集計",color:"#1D4ED8",visible:true},
   {key:"projects",icon:"📋",label:"案件管理",sub:"件進行中",color:"#1A3A5C",visible:true},
   {key:"companies",icon:"🏢",label:"取引先・協力業者",sub:"社登録",color:"#E07B39",visible:true},
   {key:"tasks",icon:"✅",label:"タスク",sub:"未完了",color:"#059669",visible:true},
