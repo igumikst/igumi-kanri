@@ -12,9 +12,15 @@ const BG = "#eef1f6";
 const CAT_COLOR_MAP = {
   "現調": "#2563eb", "調査": "#16a34a", "工事": "#9333ea",
   "打ち合わせ": "#0891b2", "緊急当番": "#dc2626", "事務": "#78716c",
-  "外出": "#92400e", "休み": "#db2777", "その他": "#6b7280",
+  "外出": "#92400e", "休み": "#db2777", "その他": "#6b7280", "サイボウズ": "#0F766E",
 };
-const getCatColor = (sc) => sc.color || CAT_COLOR_MAP[sc.category] || "#6b7280";
+const getCatColor = (sc) => sc.color || CAT_COLOR_MAP[sc.category] || (sc.source === "cybozu" ? "#0F766E" : "#6b7280");
+
+const toJstDateKey = (isoOrDate) => {
+  const d = isoOrDate instanceof Date ? isoOrDate : new Date(isoOrDate);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+};
 
 const fmtBlogDate = (dateStr) => {
   if (!dateStr) return "";
@@ -104,15 +110,22 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
       const d = String(now.getDate()).padStart(2, "0");
       const todayStr = `${y}-${m}-${d}`;
       const end = new Date(now); end.setDate(now.getDate() + 6); end.setHours(23, 59, 59);
-      const { data } = await supabase
-        .from("schedules").select("*")
-        .gte("start_at", `${todayStr}T00:00:00`)
-        .lte("start_at", end.toISOString())
-        .order("start_at");
-      if (data) {
-        setWeekSchedules(data);
-        setTodaySchedules(data.filter(sc => sc.start_at?.slice(0, 10) === todayStr));
-      }
+      const [{ data }, cybozuRes] = await Promise.all([
+        supabase
+          .from("schedules").select("*")
+          .gte("start_at", `${todayStr}T00:00:00`)
+          .lte("start_at", end.toISOString())
+          .order("start_at"),
+        fetch("/api/cybozu-calendar").then(r => r.json()).catch(() => ({ events: [] })),
+      ]);
+      const local = data || [];
+      const remote = (Array.isArray(cybozuRes?.events) ? cybozuRes.events : []).filter((ev) => {
+        const key = ev.date_key || toJstDateKey(ev.start_at);
+        return key >= todayStr;
+      });
+      const merged = [...local, ...remote].sort((a, b) => String(a.start_at).localeCompare(String(b.start_at)));
+      setWeekSchedules(merged);
+      setTodaySchedules(merged.filter(sc => (sc.date_key || toJstDateKey(sc.start_at)) === todayStr));
     };
     fetch7Days();
   }, []);
@@ -188,7 +201,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
 
   function getScForDay(offset) {
     const key = getDayKey(offset);
-    return weekSchedules.filter(sc => sc.start_at?.slice(0, 10) === key);
+    return weekSchedules.filter(sc => (sc.date_key || toJstDateKey(sc.start_at)) === key);
   }
 
   const formatTime = (isoStr) => {
@@ -460,7 +473,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
                         <div style={{ fontSize: 8, color: "#555", fontWeight: 600, lineHeight: 1.3 }}>{formatTime(sc.start_at)}{sc.end_at ? `-${formatTime(sc.end_at)}` : ""}</div>
                       )}
                       <div style={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "flex-start" }}>
-                        <span style={{ background: getCatColor(sc), color: "#fff", borderRadius: 2, padding: "0 3px", fontSize: 8, fontWeight: 700, flexShrink: 0, lineHeight: 1.6 }}>{sc.category}</span>
+                        <span style={{ background: getCatColor(sc), color: "#fff", borderRadius: 2, padding: "0 3px", fontSize: 8, fontWeight: 700, flexShrink: 0, lineHeight: 1.6 }}>{sc.source === "cybozu" ? "サイボウズ" : sc.category}</span>
                         <span style={{ fontSize: 9, color: "#1f2937", fontWeight: 600, lineHeight: 1.4, wordBreak: "break-all" }}>{sc.title}</span>
                       </div>
                     </div>
@@ -555,7 +568,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
                 <div style={{ width: 4, alignSelf: "stretch", borderRadius: 2, background: getCatColor(sc), flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 2 }}>
-                    <span style={{ background: getCatColor(sc), color: "#fff", borderRadius: 4, padding: "1px 6px", fontSize: 10, fontWeight: 700 }}>{sc.category}</span>
+                    <span style={{ background: getCatColor(sc), color: "#fff", borderRadius: 4, padding: "1px 6px", fontSize: 10, fontWeight: 700 }}>{sc.source === "cybozu" ? "サイボウズ" : sc.category}</span>
                     {!sc.all_day && (
                       <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 600 }}>
                         {formatTime(sc.start_at)}{sc.end_at ? `–${formatTime(sc.end_at)}` : ""}

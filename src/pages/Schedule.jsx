@@ -13,12 +13,19 @@ const CATEGORIES = [
   { label: "外出", color: "#92400e" },
   { label: "休み", color: "#db2777" },
   { label: "その他", color: "#6b7280" },
+  { label: "サイボウズ", color: "#0F766E" },
 ];
 
 const getCategoryColor = (label) =>
   CATEGORIES.find((c) => c.label === label)?.color || "#6b7280";
 
 const DAYS_JP = ["日", "月", "火", "水", "木", "金", "土"];
+
+function toJstDateKey(isoOrDate) {
+  const d = isoOrDate instanceof Date ? isoOrDate : new Date(isoOrDate);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+}
 
 function getWeekDates(baseDate) {
   const d = new Date(baseDate);
@@ -88,11 +95,14 @@ export default function Schedule({ nav }) {
   const monthDates = getMonthDates(baseDate);
 
   const [schedules, setSchedules] = useState([]);
+  const [cybozuEvents, setCybozuEvents] = useState([]);
+  const [cybozuError, setCybozuError] = useState("");
   const [subcontractors, setSubcontractors] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
+  const [cybozuDetail, setCybozuDetail] = useState(null);
   const [showSubModal, setShowSubModal] = useState(false);
   const [newSubName, setNewSubName] = useState("");
 
@@ -117,14 +127,18 @@ export default function Schedule({ nav }) {
 
   async function fetchAll() {
     setLoading(true);
-    const [{ data: sc }, { data: sub }, { data: hs }] = await Promise.all([
+    setCybozuError("");
+    const [{ data: sc }, { data: sub }, { data: hs }, cybozuRes] = await Promise.all([
       supabase.from("schedules").select("*").order("start_at"),
       supabase.from("subcontractors").select("*").order("name"),
       supabase.from("home_settings").select("*").eq("id", "schedule_members"),
+      fetch("/api/cybozu-calendar").then(r => r.json()).catch(() => ({ events: [], error: "fetch failed" })),
     ]);
     setSchedules(sc || []);
     setSubcontractors(sub || []);
     if (hs && hs[0]?.value) setCustomMembers(hs[0].value);
+    setCybozuEvents(Array.isArray(cybozuRes?.events) ? cybozuRes.events : []);
+    if (cybozuRes?.error && !(cybozuRes.events?.length)) setCybozuError("サイボウズ予定の取得に失敗しました");
     setLoading(false);
   }
 
@@ -176,6 +190,10 @@ export default function Schedule({ nav }) {
   }
 
   function openEdit(sc) {
+    if (sc?.source === "cybozu" || sc?.readonly) {
+      setCybozuDetail(sc);
+      return;
+    }
     const startD = new Date(sc.start_at);
     const endD = sc.end_at ? new Date(sc.end_at) : null;
     const contractors = sc.location?.startsWith("対応：")
@@ -202,7 +220,10 @@ export default function Schedule({ nav }) {
   }
 
   function getSchedulesForDay(date) {
-    return schedules.filter((sc) => isSameDay(new Date(sc.start_at), date));
+    const key = toJstDateKey(date);
+    const local = schedules.filter((sc) => toJstDateKey(sc.start_at) === key);
+    const remote = cybozuEvents.filter((sc) => (sc.date_key || toJstDateKey(sc.start_at)) === key);
+    return [...local, ...remote].sort((a, b) => String(a.start_at).localeCompare(String(b.start_at)));
   }
 
   // 週ナビ
@@ -219,25 +240,29 @@ export default function Schedule({ nav }) {
   const allMembers = [...STAFF, ...customMembers.filter(m => !STAFF.includes(m))];
 
   // 予定チップ（共通）
-  const ScChip = ({ sc }) => (
-    <div onClick={() => openEdit(sc)} style={{
-      background: getCategoryColor(sc.category) + "22",
-      borderLeft: `3px solid ${getCategoryColor(sc.category)}`,
-      borderRadius: 3, padding: "2px 3px", marginBottom: 2, cursor: "pointer", fontSize: 10,
-    }}>
-      {!sc.all_day && (
-        <div style={{ color: "#555", fontWeight: 600, fontSize: 9 }}>
-          {formatTime(sc.start_at)}{sc.end_at ? `-${formatTime(sc.end_at)}` : ""}
+  const ScChip = ({ sc }) => {
+    const color = sc.color || getCategoryColor(sc.category);
+    const isCybozu = sc.source === "cybozu";
+    return (
+      <div onClick={() => openEdit(sc)} style={{
+        background: color + "22",
+        borderLeft: `3px solid ${color}`,
+        borderRadius: 3, padding: "2px 3px", marginBottom: 2, cursor: "pointer", fontSize: 10,
+      }}>
+        {!sc.all_day && (
+          <div style={{ color: "#555", fontWeight: 600, fontSize: 9 }}>
+            {formatTime(sc.start_at)}{sc.end_at ? `-${formatTime(sc.end_at)}` : ""}
+          </div>
+        )}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 2, flexWrap: "wrap" }}>
+          <span style={{ background: color, color: "#fff", borderRadius: 2, padding: "0 3px", fontSize: 9, fontWeight: 700, flexShrink: 0, lineHeight: 1.6 }}>
+            {isCybozu ? "サイボウズ" : sc.category}
+          </span>
+          <span style={{ color: "#1f2937", fontWeight: 600, fontSize: 10, wordBreak: "break-all", lineHeight: 1.4 }}>{sc.title}</span>
         </div>
-      )}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 2, flexWrap: "wrap" }}>
-        <span style={{ background: getCategoryColor(sc.category), color: "#fff", borderRadius: 2, padding: "0 3px", fontSize: 9, fontWeight: 700, flexShrink: 0, lineHeight: 1.6 }}>
-          {sc.category}
-        </span>
-        <span style={{ color: "#1f2937", fontWeight: 600, fontSize: 10, wordBreak: "break-all", lineHeight: 1.4 }}>{sc.title}</span>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#f5f5f5", minHeight: "100vh", maxWidth: "100vw", overflowX: "hidden" }}>
@@ -248,8 +273,16 @@ export default function Schedule({ nav }) {
           <button onClick={() => nav && nav("home")} style={headerBtnStyle}>← 戻る</button>
           <span style={{ flex: 1, fontWeight: 700, fontSize: 15 }}>📅 スケジュール</span>
           <button onClick={() => openNew(today)} style={{ ...headerBtnStyle, background: "#fff", color: "#1a56a0", fontWeight: 700 }}>＋ 追加</button>
+          <button onClick={fetchAll} style={headerBtnStyle} title="再読み込み">🔄</button>
           <button onClick={() => setShowSubModal(true)} style={headerBtnStyle}>🏢</button>
         </div>
+      </div>
+
+      {/* サイボウズ連携バナー */}
+      <div style={{ background: "#ecfdf5", borderBottom: "1px solid #a7f3d0", padding: "6px 12px", display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "#065f46" }}>
+        <span style={{ fontWeight: 800 }}>サイボウズ連携中</span>
+        <span style={{ flex: 1 }}>{cybozuError ? cybozuError : `${cybozuEvents.length}件の予定を表示`}</span>
+        <a href="https://product-pro.cybozu.com/o/" target="_blank" rel="noreferrer" style={{ color: "#0F766E", fontWeight: 700, textDecoration: "none" }}>Officeを開く →</a>
       </div>
 
       {/* ナビバー */}
@@ -531,6 +564,50 @@ export default function Schedule({ nav }) {
                       style={{ padding: "4px 10px", background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, fontSize: 12, cursor: "pointer" }}>削除</button>
                   </div>
                 ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* サイボウズ予定詳細（読み取り専用） */}
+      {cybozuDetail && (
+        <div style={overlayStyle} onClick={() => setCybozuDetail(null)}>
+          <div style={{ ...modalStyle, maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ background: "#0F766E", color: "#fff", padding: "12px 16px", borderRadius: "12px 12px 0 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontWeight: 700, fontSize: 15 }}>サイボウズの予定</span>
+              <button onClick={() => setCybozuDetail(null)} style={{ background: "none", border: "none", color: "#fff", fontSize: 20, cursor: "pointer" }}>✕</button>
+            </div>
+            <div style={{ padding: 16 }}>
+              <div style={{ fontWeight: 800, fontSize: 16, color: "#1f2937", marginBottom: 10, lineHeight: 1.4 }}>{cybozuDetail.title}</div>
+              <div style={{ fontSize: 13, color: "#374151", marginBottom: 8 }}>
+                🗓 {toJstDateKey(cybozuDetail.start_at)}
+                {!cybozuDetail.all_day && (
+                  <span> {formatTime(cybozuDetail.start_at)}{cybozuDetail.end_at ? `〜${formatTime(cybozuDetail.end_at)}` : ""}</span>
+                )}
+                {cybozuDetail.all_day && <span>（終日）</span>}
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <span style={{ background: getCategoryColor(cybozuDetail.category), color: "#fff", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>
+                  {cybozuDetail.category}
+                </span>
+              </div>
+              {cybozuDetail.memo && (
+                <div style={{ fontSize: 12, color: "#4b5563", background: "#f8fafc", borderRadius: 8, padding: 12, whiteSpace: "pre-wrap", wordBreak: "break-word", marginBottom: 14, lineHeight: 1.6 }}>
+                  {cybozuDetail.memo}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                {cybozuDetail.external_url && (
+                  <a href={cybozuDetail.external_url} target="_blank" rel="noreferrer"
+                    style={{ padding: "8px 14px", background: "#0F766E", color: "#fff", borderRadius: 8, fontSize: 13, fontWeight: 700, textDecoration: "none" }}>
+                    サイボウズで開く
+                  </a>
+                )}
+                <button onClick={() => setCybozuDetail(null)}
+                  style={{ padding: "8px 14px", background: "#f1f5f9", color: "#374151", border: "none", borderRadius: 8, fontSize: 13, cursor: "pointer" }}>
+                  閉じる
+                </button>
+              </div>
             </div>
           </div>
         </div>
