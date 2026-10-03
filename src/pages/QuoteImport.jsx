@@ -5,7 +5,7 @@ import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { fmt } from "../lib/constants";
 import { buildPriceIndex, matchLine, searchItems, similarity, aliasKey, normalizeText } from "../lib/priceMatch";
 import { toBasePrice, lineAmount, roundYen, MARKUP_BACK_RATE } from "../lib/quoteImport/markup";
-import { buildEstTree, flattenEstTree } from "../lib/quoteImport/parseEst";
+import { buildEstTree, flattenEstTree, reverseSiblingOrder } from "../lib/quoteImport/parseEst";
 import { QUOTE_FILE_BUCKET, FILE_TYPES } from "../lib/quoteFiles";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -620,7 +620,11 @@ function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegi
     return { ...l, groupOverride: next };
   }));
 
-  const tree = useMemo(() => buildEstTree(lines), [lines]);
+  // ファイル内の行順(見積書の逆)を、見積書と同じ表示順に直してから使う
+  const tree = useMemo(() => {
+    const t = buildEstTree(lines);
+    return { ...t, top: reverseSiblingOrder(t.top) };
+  }, [lines]);
   const rows = useMemo(() => flattenForDisplay(tree.top), [tree]);
   const leaves = useMemo(() => flattenEstTree(tree.top), [tree]);
 
