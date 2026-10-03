@@ -5,7 +5,7 @@ import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { fmt } from "../lib/constants";
 import { buildPriceIndex, matchLine, searchItems, similarity, aliasKey, normalizeText } from "../lib/priceMatch";
 import { toBasePrice, lineAmount, roundYen, MARKUP_BACK_RATE } from "../lib/quoteImport/markup";
-import { buildEstTree } from "../lib/quoteImport/parseEst";
+import { buildEstTree, flattenEstTree } from "../lib/quoteImport/parseEst";
 import { QUOTE_FILE_BUCKET, FILE_TYPES } from "../lib/quoteFiles";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -129,7 +129,7 @@ function FileCard({ r, price, pjs, cos, salesReps, defaultProjectId, onRegistere
       </div>
     );
   }
-  if (r.kind === "est") return <EstImportForm r={r} onRemove={onRemove} />;
+  if (r.kind === "est") return <EstImportForm r={r} price={price} pjs={pjs} cos={cos} salesReps={salesReps} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onRemove={onRemove} />;
   return <ImportForm r={r} price={price} pjs={pjs} cos={cos} salesReps={salesReps} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onRemove={onRemove} />;
 }
 
@@ -596,12 +596,21 @@ function sumLeafAmount(node, markupChoice) {
   return node.children.reduce((s, c) => s + sumLeafAmount(c, markupChoice), 0);
 }
 
-// ESTファイル(見積ソフトのバイナリ形式)の確認画面。ステップ2: 読み取りと確認のみ(DBへの登録はまだ行わない)
-function EstImportForm({ r, onRemove }) {
+// ESTファイル(見積ソフトのバイナリ形式)の確認画面。ステップ3: 登録・原価の当てはめ・粗利の計算まで行う
+function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegistered, onOpenQuote, onRemove }) {
   const d = r.data;
-  const [lines, setLines] = useState(() => d.lines.map(l => ({ ...l })));
+  const [lines, setLines] = useState(() => d.lines.map(l => ({ ...l, pickedItemId: undefined })));
   const [markupChoice, setMarkupChoice] = useState(null); // "with"(元請絡む・×0.925) | "without"(絡まない) ※必須
   const [outputRateChoice, setOutputRateChoice] = useState(d.cover.detectedRate === 100 ? "100" : "file");
+  const [status, setStatus] = useState("submitted");
+  const [pickedSetId, setPriceSetId] = useState("");
+  const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
+  const [projectId, setProjectId] = useState(defaultProjectId);
+  const [np, setNp] = useState({ name: d.cover.title || "", clientId: "", salesRepId: "", inCharge: "" });
+  const [searchKey, setSearchKey] = useState(null);
+  const [searchText, setSearchText] = useState("");
+  const [registering, setRegistering] = useState(false);
+  const [result, setResult] = useState(null); // { ok, message, projectId, quoteNo }
 
   const updateLine = (key, patch) => setLines(prev => prev.map(l => (l.key === key ? { ...l, ...patch } : l)));
   const toggleGroup = key => setLines(prev => prev.map(l => {
@@ -613,6 +622,7 @@ function EstImportForm({ r, onRemove }) {
 
   const tree = useMemo(() => buildEstTree(lines), [lines]);
   const rows = useMemo(() => flattenForDisplay(tree.top), [tree]);
+  const leaves = useMemo(() => flattenEstTree(tree.top), [tree]);
 
   const topSum100 = tree.top.reduce((s, n) => s + (Number(n.amountA) || 0), 0);
   const fileTotal100 = d.cover.totalExTax;
@@ -621,13 +631,113 @@ function EstImportForm({ r, onRemove }) {
   const adjustedTotal = tree.top.reduce((s, n) => s + sumLeafAmount(n, markupChoice), 0);
   const rateMismatchWarning = outputRateChoice === "100" && d.cover.detectedRate !== 100;
 
+  // 単価セット(原価の当てはめに使う。初期値: 工事見積用)
+  const defaultSetId = price?.sets?.length ? (price.sets.find(s => s.code === "construction") || price.sets[0]).id : "";
+  const priceSetId = pickedSetId || defaultSetId;
+
+  const index = useMemo(() => {
+    if (!price || !priceSetId) return null;
+    return buildPriceIndex(price.items.filter(i => i.price_set_id === priceSetId), price.aliases);
+  }, [price, priceSetId]);
+
+  const autoMatches = useMemo(() => {
+    const out = {};
+    if (!index) return out;
+    for (const l of leaves) out[l.key] = matchLine(index, l.name, l.spec);
+    return out;
+  }, [index, leaves]);
+
+  // 原価の当てはめ・粗利の計算は、明細(葉)だけを対象にする(小計行は子の積み上げなので対象外)
+  const view = leaves.map(l => {
+    const auto = autoMatches[l.key] || { status: "none", item: null, candidates: [] };
+    const picked = l.pickedItemId !== undefined;
+    const item = picked ? (l.pickedItemId ? index?.byId.get(l.pickedItemId) || null : null) : auto.item;
+    const matchStatus = picked ? (item ? "manual" : "skip") : auto.status;
+    const cost = item ? price?.costs[item.id] : null;
+    const basePrice = toBasePrice(l.priceA, markupChoice === "with" ? "after" : "before");
+    const amount = lineAmount(l.qty, basePrice);
+    const costPrice = cost?.cost_price ?? null;
+    return { ...l, auto, item, matchStatus, basePrice, amount, costPrice, costConfirmed: !!cost?.cost_confirmed && costPrice != null };
+  });
+  const viewByKey = useMemo(() => Object.fromEntries(view.map(v => [v.key, v])), [view]);
+
+  const costTotal = view.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.costPrice) || 0), 0);
+  const gp = adjustedTotal - costTotal;
+  const gpRate = adjustedTotal ? (gp / adjustedTotal) * 100 : null;
+  const provisional = view.some(l => !l.costConfirmed);
+  const unmatchedCount = view.filter(l => !l.item).length;
+
+  const similarProjects = useMemo(() => {
+    const t = normalizeText(projectMode === "new" ? np.name : "");
+    if (!t) return [];
+    return pjs.map(p => {
+      const n = normalizeText(p.name);
+      const score = n && (n.includes(t) || t.includes(n)) ? 1 : similarity(t, p.name);
+      return { p, score };
+    }).filter(x => x.score >= 0.5).sort((a, b) => b.score - a.score).slice(0, 5);
+  }, [pjs, projectMode, np.name]);
+
+  const clients = cos.filter(c => c.type === "取引先");
+  const repsForClient = salesReps.filter(s => !np.clientId || s.company_id === np.clientId);
+  const repName = s => s?.name || s?.display_name || "";
+
   const problems = [];
   if (!markupChoice) problems.push("「元請が絡むか」を選んでください");
   if (totalCheckOk === false) problems.push("組み立てた合計が、ファイルに保存されている合計と一致していません(明細・小計/明細の切り替えを確認してください)");
+  if (!priceSetId) problems.push("単価セットを選んでください");
+  if (projectMode === "existing" && !projectId) problems.push("追加先の案件を選んでください");
+  if (projectMode === "new" && !np.name.trim()) problems.push("案件名を入力してください");
+
+  const register = async () => {
+    if (problems.length || registering) return;
+    setRegistering(true);
+    const rep = salesReps.find(s => s.id === np.salesRepId);
+    const pProject = projectMode === "existing" ? { id: projectId } : {
+      name: np.name.trim(), status: "発注待ち", clientId: np.clientId || null,
+      salesRepId: np.salesRepId || null, salesRep: repName(rep), inCharge: np.inCharge.trim(),
+      subcontractorIds: [], quoteDate: "",
+    };
+    const memo = `見積ファイル「${r.fileName}」(ESTファイル)から取り込み。${markupChoice === "with" ? `元請が絡むため、単価×${MARKUP_BACK_RATE}でIGUMIの販売金額に戻して登録` : "元請が絡まないため、100%の単価のまま登録"}。ファイルの税抜合計(100%) ${fileTotal100?.toLocaleString()}円`;
+    const pQuote = { title: (d.cover.title || r.fileName).trim(), price_set_id: priceSetId, status, total_amount: Math.round(adjustedTotal), issued_at: null, memo };
+    const pItems = view.map(l => ({
+      price_item_id: l.item?.id ?? null,
+      line_type: l.item ? "item" : "adjust",
+      group_name: l.groupPath || "",
+      name: l.name, spec: l.spec || "", unit: l.unit || "",
+      qty: Number(l.qty) || 0, sale_price: l.basePrice,
+      note: l.note || null,
+      cost_price: l.costPrice, cost_confirmed: l.costConfirmed,
+    }));
+    const pAliases = view.filter(l => l.matchStatus === "manual" && l.item).map(l => ({ alias: aliasKey(l.name, l.spec), price_item_id: l.item.id }));
+
+    const { data, error } = await supabase.rpc("import_quote", { p_project: pProject, p_quote: pQuote, p_items: pItems, p_aliases: pAliases });
+    if (error) {
+      const missing = /import_quote|function|schema cache/i.test(error.message || "");
+      setResult({ ok: false, message: `登録できませんでした。案件・見積は登録されていません。(${error.message})${missing ? " ※ 取り込み用のSQLが未実行の可能性があります" : ""}` });
+      setRegistering(false);
+      return;
+    }
+    await onRegistered(data.project_id);
+    setResult({ ok: true, projectId: data.project_id, quoteNo: data.quote_no, projectName: projectMode === "existing" ? pjs.find(p => p.id === projectId)?.name : np.name.trim() });
+    setRegistering(false);
+  };
+
+  const locked = !!result?.ok;
 
   return (
-    <div style={{ ...card, borderLeft: `4px solid ${totalCheckOk === false ? "#DC2626" : "#1A3A5C"}` }}>
-      <CardHead fileName={r.fileName} onRemove={onRemove} />
+    <div style={{ ...card, borderLeft: `4px solid ${locked ? "#059669" : totalCheckOk === false ? "#DC2626" : "#1A3A5C"}` }}>
+      <CardHead fileName={r.fileName} onRemove={onRemove} locked={locked} />
+
+      {locked ? (
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#6B7280", marginBottom: 6 }}>登録の結果</div>
+          <div style={{ fontSize: 13, color: "#065F46", marginBottom: 10 }}>✅ 案件・見積・明細・原価: 登録しました(案件「{result.projectName}」/ 見積 No.{result.quoteNo})</div>
+          <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 10 }}>※ 元のESTファイル自体は、まだ保管していません。案件の受注金額・粗利も変わっていません。反映するには、見積一覧で「採用にする」を押してください。</div>
+          <button onClick={() => onOpenQuote(result.projectId)} style={{ width: "100%", padding: "10px 0", background: "#EEF2FF", color: "#3730A3", border: "1.5px solid #C7D2FE", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>📝 見積一覧を開く →</button>
+        </div>
+      ) : (
+      <>
+
 
       {/* 表紙 */}
       <div style={{ background: "#F9FAFB", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
@@ -686,10 +796,81 @@ function EstImportForm({ r, onRemove }) {
         )}
       </div>
 
+      {/* 登録先(案件・見積の設定) */}
+      <div style={{ background: "#F9FAFB", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+        <div style={sectionTitle}>登録先</div>
+        <div style={{ display: "flex", gap: 14, marginBottom: 8, fontSize: 13 }}>
+          <label style={{ cursor: "pointer" }}><input type="radio" name={`pm-${r.key}`} checked={projectMode === "existing"} onChange={() => setProjectMode("existing")} /> 既存の案件に追加</label>
+          <label style={{ cursor: "pointer" }}><input type="radio" name={`pm-${r.key}`} checked={projectMode === "new"} onChange={() => setProjectMode("new")} /> 新しい案件を作る</label>
+        </div>
+
+        {projectMode === "new" && similarProjects.length > 0 && (
+          <div style={{ background: "#FFFBEB", border: "1px solid #FCD34D", borderRadius: 8, padding: "8px 10px", marginBottom: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#92400E", marginBottom: 4 }}>⚠️ 名前の似た案件があります(二重登録に注意)</div>
+            {similarProjects.map(({ p }) => (
+              <button key={p.id} onClick={() => { setProjectMode("existing"); setProjectId(p.id); }} style={{ display: "block", width: "100%", textAlign: "left", background: projectMode === "existing" && projectId === p.id ? "#FDE68A" : "#fff", border: "1px solid #FCD34D", borderRadius: 6, padding: "4px 8px", marginBottom: 3, fontSize: 12, cursor: "pointer", color: "#1F2937" }}>
+                {p.name}<span style={{ color: "#9CA3AF", marginLeft: 6 }}>{p.status}</span><span style={{ float: "right", color: "#92400E" }}>この案件に追加 →</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {projectMode === "existing" ? (
+          <div style={{ marginBottom: 8 }}>
+            <div style={label}>追加先の案件 *</div>
+            <select value={projectId} onChange={e => setProjectId(e.target.value)} style={inp}>
+              <option value="">選択してください</option>
+              {pjs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+        ) : (
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+            <div style={{ flex: "1 1 100%" }}>
+              <div style={label}>案件名 *(初期値 = 工事名称)</div>
+              <input value={np.name} onChange={e => setNp({ ...np, name: e.target.value })} style={inp} />
+            </div>
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <div style={label}>元請</div>
+              <select value={np.clientId} onChange={e => setNp({ ...np, clientId: e.target.value, salesRepId: "" })} style={inp}>
+                <option value="">未設定</option>
+                {clients.map(c => <option key={c.id} value={c.id}>{c.name}{c.branch ? " " + c.branch : ""}</option>)}
+              </select>
+            </div>
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <div style={label}>元請側の担当者</div>
+              <select value={np.salesRepId} onChange={e => setNp({ ...np, salesRepId: e.target.value })} style={inp}>
+                <option value="">未設定</option>
+                {repsForClient.map(s => <option key={s.id} value={s.id}>{repName(s) || s.id}</option>)}
+              </select>
+            </div>
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <div style={label}>現場担当(社内)</div>
+              <input value={np.inCharge} onChange={e => setNp({ ...np, inCharge: e.target.value })} style={inp} />
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 160 }}>
+            <div style={label}>見積の状態</div>
+            <select value={status} onChange={e => setStatus(e.target.value)} style={inp}>
+              {QUOTE_STATUS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+            </select>
+          </div>
+          <div style={{ flex: 1, minWidth: 160 }}>
+            <div style={label}>単価セット(原価の当てはめに使う)</div>
+            <select value={priceSetId} onChange={e => setPriceSetId(e.target.value)} style={inp}>
+              {(price?.sets || []).map(s => <option key={s.id} value={s.id}>{s.icon} {s.name}</option>)}
+            </select>
+          </div>
+        </div>
+      </div>
+
       {/* 明細(階層つき) */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
         <div style={sectionTitle}>明細({lines.length}行 / 小計{rows.filter(x => x.node.children.length > 0).length}件)</div>
         {tree.mismatchKeys.length > 0 && <div style={{ fontSize: 11, color: "#DC2626", fontWeight: 700 }}>⚠️ 小計にした行で、金額が子の合計と一致しないものが{tree.mismatchKeys.length}件あります</div>}
+        {unmatchedCount > 0 && <div style={{ fontSize: 11, color: "#B45309", fontWeight: 700 }}>単価表に当てはまらない行: {unmatchedCount}行(原価未入力)</div>}
       </div>
       <div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 6 }}>各行の「小計/明細」ボタンで、自動判定を手で切り替えられます(自動→小計→明細→自動…)</div>
       <div style={{ overflowX: "auto", marginBottom: 6 }}>
@@ -702,6 +883,7 @@ function EstImportForm({ r, onRemove }) {
               {markupChoice === "with" && <th style={th}>単価(IGUMI販売)</th>}
               <th style={{ ...th, textAlign: "right" }}>金額</th>
               <th style={th}>備考</th>
+              <th style={th}>単価表の項目(原価)</th>
               <th style={th}></th>
             </tr>
           </thead>
@@ -711,6 +893,7 @@ function EstImportForm({ r, onRemove }) {
               const mismatch = tree.mismatchKeys.includes(l.key);
               const basePrice = toBasePrice(l.priceA, markupChoice === "with" ? "after" : "before");
               const amount = isLeaf ? lineAmount(l.qty, basePrice) : sumLeafAmount(l, markupChoice);
+              const v = isLeaf ? viewByKey[l.key] : null;
               return (
                 <tr key={l.key} style={{ borderBottom: "1px solid #F3F4F6", background: mismatch ? "#FEF2F2" : !isLeaf ? "#FFF7ED" : "transparent" }}>
                   <td style={{ ...td, width: 70 }}>
@@ -729,6 +912,15 @@ function EstImportForm({ r, onRemove }) {
                   {markupChoice === "with" && <td style={{ ...td, textAlign: "right", width: 80 }}>{num(basePrice)}</td>}
                   <td style={{ ...td, textAlign: "right", fontWeight: 700, color: "#E07B39", width: 80 }}>{num(amount)}</td>
                   <td style={{ ...td, width: 110 }}><input value={l.note} onChange={e => updateLine(l.key, { note: e.target.value })} style={{ ...cellInp, fontSize: 11 }} /></td>
+                  <td style={{ ...td, width: 230 }}>
+                    {isLeaf
+                      ? <MatchCell l={v} index={index} costs={price?.costs || {}}
+                          searching={searchKey === l.key} searchText={searchText}
+                          onSearchOpen={() => { setSearchKey(searchKey === l.key ? null : l.key); setSearchText(""); }}
+                          onSearchText={setSearchText}
+                          onPick={id => { updateLine(l.key, { pickedItemId: id }); setSearchKey(null); }} />
+                      : <span style={{ fontSize: 11, color: "#9CA3AF" }}>小計(原価対象外)</span>}
+                  </td>
                   <td style={{ ...td, width: 30 }}>
                     <button onClick={() => setLines(prev => prev.filter(x => x.key !== l.key))} title="この行を削除" style={{ border: "none", background: "none", cursor: "pointer", color: "#DC2626", fontSize: 13 }}>🗑</button>
                   </td>
@@ -740,22 +932,36 @@ function EstImportForm({ r, onRemove }) {
       </div>
       <div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 12 }}>オレンジの行 = 小計(グループ)。ピンクの行 = 小計にしたが、子の金額の合計と一致しない(ベストエフォートで組み立て)</div>
 
-      {/* 合計 */}
+      {/* 合計・粗利 */}
       <div style={{ background: "#F9FAFB", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
           <div style={{ fontSize: 13, color: "#6B7280" }}>IGUMIの販売金額の合計(税抜)</div>
           <div style={{ fontSize: 20, fontWeight: 900, color: "#1A3A5C" }}>{yen(adjustedTotal)}</div>
         </div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#6B7280", marginBottom: 4 }}>🔒 社内用</div>
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+          <div><span style={{ fontSize: 11, color: "#9CA3AF" }}>原価合計 </span><span style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>{yen(costTotal)}</span></div>
+          <div><span style={{ fontSize: 11, color: "#9CA3AF" }}>粗利 </span><span style={{ fontSize: 13, fontWeight: 700, color: "#059669" }}>{yen(gp)}{provisional ? "(暫定)" : ""}</span></div>
+          <div><span style={{ fontSize: 11, color: "#9CA3AF" }}>粗利率 </span><span style={{ fontSize: 13, fontWeight: 700, color: "#059669" }}>{gpRate == null ? "—" : `${gpRate.toFixed(1)}%`}</span></div>
+        </div>
+        {provisional && <div style={{ marginTop: 6, fontSize: 11, color: "#DC2626", fontWeight: 700 }}>⚠️ 原価が未入力・未確認の明細があります。粗利は暫定です</div>}
+        <div style={{ marginTop: 4, fontSize: 11, color: "#6B7280" }}>※ 原価は、いまの単価表の原価をコピーします。過去の見積の場合、粗利は「いまの原価」での目安です</div>
       </div>
 
+      {result && !result.ok && (
+        <div style={{ background: "#FEF2F2", color: "#991B1B", borderRadius: 10, padding: "10px 12px", fontSize: 13, fontWeight: 700, marginBottom: 10 }}>❌ {result.message}</div>
+      )}
       {problems.length > 0 && (
         <div style={{ marginBottom: 8 }}>
           {problems.map((p, i) => <div key={i} style={{ fontSize: 12, color: "#B45309" }}>・{p}</div>)}
         </div>
       )}
-      <div style={{ fontSize: 11, color: "#6B7280", textAlign: "center", padding: "8px 0", background: "#F9FAFB", borderRadius: 10 }}>
-        このステップでは、まだ登録しません(確認・検算のみ)。案件への登録・原価の当てはめは、次のステップで対応します。
-      </div>
+      <button onClick={register} disabled={problems.length > 0 || registering} style={{ width: "100%", padding: "12px 0", background: problems.length ? "#9CA3AF" : "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: problems.length || registering ? "default" : "pointer", opacity: registering ? 0.6 : 1 }}>
+        {registering ? "登録中..." : "💾 この内容で登録する"}
+      </button>
+      <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 4, textAlign: "center" }}>案件の受注金額・粗利は変わりません(反映は見積一覧の「採用にする」で行います)。元のESTファイル自体の保管は、このステップでは行いません</div>
+      </>
+      )}
     </div>
   );
 }
