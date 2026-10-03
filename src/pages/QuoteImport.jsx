@@ -5,18 +5,17 @@ import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { fmt } from "../lib/constants";
 import { buildPriceIndex, matchLine, searchItems, similarity, aliasKey, normalizeText } from "../lib/priceMatch";
 import { toBasePrice, lineAmount, roundYen, MARKUP_BACK_RATE } from "../lib/quoteImport/markup";
-import { buildEstTree, flattenEstTree } from "../lib/quoteImport/parseEst";
+import { buildEstTree, flattenEstTree, reverseSiblingOrder } from "../lib/quoteImport/parseEst";
 import { QUOTE_FILE_BUCKET, FILE_TYPES } from "../lib/quoteFiles";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ACCEPT_RE = /\.(xls|xlsx|est)$/i;
 const EST_RE = /\.est$/i;
 
+// 見積の状態は、画面上は「発注前」「完工済」の2つだけ(発注前=submitted / 完工済=won)
 const QUOTE_STATUS = [
-  { key: "draft", label: "下書き" },
-  { key: "submitted", label: "提出済み" },
-  { key: "won", label: "受注" },
-  { key: "lost", label: "失注" },
+  { key: "submitted", label: "発注前" },
+  { key: "won", label: "完工済" },
 ];
 
 const card = { background: "#fff", borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" };
@@ -156,6 +155,7 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
     key: "il" + (++lineSeq), groupName: l.groupName, name: l.name, spec: l.spec, qty: l.qty ?? 0, unit: l.unit,
     price: l.price ?? 0, note: l.note, summaryOnly: l.summaryOnly, nameFromSpec: l.nameFromSpec, fileAmount: l.amount,
     pickedItemId: undefined, // undefined = 自動 / null = 当てはめない / id = 手で選んだ
+    costOverride: undefined, // undefined = 単価表の原価をそのまま使う / { price, confirmed } = 手で直した原価
   })));
   const [searchKey, setSearchKey] = useState(null);
   const [searchText, setSearchText] = useState("");
@@ -186,8 +186,9 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
     const cost = item ? price?.costs[item.id] : null;
     const basePrice = toBasePrice(l.price, markup || "before");
     const amount = lineAmount(l.qty, basePrice);
-    const costPrice = cost?.cost_price ?? null;
-    return { ...l, auto, item, matchStatus, basePrice, amount, costPrice, costConfirmed: !!cost?.cost_confirmed && costPrice != null };
+    const costPrice = l.costOverride !== undefined ? l.costOverride.price : (cost?.cost_price ?? null);
+    const costConfirmed = l.costOverride !== undefined ? l.costOverride.confirmed : (!!cost?.cost_confirmed && costPrice != null);
+    return { ...l, auto, item, matchStatus, basePrice, amount, costPrice, costConfirmed };
   });
 
   const total = view.reduce((s, l) => s + l.amount, 0);
@@ -472,7 +473,8 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
                         searching={searchKey === l.key} searchText={searchText}
                         onSearchOpen={() => { setSearchKey(searchKey === l.key ? null : l.key); setSearchText(""); }}
                         onSearchText={setSearchText}
-                        onPick={id => { updateLine(l.key, { pickedItemId: id }); setSearchKey(null); }} />
+                        onPick={id => { updateLine(l.key, { pickedItemId: id, costOverride: undefined }); setSearchKey(null); }}
+                        onCostChange={v => updateLine(l.key, { costOverride: v === "" ? { price: null, confirmed: false } : { price: Number(v), confirmed: true } })} />
                     </td>
                     <td style={{ ...td, width: 30 }}>
                       <button onClick={() => removeLine(l.key)} title="この行を削除" style={{ border: "none", background: "none", cursor: "pointer", color: "#DC2626", fontSize: 13 }}>🗑</button>
@@ -530,7 +532,7 @@ const MATCH_BADGE = {
   none: { text: "未当てはめ", color: "#92400E", bg: "#FEF3C7" },
 };
 
-function MatchCell({ l, index, costs, searching, searchText, onSearchOpen, onSearchText, onPick }) {
+function MatchCell({ l, index, costs, searching, searchText, onSearchOpen, onSearchText, onPick, onCostChange }) {
   if (l.summaryOnly) return <span style={{ fontSize: 11, color: "#9A3412", fontWeight: 700 }}>総括のみ(原価未入力)</span>;
   if (!index) return <span style={{ fontSize: 11, color: "#9CA3AF" }}>単価表を読み込み中...</span>;
   const b = MATCH_BADGE[l.matchStatus];
@@ -541,13 +543,14 @@ function MatchCell({ l, index, costs, searching, searchText, onSearchOpen, onSea
   const scoreOf = id => l.auto.candidates.find(c => c.item.id === id)?.score;
   const results = searching ? searchItems(index, searchText) : [];
   const costLabel = it => { const c = costs[it.id]; return c?.cost_price != null ? `原価${Number(c.cost_price).toLocaleString()}${c.cost_confirmed ? "" : "(未確認)"}` : "原価なし"; };
+  const lineCostTotal = (Number(l.qty) || 0) * (Number(l.costPrice) || 0);
+  const lineGp = (Number(l.amount) || 0) - lineCostTotal;
   return (
     <div>
       <div style={{ display: "flex", gap: 4, alignItems: "center", marginBottom: 3 }}>
         <span style={{ fontSize: 10, fontWeight: 700, color: b.color, background: b.bg, borderRadius: 4, padding: "1px 6px", whiteSpace: "nowrap" }}>{b.text}</span>
-        {l.item && <span style={{ fontSize: 10, color: l.costConfirmed ? "#6B7280" : "#DC2626" }}>{l.costPrice != null ? `原価 ${Number(l.costPrice).toLocaleString()}${l.costConfirmed ? "" : "(未確認)"}` : "原価未入力"}</span>}
       </div>
-      <div style={{ display: "flex", gap: 3 }}>
+      <div style={{ display: "flex", gap: 3, marginBottom: 3 }}>
         <select value={l.item?.id || ""} onChange={e => onPick(e.target.value || null)} style={{ ...cellInp, fontSize: 11, flex: 1, minWidth: 0 }}>
           <option value="">当てはめない(原価未入力)</option>
           {options.map(it => <option key={it.id} value={it.id}>{it.name} {it.spec || ""} / {costLabel(it)}{scoreOf(it.id) != null ? ` [類似${Math.round(scoreOf(it.id) * 100)}%]` : ""}</option>)}
@@ -567,6 +570,16 @@ function MatchCell({ l, index, costs, searching, searchText, onSearchOpen, onSea
           </div>
         </div>
       )}
+      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+        <span style={{ fontSize: 10, color: "#9CA3AF", whiteSpace: "nowrap" }}>原価単価</span>
+        <input type="number" value={l.costPrice ?? ""} placeholder="未入力" onChange={e => onCostChange(e.target.value)}
+          style={{ ...cellInp, fontSize: 11, width: 72, borderColor: l.costConfirmed ? "#E5E7EB" : "#FCA5A5" }} />
+      </div>
+      <div style={{ fontSize: 10, marginTop: 2 }}>
+        {!l.costConfirmed
+          ? <span style={{ color: "#DC2626", fontWeight: 700 }}>未確認(粗利は暫定)</span>
+          : <span style={{ color: "#6B7280" }}>原価計 {Math.round(lineCostTotal).toLocaleString()} / 粗利 {Math.round(lineGp).toLocaleString()}</span>}
+      </div>
     </div>
   );
 }
@@ -599,7 +612,7 @@ function sumLeafAmount(node, markupChoice) {
 // ESTファイル(見積ソフトのバイナリ形式)の確認画面。ステップ3: 登録・原価の当てはめ・粗利の計算まで行う
 function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegistered, onOpenQuote, onRemove }) {
   const d = r.data;
-  const [lines, setLines] = useState(() => d.lines.map(l => ({ ...l, pickedItemId: undefined })));
+  const [lines, setLines] = useState(() => d.lines.map(l => ({ ...l, pickedItemId: undefined, costOverride: undefined })));
   const [markupChoice, setMarkupChoice] = useState(null); // "with"(元請絡む・×0.925) | "without"(絡まない) ※必須
   const [outputRateChoice, setOutputRateChoice] = useState(d.cover.detectedRate === 100 ? "100" : "file");
   const [status, setStatus] = useState("submitted");
@@ -620,7 +633,11 @@ function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegi
     return { ...l, groupOverride: next };
   }));
 
-  const tree = useMemo(() => buildEstTree(lines), [lines]);
+  // ファイル内の行順(見積書の逆)を、見積書と同じ表示順に直してから使う
+  const tree = useMemo(() => {
+    const t = buildEstTree(lines);
+    return { ...t, top: reverseSiblingOrder(t.top) };
+  }, [lines]);
   const rows = useMemo(() => flattenForDisplay(tree.top), [tree]);
   const leaves = useMemo(() => flattenEstTree(tree.top), [tree]);
 
@@ -656,8 +673,9 @@ function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegi
     const cost = item ? price?.costs[item.id] : null;
     const basePrice = toBasePrice(l.priceA, markupChoice === "with" ? "after" : "before");
     const amount = lineAmount(l.qty, basePrice);
-    const costPrice = cost?.cost_price ?? null;
-    return { ...l, auto, item, matchStatus, basePrice, amount, costPrice, costConfirmed: !!cost?.cost_confirmed && costPrice != null };
+    const costPrice = l.costOverride !== undefined ? l.costOverride.price : (cost?.cost_price ?? null);
+    const costConfirmed = l.costOverride !== undefined ? l.costOverride.confirmed : (!!cost?.cost_confirmed && costPrice != null);
+    return { ...l, auto, item, matchStatus, basePrice, amount, costPrice, costConfirmed };
   });
   const viewByKey = useMemo(() => Object.fromEntries(view.map(v => [v.key, v])), [view]);
 
@@ -918,7 +936,8 @@ function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegi
                           searching={searchKey === l.key} searchText={searchText}
                           onSearchOpen={() => { setSearchKey(searchKey === l.key ? null : l.key); setSearchText(""); }}
                           onSearchText={setSearchText}
-                          onPick={id => { updateLine(l.key, { pickedItemId: id }); setSearchKey(null); }} />
+                          onPick={id => { updateLine(l.key, { pickedItemId: id, costOverride: undefined }); setSearchKey(null); }}
+                          onCostChange={val => updateLine(l.key, { costOverride: val === "" ? { price: null, confirmed: false } : { price: Number(val), confirmed: true } })} />
                       : <span style={{ fontSize: 11, color: "#9CA3AF" }}>小計(原価対象外)</span>}
                   </td>
                   <td style={{ ...td, width: 30 }}>

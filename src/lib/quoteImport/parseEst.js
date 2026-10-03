@@ -206,6 +206,13 @@ export function buildEstTree(lines, amountKey = "amountA") {
   return { top: pending, resolved, mismatchKeys };
 }
 
+// ESTのファイル内の行順は、見積書(Excel)の表示順の「逆」(ファイル形式そのものの仕様)。
+// buildEstTree は「小計行が子の後に来る」前提で組み立てるため、組み立てたあとに
+// 各階層の兄弟(同じ親を持つ行どうし)の順番だけを反転し、見積書と同じ表示順に直す
+export function reverseSiblingOrder(nodes) {
+  return [...nodes].reverse().map(n => (n.children && n.children.length ? { ...n, children: reverseSiblingOrder(n.children) } : n));
+}
+
 // グループの入れ子を「親 > 子」の文字列にして、明細(葉)だけを平らなリストにする
 export function flattenEstTree(top, pathPrefix = []) {
   const out = [];
