@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
-import { PRIO } from "../lib/constants";
+import { PRIO, PROJECT_STATS_SINCE } from "../lib/constants";
 
 const SB_W = 180, RP_W = 220;
 
@@ -52,7 +52,8 @@ export const FloatLauncher = ({ links, isPC, nav }) => {
 };
 
 export const PCSidebar = ({ cust, tileConf, pjs, cos, pending, page, nav, setModal, setEc, SB_W }) => {
-  const active = pjs.filter(p => p.status !== "完了" && p.status !== "中断");
+  const statsPjs = pjs.filter(p => p.created_at >= PROJECT_STATS_SINCE);
+  const active = statsPjs.filter(p => p.status !== "完了" && p.status !== "中断");
 
   // 🔒 財務パスワード関連のstate
   const [pwModal, setPwModal] = useState(null); // "unlock" | "set" | null
@@ -293,9 +294,10 @@ export const PCRightPanel = ({ rpOpen, setRpOpen, pjs, tks, finFiles, tmplFiles,
   const [open, setOpen] = useState({ kpi: true, tasks: true, fishing: true, ai: true });
   const tog = k => setOpen(p => ({ ...p, [k]: !p[k] }));
   const pending = tks.filter(t => !t.done);
-  const totalAmt = pjs.reduce((s, p) => s + (p.amount || 0), 0);
-  const totalGp = pjs.reduce((s, p) => s + (p.gp || 0), 0);
-  const active = pjs.filter(p => p.status !== "完了" && p.status !== "中断");
+  const statsPjs = pjs.filter(p => p.created_at >= PROJECT_STATS_SINCE);
+  const totalAmt = statsPjs.reduce((s, p) => s + (p.amount || 0), 0);
+  const totalGp = statsPjs.reduce((s, p) => s + (p.gp || 0), 0);
+  const active = statsPjs.filter(p => p.status !== "完了" && p.status !== "中断");
   const SectionHdr = ({ id, label }) => (
     <button onClick={() => tog(id)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "none", border: "none", cursor: "pointer", padding: "10px 0 8px" }}>
       <div style={{ fontWeight: 800, fontSize: 13, color: "#1A3A5C" }}>{label}</div>

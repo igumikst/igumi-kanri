@@ -56,6 +56,9 @@ export const DEFAULT_TILE_CONF = [
   {key:"systemmanual",icon:"📘",label:"システムマニュアル",sub:"会社保管用ドキュメント",color:"#1A3A5C",visible:true},
   {key:"usermanual",icon:"📗",label:"使い方マニュアル",sub:"社員向け操作ガイド",color:"#059669",visible:true},
 ];
+// この日以降に登録(created_at)された案件だけを、集計(ダッシュボード・ホームの件数等)の対象にする。
+// 2026年8月31日以前の案件は、一覧には残すが集計からは外す(第6弾 8節)。
+export const PROJECT_STATS_SINCE = "2026-09-01";
 export const HOMEPAGE_URL = "https://www.igumi-inc.jp";
 export const BLOG_LIST_URL = "https://www.igumi-inc.jp/blog";
 export const DEFAULT_CUST = {name:"株式会社IGUMI",sys:"案件管理システム",c1:"#1A3A5C",c2:"#2563EB",acc:"#E07B39",bg:"#F0F4F8",showSidebar:true,showRightPanel:true,showLauncher:true};
