@@ -12,11 +12,10 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ACCEPT_RE = /\.(xls|xlsx|est)$/i;
 const EST_RE = /\.est$/i;
 
+// 見積の状態は、画面上は「発注前」「完工済」の2つだけ(発注前=submitted / 完工済=won)
 const QUOTE_STATUS = [
-  { key: "draft", label: "下書き" },
-  { key: "submitted", label: "提出済み" },
-  { key: "won", label: "受注" },
-  { key: "lost", label: "失注" },
+  { key: "submitted", label: "発注前" },
+  { key: "won", label: "完工済" },
 ];
 
 const card = { background: "#fff", borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" };

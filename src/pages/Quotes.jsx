@@ -5,15 +5,17 @@ import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { fmt } from "../lib/constants";
 import { openQuoteFile } from "../lib/quoteFiles";
 
+// 見積の状態は、画面上は「発注前」「完工済」の2つだけ。DBの値は既存の制約に合わせる
+// (発注前=submitted / 完工済=won)。既存の下書き(draft)・失注(lost)は、画面では発注前と表示する
 const QUOTE_STATUS = [
-  { key: "draft", label: "下書き", bg: "#F3F4F6", text: "#4B5563", border: "#D1D5DB" },
-  { key: "submitted", label: "提出済み", bg: "#E0F0FF", text: "#0B4F8A", border: "#60A5FA" },
-  { key: "won", label: "受注", bg: "#D1FAE5", text: "#065F46", border: "#34D399" },
-  { key: "lost", label: "失注", bg: "#F8D7DA", text: "#58151C", border: "#F1707A" },
+  { key: "submitted", label: "発注前" },
+  { key: "won", label: "完工済" },
 ];
-const statusStyle = key => QUOTE_STATUS.find(s => s.key === key) || QUOTE_STATUS[0];
+const STATUS_STYLE_DEFAULT = { label: "発注前", bg: "#E0F0FF", text: "#0B4F8A", border: "#60A5FA" };
+const STATUS_STYLE_WON = { label: "完工済", bg: "#D1FAE5", text: "#065F46", border: "#34D399" };
+const statusStyle = key => (key === "won" ? STATUS_STYLE_WON : STATUS_STYLE_DEFAULT);
 
-const blankEd = { id: null, quote_no: null, title: "", price_set_id: "", status: "draft", lines: [] };
+const blankEd = { id: null, quote_no: null, title: "", price_set_id: "", status: "submitted", lines: [] };
 const newKey = () => "l" + Date.now() + Math.random().toString(36).slice(2);
 // quote_no は text 型のため、数字だけを取り出して数として扱う(DB関数 import_quote と同じ考え方)
 const quoteNoNum = q => parseInt(String(q.quote_no ?? "").replace(/[^0-9]/g, ""), 10) || 0;
@@ -103,7 +105,7 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
       labor_count: r.line_type === "labor" ? (parseFloat(r.spec) || "") : undefined,
       note: r.note || "",
     }));
-    setEd({ id: q.id, quote_no: q.quote_no, title: q.title, price_set_id: q.price_set_id || "", status: q.status, lines });
+    setEd({ id: q.id, quote_no: q.quote_no, title: q.title, price_set_id: q.price_set_id || "", status: q.status === "won" ? "won" : "submitted", lines });
     setSearch(""); setCategoryFilter(""); setGroupFilter("");
     setView("edit");
   };
@@ -125,34 +127,35 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
     return { total, costTotal, gp, hasUnconfirmed };
   };
 
+  // 「採用にする」= 完工済にする、と同じ処理(見積の状態もwonにし、案件のstatusも完了にする)
   const adoptQuote = async quote => {
     const { total, gp, hasUnconfirmed } = await computeQuoteTotals(quote);
     const prevAdopted = quotes.find(q => q.is_adopted && q.id !== quote.id);
     const msg = [
-      `「${quote.title}」を採用します`,
+      `「${quote.title}」を完工済(採用)にします`,
       prevAdopted ? `(現在「${prevAdopted.title}」が採用中です。切り替えます)` : "",
       "",
       `受注金額: ${fmt(project.amount)} → ${fmt(total)}`,
       `粗利: ${fmt(project.gp)} → ${fmt(gp)}`,
       hasUnconfirmed ? "⚠️ 原価が未確認の明細があります。粗利は暫定です" : "",
       "",
-      "案件の値を上書きします。元に戻せません。",
+      "案件の状態も「完了」にし、案件の受注金額・粗利を上書きします。元に戻せません。",
       "よろしいですか？",
     ].filter(Boolean).join("\n");
-    setConf({ msg, okLabel: "採用する", okColor: "#059669", onOk: async () => {
+    setConf({ msg, okLabel: "完工済にする", okColor: "#059669", onOk: async () => {
       setConf(null);
       if (prevAdopted) await supabase.from("quotes").update({ is_adopted: false }).eq("id", prevAdopted.id);
-      await supabase.from("quotes").update({ is_adopted: true }).eq("id", quote.id);
-      await supabase.from("projects").update({ amount: Math.round(total), grossProfit: Math.round(gp) }).eq("id", quoteProjectId);
-      setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, amount: Math.round(total), gp: Math.round(gp) } : p));
+      await supabase.from("quotes").update({ is_adopted: true, status: "won" }).eq("id", quote.id);
+      await supabase.from("projects").update({ amount: Math.round(total), grossProfit: Math.round(gp), status: "完了" }).eq("id", quoteProjectId);
+      setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, amount: Math.round(total), gp: Math.round(gp), status: "完了" } : p));
       await loadQuotes();
     } });
   };
 
   const unadoptQuote = quote => {
-    setConf({ msg: `「${quote.title}」の採用を解除します\n\n案件の受注金額・粗利はそのまま残ります(自動では戻りません)\n\nよろしいですか？`, okLabel: "解除する", okColor: "#9A3412", onOk: async () => {
+    setConf({ msg: `「${quote.title}」を発注前に戻します(採用を解除)\n\n案件の受注金額・粗利はそのまま残ります(自動では戻りません)\n\nよろしいですか？`, okLabel: "発注前に戻す", okColor: "#9A3412", onOk: async () => {
       setConf(null);
-      await supabase.from("quotes").update({ is_adopted: false }).eq("id", quote.id);
+      await supabase.from("quotes").update({ is_adopted: false, status: "submitted" }).eq("id", quote.id);
       await loadQuotes();
     } });
   };
@@ -212,9 +215,38 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
   const gpRate = total ? (gp / total * 100) : null;
   const hasUnconfirmed = ed.lines.some(l => !l.cost_confirmed || l.cost_price == null);
 
-  const saveQuote = async () => {
+  // 状態を「完工済」にして保存する場合は、採用(案件のamount/grossProfit・statusへの反映)も
+  // あわせて行う。「発注前」に戻す場合は、採用を解除する。どちらも確認ダイアログを先に出す
+  const saveQuote = () => {
     if (!ed.title.trim()) { alert("タイトルを入力してください"); return; }
     if (!ed.price_set_id) { alert("単価セットを選んでください"); return; }
+    const prevQuote = ed.id ? quotes.find(q => q.id === ed.id) : null;
+    const becomingDone = ed.status === "won";
+    const leavingDone = !!prevQuote?.is_adopted && !becomingDone;
+    if (becomingDone) {
+      const prevAdopted = quotes.find(q => q.is_adopted && q.id !== ed.id);
+      const msg = [
+        `「${ed.title.trim()}」を完工済にします`,
+        prevAdopted ? `(現在「${prevAdopted.title}」が採用中です。切り替えます)` : "",
+        "",
+        `受注金額: ${fmt(project.amount)} → ${fmt(total)}`,
+        `粗利: ${fmt(project.gp)} → ${fmt(gp)}`,
+        hasUnconfirmed ? "⚠️ 原価が未確認の明細があります。粗利は暫定です" : "",
+        "",
+        "案件の状態も「完了」にし、案件の受注金額・粗利を上書きします。元に戻せません。",
+        "よろしいですか？",
+      ].filter(Boolean).join("\n");
+      setConf({ msg, okLabel: "完工済にする", okColor: "#059669", onOk: () => { setConf(null); persistQuote({ adopt: true, prevAdopted }); } });
+      return;
+    }
+    if (leavingDone) {
+      setConf({ msg: `「${ed.title.trim()}」を発注前に戻します(採用を解除)\n\n案件の受注金額・粗利はそのまま残ります(自動では戻りません)\n\nよろしいですか？`, okLabel: "発注前に戻す", okColor: "#9A3412", onOk: () => { setConf(null); persistQuote({ unadopt: true }); } });
+      return;
+    }
+    persistQuote({});
+  };
+
+  const persistQuote = async ({ adopt, unadopt, prevAdopted }) => {
     setSaving(true);
     let quoteId = ed.id;
     const payload = { project_id: quoteProjectId, title: ed.title.trim(), price_set_id: ed.price_set_id, status: ed.status, total_amount: Math.round(total) };
@@ -241,6 +273,14 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
       }));
       const { error: costsErr } = await supabase.from("quote_item_costs").insert(costsPayload);
       if (costsErr) { alert("原価の保存に失敗しました: " + costsErr.message); setSaving(false); return; }
+    }
+    if (adopt) {
+      if (prevAdopted) await supabase.from("quotes").update({ is_adopted: false }).eq("id", prevAdopted.id);
+      await supabase.from("quotes").update({ is_adopted: true }).eq("id", quoteId);
+      await supabase.from("projects").update({ amount: Math.round(total), grossProfit: Math.round(gp), status: "完了" }).eq("id", quoteProjectId);
+      setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, amount: Math.round(total), gp: Math.round(gp), status: "完了" } : p));
+    } else if (unadopt) {
+      await supabase.from("quotes").update({ is_adopted: false }).eq("id", quoteId);
     }
     await loadQuotes();
     setSaving(false);
