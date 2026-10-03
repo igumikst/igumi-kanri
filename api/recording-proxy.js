@@ -23,22 +23,32 @@ export default async function handler(req, res) {
   // Basic認証でTwilioにアクセス
   const credentials = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
 
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Basic ${credentials}`,
-    },
-  });
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Basic ${credentials}`,
+      },
+    });
 
-  if (!response.ok) {
-    return res.status(response.status).json({ error: "Twilio fetch failed" });
+    if (!response.ok) {
+      return res.status(response.status).send("Twilio fetch failed");
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    let contentType = response.headers.get("content-type") || "audio/mpeg";
+    // Android Chrome は application/octet-stream や曖昧な MIME で再生に失敗しやすい
+    if (!contentType.startsWith("audio/")) {
+      contentType = "audio/mpeg";
+    }
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Length", buffer.length);
+    res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("Cache-Control", "private, max-age=3600");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.status(200).send(buffer);
+  } catch (err) {
+    console.error("[recording-proxy]", err);
+    return res.status(500).send("Recording proxy error");
   }
-
-  // Content-Typeをそのまま返す
-  const contentType = response.headers.get("content-type") || "audio/mpeg";
-  res.setHeader("Content-Type", contentType);
-  res.setHeader("Cache-Control", "private, max-age=3600");
-
-  // 音声データをストリームで返す
-  const buffer = await response.arrayBuffer();
-  res.send(Buffer.from(buffer));
 }

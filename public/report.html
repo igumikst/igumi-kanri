@@ -115,12 +115,21 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
 .filename-note{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.7}
 .filename-note .example{font-weight:700;color:var(--text)}
 .filename-note .caution{color:var(--orange);font-weight:700;margin-top:4px;display:block}
+.check-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:10px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent}
+.check-row input[type="checkbox"]{
+  width:18px;height:18px;min-width:18px;margin:0;padding:0;
+  flex-shrink:0;cursor:pointer;accent-color:var(--navy);
+  -webkit-appearance:auto;appearance:auto;border:none;background:transparent;
+}
+.check-row .check-label{font-size:13px;font-weight:700;color:var(--text);line-height:1.4}
+.check-row .check-sub{font-size:11px;color:var(--muted);font-weight:600;margin-top:2px}
 .export-note{font-size:11px;color:var(--muted);line-height:1.7;margin:-4px 0 10px;padding:10px 12px;background:#F8FAFC;border-radius:10px;border:1px solid var(--border)}
 .export-note strong{color:var(--navy)}
 .btn-orange{background:var(--orange);color:#fff;font-size:16px;padding:15px}
-#pdf-render-root{position:fixed;left:-12000px;top:0;z-index:-1;pointer-events:none}
+#pdf-render-root{position:fixed;left:-10000px;top:0;width:794px;z-index:-1;pointer-events:none}
 .pdf-page{width:794px;height:1123px;padding:36px 44px;background:#fff;box-sizing:border-box;font-family:'Hiragino Mincho ProN','Yu Mincho','MS PMincho',serif;color:#111;overflow:hidden}
-.pdf-page.pdf-cover-page{display:flex;flex-direction:column;padding:48px 56px 40px}
+.pdf-page.pdf-cover-page{display:flex;flex-direction:column;padding:48px 56px 40px;position:relative}
+.pdf-cover-logo{position:absolute;top:14px;left:18px;height:56px;width:auto;object-fit:contain;z-index:2}
 .pdf-cover-title{text-align:center;font-size:28px;font-weight:700;letter-spacing:.35em;padding:14px 0;margin:0 auto 48px;border:3px double #111;width:88%}
 .pdf-cover-body{flex:0 0 auto}
 .pdf-cover-row{display:flex;align-items:center;border-bottom:1px solid #333;min-height:48px;margin-bottom:0;font-size:15px}
@@ -253,6 +262,16 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
         <option value="960">中（960px）</option>
         <option value="640">小（640px）</option>
       </select>
+    </div>
+    <div class="field" style="margin-top:10px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:600">自社案件ロゴ</div>
+      <label class="check-row">
+        <input type="checkbox" id="cover-logo">
+        <span>
+          <div class="check-label">表紙にIGUMIロゴを入れる</div>
+          <div class="check-sub">自社案件向け・表紙左上に小さく表示</div>
+        </span>
+      </label>
     </div>
   </div>
 
@@ -564,6 +583,53 @@ function formatDateJa(dateStr,spaced=true){
   return spaced?`${y}年 ${m}月${day}日`:`${y}年${m}月${day}日`;
 }
 
+const COVER_LOGO_URL='/igumi-logo.jpg';
+let coverLogoBase64Cache=null;
+let coverLogoDataUrlCache=null;
+
+function isCoverLogoEnabled(){
+  return !!document.getElementById('cover-logo')?.checked;
+}
+
+function buildPdfCoverLogoHtml(logoSrc){
+  if(!logoSrc)return'';
+  return`<img class="pdf-cover-logo" src="${logoSrc}" alt="株式会社IGUMI" crossorigin="anonymous">`;
+}
+
+async function getCoverLogoBase64(){
+  if(coverLogoBase64Cache)return coverLogoBase64Cache;
+  const res=await fetch(COVER_LOGO_URL+'?v=2');
+  if(!res.ok)throw new Error('ロゴの読み込みに失敗しました');
+  const buf=await res.arrayBuffer();
+  const bytes=new Uint8Array(buf);
+  let binary='';
+  const chunk=0x8000;
+  for(let i=0;i<bytes.length;i+=chunk){
+    binary+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
+  }
+  coverLogoBase64Cache=btoa(binary);
+  coverLogoDataUrlCache='data:image/jpeg;base64,'+coverLogoBase64Cache;
+  return coverLogoBase64Cache;
+}
+
+async function getCoverLogoDataUrl(){
+  if(coverLogoDataUrlCache)return coverLogoDataUrlCache;
+  await getCoverLogoBase64();
+  return coverLogoDataUrlCache;
+}
+
+async function embedCoverLogo(ws,wb){
+  if(!isCoverLogoEnabled())return;
+  const base64=await getCoverLogoBase64();
+  const imgId=wb.addImage({base64,extension:'jpeg'});
+  // 表紙左上（読みやすいサイズ・タイトルと重ならない）
+  ws.addImage(imgId,{
+    tl:{col:0.1,row:0.08},
+    ext:{width:200,height:141},
+    editAs:'oneCell'
+  });
+}
+
 function getExportFilename(ext){
   const customFn=document.getElementById('filename').value.trim();
   if(customFn){
@@ -600,8 +666,9 @@ function buildPdfPhotoLines(caption){
   return html;
 }
 
-function buildPdfPagesHtml(){
+function buildPdfPagesHtml(logoSrc){
   const pages=[];
+  const logoHtml=buildPdfCoverLogoHtml(logoSrc);
   if(reportType==='union'){
     const building=document.getElementById('u-building').value.trim();
     const workname=document.getElementById('u-workname').value.trim();
@@ -609,7 +676,8 @@ function buildPdfPagesHtml(){
     const company=document.getElementById('u-company').value.trim();
     let uDateStr='';
     if(uDate){const d=new Date(uDate);uDateStr=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
-    pages.push(`<div class="pdf-page" style="padding:0;border:1px solid #333;box-sizing:border-box;display:flex;flex-direction:column;width:794px;height:1123px;">
+    pages.push(`<div class="pdf-page" style="padding:0;border:1px solid #333;box-sizing:border-box;display:flex;flex-direction:column;width:794px;height:1123px;position:relative;">
+      ${logoHtml}
       <div style="width:794px;height:1123px;display:flex;flex-direction:column;justify-content:space-around;align-items:center;padding:60px;box-sizing:border-box;">
         <div style="text-align:center;font-size:22px;font-weight:700;">${esc(building)}</div>
         <div style="text-align:center;font-size:20px;font-weight:700;">${esc(workname)}</div>
@@ -640,6 +708,7 @@ function buildPdfPagesHtml(){
     let rows=[['物　件　名',propName],['住　　　所',address],['件　　　名',workName],['作　業　日',dateStr],['施　工　者',worker]];
     if(reportType==='tama'&&workContent.trim())rows.push(['内　　　容',workContent]);
     pages.push(`<div class="pdf-page pdf-cover-page">
+      ${logoHtml}
       <div class="pdf-cover-title">工　事　写　真　帳</div>
       <div class="pdf-cover-body">
       ${rows.map(([l,v])=>buildPdfCoverRow(l,v)).join('')}
@@ -671,9 +740,50 @@ function buildPdfPagesHtml(){
   return pages.join('');
 }
 
-async function waitForImages(el){
-  const imgs=el.querySelectorAll('img');
-  await Promise.all([...imgs].map(img=>img.complete?Promise.resolve():new Promise(r=>{img.onload=img.onerror=r;})));
+async function waitForImages(el,timeoutMs=5000){
+  const imgs=[...el.querySelectorAll('img')];
+  await Promise.all(imgs.map(img=>new Promise(resolve=>{
+    let done=false;
+    const finish=()=>{if(done)return;done=true;resolve();};
+    if(img.complete&&img.naturalWidth>0){finish();return;}
+    img.onload=finish;
+    img.onerror=finish;
+    setTimeout(finish,timeoutMs);
+  })));
+}
+
+async function renderPdfPageCanvas(el){
+  const isMobile=/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)||window.innerWidth<900;
+  const scale=isMobile?1:1.5;
+  const render=html2canvas(el,{
+    scale,
+    useCORS:true,
+    allowTaint:false,
+    backgroundColor:'#ffffff',
+    logging:false,
+    imageTimeout:3000,
+    removeContainer:true,
+    foreignObjectRendering:false
+  });
+  const timeout=new Promise((_,reject)=>setTimeout(()=>reject(new Error('ページ変換がタイムアウトしました。写真枚数を減らすか、XLSX出力をお試しください。')),20000));
+  return Promise.race([render,timeout]);
+}
+
+function downloadPdfBlob(pdf,filename){
+  const blob=pdf.output('blob');
+  if(typeof saveAs==='function'){
+    saveAs(blob,filename);
+    return;
+  }
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=filename;
+  a.rel='noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
 }
 
 async function exportPdf(){
@@ -681,22 +791,36 @@ async function exportPdf(){
   showLoading('PDF生成中...','ページを描画中...');await sleep(80);
   const root=document.getElementById('pdf-render-root');
   try{
-    root.innerHTML=buildPdfPagesHtml();
+    // ロゴはhtml2canvasに載せるとスマホで固まるため、描画後にjsPDFへ直接貼る
+    let logoDataUrl='';
+    if(isCoverLogoEnabled()){
+      document.getElementById('loading-s').textContent='ロゴを読み込み中...';
+      try{logoDataUrl=await getCoverLogoDataUrl();}
+      catch(e){console.warn(e);showToast('⚠️ ロゴを読み込めなかったため、ロゴなしで出力します');}
+    }
+    root.innerHTML=buildPdfPagesHtml('');
     const pageEls=root.querySelectorAll('.pdf-page');
     const {jsPDF}=window.jspdf;
-    const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});
     for(let i=0;i<pageEls.length;i++){
-      await waitForImages(pageEls[i]);
+      await waitForImages(pageEls[i],3000);
       document.getElementById('loading-s').textContent=`${i+1}/${pageEls.length}ページを変換中`;
-      const canvas=await html2canvas(pageEls[i],{scale:2,useCORS:true,backgroundColor:'#ffffff',logging:false});
-      const imgData=canvas.toDataURL('image/jpeg',0.92);
+      await sleep(30);
+      const canvas=await renderPdfPageCanvas(pageEls[i]);
+      const imgData=canvas.toDataURL('image/jpeg',0.85);
       if(i>0)pdf.addPage();
-      pdf.addImage(imgData,'JPEG',0,0,210,297);
-      await sleep(10);
+      pdf.addImage(imgData,'JPEG',0,0,210,297,'page'+i,'FAST');
+      if(i===0&&logoDataUrl){
+        // 表紙左上（読みやすいサイズ）
+        pdf.addImage(logoDataUrl,'JPEG',6,4,42,30);
+      }
+      // メモリ解放を促す
+      try{canvas.width=0;canvas.height=0;}catch(_){}
+      await sleep(40);
     }
     root.innerHTML='';
     const filename=getExportFilename('pdf');
-    pdf.save(filename);
+    downloadPdfBlob(pdf,filename);
     hideLoading();showToast(`✅ ${filename} を出力しました`);
   }catch(err){
     root.innerHTML='';
@@ -760,7 +884,7 @@ const NORMAL_COVER_COLS={
   L:4.3984375
 };
 const NORMAL_COVER_TITLE='報　　　告　　　書';
-const NORMAL_COVER_J_MERGE_ROWS=[1,2,3,4,5,32,33,34];
+const NORMAL_COVER_J_MERGE_ROWS=[1,2,3,4,5];
 const NORMAL_COVER_ITEM_ROWS=[
   {row:12,label:'物　件　名',valueKey:'propName'},
   {row:14,label:'住　　　所',valueKey:'address'},
@@ -770,13 +894,15 @@ const NORMAL_COVER_ITEM_ROWS=[
 ];
 
 function applyNormalCoverRowHeights(ws){
-  [1,2,3,4,5,11,21,22,27,28,29,30,31,32,33,34].forEach(r=>{ws.getRow(r).height=30;});
+  // 印刷範囲はA1:L28。29行以降を高くするとExcel→PDF変換で空白ページが増える
+  [1,2,3,4,5,11,21,22,27,28].forEach(r=>{ws.getRow(r).height=30;});
   ws.getRow(6).height=45.75;
   ws.getRow(7).height=13.8;
   ws.getRow(10).height=16.2;
   [12,14,16,18,20].forEach(r=>{ws.getRow(r).height=65.1;});
   [13,15,17,19].forEach(r=>{ws.getRow(r).height=20.1;});
   ws.getRow(26).height=16.2;
+  for(let r=29;r<=34;r++)ws.getRow(r).height=1;
 }
 
 const NORMAL_SHEET_VIEWS=[{style:'pageBreakPreview',zoomScale:85,zoomScaleNormal:100}];
@@ -841,7 +967,8 @@ function fillNormalCoverItemRow(cws,row,label,value,minchoFont,thin,nextRowTop=t
 
 const FREE_SHEET_COLS=Object.fromEntries('ABCDEFGHIJKLMNOPQRSTU'.split('').map(c=>[c,4.19921875]));
 function setupFreeSheet(wb){
-  const ws=wb.addWorksheet('自由シート');
+  // Excel全体をPDF化すると空白ページ大量になるため非表示（必要なら再表示して利用）
+  const ws=wb.addWorksheet('自由シート',{state:'hidden'});
   ws.views=NORMAL_SHEET_VIEWS;
   ws.properties.defaultRowHeight=13.2;
   ws.properties.defaultColWidth=4.19921875;
@@ -852,7 +979,10 @@ function setupFreeSheet(wb){
   ws.pageSetup.paperSize=9;
   ws.pageSetup.scale=90;
   ws.pageSetup.orientation='portrait';
-  ws.pageSetup.printArea='A1:U65';
+  ws.pageSetup.printArea='A1:A1';
+  ws.pageSetup.fitToPage=true;
+  ws.pageSetup.fitToWidth=1;
+  ws.pageSetup.fitToHeight=1;
   ws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
 
   // 全セルをXMLに書き出させる(iOSプレビュー対策)
@@ -882,6 +1012,7 @@ async function buildNormalWorkbook(wb, minchoFont, thin, double) {
 
   const cws=wb.addWorksheet('表紙');
   setupNormalCoverSheet(cws,minchoFont,double);
+  await embedCoverLogo(cws,wb);
 
   NORMAL_COVER_ITEM_ROWS.forEach(({row,label,valueKey})=>{
     fillNormalCoverItemRow(cws,row,label,fieldValues[valueKey],minchoFont,thin,row!==20);
@@ -943,6 +1074,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   }
 
   cws.properties.defaultRowHeight=20;
+  await embedCoverLogo(cws,wb);
 
   // 建物名称 E6:P8（ゴシック20pt太字・中央）
   cws.mergeCells('E6:P8');
@@ -1224,9 +1356,10 @@ function ensureUnionPhotoSheetGrid(ws){
   }
 }
 function ensureNormalPhotoSheetGrid(ws){
+  // 印刷範囲はA1:L37。M列まで書くとExcel→PDFで見切れ・余分ページの原因になる
   for(let r=1;r<=NORMAL_PHOTO_SHEET_ROWS;r++){
-    ensureRowCells(ws,r,'A','M');
-    for(let c=1;c<=13;c++){
+    ensureRowCells(ws,r,'A','L');
+    for(let c=1;c<=12;c++){
       const cell=ws.getCell(r,c);
       if(cell.value==null)cell.value='';
     }
@@ -1253,7 +1386,8 @@ async function fillUnionPhotoBlock(ws,wb,p,blk,globalNo,{minchoFont,thin,hair,un
     const line=safeCellStr(capLines[r1-blk.captStart-1]??'');
     cell.value=line;
     cell.font=unionFont?(/号室/.test(line)?{name:'ＭＳ 明朝',size:11}:{name:'ＭＳ ゴシック',size:11}):minchoFont(11);
-    cell.alignment={vertical:'middle',wrapText:true};
+    // splitCaptionで1行分に分割済みのためwrapTextはオフ（Excelの再折り返しで行高が伸びるのを防止）
+    cell.alignment={vertical:'middle',wrapText:false};
     cell.border={bottom:hair};
   }
 
@@ -1287,7 +1421,8 @@ async function fillNormalPhotoBlock(ws,wb,p,blk,globalNo,minchoFont,thin,hair){
     const cell=ws.getCell(r,capColStart);
     cell.value=safeCellStr(capLines[r-blk.captStart]??'');
     cell.font=capFont;
-    cell.alignment={vertical:'middle',wrapText:true};
+    // splitCaptionで1行分に分割済みのためwrapTextはオフ（Excelの再折り返しで行高が伸びるのを防止）
+    cell.alignment={vertical:'middle',wrapText:false};
     cell.border=r===blk.captStart?{bottom:hair}:{top:hair,bottom:hair};
   }
 
@@ -1348,6 +1483,8 @@ async function buildPhotoSheets(wb, minchoFont, thin) {
     ws.pageSetup.fitToPage=false;
     ws.pageSetup.margins={left:.197,right:.197,top:.197,bottom:.197,header:0,footer:0};
     ws.pageSetup.printArea='A1:L37';
+    ws.pageSetup.horizontalCentered=false;
+    ws.pageSetup.verticalCentered=false;
 
     applyNormalPhotoSheetColWidths(ws);
     ensureNormalPhotoSheetGrid(ws);
@@ -1381,7 +1518,7 @@ function ensureThumb(p){
 
 function saveData(){
   const data={reportType,
-    cover:{propName:document.getElementById('prop-name').value,address:document.getElementById('prop-address').value,workName:document.getElementById('work-name').value,workDate:document.getElementById('work-date').value,worker:document.getElementById('worker').value,content:document.getElementById('work-content').value,filename:document.getElementById('filename').value},
+    cover:{propName:document.getElementById('prop-name').value,address:document.getElementById('prop-address').value,workName:document.getElementById('work-name').value,workDate:document.getElementById('work-date').value,worker:document.getElementById('worker').value,content:document.getElementById('work-content').value,filename:document.getElementById('filename').value,coverLogo:isCoverLogoEnabled()},
     union:{building:document.getElementById('u-building').value,address:document.getElementById('u-address').value,workname:document.getElementById('u-workname').value,date:document.getElementById('u-date').value,worker:document.getElementById('u-worker').value,company:document.getElementById('u-company').value,content:document.getElementById('u-content').value},
     quality,photos:photos.map(p=>({id:p.id,dataUrl:p.dataUrl,thumbUrl:p.thumbUrl||null,caption:p.caption})),nextId};
   const blob=new Blob([JSON.stringify(data)],{type:'application/json'});
@@ -1407,6 +1544,7 @@ function loadData(e){
         document.getElementById('worker').value=data.cover.worker||'';
         document.getElementById('work-content').value=data.cover.content||'';
         document.getElementById('filename').value=data.cover.filename||'';
+        document.getElementById('cover-logo').checked=!!data.cover.coverLogo;
       }
       if(data.union){
         document.getElementById('u-building').value=data.union.building||'';
@@ -1635,7 +1773,12 @@ function fillCoverRows(out,merges,rows,opts={}){
 }
 
 function fixCoverSheetXml(xml){
-  if(isNormalCoverSheet(xml))return fixPageSetupXml(xml,91);
+  if(isNormalCoverSheet(xml)){
+    let out=fixPageSetupXml(xml,91);
+    // 印刷範囲外の行を使ったused rangeだとExcel→PDFで空白ページが増える
+    out=out.replace(/<dimension ref="[^"]*"/,'<dimension ref="A1:L28"');
+    return out;
+  }
   xml=xml.replace(/<sheetPr>\s*<pageSetUpPr[^>]*\/>\s*<\/sheetPr>\s*/g,'');
   return xml;
 }
@@ -1665,7 +1808,7 @@ function fixNormalPhotoSheetXml(xml){
   });
   out=updateMergeCellsCount(out);
   let merges=parseMergeCells(out);
-  out=fillCoverRows(out,merges,Array.from({length:NORMAL_PHOTO_SHEET_ROWS},(_,i)=>i+1),{cols:'ABCDEFGHIJKLM',spanEnd:13});
+  out=fillCoverRows(out,merges,Array.from({length:NORMAL_PHOTO_SHEET_ROWS},(_,i)=>i+1),{cols:'ABCDEFGHIJKL',spanEnd:12});
   return updateMergeCellsCount(out);
 }
 
@@ -1831,6 +1974,7 @@ function confirmReset(){
     ['prop-name','prop-address','work-name','worker','work-content','u-building','u-address','u-workname','u-worker','u-company','u-content'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('work-date').value=new Date().toISOString().split('T')[0];
     document.getElementById('u-date').value=new Date().toISOString().split('T')[0];
+    document.getElementById('cover-logo').checked=false;
     closeModal();showToast('🗑 リセットしました');
   };
   document.getElementById('modal').style.display='flex';

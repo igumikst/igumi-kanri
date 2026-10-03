@@ -3,6 +3,7 @@ import { supabase } from "./lib/supabase";
 import { DEFAULT_LINKS, DEFAULT_TILE_CONF, DEFAULT_CUST } from "./lib/constants";
 import { Modal, Inp } from "./components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "./components/Layout";
+import { consumeResumePage } from "./lib/androidResume";
 import Home from "./pages/Home";
 import Projects from "./pages/Projects";
 import Companies from "./pages/Companies";
@@ -29,7 +30,7 @@ import Quotes from "./pages/Quotes";
 import PriceAdmin from "./pages/PriceAdmin";
 
 export default function App() {
-  const [page, setPage] = useState("home");
+  const [page, setPage] = useState(() => consumeResumePage() || "home");
   const [cos, setCos] = useState([]);
   const [pjs, setPjs] = useState([]);
   const [tks, setTks] = useState([]);
@@ -134,7 +135,8 @@ export default function App() {
       if (tilesRow?.value && Array.isArray(tilesRow.value) && tilesRow.value.length > 0) {
         const saved = tilesRow.value;
         const savedKeys = new Set(saved.map(t => t.key));
-        const merged = [...saved, ...DEFAULT_TILE_CONF.filter(t => !savedKeys.has(t.key))];
+        const merged = [...saved, ...DEFAULT_TILE_CONF.filter(t => !savedKeys.has(t.key))]
+          .map(t => t.key === "estimate" ? { ...t, visible: false } : t);
         setTileConf(merged);
       }
       if (custRow?.value && Object.keys(custRow.value).length > 0) { setCust(custRow.value); setEc(custRow.value); }
@@ -195,5 +197,12 @@ export default function App() {
   if (page === "schedule") return <Schedule nav={nav} />;
   if (page === "aiknowledge") return <AiKnowledge {...commonProps} />;
   if (page === "reports") return <Reports {...commonProps} />;
-  return null;
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#F0F4F8", fontFamily: "system-ui,sans-serif" }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontWeight: 800, color: "#1A3A5C", marginBottom: 12 }}>ページが見つかりません</div>
+        <button onClick={() => nav("home")} style={{ padding: "10px 18px", border: "none", borderRadius: 10, background: "#1A3A5C", color: "#fff", fontWeight: 700, cursor: "pointer" }}>ホームへ戻る</button>
+      </div>
+    </div>
+  );
 }
