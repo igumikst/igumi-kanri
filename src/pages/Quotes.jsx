@@ -14,6 +14,8 @@ const statusStyle = key => QUOTE_STATUS.find(s => s.key === key) || QUOTE_STATUS
 
 const blankEd = { id: null, quote_no: null, title: "", price_set_id: "", status: "draft", lines: [] };
 const newKey = () => "l" + Date.now() + Math.random().toString(36).slice(2);
+// quote_no は text 型のため、数字だけを取り出して数として扱う(DB関数 import_quote と同じ考え方)
+const quoteNoNum = q => parseInt(String(q.quote_no ?? "").replace(/[^0-9]/g, ""), 10) || 0;
 
 export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteProjectId, setQuoteImportCtx }) {
   const project = pjs.find(p => p.id === quoteProjectId);
@@ -42,8 +44,8 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
   const loadQuotes = async () => {
     if (!quoteProjectId) return;
     setLoadingQuotes(true);
-    const { data } = await supabase.from("quotes").select("*").eq("project_id", quoteProjectId).order("quote_no", { ascending: true });
-    if (data) setQuotes(data);
+    const { data } = await supabase.from("quotes").select("*").eq("project_id", quoteProjectId);
+    if (data) setQuotes([...data].sort((a, b) => quoteNoNum(a) - quoteNoNum(b) || String(a.created_at).localeCompare(String(b.created_at))));
     setLoadingQuotes(false);
   };
   useEffect(() => { loadQuotes(); }, [quoteProjectId]);
@@ -211,7 +213,7 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
     let quoteId = ed.id;
     const payload = { project_id: quoteProjectId, title: ed.title.trim(), price_set_id: ed.price_set_id, status: ed.status, total_amount: Math.round(total) };
     if (!quoteId) {
-      const { data, error } = await supabase.from("quotes").insert([{ ...payload, quote_no: quotes.length + 1 }]).select();
+      const { data, error } = await supabase.from("quotes").insert([{ ...payload, quote_no: String(Math.max(0, ...quotes.map(quoteNoNum)) + 1) }]).select();
       if (error) { alert("保存に失敗しました: " + error.message); setSaving(false); return; }
       quoteId = data[0].id;
     } else {
