@@ -71,6 +71,13 @@ Backend API (Vercel env vars, no `VITE_` prefix):
 - `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` — server-side Supabase access
 - `LINE_CHANNEL_ACCESS_TOKEN` / `LINE_USER_ID` — LINE push notifications
 
+### Deploy
+
+`main`へのプッシュで、Vercelが本番へ自動デプロイする。`main`へのプッシュ前には、
+`node scripts/predeploy-check.mjs`(build/lint/差分の内容チェック)が
+git の pre-push フックで自動実行され、失敗するとプッシュが止まる。
+DBの変更を伴う作業は、SQLを提案して実行者の確認を待ってからデプロイする。
+
 ### Styling conventions
 
 All styles are **inline JSX style objects** — no Tailwind, no CSS modules, no styled-components. Brand colors come from `DEFAULT_CUST` in constants: navy `#1A3A5C`, accent orange `#E07B39`, link blue `#2563EB`. The font stack is `'Hiragino Sans','Yu Gothic',sans-serif`.
