@@ -15,7 +15,7 @@ const statusStyle = key => QUOTE_STATUS.find(s => s.key === key) || QUOTE_STATUS
 const blankEd = { id: null, quote_no: null, title: "", price_set_id: "", status: "draft", lines: [] };
 const newKey = () => "l" + Date.now() + Math.random().toString(36).slice(2);
 
-export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteProjectId }) {
+export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteProjectId, setQuoteImportCtx }) {
   const project = pjs.find(p => p.id === quoteProjectId);
   const pending = tks.filter(t => !t.done);
 
@@ -273,6 +273,7 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
                 </div>
 
                 <button onClick={openNewQuote} style={{ width: "100%", padding: "12px 0", background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: "pointer", marginBottom: 14 }}>＋ 新規見積を作成</button>
+                <button onClick={() => { setQuoteImportCtx({ from: "quotes", projectId: quoteProjectId }); nav("quoteImport"); }} style={{ width: "100%", padding: "10px 0", background: "#fff", color: "#1A3A5C", border: "1.5px dashed #94A3B8", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer", marginTop: -6, marginBottom: 14 }}>📥 見積ファイルから登録</button>
 
                 {loadingQuotes ? (
                   <div style={{ textAlign: "center", color: "#9CA3AF", padding: 20 }}>読み込み中...</div>

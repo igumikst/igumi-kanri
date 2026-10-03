@@ -4,7 +4,7 @@ import { STATUSES, STATUS_STYLE, fmt, pct } from "../lib/constants";
 import { Badge, Inp, Sel, Modal, Hdr, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 
-export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, setQuoteProjectId }) {
+export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, setQuoteProjectId, setQuoteImportCtx }) {
   const [selP, setSelP] = useState(null);
   const [modal, setModal] = useState(null);
   const [fltS, setFltS] = useState("すべて");
@@ -130,7 +130,7 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
       {(cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
 
       <Hdr title={selP ? selP.name : "📋 案件管理"} back={selP ? () => setSelP(null) : () => nav("home")}
-        right={!selP && <button onClick={() => setModal("addP")} style={{ background: "#E07B39", border: "none", color: "#fff", borderRadius: 8, padding: "5px 12px", fontSize: 12, cursor: "pointer", fontWeight: 800 }}>＋ 新規</button>} />
+        right={!selP && <div style={{ display: "flex", gap: 6 }}><button onClick={() => { setQuoteImportCtx({ from: "projects", projectId: null }); nav("quoteImport"); }} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer", fontWeight: 700 }}>📥 見積ファイル</button><button onClick={() => setModal("addP")} style={{ background: "#E07B39", border: "none", color: "#fff", borderRadius: 8, padding: "5px 12px", fontSize: 12, cursor: "pointer", fontWeight: 800 }}>＋ 新規</button></div>} />
 
       {selP ? (
         <div style={{ padding: isPC ? "14px 0" : 14 }}>
@@ -188,6 +188,7 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
               <div style={{ borderTop: "1px solid #F3F4F6", paddingTop: 14 }}>
                 <div style={{ fontWeight: 700, fontSize: 13, color: "#1A3A5C", marginBottom: 8 }}>📝 見積</div>
                 <button onClick={() => { setQuoteProjectId(selP.id); nav("quotes"); }} style={{ width: "100%", padding: "10px 0", background: "#EEF2FF", color: "#3730A3", border: "1.5px solid #C7D2FE", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>📝 見積一覧を見る・作成する →</button>
+                <button onClick={() => { setQuoteImportCtx({ from: "projects", projectId: selP.id }); nav("quoteImport"); }} style={{ width: "100%", marginTop: 8, padding: "10px 0", background: "#fff", color: "#1A3A5C", border: "1.5px dashed #94A3B8", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>📥 見積ファイルから登録</button>
               </div>
             </div>
           )}
