@@ -4,7 +4,7 @@ import { STATUSES, STATUS_STYLE, fmt, pct } from "../lib/constants";
 import { Badge, Inp, Sel, Modal, Hdr, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 
-export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W }) {
+export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, setQuoteProjectId }) {
   const [selP, setSelP] = useState(null);
   const [modal, setModal] = useState(null);
   const [fltS, setFltS] = useState("すべて");
@@ -181,9 +181,13 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
                   <div key={l} style={{ marginBottom: 8 }}><div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 2 }}>{l}</div><div style={{ fontSize: 13, fontWeight: 600, color: "#1F2937" }}>{v || "—"}</div></div>
                 ))}
               </div>
-              <div style={{ borderTop: "1px solid #F3F4F6", paddingTop: 14 }}>
+              <div style={{ borderTop: "1px solid #F3F4F6", paddingTop: 14, marginBottom: 14 }}>
                 <div style={{ fontWeight: 700, fontSize: 13, color: "#1A3A5C", marginBottom: 8 }}>🏢 取引先</div>
                 {getC(selP.clientId) ? <div style={{ background: "#F0F4F8", borderRadius: 10, padding: "10px 12px" }}><div style={{ fontWeight: 700, color: "#1F2937" }}>{getC(selP.clientId).name}</div></div> : <div style={{ color: "#9CA3AF", fontSize: 13 }}>未設定</div>}
+              </div>
+              <div style={{ borderTop: "1px solid #F3F4F6", paddingTop: 14 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: "#1A3A5C", marginBottom: 8 }}>📝 見積</div>
+                <button onClick={() => { setQuoteProjectId(selP.id); nav("quotes"); }} style={{ width: "100%", padding: "10px 0", background: "#EEF2FF", color: "#3730A3", border: "1.5px solid #C7D2FE", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>📝 見積一覧を見る・作成する →</button>
               </div>
             </div>
           )}

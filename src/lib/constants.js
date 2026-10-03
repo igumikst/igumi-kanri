@@ -1,8 +1,9 @@
-export const STATUSES = ["発注待ち","見積中","着工","進行中","完了","中断"];
+export const STATUSES = ["発注待ち","失注","見積中","着工","進行中","完了","中断"];
 export const COMPANY_TYPES = ["取引先","協力業者","その他"];
 export const CONTACT_ROLES = ["営業","現場監督","職人","事務","その他"];
 export const STATUS_STYLE = {
   "発注待ち":{bg:"#FFF3CD",text:"#856404",border:"#FFCA2C"},
+  "失注":{bg:"#FEE2E2",text:"#991B1B",border:"#F87171"},
   "見積中":{bg:"#E0F0FF",text:"#0B4F8A",border:"#60A5FA"},
   "着工":{bg:"#D1FAE5",text:"#065F46",border:"#34D399"},
   "進行中":{bg:"#D1E7DD",text:"#0A3622",border:"#20C997"},
@@ -34,6 +35,7 @@ export const DEFAULT_LINKS = [
   {id:"l4",cat:"Google",label:"Google ToDo",url:"https://tasks.google.com",icon:"✅"},
 ];
 export const DEFAULT_TILE_CONF = [
+  {key:"dashboard",icon:"🧭",label:"ダッシュボード",sub:"案件の集計",color:"#1D4ED8",visible:true},
   {key:"projects",icon:"📋",label:"案件管理",sub:"件進行中",color:"#1A3A5C",visible:true},
   {key:"companies",icon:"🏢",label:"取引先・協力業者",sub:"社登録",color:"#E07B39",visible:true},
   {key:"tasks",icon:"✅",label:"タスク",sub:"未完了",color:"#059669",visible:true},
@@ -41,6 +43,7 @@ export const DEFAULT_TILE_CONF = [
   {key:"finance",icon:"🗃",label:"財務・書類管理",sub:"書類一覧",color:"#0891B2",visible:true},
   {key:"templates",icon:"📂",label:"お知らせ・雛形",sub:"テンプレート",color:"#D97706",visible:true},
   {key:"estimate",icon:"📝",label:"見積書作成",sub:"CSV出力対応",color:"#BE185D",visible:false},
+  {key:"priceadmin",icon:"💲",label:"単価・原価管理",sub:"単価表の編集",color:"#9333EA",visible:true},
   {key:"analytics",icon:"📊",label:"分析ダッシュボード",sub:"グラフ・集計",color:"#0F766E",visible:true},
   {key:"ai",icon:"🤖",label:"AIアシスタント",sub:"データに質問",color:"#6D28D9",visible:true},
   {key:"chatgpt",icon:"💬",label:"ChatGPT",sub:"外部AIを開く",color:"#10A37F",visible:true},

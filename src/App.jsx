@@ -25,6 +25,9 @@ import UserManual from "./pages/UserManual";
 import Schedule from "./pages/Schedule";
 import AiKnowledge from "./pages/AiKnowledge";
 import Reports from "./pages/Reports";
+import Dashboard from "./pages/Dashboard";
+import Quotes from "./pages/Quotes";
+import PriceAdmin from "./pages/PriceAdmin";
 
 export default function App() {
   const [page, setPage] = useState(() => consumeResumePage() || "home");
@@ -39,6 +42,8 @@ export default function App() {
   const [boardPosts, setBoardPosts] = useState([]);
   const [boardComments, setBoardComments] = useState([]);
   const [calls, setCalls] = useState([]);
+  const [salesReps, setSalesReps] = useState([]);
+  const [quoteProjectId, setQuoteProjectId] = useState(null);
   const [cust, setCust] = useState(DEFAULT_CUST);
   const [ec, setEc] = useState({ ...DEFAULT_CUST });
   const [tileConf, setTileConf] = useState(DEFAULT_TILE_CONF);
@@ -105,7 +110,7 @@ export default function App() {
 
   const loadAll = async () => {
     setLoading(true);
-    const [pjRes, coRes, tkRes, ffRes, foldRes, hsRes, linksRes, tmplRes, bpRes, bcRes, callsRes] = await Promise.all([
+    const [pjRes, coRes, tkRes, ffRes, foldRes, hsRes, linksRes, tmplRes, bpRes, bcRes, callsRes, srRes] = await Promise.all([
       supabase.from("projects").select("*").order("created_at", { ascending: false }),
       supabase.from("companies").select("*").order("created_at", { ascending: true }),
       supabase.from("tasks").select("*").order("created_at", { ascending: false }),
@@ -117,6 +122,7 @@ export default function App() {
       supabase.from("board_posts").select("*").order("created_at", { ascending: false }),
       supabase.from("board_comments").select("*").order("created_at", { ascending: true }),
       supabase.from("calls").select("*").order("received_at", { ascending: false }),
+      supabase.from("sales_reps").select("*").then(r => r, e => ({ data: null, error: e })),
     ]);
     if (pjRes.data) setPjs(pjRes.data.map(p => ({ ...p, subIds: p.subcontractorIds || [], gp: p.grossProfit || 0, qDate: p.quoteDate || "" })));
     if (coRes.data) setCos(coRes.data.map(c => ({ ...c, contacts: c.contacts || [] })));
@@ -142,6 +148,7 @@ export default function App() {
     if (bpRes.data) setBoardPosts(bpRes.data);
     if (bcRes.data) setBoardComments(bcRes.data);
     if (callsRes.data) setCalls(callsRes.data);
+    if (srRes.data) setSalesReps(srRes.data);
     setLoading(false);
   };
 
@@ -154,7 +161,8 @@ export default function App() {
 
   const nav = p => { setPage(p); setModal(null); };
   const pp = isPC ? { marginLeft: SB_W, marginRight: rpOpen ? RP_W : 32 } : {};
-  const commonProps = { pjs, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, tileConf, SB_W, RP_W };
+  const commonProps = { pjs, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, tileConf, SB_W, RP_W, salesReps };
+  const quoteProps = { ...commonProps, quoteProjectId, setPjs };
 
   if (loading) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", fontFamily: "'Hiragino Sans',sans-serif", background: "#F0F4F8" }}><div style={{ textAlign: "center" }}><div style={{ fontSize: 32, marginBottom: 12 }}>⚡</div><div style={{ color: "#1A3A5C", fontWeight: 700 }}>読み込み中...</div></div></div>;
 
@@ -166,7 +174,10 @@ export default function App() {
   );
 
   if (page === "home") return <Home {...commonProps} setPjs={setPjs} setCos={setCos} setTks={setTks} setLinks={setLinks} weather={weather} weekWeather={weekWeather} tileEdit={tileEdit} setTileEdit={setTileEdit} saveTileConf={saveTileConf} saveCustomize={saveCustomize} modal={modal} setModal={setModal} ec={ec} setEc={setEc} boardPosts={boardPosts} calls={calls} />;
-  if (page === "projects") return <Projects {...commonProps} setPjs={setPjs} setCos={setCos} />;
+  if (page === "dashboard") return <Dashboard {...commonProps} />;
+  if (page === "projects") return <Projects {...commonProps} setPjs={setPjs} setCos={setCos} setQuoteProjectId={setQuoteProjectId} />;
+  if (page === "quotes") return <Quotes {...quoteProps} />;
+  if (page === "priceadmin") return <PriceAdmin {...commonProps} />;
   if (page === "companies") return <Companies {...commonProps} setCos={setCos} />;
   if (page === "tasks") return <Tasks {...commonProps} setTks={setTks} />;
   if (page === "links") return <Links {...commonProps} setLinks={setLinks} />;
