@@ -26,6 +26,7 @@ import Schedule from "./pages/Schedule";
 import AiKnowledge from "./pages/AiKnowledge";
 import Reports from "./pages/Reports";
 import Dashboard from "./pages/Dashboard";
+import SwipeHome from "./components/SwipeHome";
 import Quotes from "./pages/Quotes";
 import QuoteImport from "./pages/QuoteImport";
 import PriceAdmin from "./pages/PriceAdmin";
@@ -175,7 +176,13 @@ export default function App() {
     </Modal>
   );
 
-  if (page === "home") return <Home {...commonProps} setPjs={setPjs} setCos={setCos} setTks={setTks} setLinks={setLinks} weather={weather} weekWeather={weekWeather} tileEdit={tileEdit} setTileEdit={setTileEdit} saveTileConf={saveTileConf} saveCustomize={saveCustomize} modal={modal} setModal={setModal} ec={ec} setEc={setEc} boardPosts={boardPosts} calls={calls} />;
+  if (page === "home") return (
+    <SwipeHome
+      dashboardOn="right"
+      home={<Home {...commonProps} setPjs={setPjs} setCos={setCos} setTks={setTks} setLinks={setLinks} weather={weather} weekWeather={weekWeather} tileEdit={tileEdit} setTileEdit={setTileEdit} saveTileConf={saveTileConf} saveCustomize={saveCustomize} modal={modal} setModal={setModal} ec={ec} setEc={setEc} boardPosts={boardPosts} calls={calls} />}
+      dashboard={<Dashboard {...commonProps} embedded />}
+    />
+  );
   if (page === "dashboard") return <Dashboard {...commonProps} />;
   if (page === "projects") return <Projects {...commonProps} setPjs={setPjs} setCos={setCos} setQuoteProjectId={setQuoteProjectId} setQuoteImportCtx={setQuoteImportCtx} />;
   if (page === "quotes") return <Quotes {...quoteProps} />;

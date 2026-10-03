@@ -1,0 +1,7 @@
+.swipehome{display:flex;flex-direction:column;height:100dvh;min-height:0;overflow:hidden;background:#eef1f6}
+.sh-pager{flex:1;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;min-height:0;touch-action:pan-y}
+.sh-pane{flex:0 0 100%;scroll-snap-align:start;overflow-x:hidden;overflow-y:auto;min-width:0;height:100%;touch-action:pan-y}
+.sh-dots{display:flex;justify-content:center;gap:6px;padding:6px}
+.sh-dots button{width:7px;height:7px;border-radius:50%;background:#d6deea;border:0;padding:0;cursor:pointer}
+.sh-dots button.on{background:#3b82f6}
+@media (prefers-reduced-motion:no-preference){.sh-pager{scroll-behavior:smooth}}

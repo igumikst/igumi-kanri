@@ -393,8 +393,13 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
     const dx = e.changedTouches[0].clientX - touchStartX.current;
     const dy = e.changedTouches[0].clientY - touchStartY.current;
     if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
-      if (dx < 0 && currentPage < HOME_PAGE_COUNT - 1) setCurrentPage(p => p + 1);
-      if (dx > 0 && currentPage > 0) setCurrentPage(p => p - 1);
+      if (dx < 0) {
+        if (currentPage < HOME_PAGE_COUNT - 1) setCurrentPage(p => p + 1);
+        else window.dispatchEvent(new CustomEvent("igumi-swipe-edge", { detail: "next" }));
+      } else if (dx > 0) {
+        if (currentPage > 0) setCurrentPage(p => p - 1);
+        else window.dispatchEvent(new CustomEvent("igumi-swipe-edge", { detail: "prev" }));
+      }
     }
     touchStartX.current = null;
     touchStartY.current = null;
