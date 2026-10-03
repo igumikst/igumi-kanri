@@ -248,9 +248,8 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
           newVal={newNSalesRep}
           onNewChange={setNewNSalesRep}
         />
-        <Inp label="受注金額" type="number" value={nP.amount} onChange={e => setNP({ ...nP, amount: e.target.value })} />
-        <Inp label="粗利" type="number" value={nP.gp} onChange={e => setNP({ ...nP, gp: e.target.value })} />
         <Inp label="見積提出日" type="date" value={nP.qDate} onChange={e => setNP({ ...nP, qDate: e.target.value })} />
+        <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: -4, marginBottom: 10 }}>受注金額・粗利は、見積を作成して「採用」すると自動で入ります</div>
       </Modal>)}
       {conf && <Confirm msg={conf.msg} onCancel={() => setConf(null)} onOk={conf.onOk} />}
     </div>
