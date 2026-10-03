@@ -5,10 +5,12 @@ import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { fmt } from "../lib/constants";
 import { buildPriceIndex, matchLine, searchItems, similarity, aliasKey, normalizeText } from "../lib/priceMatch";
 import { toBasePrice, lineAmount, roundYen, MARKUP_BACK_RATE } from "../lib/quoteImport/markup";
+import { buildEstTree } from "../lib/quoteImport/parseEst";
 import { QUOTE_FILE_BUCKET, FILE_TYPES } from "../lib/quoteFiles";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
-const ACCEPT_RE = /\.(xls|xlsx)$/i;
+const ACCEPT_RE = /\.(xls|xlsx|est)$/i;
+const EST_RE = /\.est$/i;
 
 const QUOTE_STATUS = [
   { key: "draft", label: "下書き" },
@@ -56,14 +58,18 @@ export default function QuoteImport({ pjs, setPjs, cos, salesReps, cust, isPC, p
     if (!files.length) return;
     setReading(true);
     // ライブラリが大きいので、ファイルを選んだ時だけ読み込む
-    const { parseConcluFile } = await import("../lib/quoteImport/parseConclu.js");
+    const [{ parseConcluFile }, { parseEstFile }] = await Promise.all([
+      import("../lib/quoteImport/parseConclu.js"),
+      import("../lib/quoteImport/parseEst.js"),
+    ]);
     const next = [];
     for (const f of files) {
       const base = { key: f.name + f.size + f.lastModified, fileName: f.name, size: f.size, file: f };
-      if (!ACCEPT_RE.test(f.name)) { next.push({ ...base, error: ".xls / .xlsx のファイルを選んでください" }); continue; }
+      if (!ACCEPT_RE.test(f.name)) { next.push({ ...base, error: ".xls / .xlsx / .est のファイルを選んでください" }); continue; }
       if (f.size > MAX_FILE_SIZE) { next.push({ ...base, error: `ファイルが大きすぎます(上限 10MB / このファイル ${(f.size / 1024 / 1024).toFixed(1)}MB)` }); continue; }
+      const isEst = EST_RE.test(f.name);
       try {
-        next.push({ ...base, data: parseConcluFile(await f.arrayBuffer()) });
+        next.push({ ...base, kind: isEst ? "est" : "conclu", data: isEst ? parseEstFile(await f.arrayBuffer()) : parseConcluFile(await f.arrayBuffer()) });
       } catch (e) {
         next.push({ ...base, error: "読み取れませんでした: " + e.message });
       }
@@ -92,13 +98,13 @@ export default function QuoteImport({ pjs, setPjs, cos, salesReps, cust, isPC, p
         <div style={card}>
           {targetProject && <div style={{ fontSize: 12, color: "#374151", marginBottom: 8 }}>追加先の案件(初期値): <b>{targetProject.name}</b></div>}
           <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 10, lineHeight: 1.6 }}>
-            Concluで出力した見積書(.xls)を選んでください。複数選べます(1ファイル 10MB まで)。<br />
+            Concluで出力した見積書(.xls)、または見積ソフトのESTファイル(.est)を選んでください。複数選べます(1ファイル 10MB まで)。<br />
             内容を確認・修正してから、ファイルごとに「登録する」を押してください。
           </div>
           {price?.error && <div style={{ background: "#FEF2F2", color: "#991B1B", borderRadius: 10, padding: "8px 12px", fontSize: 12, fontWeight: 700, marginBottom: 10 }}>⚠️ {price.error}</div>}
           <label style={{ display: "block", width: "100%", padding: "12px 0", background: "#1A3A5C", color: "#fff", borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: reading ? "default" : "pointer", textAlign: "center", opacity: reading ? 0.6 : 1 }}>
             {reading ? "読み取り中..." : "📂 ファイルを選ぶ"}
-            <input type="file" accept=".xls,.xlsx" multiple disabled={reading} onChange={e => { readFiles(e.target.files); e.target.value = ""; }} style={{ display: "none" }} />
+            <input type="file" accept=".xls,.xlsx,.est" multiple disabled={reading} onChange={e => { readFiles(e.target.files); e.target.value = ""; }} style={{ display: "none" }} />
           </label>
         </div>
 
@@ -123,6 +129,7 @@ function FileCard({ r, price, pjs, cos, salesReps, defaultProjectId, onRegistere
       </div>
     );
   }
+  if (r.kind === "est") return <EstImportForm r={r} onRemove={onRemove} />;
   return <ImportForm r={r} price={price} pjs={pjs} cos={cos} salesReps={salesReps} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onRemove={onRemove} />;
 }
 
@@ -570,3 +577,185 @@ const Info = ({ label: l, value, strong }) => (
     <div style={{ fontSize: strong ? 14 : 12, fontWeight: strong ? 800 : 600, color: strong ? "#E07B39" : "#1F2937" }}>{value}</div>
   </div>
 );
+
+// ツリーを、表示用に「深さつきの行配列」に平らにする(プレ順: グループの見出し行→その子、を繰り返す)
+function flattenForDisplay(nodes, depth = 0, out = []) {
+  for (const node of nodes) {
+    out.push({ node, depth });
+    if (node.children?.length) flattenForDisplay(node.children, depth + 1, out);
+  }
+  return out;
+}
+
+// 葉(明細)だけの金額(元請が絡む場合は×0.925した後)の合計。小計行自体の金額は使わず、子の積み上げで出す
+function sumLeafAmount(node, markupChoice) {
+  if (!node.children?.length) {
+    const base = toBasePrice(node.priceA, markupChoice === "with" ? "after" : "before");
+    return lineAmount(node.qty, base);
+  }
+  return node.children.reduce((s, c) => s + sumLeafAmount(c, markupChoice), 0);
+}
+
+// ESTファイル(見積ソフトのバイナリ形式)の確認画面。ステップ2: 読み取りと確認のみ(DBへの登録はまだ行わない)
+function EstImportForm({ r, onRemove }) {
+  const d = r.data;
+  const [lines, setLines] = useState(() => d.lines.map(l => ({ ...l })));
+  const [markupChoice, setMarkupChoice] = useState(null); // "with"(元請絡む・×0.925) | "without"(絡まない) ※必須
+  const [outputRateChoice, setOutputRateChoice] = useState(d.cover.detectedRate === 100 ? "100" : "file");
+
+  const updateLine = (key, patch) => setLines(prev => prev.map(l => (l.key === key ? { ...l, ...patch } : l)));
+  const toggleGroup = key => setLines(prev => prev.map(l => {
+    if (l.key !== key) return l;
+    // undefined(自動)→true(強制:小計)→false(強制:明細)→undefined… の順で切り替える
+    const next = l.groupOverride === undefined ? true : l.groupOverride === true ? false : undefined;
+    return { ...l, groupOverride: next };
+  }));
+
+  const tree = useMemo(() => buildEstTree(lines), [lines]);
+  const rows = useMemo(() => flattenForDisplay(tree.top), [tree]);
+
+  const topSum100 = tree.top.reduce((s, n) => s + (Number(n.amountA) || 0), 0);
+  const fileTotal100 = d.cover.totalExTax;
+  const totalCheckOk = fileTotal100 != null ? Math.abs(topSum100 - fileTotal100) < 1 : null;
+
+  const adjustedTotal = tree.top.reduce((s, n) => s + sumLeafAmount(n, markupChoice), 0);
+  const rateMismatchWarning = outputRateChoice === "100" && d.cover.detectedRate !== 100;
+
+  const problems = [];
+  if (!markupChoice) problems.push("「元請が絡むか」を選んでください");
+  if (totalCheckOk === false) problems.push("組み立てた合計が、ファイルに保存されている合計と一致していません(明細・小計/明細の切り替えを確認してください)");
+
+  return (
+    <div style={{ ...card, borderLeft: `4px solid ${totalCheckOk === false ? "#DC2626" : "#1A3A5C"}` }}>
+      <CardHead fileName={r.fileName} onRemove={onRemove} />
+
+      {/* 表紙 */}
+      <div style={{ background: "#F9FAFB", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+        <div style={sectionTitle}>表紙(EST)</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 6, fontSize: 12 }}>
+          <Info label="工事名称" value={d.cover.title || "(読み取れませんでした)"} strong />
+          <Info label="合計(税抜・100%)" value={yen(d.cover.totalExTax)} />
+          <Info label="合計(ファイルの出力率)" value={yen(d.cover.totalExTax130)} />
+          <Info label="検出した出力率" value={`${d.cover.detectedRate}%`} />
+        </div>
+      </div>
+
+      {/* 検算: 組み立てた階層のトップレベル合計 と、ファイルに保存されている合計(100%)を照合 */}
+      <div style={{ marginBottom: 12 }}>
+        <div style={sectionTitle}>検算(小計の組み立て)</div>
+        {totalCheckOk == null
+          ? <div style={{ background: "#FEF2F2", color: "#991B1B", borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 700 }}>⚠️ ファイルに保存されている合計金額が見つかりませんでした。検算できていません</div>
+          : totalCheckOk
+            ? <div style={{ background: "#ECFDF5", color: "#065F46", borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 700 }}>✅ 組み立てた明細の合計({yen(topSum100)})が、ファイル保存の合計と一致しています</div>
+            : <div style={{ background: "#FEF2F2", color: "#991B1B", borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 700 }}>⚠️ 組み立てた明細の合計({yen(topSum100)})が、ファイル保存の合計({yen(fileTotal100)})と一致しません。下の明細一覧で、小計/明細の割り当てを確認してください</div>}
+        {d.warnings.filter(w => !w.includes("検算")).map((w, i) => <div key={i} style={{ fontSize: 11, color: "#92400E", marginTop: 4 }}>⚠️ {w}</div>)}
+      </div>
+
+      {/* ①ESTの出力率(必須・自動判定ずみ・手で変更可) */}
+      <div style={{ border: "2px solid #E5E7EB", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: "#1A3A5C", marginBottom: 6 }}>① このESTの出力率は?</div>
+        <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 13, marginBottom: 4, cursor: "pointer" }}>
+          <input type="radio" name={`rate-${r.key}`} checked={outputRateChoice === "file"} onChange={() => setOutputRateChoice("file")} />
+          <span>検出通り(<b>{d.cover.detectedRate}%</b>出力のファイル)</span>
+        </label>
+        <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 13, cursor: "pointer" }}>
+          <input type="radio" name={`rate-${r.key}`} checked={outputRateChoice === "100"} onChange={() => setOutputRateChoice("100")} />
+          <span><b>100%</b>出力のファイル</span>
+        </label>
+        <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 4 }}>いずれの場合も、IGUMIの販売金額のもとは「100%の金額」(単価A)を使います。この選択は確認用です</div>
+        {rateMismatchWarning && <div style={{ fontSize: 11, color: "#DC2626", fontWeight: 700, marginTop: 4 }}>⚠️ ファイルから検出した出力率({d.cover.detectedRate}%)と選択が違います</div>}
+      </div>
+
+      {/* ②元請が絡むか(必須) */}
+      <div style={{ border: `2px solid ${markupChoice ? "#E5E7EB" : "#E07B39"}`, borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: "#1A3A5C", marginBottom: 6 }}>② 元請さんが絡む案件ですか? *(必須)</div>
+        <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 13, marginBottom: 4, cursor: "pointer" }}>
+          <input type="radio" name={`mk-${r.key}`} checked={markupChoice === "with"} onChange={() => setMarkupChoice("with")} />
+          <span><b>絡む</b> → 単価 × {MARKUP_BACK_RATE} した金額を、IGUMIの販売金額にする</span>
+        </label>
+        <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 13, cursor: "pointer" }}>
+          <input type="radio" name={`mk-${r.key}`} checked={markupChoice === "without"} onChange={() => setMarkupChoice("without")} />
+          <span><b>絡まない</b> → 100%の単価のまま、IGUMIの販売金額にする</span>
+        </label>
+        {markupChoice === "with" && (
+          <div style={{ marginTop: 8, background: "#F9FAFB", borderRadius: 8, padding: "8px 10px", fontSize: 12, color: "#374151" }}>
+            100%の合計 {yen(topSum100)} × {MARKUP_BACK_RATE} = {yen(roundYen(topSum100 * MARKUP_BACK_RATE))} / 単価ごとに戻した合計 {yen(adjustedTotal)}
+            <span style={{ marginLeft: 6, fontWeight: 700, color: "#9A3412" }}>差額 {(adjustedTotal - roundYen(topSum100 * MARKUP_BACK_RATE)).toLocaleString()}円</span>
+            <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 2 }}>差額は、明細ごとに単価の円未満を四捨五入したことによるものです</div>
+          </div>
+        )}
+      </div>
+
+      {/* 明細(階層つき) */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+        <div style={sectionTitle}>明細({lines.length}行 / 小計{rows.filter(x => x.node.children.length > 0).length}件)</div>
+        {tree.mismatchKeys.length > 0 && <div style={{ fontSize: 11, color: "#DC2626", fontWeight: 700 }}>⚠️ 小計にした行で、金額が子の合計と一致しないものが{tree.mismatchKeys.length}件あります</div>}
+      </div>
+      <div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 6 }}>各行の「小計/明細」ボタンで、自動判定を手で切り替えられます(自動→小計→明細→自動…)</div>
+      <div style={{ overflowX: "auto", marginBottom: 6 }}>
+        <table style={{ width: "100%", minWidth: 1100, borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ borderBottom: "2px solid #F3F4F6" }}>
+              <th style={th}>種別</th><th style={th}>名称</th><th style={th}>材質・寸法</th>
+              <th style={th}>数量</th><th style={th}>単位</th>
+              <th style={th}>単価(100%)</th><th style={th}>単価(ファイルの出力率・参考)</th>
+              {markupChoice === "with" && <th style={th}>単価(IGUMI販売)</th>}
+              <th style={{ ...th, textAlign: "right" }}>金額</th>
+              <th style={th}>備考</th>
+              <th style={th}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ node: l, depth }) => {
+              const isLeaf = !l.children?.length;
+              const mismatch = tree.mismatchKeys.includes(l.key);
+              const basePrice = toBasePrice(l.priceA, markupChoice === "with" ? "after" : "before");
+              const amount = isLeaf ? lineAmount(l.qty, basePrice) : sumLeafAmount(l, markupChoice);
+              return (
+                <tr key={l.key} style={{ borderBottom: "1px solid #F3F4F6", background: mismatch ? "#FEF2F2" : !isLeaf ? "#FFF7ED" : "transparent" }}>
+                  <td style={{ ...td, width: 70 }}>
+                    <button onClick={() => toggleGroup(l.key)} title="小計/明細を切り替える" style={{ border: "1px solid #E5E7EB", background: isLeaf ? "#fff" : "#FDE68A", borderRadius: 6, cursor: "pointer", fontSize: 10, padding: "3px 6px", fontWeight: 700, color: isLeaf ? "#6B7280" : "#92400E", whiteSpace: "nowrap" }}>
+                      {isLeaf ? "明細" : "小計"}{l.groupOverride !== undefined ? "(手動)" : ""}
+                    </button>
+                  </td>
+                  <td style={{ ...td, width: 150, paddingLeft: 6 + depth * 14 }}>
+                    <input value={l.name} onChange={e => updateLine(l.key, { name: e.target.value })} style={{ ...cellInp, fontWeight: isLeaf ? 400 : 700, color: isLeaf ? "#1F2937" : "#9A3412" }} />
+                  </td>
+                  <td style={{ ...td, width: 170 }}><input value={l.spec} onChange={e => updateLine(l.key, { spec: e.target.value })} style={{ ...cellInp, fontSize: 11 }} /></td>
+                  <td style={{ ...td, width: 56 }}><input type="number" value={l.qty} onChange={e => updateLine(l.key, { qty: e.target.value })} style={{ ...cellInp, textAlign: "right" }} disabled={!isLeaf} /></td>
+                  <td style={{ ...td, width: 46 }}><input value={l.unit} onChange={e => updateLine(l.key, { unit: e.target.value })} style={cellInp} /></td>
+                  <td style={{ ...td, textAlign: "right", width: 80 }}>{num(l.priceA)}</td>
+                  <td style={{ ...td, textAlign: "right", width: 90, color: "#9CA3AF", fontSize: 11 }}>{num(l.priceB)}({d.cover.detectedRate}%)</td>
+                  {markupChoice === "with" && <td style={{ ...td, textAlign: "right", width: 80 }}>{num(basePrice)}</td>}
+                  <td style={{ ...td, textAlign: "right", fontWeight: 700, color: "#E07B39", width: 80 }}>{num(amount)}</td>
+                  <td style={{ ...td, width: 110 }}><input value={l.note} onChange={e => updateLine(l.key, { note: e.target.value })} style={{ ...cellInp, fontSize: 11 }} /></td>
+                  <td style={{ ...td, width: 30 }}>
+                    <button onClick={() => setLines(prev => prev.filter(x => x.key !== l.key))} title="この行を削除" style={{ border: "none", background: "none", cursor: "pointer", color: "#DC2626", fontSize: 13 }}>🗑</button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 12 }}>オレンジの行 = 小計(グループ)。ピンクの行 = 小計にしたが、子の金額の合計と一致しない(ベストエフォートで組み立て)</div>
+
+      {/* 合計 */}
+      <div style={{ background: "#F9FAFB", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontSize: 13, color: "#6B7280" }}>IGUMIの販売金額の合計(税抜)</div>
+          <div style={{ fontSize: 20, fontWeight: 900, color: "#1A3A5C" }}>{yen(adjustedTotal)}</div>
+        </div>
+      </div>
+
+      {problems.length > 0 && (
+        <div style={{ marginBottom: 8 }}>
+          {problems.map((p, i) => <div key={i} style={{ fontSize: 12, color: "#B45309" }}>・{p}</div>)}
+        </div>
+      )}
+      <div style={{ fontSize: 11, color: "#6B7280", textAlign: "center", padding: "8px 0", background: "#F9FAFB", borderRadius: 10 }}>
+        このステップでは、まだ登録しません(確認・検算のみ)。案件への登録・原価の当てはめは、次のステップで対応します。
+      </div>
+    </div>
+  );
+}
