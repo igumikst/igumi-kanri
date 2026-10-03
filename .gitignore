@@ -33,3 +33,6 @@ dist-ssr
 
 # 社内向け指示書(非公開情報を含む可能性があるため、公開リポジトリにはコミットしない)
 docs/igumi_*_instructions.md
+
+# predeploy-check.mjs が、mainとの比較用に一時的に作る作業ツリー
+.predeploy-tmp-main
