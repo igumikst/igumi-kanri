@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase";
 import { Hdr, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { fmt } from "../lib/constants";
+import { openQuoteFile } from "../lib/quoteFiles";
 
 const QUOTE_STATUS = [
   { key: "draft", label: "下書き", bg: "#F3F4F6", text: "#4B5563", border: "#D1D5DB" },
@@ -23,6 +24,7 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
 
   const [view, setView] = useState("list");
   const [quotes, setQuotes] = useState([]);
+  const [quoteFiles, setQuoteFiles] = useState([]);
   const [loadingQuotes, setLoadingQuotes] = useState(true);
   const [conf, setConf] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -44,8 +46,12 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
   const loadQuotes = async () => {
     if (!quoteProjectId) return;
     setLoadingQuotes(true);
-    const { data } = await supabase.from("quotes").select("*").eq("project_id", quoteProjectId);
+    const [{ data }, filesRes] = await Promise.all([
+      supabase.from("quotes").select("*").eq("project_id", quoteProjectId),
+      supabase.from("quote_files").select("*").eq("project_id", quoteProjectId).order("created_at"),
+    ]);
     if (data) setQuotes([...data].sort((a, b) => quoteNoNum(a) - quoteNoNum(b) || String(a.created_at).localeCompare(String(b.created_at))));
+    setQuoteFiles(filesRes.data || []); // テーブルが未作成でも、見積一覧はそのまま表示する
     setLoadingQuotes(false);
   };
   useEffect(() => { loadQuotes(); }, [quoteProjectId]);
@@ -306,8 +312,29 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
                             ) : (
                               <button onClick={() => adoptQuote(q)} style={{ flex: 1, padding: "8px 0", background: "none", border: "none", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#059669", fontWeight: 700, cursor: "pointer" }}>✅ 採用にする</button>
                             )}
+                            {quoteFiles.filter(f => f.quote_id === q.id).map(f => (
+                              <button key={f.id} onClick={() => openQuoteFile(f)} title={f.original_name} style={{ padding: "8px 12px", background: "none", border: "none", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#2563EB", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>📎 元ファイル</button>
+                            ))}
                             <button onClick={() => setConf({ msg: `「${q.title}」\n\nこの操作は元に戻せません。\n削除しますか？`, onOk: () => { delQuote(q.id); setConf(null); } })} style={{ padding: "8px 16px", background: "none", border: "none", fontSize: 12, color: "#DC2626", fontWeight: 700, cursor: "pointer" }}>🗑</button>
                           </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {quoteFiles.length > 0 && (
+                  <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginTop: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
+                    <div style={{ fontWeight: 800, fontSize: 14, color: "#1A3A5C", marginBottom: 8 }}>📎 見積の元ファイル</div>
+                    {quoteFiles.map(f => {
+                      const q = quotes.find(x => x.id === f.quote_id);
+                      return (
+                        <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderTop: "1px solid #F3F4F6" }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "#1F2937", wordBreak: "break-all" }}>📗 {f.original_name}</div>
+                            <div style={{ fontSize: 11, color: "#9CA3AF" }}>{q ? `見積 No.${q.quote_no}` : "見積は削除済み"} ・ {String(f.created_at || "").slice(0, 10)}{f.size ? ` ・ ${Math.ceil(f.size / 1024)}KB` : ""}</div>
+                          </div>
+                          <button onClick={() => openQuoteFile(f)} style={{ background: "#EFF6FF", color: "#2563EB", border: "1.5px solid #BFDBFE", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>開く</button>
                         </div>
                       );
                     })}

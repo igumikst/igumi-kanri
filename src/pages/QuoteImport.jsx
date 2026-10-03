@@ -5,6 +5,7 @@ import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { fmt } from "../lib/constants";
 import { buildPriceIndex, matchLine, searchItems, similarity, aliasKey, normalizeText } from "../lib/priceMatch";
 import { toBasePrice, lineAmount, roundYen, MARKUP_BACK_RATE } from "../lib/quoteImport/markup";
+import { QUOTE_FILE_BUCKET, FILE_TYPES } from "../lib/quoteFiles";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ACCEPT_RE = /\.(xls|xlsx)$/i;
@@ -239,10 +240,23 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
     }));
     const pAliases = view.filter(l => l.matchStatus === "manual" && l.item).map(l => ({ alias: aliasKey(l.name, l.spec), price_item_id: l.item.id }));
 
-    const { data, error } = await supabase.rpc("import_quote", { p_project: pProject, p_quote: pQuote, p_items: pItems, p_aliases: pAliases });
+    // 1) 元ファイルを Storage(非公開バケット)に保存。保存名は ID + 拡張子、元の名前は別に記録する
+    const ext = (r.fileName.match(/\.(xlsx?|XLSX?)$/)?.[1] || "xls").toLowerCase();
+    const storagePath = `${crypto.randomUUID()}.${ext}`;
+    const contentType = FILE_TYPES[ext];
+    const { error: upErr } = await supabase.storage.from(QUOTE_FILE_BUCKET).upload(storagePath, r.file, { contentType, upsert: false });
+    if (upErr) {
+      setResult({ ok: false, message: `元ファイルの保存に失敗しました。何も登録されていません。(${upErr.message})` });
+      setRegistering(false);
+      return;
+    }
+
+    // 2) 案件・見積・明細・原価・別名・ファイルの記録を、1つのトランザクションで登録
+    const pFile = { storage_path: storagePath, original_name: r.fileName, size: r.size, content_type: contentType };
+    const { data, error } = await supabase.rpc("import_quote", { p_project: pProject, p_quote: pQuote, p_items: pItems, p_aliases: pAliases, p_file: pFile });
     if (error) {
       const missing = /import_quote|function|schema cache/i.test(error.message || "");
-      setResult({ ok: false, message: `登録できませんでした。何も登録されていません。(${error.message})${missing ? " ※ 取り込み用のSQLが未実行の可能性があります" : ""}` });
+      setResult({ ok: false, message: `登録できませんでした。案件・見積は登録されていません。(${error.message})${missing ? " ※ 取り込み用のSQLが未実行の可能性があります" : ""}`, orphanPath: storagePath });
       setRegistering(false);
       return;
     }
@@ -260,8 +274,8 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
       {locked ? (
         <div>
           <div style={{ fontSize: 12, fontWeight: 700, color: "#6B7280", marginBottom: 6 }}>登録の結果</div>
-          <div style={{ fontSize: 13, color: "#065F46", marginBottom: 4 }}>✅ 案件・見積・明細・原価: 登録しました(案件「{result.projectName}」/ 見積 No.{result.quoteNo})</div>
-          <div style={{ fontSize: 13, color: "#9CA3AF", marginBottom: 10 }}>－ 元ファイルの保管: 次のステップで対応します</div>
+          <div style={{ fontSize: 13, color: "#065F46", marginBottom: 4 }}>✅ 元ファイルの保管: 保存しました(案件の見積一覧から開けます)</div>
+          <div style={{ fontSize: 13, color: "#065F46", marginBottom: 10 }}>✅ 案件・見積・明細・原価: 登録しました(案件「{result.projectName}」/ 見積 No.{result.quoteNo})</div>
           <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 10 }}>案件の受注金額・粗利は変わっていません。反映するには、見積一覧で「採用にする」を押してください。</div>
           <button onClick={() => onOpenQuote(result.projectId)} style={{ width: "100%", padding: "10px 0", background: "#EEF2FF", color: "#3730A3", border: "1.5px solid #C7D2FE", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>📝 見積一覧を開く →</button>
         </div>
@@ -480,7 +494,12 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
             <div style={{ marginTop: 4, fontSize: 11, color: "#6B7280" }}>※ 原価は、いまの単価表の原価をコピーします。過去の見積の場合、粗利は「いまの原価」での目安です</div>
           </div>
 
-          {result && !result.ok && <div style={{ background: "#FEF2F2", color: "#991B1B", borderRadius: 10, padding: "10px 12px", fontSize: 13, fontWeight: 700, marginBottom: 10 }}>❌ {result.message}</div>}
+          {result && !result.ok && (
+            <div style={{ background: "#FEF2F2", color: "#991B1B", borderRadius: 10, padding: "10px 12px", fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
+              <div>❌ {result.message}</div>
+              {result.orphanPath && <div style={{ fontSize: 11, fontWeight: 400, marginTop: 4 }}>※ 元ファイルだけが Storage に残っています(quote-files / {result.orphanPath})。もう一度登録すると、新しい名前で保存し直します。</div>}
+            </div>
+          )}
           {problems.length > 0 && (
             <div style={{ marginBottom: 8 }}>
               {problems.map((p, i) => <div key={i} style={{ fontSize: 12, color: "#B45309" }}>・{p}</div>)}
