@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase";
 import { Hdr, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { fmt } from "../lib/constants";
+import { openQuoteFile } from "../lib/quoteFiles";
 
 const QUOTE_STATUS = [
   { key: "draft", label: "下書き", bg: "#F3F4F6", text: "#4B5563", border: "#D1D5DB" },
@@ -14,13 +15,16 @@ const statusStyle = key => QUOTE_STATUS.find(s => s.key === key) || QUOTE_STATUS
 
 const blankEd = { id: null, quote_no: null, title: "", price_set_id: "", status: "draft", lines: [] };
 const newKey = () => "l" + Date.now() + Math.random().toString(36).slice(2);
+// quote_no は text 型のため、数字だけを取り出して数として扱う(DB関数 import_quote と同じ考え方)
+const quoteNoNum = q => parseInt(String(q.quote_no ?? "").replace(/[^0-9]/g, ""), 10) || 0;
 
-export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteProjectId }) {
+export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteProjectId, setQuoteImportCtx }) {
   const project = pjs.find(p => p.id === quoteProjectId);
   const pending = tks.filter(t => !t.done);
 
   const [view, setView] = useState("list");
   const [quotes, setQuotes] = useState([]);
+  const [quoteFiles, setQuoteFiles] = useState([]);
   const [loadingQuotes, setLoadingQuotes] = useState(true);
   const [conf, setConf] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -42,8 +46,12 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
   const loadQuotes = async () => {
     if (!quoteProjectId) return;
     setLoadingQuotes(true);
-    const { data } = await supabase.from("quotes").select("*").eq("project_id", quoteProjectId).order("quote_no", { ascending: true });
-    if (data) setQuotes(data);
+    const [{ data }, filesRes] = await Promise.all([
+      supabase.from("quotes").select("*").eq("project_id", quoteProjectId),
+      supabase.from("quote_files").select("*").eq("project_id", quoteProjectId).order("created_at"),
+    ]);
+    if (data) setQuotes([...data].sort((a, b) => quoteNoNum(a) - quoteNoNum(b) || String(a.created_at).localeCompare(String(b.created_at))));
+    setQuoteFiles(filesRes.data || []); // テーブルが未作成でも、見積一覧はそのまま表示する
     setLoadingQuotes(false);
   };
   useEffect(() => { loadQuotes(); }, [quoteProjectId]);
@@ -93,6 +101,7 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
       cost_price: costsByItem[r.id]?.cost_price ?? null,
       cost_confirmed: costsByItem[r.id]?.cost_confirmed ?? false,
       labor_count: r.line_type === "labor" ? (parseFloat(r.spec) || "") : undefined,
+      note: r.note || "",
     }));
     setEd({ id: q.id, quote_no: q.quote_no, title: q.title, price_set_id: q.price_set_id || "", status: q.status, lines });
     setSearch(""); setCategoryFilter(""); setGroupFilter("");
@@ -210,7 +219,7 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
     let quoteId = ed.id;
     const payload = { project_id: quoteProjectId, title: ed.title.trim(), price_set_id: ed.price_set_id, status: ed.status, total_amount: Math.round(total) };
     if (!quoteId) {
-      const { data, error } = await supabase.from("quotes").insert([{ ...payload, quote_no: quotes.length + 1 }]).select();
+      const { data, error } = await supabase.from("quotes").insert([{ ...payload, quote_no: String(Math.max(0, ...quotes.map(quoteNoNum)) + 1) }]).select();
       if (error) { alert("保存に失敗しました: " + error.message); setSaving(false); return; }
       quoteId = data[0].id;
     } else {
@@ -222,12 +231,13 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
       const itemsPayload = ed.lines.map((l, i) => ({
         quote_id: quoteId, price_item_id: l.price_item_id, line_type: l.line_type, group_name: l.group_name,
         name: l.name, spec: l.spec, unit: l.unit, qty: Number(l.qty) || 0, sale_price: Number(l.sale_price) || 0, sort_order: i,
+        ...(l.note ? { note: l.note } : {}), // 備考(見積ファイルから取り込んだ行)。ない行は送らない
       }));
       const { data: insertedItems, error: itemsErr } = await supabase.from("quote_items").insert(itemsPayload).select();
       if (itemsErr) { alert("明細の保存に失敗しました: " + itemsErr.message); setSaving(false); return; }
       const idBySortOrder = Object.fromEntries(insertedItems.map(r => [r.sort_order, r.id]));
       const costsPayload = ed.lines.map((l, i) => ({
-        quote_item_id: idBySortOrder[i], cost_price: l.cost_price, cost_qty: Number(l.qty) || 0, cost_confirmed: !!l.cost_confirmed,
+        quote_item_id: idBySortOrder[i], cost_price: l.cost_price == null || l.cost_price === "" ? null : Number(l.cost_price), cost_qty: Number(l.qty) || 0, cost_confirmed: !!l.cost_confirmed,
       }));
       const { error: costsErr } = await supabase.from("quote_item_costs").insert(costsPayload);
       if (costsErr) { alert("原価の保存に失敗しました: " + costsErr.message); setSaving(false); return; }
@@ -273,6 +283,7 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
                 </div>
 
                 <button onClick={openNewQuote} style={{ width: "100%", padding: "12px 0", background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: "pointer", marginBottom: 14 }}>＋ 新規見積を作成</button>
+                <button onClick={() => { setQuoteImportCtx({ from: "quotes", projectId: quoteProjectId }); nav("quoteImport"); }} style={{ width: "100%", padding: "10px 0", background: "#fff", color: "#1A3A5C", border: "1.5px dashed #94A3B8", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer", marginTop: -6, marginBottom: 14 }}>📥 見積ファイルから登録</button>
 
                 {loadingQuotes ? (
                   <div style={{ textAlign: "center", color: "#9CA3AF", padding: 20 }}>読み込み中...</div>
@@ -301,8 +312,29 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
                             ) : (
                               <button onClick={() => adoptQuote(q)} style={{ flex: 1, padding: "8px 0", background: "none", border: "none", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#059669", fontWeight: 700, cursor: "pointer" }}>✅ 採用にする</button>
                             )}
+                            {quoteFiles.filter(f => f.quote_id === q.id).map(f => (
+                              <button key={f.id} onClick={() => openQuoteFile(f)} title={f.original_name} style={{ padding: "8px 12px", background: "none", border: "none", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#2563EB", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>📎 元ファイル</button>
+                            ))}
                             <button onClick={() => setConf({ msg: `「${q.title}」\n\nこの操作は元に戻せません。\n削除しますか？`, onOk: () => { delQuote(q.id); setConf(null); } })} style={{ padding: "8px 16px", background: "none", border: "none", fontSize: 12, color: "#DC2626", fontWeight: 700, cursor: "pointer" }}>🗑</button>
                           </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {quoteFiles.length > 0 && (
+                  <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginTop: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
+                    <div style={{ fontWeight: 800, fontSize: 14, color: "#1A3A5C", marginBottom: 8 }}>📎 見積の元ファイル</div>
+                    {quoteFiles.map(f => {
+                      const q = quotes.find(x => x.id === f.quote_id);
+                      return (
+                        <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderTop: "1px solid #F3F4F6" }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "#1F2937", wordBreak: "break-all" }}>📗 {f.original_name}</div>
+                            <div style={{ fontSize: 11, color: "#9CA3AF" }}>{q ? `見積 No.${q.quote_no}` : "見積は削除済み"} ・ {String(f.created_at || "").slice(0, 10)}{f.size ? ` ・ ${Math.ceil(f.size / 1024)}KB` : ""}</div>
+                          </div>
+                          <button onClick={() => openQuoteFile(f)} style={{ background: "#EFF6FF", color: "#2563EB", border: "1.5px solid #BFDBFE", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>開く</button>
                         </div>
                       );
                     })}
@@ -400,7 +432,7 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
                         <th style={{ padding: "6px 8px", fontSize: 11, color: "#6B7280", textAlign: "left" }}>数量</th>
                         <th style={{ padding: "6px 8px", fontSize: 11, color: "#6B7280", textAlign: "left" }}>単価</th>
                         <th style={{ padding: "6px 8px", fontSize: 11, color: "#6B7280", textAlign: "left" }}>金額</th>
-                        <th style={{ padding: "6px 8px", fontSize: 11, color: "#6B7280", textAlign: "left" }}>原価🔒</th>
+                        <th style={{ padding: "6px 8px", fontSize: 11, color: "#6B7280", textAlign: "left" }}>原価単価🔒</th>
                         <th style={{ padding: "6px 8px", fontSize: 11, color: "#6B7280" }}></th>
                       </tr>
                     </thead>
@@ -423,6 +455,7 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
                                   <div style={{ fontSize: 11, color: "#9CA3AF" }}>{l.spec}</div>
                                 </>
                               )}
+                              {l.note && <div style={{ fontSize: 10, color: "#6B7280", marginTop: 2 }}>備考: {l.note}</div>}
                             </td>
                             <td style={{ padding: "6px 8px" }}>
                               {l.line_type === "labor" ? (
@@ -432,7 +465,7 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
                               )}
                             </td>
                             <td style={{ padding: "6px 8px" }}>
-                              {l.line_type === "adjust" ? (
+                              {l.line_type !== "labor" ? (
                                 <input type="number" value={l.sale_price} onChange={e => updateLine(l.key, { sale_price: e.target.value })} style={{ width: 90, padding: "4px 6px", borderRadius: 6, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
                               ) : (
                                 <span style={{ fontSize: 12, color: "#374151" }}>{fmt(l.sale_price)}</span>
@@ -440,7 +473,9 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
                             </td>
                             <td style={{ padding: "6px 8px", fontSize: 12, fontWeight: 700, color: "#E07B39", whiteSpace: "nowrap" }}>{fmt(amount)}</td>
                             <td style={{ padding: "6px 8px", fontSize: 11, whiteSpace: "nowrap" }}>
-                              {unconfirmed ? <span style={{ color: "#DC2626", fontWeight: 700 }}>未確認</span> : <span style={{ color: "#6B7280" }}>{fmt(lineCostTotal)}</span>}
+                              {/* 原価単価を直すと、その行は「確認済み」になる。空にすると未入力に戻る */}
+                              <input type="number" value={l.cost_price ?? ""} placeholder="未入力" onChange={e => updateLine(l.key, e.target.value === "" ? { cost_price: null, cost_confirmed: false } : { cost_price: e.target.value, cost_confirmed: true })} style={{ width: 80, padding: "4px 6px", borderRadius: 6, border: `1.5px solid ${unconfirmed ? "#FCA5A5" : "#E5E7EB"}`, fontSize: 12, color: "#1F2937" }} />
+                              <div style={{ marginTop: 2 }}>{unconfirmed ? <span style={{ color: "#DC2626", fontWeight: 700 }}>未確認</span> : <span style={{ color: "#6B7280" }}>計 {fmt(lineCostTotal)}</span>}</div>
                             </td>
                             <td style={{ padding: "6px 4px", whiteSpace: "nowrap" }}>
                               <button onClick={() => moveLine(l.key, -1)} disabled={i === 0} style={{ border: "none", background: "none", cursor: i === 0 ? "default" : "pointer", opacity: i === 0 ? 0.3 : 1, fontSize: 13 }}>↑</button>
