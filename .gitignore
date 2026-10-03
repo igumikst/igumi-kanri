@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 
 .vercel
+
+# 社内向け指示書(非公開情報を含む可能性があるため、公開リポジトリにはコミットしない)
+docs/igumi_*_instructions.md
