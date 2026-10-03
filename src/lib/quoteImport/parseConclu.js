@@ -88,6 +88,8 @@ const readCover = (memoWs, coverWs) => {
   for (const k of AMOUNT_FIELDS) cover[k] = toNumber(cover[k]);
   for (const k of ["outputDate", "quoteDate", "startDate", "endDate"]) cover[k] = toISODate(cover[k]);
   for (const k of ["title", "site", "clientName"]) cover[k] = str(cover[k]);
+  // 見積日: 概要メモの「見積年月日」。空なら表紙の日付(出力年月日)
+  cover.issuedDate = cover.quoteDate || cover.outputDate;
   return cover;
 };
 

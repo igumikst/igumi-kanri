@@ -179,7 +179,7 @@ export default function App() {
   if (page === "dashboard") return <Dashboard {...commonProps} />;
   if (page === "projects") return <Projects {...commonProps} setPjs={setPjs} setCos={setCos} setQuoteProjectId={setQuoteProjectId} setQuoteImportCtx={setQuoteImportCtx} />;
   if (page === "quotes") return <Quotes {...quoteProps} />;
-  if (page === "quoteImport") return <QuoteImport {...commonProps} quoteImportCtx={quoteImportCtx} />;
+  if (page === "quoteImport") return <QuoteImport {...commonProps} setPjs={setPjs} setQuoteProjectId={setQuoteProjectId} quoteImportCtx={quoteImportCtx} />;
   if (page === "priceadmin") return <PriceAdmin {...commonProps} />;
   if (page === "companies") return <Companies {...commonProps} setCos={setCos} />;
   if (page === "tasks") return <Tasks {...commonProps} setTks={setTks} />;

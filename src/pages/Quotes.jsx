@@ -93,6 +93,7 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
       cost_price: costsByItem[r.id]?.cost_price ?? null,
       cost_confirmed: costsByItem[r.id]?.cost_confirmed ?? false,
       labor_count: r.line_type === "labor" ? (parseFloat(r.spec) || "") : undefined,
+      note: r.note || "",
     }));
     setEd({ id: q.id, quote_no: q.quote_no, title: q.title, price_set_id: q.price_set_id || "", status: q.status, lines });
     setSearch(""); setCategoryFilter(""); setGroupFilter("");
@@ -222,12 +223,13 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
       const itemsPayload = ed.lines.map((l, i) => ({
         quote_id: quoteId, price_item_id: l.price_item_id, line_type: l.line_type, group_name: l.group_name,
         name: l.name, spec: l.spec, unit: l.unit, qty: Number(l.qty) || 0, sale_price: Number(l.sale_price) || 0, sort_order: i,
+        ...(l.note ? { note: l.note } : {}), // 備考(見積ファイルから取り込んだ行)。ない行は送らない
       }));
       const { data: insertedItems, error: itemsErr } = await supabase.from("quote_items").insert(itemsPayload).select();
       if (itemsErr) { alert("明細の保存に失敗しました: " + itemsErr.message); setSaving(false); return; }
       const idBySortOrder = Object.fromEntries(insertedItems.map(r => [r.sort_order, r.id]));
       const costsPayload = ed.lines.map((l, i) => ({
-        quote_item_id: idBySortOrder[i], cost_price: l.cost_price, cost_qty: Number(l.qty) || 0, cost_confirmed: !!l.cost_confirmed,
+        quote_item_id: idBySortOrder[i], cost_price: l.cost_price == null || l.cost_price === "" ? null : Number(l.cost_price), cost_qty: Number(l.qty) || 0, cost_confirmed: !!l.cost_confirmed,
       }));
       const { error: costsErr } = await supabase.from("quote_item_costs").insert(costsPayload);
       if (costsErr) { alert("原価の保存に失敗しました: " + costsErr.message); setSaving(false); return; }
@@ -401,7 +403,7 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
                         <th style={{ padding: "6px 8px", fontSize: 11, color: "#6B7280", textAlign: "left" }}>数量</th>
                         <th style={{ padding: "6px 8px", fontSize: 11, color: "#6B7280", textAlign: "left" }}>単価</th>
                         <th style={{ padding: "6px 8px", fontSize: 11, color: "#6B7280", textAlign: "left" }}>金額</th>
-                        <th style={{ padding: "6px 8px", fontSize: 11, color: "#6B7280", textAlign: "left" }}>原価🔒</th>
+                        <th style={{ padding: "6px 8px", fontSize: 11, color: "#6B7280", textAlign: "left" }}>原価単価🔒</th>
                         <th style={{ padding: "6px 8px", fontSize: 11, color: "#6B7280" }}></th>
                       </tr>
                     </thead>
@@ -424,6 +426,7 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
                                   <div style={{ fontSize: 11, color: "#9CA3AF" }}>{l.spec}</div>
                                 </>
                               )}
+                              {l.note && <div style={{ fontSize: 10, color: "#6B7280", marginTop: 2 }}>備考: {l.note}</div>}
                             </td>
                             <td style={{ padding: "6px 8px" }}>
                               {l.line_type === "labor" ? (
@@ -433,7 +436,7 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
                               )}
                             </td>
                             <td style={{ padding: "6px 8px" }}>
-                              {l.line_type === "adjust" ? (
+                              {l.line_type !== "labor" ? (
                                 <input type="number" value={l.sale_price} onChange={e => updateLine(l.key, { sale_price: e.target.value })} style={{ width: 90, padding: "4px 6px", borderRadius: 6, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
                               ) : (
                                 <span style={{ fontSize: 12, color: "#374151" }}>{fmt(l.sale_price)}</span>
@@ -441,7 +444,9 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
                             </td>
                             <td style={{ padding: "6px 8px", fontSize: 12, fontWeight: 700, color: "#E07B39", whiteSpace: "nowrap" }}>{fmt(amount)}</td>
                             <td style={{ padding: "6px 8px", fontSize: 11, whiteSpace: "nowrap" }}>
-                              {unconfirmed ? <span style={{ color: "#DC2626", fontWeight: 700 }}>未確認</span> : <span style={{ color: "#6B7280" }}>{fmt(lineCostTotal)}</span>}
+                              {/* 原価単価を直すと、その行は「確認済み」になる。空にすると未入力に戻る */}
+                              <input type="number" value={l.cost_price ?? ""} placeholder="未入力" onChange={e => updateLine(l.key, e.target.value === "" ? { cost_price: null, cost_confirmed: false } : { cost_price: e.target.value, cost_confirmed: true })} style={{ width: 80, padding: "4px 6px", borderRadius: 6, border: `1.5px solid ${unconfirmed ? "#FCA5A5" : "#E5E7EB"}`, fontSize: 12, color: "#1F2937" }} />
+                              <div style={{ marginTop: 2 }}>{unconfirmed ? <span style={{ color: "#DC2626", fontWeight: 700 }}>未確認</span> : <span style={{ color: "#6B7280" }}>計 {fmt(lineCostTotal)}</span>}</div>
                             </td>
                             <td style={{ padding: "6px 4px", whiteSpace: "nowrap" }}>
                               <button onClick={() => moveLine(l.key, -1)} disabled={i === 0} style={{ border: "none", background: "none", cursor: i === 0 ? "default" : "pointer", opacity: i === 0 ? 0.3 : 1, fontSize: 13 }}>↑</button>
