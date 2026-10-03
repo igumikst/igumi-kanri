@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Hdr } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
-import { STATUS_STYLE, fmt } from "../lib/constants";
+import { STATUS_STYLE, fmt, PROJECT_STATS_SINCE } from "../lib/constants";
 
 const DASHBOARD_STATUSES = ["発注待ち", "失注", "着工", "完了"];
 
@@ -71,6 +71,7 @@ export default function Dashboard({ pjs, cos, tks, links, cust, isPC, pp, nav, r
 
   const filtered = useMemo(() => {
     return pjs.filter(p => {
+      if (p.created_at < PROJECT_STATS_SINCE) return false;
       if (!inPeriod(p.created_at, period)) return false;
       if (repFilter && (p.salesRepId || p.salesRep || "unknown") !== repFilter) return false;
       if (clientFilter && p.clientId !== clientFilter) return false;

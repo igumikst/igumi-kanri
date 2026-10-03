@@ -3,7 +3,7 @@ import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { Modal, Inp } from "../components/UI";
 import AiAssistModal from "../components/AiAssistModal";
 import { supabase } from "../lib/supabase";
-import { HOMEPAGE_URL, BLOG_LIST_URL } from "../lib/constants";
+import { HOMEPAGE_URL, BLOG_LIST_URL, PROJECT_STATS_SINCE } from "../lib/constants";
 
 const NAVY = "#122a4a";
 const SCHEDULE_BLUE = "#1a56a0";
@@ -85,7 +85,7 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   }, []);
 
   const pending = tks.filter(t => !t.done);
-  const active = pjs.filter(p => p.status !== "完了" && p.status !== "中断");
+  const active = pjs.filter(p => p.created_at >= PROJECT_STATS_SINCE && p.status !== "完了" && p.status !== "中断");
   const pendingCalls = (calls || []).filter(c => c.status === "未対応");
   const pendingCallsCount = pendingCalls.length;
   const todayLabel = new Date().toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "short" });
