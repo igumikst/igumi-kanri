@@ -8,6 +8,7 @@ import { toBasePrice, lineAmount, roundYen, MARKUP_BACK_RATE } from "../lib/quot
 import { buildEstTree, flattenEstTree, reverseSiblingOrder } from "../lib/quoteImport/parseEst";
 import GroupTree, { BundleToolbar } from "../components/GroupTree";
 import ClientBranchRepPicker from "../components/ClientBranchRepPicker";
+import SubQuoteFileReader from "../components/SubQuoteFileReader";
 import { QUOTE_FILE_BUCKET, FILE_TYPES } from "../lib/quoteFiles";
 import { computeQuoteFinancials, CONSTRUCTION_TYPES } from "../lib/quoteFinancials";
 
@@ -603,6 +604,11 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
                 <input type="file" accept=".xls,.xlsx,.pdf" onChange={e => setSubForm({ ...subForm, file: e.target.files?.[0] || null })} style={{ fontSize: 11 }} />
                 <button onClick={addSubCostDraft} style={{ background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ 追加</button>
               </div>
+              <SubQuoteFileReader
+                file={subForm.file} subcontractors={subcontractors} hasCompanySelected={!!subForm.subcontractor_id}
+                onPickAmount={v => setSubForm(f => ({ ...f, amount: String(v) }))}
+                onPickCompany={id => setSubForm(f => ({ ...f, subcontractor_id: id }))}
+              />
             </div>
           )}
 
@@ -888,10 +894,23 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
     const subFlagsBySortOrder = view.map((l, i) => [i, !!l.isSubcontracted]).filter(([, flag]) => flag).map(([i]) => i);
     const pAliases = view.filter(l => l.matchStatus === "manual" && l.item).map(l => ({ alias: aliasKey(l.name, l.spec), price_item_id: l.item.id }));
 
-    const { data, error } = await supabase.rpc("import_quote", { p_project: pProject, p_quote: pQuote, p_items: pItems, p_aliases: pAliases });
+    // 1) 元ファイル(EST)を Storage(非公開バケット)に保存。保存名は ID + 拡張子、元の名前は別に記録する
+    const ext = (r.fileName.match(/\.([a-zA-Z0-9]+)$/)?.[1] || "est").toLowerCase();
+    const storagePath = `${crypto.randomUUID()}.${ext}`;
+    const contentType = FILE_TYPES[ext] || "application/octet-stream";
+    const { error: upErr } = await supabase.storage.from(QUOTE_FILE_BUCKET).upload(storagePath, r.file, { contentType, upsert: false });
+    if (upErr) {
+      setResult({ ok: false, message: `元ファイルの保存に失敗しました。何も登録されていません。(${upErr.message})` });
+      setRegistering(false);
+      return;
+    }
+
+    // 2) 案件・見積・明細・原価・別名・ファイルの記録を、1つのトランザクションで登録
+    const pFile = { storage_path: storagePath, original_name: r.fileName, size: r.size, content_type: contentType };
+    const { data, error } = await supabase.rpc("import_quote", { p_project: pProject, p_quote: pQuote, p_items: pItems, p_aliases: pAliases, p_file: pFile });
     if (error) {
       const missing = /import_quote|function|schema cache/i.test(error.message || "");
-      setResult({ ok: false, message: `登録できませんでした。案件・見積は登録されていません。(${error.message})${missing ? " ※ 取り込み用のSQLが未実行の可能性があります" : ""}` });
+      setResult({ ok: false, message: `登録できませんでした。案件・見積は登録されていません。(${error.message})${missing ? " ※ 取り込み用のSQLが未実行の可能性があります" : ""}`, orphanPath: storagePath });
       setRegistering(false);
       return;
     }
@@ -917,8 +936,9 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
       {locked ? (
         <div>
           <div style={{ fontSize: 12, fontWeight: 700, color: "#6B7280", marginBottom: 6 }}>登録の結果</div>
+          <div style={{ fontSize: 13, color: "#065F46", marginBottom: 4 }}>✅ 元ファイルの保管: 保存しました(案件の見積一覧から開けます)</div>
           <div style={{ fontSize: 13, color: "#065F46", marginBottom: 10 }}>✅ 案件・見積・明細・原価: 登録しました(案件「{result.projectName}」/ 見積 No.{result.quoteNo})</div>
-          <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 10 }}>※ 元のESTファイル自体は、まだ保管していません。案件の受注金額・粗利も変わっていません。反映するには、見積一覧で「採用にする」を押してください。</div>
+          <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 10 }}>案件の受注金額・粗利は変わっていません。反映するには、見積一覧で「採用にする」を押してください。</div>
           <button onClick={() => onOpenQuote(result.projectId)} style={{ width: "100%", padding: "10px 0", background: "#EEF2FF", color: "#3730A3", border: "1.5px solid #C7D2FE", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>📝 見積一覧を開く →</button>
         </div>
       ) : (
@@ -1218,6 +1238,11 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
             <input type="file" accept=".xls,.xlsx,.pdf" onChange={e => setSubForm({ ...subForm, file: e.target.files?.[0] || null })} style={{ fontSize: 11 }} />
             <button onClick={addSubCostDraft} style={{ background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ 追加</button>
           </div>
+          <SubQuoteFileReader
+            file={subForm.file} subcontractors={subcontractors} hasCompanySelected={!!subForm.subcontractor_id}
+            onPickAmount={v => setSubForm(f => ({ ...f, amount: String(v) }))}
+            onPickCompany={id => setSubForm(f => ({ ...f, subcontractor_id: id }))}
+          />
         </div>
       )}
 
@@ -1239,7 +1264,10 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
       </div>
 
       {result && !result.ok && (
-        <div style={{ background: "#FEF2F2", color: "#991B1B", borderRadius: 10, padding: "10px 12px", fontSize: 13, fontWeight: 700, marginBottom: 10 }}>❌ {result.message}</div>
+        <div style={{ background: "#FEF2F2", color: "#991B1B", borderRadius: 10, padding: "10px 12px", fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
+          <div>❌ {result.message}</div>
+          {result.orphanPath && <div style={{ fontSize: 11, fontWeight: 400, marginTop: 4 }}>※ 元ファイルだけが Storage に残っています(quote-files / {result.orphanPath})。もう一度登録すると、新しい名前で保存し直します。</div>}
+        </div>
       )}
       {problems.length > 0 && (
         <div style={{ marginBottom: 8 }}>
@@ -1249,7 +1277,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
       <button onClick={register} disabled={problems.length > 0 || registering} style={{ width: "100%", padding: "12px 0", background: problems.length ? "#9CA3AF" : "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: problems.length || registering ? "default" : "pointer", opacity: registering ? 0.6 : 1 }}>
         {registering ? "登録中..." : "💾 この内容で登録する"}
       </button>
-      <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 4, textAlign: "center" }}>案件の受注金額・粗利は変わりません(反映は見積一覧の「採用にする」で行います)。元のESTファイル自体の保管は、このステップでは行いません</div>
+      <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 4, textAlign: "center" }}>案件の受注金額・粗利は変わりません(反映は見積一覧の「採用にする」で行います)</div>
       </>
       )}
     </div>
