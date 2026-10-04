@@ -314,19 +314,33 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
   };
 
   const collectDropNodesFromEvent = async (e) => {
-    const items = e.dataTransfer?.items;
-    if (!items?.length) return [];
+    const dt = e.dataTransfer;
+    if (!dt) return [];
+    // await 前に DataTransfer から同期取得（await 後は items が無効になるため）
+    const filesCopy = dt.files ? Array.from(dt.files) : [];
+    const captured = [];
+    const items = dt.items;
+    if (items?.length) {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind !== "file") continue;
+        captured.push({
+          entry: item.webkitGetAsEntry?.() || null,
+          file: item.getAsFile?.() || filesCopy[captured.length] || null,
+        });
+      }
+    } else {
+      for (const file of filesCopy) captured.push({ entry: null, file });
+    }
+    if (!captured.length) return [];
+
     const nodes = [];
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.kind !== "file") continue;
-      const entry = item.webkitGetAsEntry?.();
+    for (const { entry, file } of captured) {
       if (entry) {
         const node = await entryToDropNode(entry);
         if (node) nodes.push(node);
-      } else {
-        const file = item.getAsFile?.();
-        if (file && !isIgnoredDropFile(file.name)) nodes.push({ type: "file", name: file.name, file });
+      } else if (file && !isIgnoredDropFile(file.name)) {
+        nodes.push({ type: "file", name: file.name, file });
       }
     }
     return nodes;
