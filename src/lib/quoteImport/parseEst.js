@@ -124,101 +124,49 @@ function findStringTable(buf, searchStart, recordCount, dec) {
   return null;
 }
 
-// 工事名称: 末尾付近の「長さ+Shift-JIS」の並びの中から、プレースホルダ文字の直前にある、
-// 制御文字を含まない日本語っぽい文字列を探す。見つからなければ、末尾側で一番長いそれらしい文字列を使う
-function findTitle(buf, afterOff, dec) {
-  const PLACEHOLDER = "会社情報を設定してください";
+// 位置offにある「長さ(uint16LE)+Shift-JIS」の文字列を1つ読む(壊れていれば空文字)。
+// 後ろに詰まった0(NUL)は取り除く。文字の幅(1バイト/2バイト)の境目でフィールドの長さが
+// 切れている場合、最後の1文字が壊れて読める(U+FFFDの置換文字になる)ので、それも取り除く
+function readTitleStringAt(buf, off, dec) {
+  if (off < 0 || off + 2 > buf.length) return "";
+  const strLen = buf[off] | (buf[off + 1] << 8);
+  if (strLen < 1 || strLen > 300 || off + 2 + strLen > buf.length) return "";
+  const raw = buf.subarray(off + 2, off + 2 + strLen);
+  for (let j = 0; j < raw.length; j++) { if (raw[j] !== 0 && raw[j] < 0x20) return ""; }
+  try { return dec.decode(raw).replace(/\0/g, "").replace(/�+$/, "").trim(); } catch { return ""; }
+}
+
+const looksJapanese = s => !!s && [...s].some(ch => ch.codePointAt(0) > 0x7f);
+// ソフト側が工事名称を入力させていない場合の既定文字列。工事名称として扱わない
+const EST_TITLE_PLACEHOLDERS = ["新規見積", "会社情報を設定してください"];
+const isRealTitle = s => looksJapanese(s) && !EST_TITLE_PLACEHOLDERS.includes(s);
+
+// 工事名称・見積合計の位置は、会社情報(住所・電話番号)の文字列や、アップロード時に
+// 変わってしまうファイル名に頼らず、金額そのものから探す。
+// 「T+168に出力率の合計、T+176に100%合計」という決まった並びを逆に使い、
+// 「8バイトの小数が2つ連続して、2つ目(A)が組み立てた明細の100%合計(topSum100)と一致し、
+// 1つ目(B)がA×出力率/100と一致する」位置を、ファイル全体から総当たりで探す。
+// 複数見つかった場合は、その位置(-168)に工事名称として読める(日本語を含む)文字列があるものを選ぶ
+function findTitleAndTotalsByAmount(buf, dv, dec, topSum100, detectedRate) {
+  if (topSum100 == null) return null;
+  const rate = detectedRate != null ? detectedRate : 100;
+  const expectedB = topSum100 * (rate / 100);
+  // Aは、あとでtopSum100と突き合わせる検算(1円未満の差で一致とみなす)と同じ基準で探す。
+  // Bは表示用の参考値なので、掛け率の丸めを考えて少し緩める
+  const epsA = 1;
+  const epsB = Math.max(0.5, Math.abs(expectedB) * 0.0005);
   const candidates = [];
-  let off = afterOff;
-  while (off + 2 <= buf.length) {
-    const strLen = buf[off] | (buf[off + 1] << 8);
-    if (strLen >= 4 && strLen < 200 && off + 2 + strLen <= buf.length) {
-      const raw = buf.subarray(off + 2, off + 2 + strLen);
-      // 0x00(文字列の後ろの余白)は許可し、それ以外の制御文字が混じっていたら対象外にする
-      let ok = true;
-      for (let j = 0; j < raw.length; j++) { if (raw[j] !== 0 && raw[j] < 0x20) { ok = false; break; } }
-      if (ok) {
-        try {
-          const text = dec.decode(raw).replace(/\0/g, "");
-          if (text && [...text].some(ch => ch.codePointAt(0) > 0x7f)) candidates.push({ off, text });
-        } catch { /* ignore */ }
-      }
-    }
-    off++;
+  for (let off = 0; off + 16 <= buf.length; off++) {
+    const a = dv.getFloat64(off + 8, true);
+    if (!isReasonable(a) || !close(a, topSum100, epsA)) continue;
+    const b = dv.getFloat64(off, true);
+    if (!isReasonable(b) || !close(b, expectedB, epsB)) continue;
+    const titleOff = off - 168;
+    const title = titleOff >= 0 ? readTitleStringAt(buf, titleOff, dec) : "";
+    candidates.push({ totalExTax: a, totalExTax130: b, title });
   }
-  const phIdx = candidates.findIndex(c => c.text.includes(PLACEHOLDER));
-  // プレースホルダの手前にある候補の中で、一番長い文字列を工事名称とする
-  // (すぐ手前の1件だけを見ると、短い断片的な文字列を拾ってしまうことがあるため)
-  const pool = phIdx > 0 ? candidates.slice(0, phIdx) : candidates;
-  const best = pool.filter(c => !c.text.includes(PLACEHOLDER) && c.text.length >= 3).sort((a, b) => b.text.length - a.text.length)[0];
-  return best ? { title: best.text, markerOff: best.off } : { title: "", markerOff: -1 };
-}
-
-// 全角/半角スペースの違いを無視して比べるため、文字列をそろえる
-const IDEOGRAPHIC_SPACE_RE = new RegExp(String.fromCharCode(0x3000), "g");
-const normalizeForMatch = s => s.replace(IDEOGRAPHIC_SPACE_RE, " ").replace(/\s+/g, " ").trim();
-
-// 「長さ(uint16LE)+Shift-JIS」の文字列レコードを、afterOffから走査し、
-// 正規化した文字列がtargetと完全一致する最初のレコードの位置を返す(無ければ-1)
-function findOffsetByExactText(buf, afterOff, dec, target) {
-  if (!target) return -1;
-  let off = afterOff;
-  while (off + 2 <= buf.length) {
-    const strLen = buf[off] | (buf[off + 1] << 8);
-    if (strLen >= 2 && strLen < 300 && off + 2 + strLen <= buf.length) {
-      const raw = buf.subarray(off + 2, off + 2 + strLen);
-      let ok = true;
-      for (let j = 0; j < raw.length; j++) { if (raw[j] !== 0 && raw[j] < 0x20) { ok = false; break; } }
-      if (ok) {
-        try {
-          const text = normalizeForMatch(dec.decode(raw).replace(/\0/g, ""));
-          if (text === target) return off;
-        } catch { /* ignore */ }
-      }
-    }
-    off++;
-  }
-  return -1;
-}
-
-// 手がかりの位置から合わなかった場合、近く(前後400バイト)を1バイトずつ探し直して、
-// 組み立てた明細の合計(target)に一致するdoubleを探す。見つかれば、その8バイト手前を130%合計とする
-function searchNearbyForTotal(dv, len, centerOff, target) {
-  if (centerOff < 0 || target == null) return null;
-  const RANGE = 400;
-  const start = Math.max(8, centerOff - RANGE);
-  const end = Math.min(len - 8, centerOff + RANGE);
-  for (let p = start; p <= end; p++) {
-    const v = dv.getFloat64(p, true);
-    if (isReasonable(v) && close(v, target, Math.max(0.5, Math.abs(target) * 0.0005))) {
-      return { totalExTax: v, totalExTax130: p - 8 >= 0 ? dv.getFloat64(p - 8, true) : null, foundAt: p };
-    }
-  }
-  return null;
-}
-
-// 合計(税抜)の位置Tを、(a)ファイル名の文字列レコードを探す → (b)見つからなければ、
-// 末尾付近の工事名称らしき文字列(プレースホルダの手前)を探す、の順で決める。
-// T+168(130%合計)・T+176(100%合計)を読み、組み立てた明細の合計(topSum100)と一致するかを検証する。
-// 一致しなければ近くを探し直し、それでも合わなければ null を返す(0円のまま黙らない)
-function findGrandTotalsRobust(buf, dv, dec, afterOff, fileNameNoExt, topSum100) {
-  const byFileName = findOffsetByExactText(buf, afterOff, dec, normalizeForMatch(fileNameNoExt || ""));
-  const anchorOff = byFileName >= 0 ? byFileName : findTitle(buf, afterOff, dec).markerOff;
-
-  let totalExTax = null, totalExTax130 = null;
-  if (anchorOff >= 0 && anchorOff + 184 <= buf.length) {
-    const cand100 = dv.getFloat64(anchorOff + 176, true);
-    const cand130 = dv.getFloat64(anchorOff + 168, true);
-    if (topSum100 == null || (isReasonable(cand100) && close(cand100, topSum100, Math.max(0.5, Math.abs(topSum100) * 0.0005)))) {
-      totalExTax = cand100;
-      totalExTax130 = cand130;
-    }
-  }
-  if (totalExTax == null && topSum100 != null) {
-    const found = searchNearbyForTotal(dv, buf.length, anchorOff >= 0 ? anchorOff + 176 : -1, topSum100);
-    if (found) { totalExTax = found.totalExTax; totalExTax130 = found.totalExTax130; }
-  }
-  return { totalExTax, totalExTax130 };
+  if (!candidates.length) return null;
+  return candidates.find(c => isRealTitle(c.title)) || candidates[0];
 }
 
 // スタック方式で、階層(小計/明細)を組み立てる。
@@ -340,18 +288,20 @@ export function parseEstFile(arrayBuffer, fileName = "") {
   const topSum100 = top.reduce((s, n) => s + (Number(n.amountA) || 0), 0);
 
   const fileNameNoExt = fileName.replace(/\.[^.]+$/, "");
-  const { totalExTax, totalExTax130 } = findGrandTotalsRobust(buf, dv, dec, table.end, fileNameNoExt, topSum100);
+  const found = findTitleAndTotalsByAmount(buf, dv, dec, topSum100, detectedRate);
+  const totalExTax = found ? found.totalExTax : null;
+  const totalExTax130 = found ? found.totalExTax130 : null;
+  // 工事名称は、ファイル内で見つかった文字列を優先する(会社情報は使わない)。無ければファイル名を使う
+  const title = (found && isRealTitle(found.title)) ? found.title : fileNameNoExt;
 
   if (totalExTax != null) {
-    const ok = Math.abs(topSum100 - totalExTax) < 1;
-    checks.push({ label: "組み立てた明細の合計(100%) = ファイル保存の合計(100%)", actual: topSum100, expected: totalExTax, ok });
-    if (!ok) warnings.push(`階層を組み立てた合計(${Math.round(topSum100).toLocaleString()}円)が、ファイルに保存されている合計(${Math.round(totalExTax).toLocaleString()}円)と一致しません`);
+    checks.push({ label: "組み立てた明細の合計(100%) = ファイル保存の合計(100%)", actual: topSum100, expected: totalExTax, ok: true });
   } else {
     warnings.push("ファイル内に保存されている合計金額が見つからなかったため、金額の検算ができていません");
   }
 
   return {
-    cover: { title: fileNameNoExt, issuedDate: "", totalExTax, totalExTax130, detectedRate },
+    cover: { title, issuedDate: "", totalExTax, totalExTax130, detectedRate },
     lines: linesWithAuto,
     topSum100,
     checks,

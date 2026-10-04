@@ -777,7 +777,7 @@ function resolveDefaultMarkup({ clientId, branchId, cos, branches }) {
 function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, defaultProjectId, onRegistered, onOpenQuote, onRemove }) {
   const d = r.data;
   const [lines, setLines] = useState(() => d.lines.map(l => ({ ...l, pickedItemId: undefined, costOverride: undefined, isSubcontracted: false })));
-  // 工事名称。初期値はファイル名(拡張子を除いたもの)。ファイルの中の文字から読み取るのは不安定なため使わない
+  // 工事名称。初期値はファイル内で見つかった工事名称(見つからなければファイル名)。確認画面で直せる
   const [title, setTitle] = useState(d.cover.title || "");
   // rateChoice: "none"(1.0) | "back"(×0.925) | "0.9"(×0.9) | "custom"(入力した掛け率) ※必須。
   // 手で触るまでは、取引先・営業所の「掛け率の初期値」をそのまま使う(manualの状態には入れない)
@@ -785,6 +785,8 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
   const [manualCustomRate, setManualCustomRate] = useState("");
   const [rateTouched, setRateTouched] = useState(false);
   const [outputRateChoice, setOutputRateChoice] = useState(d.cover.detectedRate === 100 ? "100" : "file");
+  // ファイルの合計が見つからない場合、自分で明細の合計を確認したことのチェック(必須)
+  const [totalMissingAck, setTotalMissingAck] = useState(false);
   const [status, setStatus] = useState("submitted");
   const [pickedSetId, setPriceSetId] = useState("");
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
@@ -870,10 +872,11 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
     return buildPriceIndex(price.items.filter(i => i.price_set_id === priceSetId), price.aliases);
   }, [price, priceSetId]);
 
+  // 名称の頭の「N月N日」を外してから当てはめる(自社見積書Excelの取り込みと同じ)
   const autoMatches = useMemo(() => {
     const out = {};
     if (!index) return out;
-    for (const l of leaves) out[l.key] = matchLine(index, l.name, l.spec);
+    for (const l of leaves) out[l.key] = matchLine(index, l.name.replace(DATE_PREFIX_RE, ""), l.spec);
     return out;
   }, [index, leaves]);
 
@@ -923,6 +926,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
   else if (rateChoice === "custom" && !customRateValid) problems.push(`掛け率は${CUSTOM_RATE_MIN}〜${CUSTOM_RATE_MAX}の範囲で入力してください`);
   if (!title.trim()) problems.push("見積タイトルを入力してください");
   if (totalCheckOk === false) problems.push("組み立てた合計が、ファイルに保存されている合計と一致していません(明細・小計/明細の切り替えを確認してください)");
+  else if (totalCheckOk == null && !totalMissingAck) problems.push("ファイルの合計を確認できなかったことを、チェックで確認してください");
   if (!priceSetId) problems.push("単価セットを選んでください");
   if (projectMode === "existing" && !projectId) problems.push("追加先の案件を選んでください");
   if (projectMode === "new" && !np.name.trim()) problems.push("案件名を入力してください");
@@ -1008,7 +1012,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
       <div style={{ background: "#F9FAFB", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
         <div style={sectionTitle}>表紙(EST)</div>
         <div style={{ marginBottom: 8 }}>
-          <div style={label}>見積タイトル(初期値 = ファイル名)*</div>
+          <div style={label}>見積タイトル(初期値 = 工事名称)*</div>
           <input value={title} onChange={e => setTitle(e.target.value)} style={inp} />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 6, fontSize: 12 }}>
@@ -1022,7 +1026,15 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
       <div style={{ marginBottom: 12 }}>
         <div style={sectionTitle}>検算(小計の組み立て)</div>
         {totalCheckOk == null
-          ? <div style={{ background: "#FEF2F2", color: "#991B1B", borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 700 }}>⚠️ ファイルに保存されている合計金額が見つかりませんでした。検算できていません</div>
+          ? (
+            <div style={{ background: "#FEF2F2", color: "#991B1B", borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 700 }}>
+              ⚠️ ファイルに保存されている合計金額が見つかりませんでした。検算できていません(明細の合計 {yen(topSum100)})
+              <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 12, fontWeight: 400, marginTop: 6, cursor: "pointer" }}>
+                <input type="checkbox" checked={totalMissingAck} onChange={e => setTotalMissingAck(e.target.checked)} />
+                <span>ファイルの合計を確認できませんでした。明細の合計を確認しました</span>
+              </label>
+            </div>
+          )
           : totalCheckOk
             ? <div style={{ background: "#ECFDF5", color: "#065F46", borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 700 }}>✅ 組み立てた明細の合計({yen(topSum100)})が、ファイル保存の合計と一致しています</div>
             : <div style={{ background: "#FEF2F2", color: "#991B1B", borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 700 }}>⚠️ 組み立てた明細の合計({yen(topSum100)})が、ファイル保存の合計({yen(fileTotal100)})と一致しません。下の明細一覧で、小計/明細の割り当てを確認してください</div>}
