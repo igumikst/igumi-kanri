@@ -4,7 +4,7 @@ import { Hdr } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { fmt } from "../lib/constants";
 import { buildPriceIndex, matchLine, searchItems, similarity, aliasKey, normalizeText } from "../lib/priceMatch";
-import { toBasePrice, lineAmount, roundYen, applyRate, MARKUP_BACK_RATE } from "../lib/quoteImport/markup";
+import { toBasePrice, lineAmount, roundYen, applyRate, MARKUP_BACK_RATE, CUSTOM_RATE_MIN, CUSTOM_RATE_MAX, MARKUP_CHOICE_OPTIONS, resolveMarkupChoice } from "../lib/quoteImport/markup";
 import { buildEstTree, flattenEstTree, reverseSiblingOrder } from "../lib/quoteImport/parseEst";
 import GroupTree, { BundleToolbar } from "../components/GroupTree";
 import ClientBranchRepPicker from "../components/ClientBranchRepPicker";
@@ -763,8 +763,15 @@ function sumLeafAmount(node, rate) {
   return node.children.reduce((s, c) => s + sumLeafAmount(c, rate), 0);
 }
 
-const CUSTOM_RATE_MIN = 0.5;
-const CUSTOM_RATE_MAX = 1.2;
+// 取引先・営業所の「掛け率の初期値」を解決する。選択済みの案件(既存)/未登録の案件(新規)の
+// どちらでも、clientId・branchIdから branch優先→company優先の順で探す
+function resolveDefaultMarkup({ clientId, branchId, cos, branches }) {
+  const branch = branchId ? branches.find(b => b.id === branchId) : null;
+  const fromBranch = branch ? resolveMarkupChoice(branch.markup_default) : null;
+  if (fromBranch) return fromBranch;
+  const co = clientId ? cos.find(c => c.id === clientId) : null;
+  return co ? resolveMarkupChoice(co.markupDefault) : null;
+}
 
 // ESTファイル(見積ソフトのバイナリ形式)の確認画面。ステップ3: 登録・原価の当てはめ・粗利の計算まで行う
 function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, defaultProjectId, onRegistered, onOpenQuote, onRemove }) {
@@ -772,9 +779,11 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
   const [lines, setLines] = useState(() => d.lines.map(l => ({ ...l, pickedItemId: undefined, costOverride: undefined, isSubcontracted: false })));
   // 工事名称。初期値はファイル名(拡張子を除いたもの)。ファイルの中の文字から読み取るのは不安定なため使わない
   const [title, setTitle] = useState(d.cover.title || "");
-  // rateChoice: "925"(元請絡む・×0.925) | "90"(×0.9) | "custom"(入力した掛け率) | "none"(絡まない・100%) ※必須
-  const [rateChoice, setRateChoice] = useState(null);
-  const [customRate, setCustomRate] = useState("");
+  // rateChoice: "none"(1.0) | "back"(×0.925) | "0.9"(×0.9) | "custom"(入力した掛け率) ※必須。
+  // 手で触るまでは、取引先・営業所の「掛け率の初期値」をそのまま使う(manualの状態には入れない)
+  const [manualRateChoice, setManualRateChoice] = useState(null);
+  const [manualCustomRate, setManualCustomRate] = useState("");
+  const [rateTouched, setRateTouched] = useState(false);
   const [outputRateChoice, setOutputRateChoice] = useState(d.cover.detectedRate === 100 ? "100" : "file");
   const [status, setStatus] = useState("submitted");
   const [pickedSetId, setPriceSetId] = useState("");
@@ -787,6 +796,17 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
   const [result, setResult] = useState(null); // { ok, message, projectId, quoteNo }
   const [arrangedMeta, setArrangedMeta] = useState([]); // [{key, group_name}] 手でドラッグ・移動した並び・グループ(ステップ2)
   const [selectedKeys, setSelectedKeys] = useState(new Set());
+
+  // 掛け率②の初期値:取引先・営業所の「掛け率の初期値」から、手で触るまでは自動で入れる
+  const selectedProject = projectMode === "existing" ? pjs.find(p => p.id === projectId) : null;
+  const effClientId = projectMode === "existing" ? selectedProject?.clientId : np.clientId;
+  const effBranchId = projectMode === "existing" ? selectedProject?.branchId : np.branchId;
+  const autoMarkup = useMemo(() => resolveDefaultMarkup({ clientId: effClientId, branchId: effBranchId, cos, branches }), [effClientId, effBranchId, cos, branches]);
+  const rateChoice = rateTouched ? manualRateChoice : (autoMarkup?.choice ?? null);
+  const customRate = rateTouched ? manualCustomRate : (autoMarkup?.choice === "custom" ? String(autoMarkup.rate) : "");
+  const rateAutoSource = !rateTouched && autoMarkup ? autoMarkup.rate : null;
+  const setRateChoice = v => { setRateTouched(true); setManualRateChoice(v); setManualCustomRate(""); };
+  const setCustomRate = v => { setRateTouched(true); setManualRateChoice("custom"); setManualCustomRate(v); };
   // 下請けの原価(まだ案件・見積が無いので、登録が終わるまではこの画面のローカル状態に置く)
   const [subCosts, setSubCosts] = useState([]);
   const [subForm, setSubForm] = useState({ subcontractor_id: "", amount: "", note: "", file: null });
@@ -829,12 +849,12 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
   const fileTotal100 = d.cover.totalExTax;
   const totalCheckOk = fileTotal100 != null ? Math.abs(topSum100 - fileTotal100) < 1 : null;
 
-  // 掛け率(①絡む=0.925 / ②0.9 / ③カスタム(0.50〜1.20) / ④絡まない=100%)。未選択・範囲外は
+  // 掛け率(1.0 / 0.925 / 0.9 / カスタム(0.50〜1.20))。未選択・範囲外は
   // problemsでブロックするが、選ぶまでのプレビューは100%(rate=1)のまま表示する
   const customRateNum = Number(customRate);
   const customRateValid = customRate.trim() !== "" && Number.isFinite(customRateNum) && customRateNum >= CUSTOM_RATE_MIN && customRateNum <= CUSTOM_RATE_MAX;
-  const rate = rateChoice === "925" ? MARKUP_BACK_RATE
-    : rateChoice === "90" ? 0.9
+  const rate = rateChoice === "back" ? MARKUP_BACK_RATE
+    : rateChoice === "0.9" ? 0.9
     : rateChoice === "custom" ? (customRateValid ? customRateNum : 1)
     : 1;
 
@@ -872,7 +892,6 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
   });
   const viewByKey = useMemo(() => Object.fromEntries(view.map(v => [v.key, v])), [view]);
 
-  const selectedProject = projectMode === "existing" ? pjs.find(p => p.id === projectId) : null;
   const constructionType = projectMode === "existing" ? (selectedProject?.constructionType || "自社のみ") : (np.constructionType || "自社のみ");
   const isMixed = constructionType === "自社+下請け";
   const isSubOnly = constructionType === "下請けのみ";
@@ -900,7 +919,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
   const repName = s => s?.name || s?.display_name || "";
 
   const problems = [];
-  if (!rateChoice) problems.push("「元請が絡むか」を選んでください");
+  if (!rateChoice) problems.push("「掛け率」を選んでください");
   else if (rateChoice === "custom" && !customRateValid) problems.push(`掛け率は${CUSTOM_RATE_MIN}〜${CUSTOM_RATE_MAX}の範囲で入力してください`);
   if (!title.trim()) problems.push("見積タイトルを入力してください");
   if (totalCheckOk === false) problems.push("組み立てた合計が、ファイルに保存されている合計と一致していません(明細・小計/明細の切り替えを確認してください)");
@@ -917,7 +936,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
       salesRepId: np.salesRepId || null, salesRep: repName(rep), inCharge: np.inCharge.trim(),
       subcontractorIds: [], quoteDate: "",
     };
-    const memo = `見積ファイル「${r.fileName}」(ESTファイル)から取り込み。${rateChoice === "none" ? "元請が絡まないため、100%の単価のまま登録" : `元請が絡むため、単価×${rate}でIGUMIの販売金額に戻して登録`}。ファイルの税抜合計(100%) ${fileTotal100?.toLocaleString()}円`;
+    const memo = `見積ファイル「${r.fileName}」(ESTファイル)から取り込み。${rateChoice === "none" ? "掛け率1.0のまま登録" : `掛け率×${rate}でIGUMIの販売金額を計算して登録`}。ファイルの税抜合計(100%) ${fileTotal100?.toLocaleString()}円`;
     const appliedRates = { rate, choice: rateChoice, est_output_rate: d.cover.detectedRate ?? null };
     const pQuote = { title: title.trim(), price_set_id: priceSetId, status, total_amount: Math.round(adjustedTotal), issued_at: null, memo };
     const pItems = view.map(l => ({
@@ -1025,21 +1044,16 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
         {rateMismatchWarning && <div style={{ fontSize: 11, color: "#DC2626", fontWeight: 700, marginTop: 4 }}>⚠️ ファイルから検出した出力率({d.cover.detectedRate}%)と選択が違います</div>}
       </div>
 
-      {/* ②元請が絡むか(必須) */}
+      {/* ②掛け率(必須) */}
       <div style={{ border: `2px solid ${rateChoice ? "#E5E7EB" : "#E07B39"}`, borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
-        <div style={{ fontSize: 12, fontWeight: 800, color: "#1A3A5C", marginBottom: 6 }}>② 元請さんが絡む案件ですか? *(必須)</div>
-        <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 13, marginBottom: 4, cursor: "pointer" }}>
-          <input type="radio" name={`mk-${r.key}`} checked={rateChoice === "925"} onChange={() => setRateChoice("925")} />
-          <span><b>絡む</b> → 単価 × {MARKUP_BACK_RATE} した金額を、IGUMIの販売金額にする</span>
-        </label>
-        <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 13, marginBottom: 4, cursor: "pointer" }}>
-          <input type="radio" name={`mk-${r.key}`} checked={rateChoice === "90"} onChange={() => setRateChoice("90")} />
-          <span><b>0.9</b> → 単価 × 0.9 した金額を、IGUMIの販売金額にする</span>
-        </label>
-        <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 13, marginBottom: 4, cursor: "pointer" }}>
-          <input type="radio" name={`mk-${r.key}`} checked={rateChoice === "custom"} onChange={() => setRateChoice("custom")} />
-          <span><b>カスタム</b> → 単価 × 入力した掛け率({CUSTOM_RATE_MIN}〜{CUSTOM_RATE_MAX})にする</span>
-        </label>
+        <div style={{ fontSize: 12, fontWeight: 800, color: "#1A3A5C", marginBottom: 6 }}>② 掛け率 *(必須)</div>
+        <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 6 }}>IGUMIの販売金額 = 100%の単価 × 掛け率</div>
+        {MARKUP_CHOICE_OPTIONS.map(o => (
+          <label key={o.key} style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 13, marginBottom: 4, cursor: "pointer" }}>
+            <input type="radio" name={`mk-${r.key}`} checked={rateChoice === o.key} onChange={() => setRateChoice(o.key)} />
+            <span><b>{o.label}</b></span>
+          </label>
+        ))}
         {rateChoice === "custom" && (
           <div style={{ marginLeft: 22, marginBottom: 4 }}>
             <input type="number" step="0.001" min={CUSTOM_RATE_MIN} max={CUSTOM_RATE_MAX} value={customRate} onChange={e => setCustomRate(e.target.value)}
@@ -1047,10 +1061,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
             {!customRateValid && <span style={{ fontSize: 11, color: "#DC2626", marginLeft: 6 }}>{CUSTOM_RATE_MIN}〜{CUSTOM_RATE_MAX}の範囲で入力してください</span>}
           </div>
         )}
-        <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 13, cursor: "pointer" }}>
-          <input type="radio" name={`mk-${r.key}`} checked={rateChoice === "none"} onChange={() => setRateChoice("none")} />
-          <span><b>絡まない</b> → 100%の単価のまま、IGUMIの販売金額にする</span>
-        </label>
+        {rateAutoSource != null && !rateTouched && <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>取引先の初期値(×{rateAutoSource})を使っています</div>}
         {rateChoice && rateChoice !== "none" && (customRateValid || rateChoice !== "custom") && (
           <div style={{ marginTop: 8, background: "#F9FAFB", borderRadius: 8, padding: "8px 10px", fontSize: 12, color: "#374151" }}>
             100%の合計 {yen(topSum100)} × {rate} = {yen(roundYen(topSum100 * rate))} / 単価ごとに戻した合計 {yen(adjustedTotal)}
@@ -1357,9 +1368,11 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
   const [title, setTitle] = useState(d.cover.title || "");
   const [issuedDate, setIssuedDate] = useState(d.cover.issuedDate || "");
   const [status, setStatus] = useState("submitted");
-  // rateChoice: "925"(絡む・×0.925) | "90"(×0.9) | "custom"(入力した掛け率) | "none"(絡まない・100%) ※必須
-  const [rateChoice, setRateChoice] = useState(null);
-  const [customRate, setCustomRate] = useState("");
+  // rateChoice: "none"(1.0) | "back"(×0.925) | "0.9"(×0.9) | "custom"(入力した掛け率) ※必須。
+  // 手で触るまでは、取引先・営業所の「掛け率の初期値」をそのまま使う(manualの状態には入れない)
+  const [manualRateChoice, setManualRateChoice] = useState(null);
+  const [manualCustomRate, setManualCustomRate] = useState("");
+  const [rateTouched, setRateTouched] = useState(false);
   const [pickedSetId, setPriceSetId] = useState("");
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
@@ -1384,6 +1397,17 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
     setSubForm({ subcontractor_id: "", amount: "", note: "", file: null });
   };
   const removeSubCostDraft = key => setSubCosts(prev => prev.filter(c => c.key !== key));
+
+  // 掛け率②の初期値:取引先・営業所の「掛け率の初期値」から、手で触るまでは自動で入れる
+  const selectedProject = projectMode === "existing" ? pjs.find(p => p.id === projectId) : null;
+  const effClientId = projectMode === "existing" ? selectedProject?.clientId : np.clientId;
+  const effBranchId = projectMode === "existing" ? selectedProject?.branchId : np.branchId;
+  const autoMarkup = useMemo(() => resolveDefaultMarkup({ clientId: effClientId, branchId: effBranchId, cos, branches }), [effClientId, effBranchId, cos, branches]);
+  const rateChoice = rateTouched ? manualRateChoice : (autoMarkup?.choice ?? null);
+  const customRate = rateTouched ? manualCustomRate : (autoMarkup?.choice === "custom" ? String(autoMarkup.rate) : "");
+  const rateAutoSource = !rateTouched && autoMarkup ? autoMarkup.rate : null;
+  const setRateChoice = v => { setRateTouched(true); setManualRateChoice(v); setManualCustomRate(""); };
+  const setCustomRate = v => { setRateTouched(true); setManualRateChoice("custom"); setManualCustomRate(v); };
 
   // ドラッグ・ボタンでの並べ替え・グループ分け。group_nameを直接書き換える
   const handleArrangeSelf = newLines => setLines(prev => {
@@ -1418,8 +1442,8 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
   const fileTotal = d.linesTotal; // 100%の合計(ファイルの明細の合計)
   const customRateNum = Number(customRate);
   const customRateValid = customRate.trim() !== "" && Number.isFinite(customRateNum) && customRateNum >= CUSTOM_RATE_MIN && customRateNum <= CUSTOM_RATE_MAX;
-  const rate = rateChoice === "925" ? MARKUP_BACK_RATE
-    : rateChoice === "90" ? 0.9
+  const rate = rateChoice === "back" ? MARKUP_BACK_RATE
+    : rateChoice === "0.9" ? 0.9
     : rateChoice === "custom" ? (customRateValid ? customRateNum : 1)
     : 1;
 
@@ -1437,7 +1461,6 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
   });
 
   const total = view.reduce((s, l) => s + l.amount, 0);
-  const selectedProject = projectMode === "existing" ? pjs.find(p => p.id === projectId) : null;
   const constructionType = projectMode === "existing" ? (selectedProject?.constructionType || "自社のみ") : (np.constructionType || "自社のみ");
   const isMixed = constructionType === "自社+下請け";
   const isSubOnly = constructionType === "下請けのみ";
@@ -1468,7 +1491,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
   const removeLine = key => setLines(prev => prev.filter(l => l.key !== key));
 
   const problems = [];
-  if (!rateChoice) problems.push("「元請が絡むか」を選んでください");
+  if (!rateChoice) problems.push("「掛け率」を選んでください");
   else if (rateChoice === "custom" && !customRateValid) problems.push(`掛け率は${CUSTOM_RATE_MIN}〜${CUSTOM_RATE_MAX}の範囲で入力してください`);
   if (!title.trim()) problems.push("見積タイトルを入力してください");
   if (!priceSetId) problems.push("単価セットを選んでください");
@@ -1485,7 +1508,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
       salesRepId: np.salesRepId || null, salesRep: repName(rep), inCharge: np.inCharge.trim(),
       subcontractorIds: [], quoteDate: issuedDate || "",
     };
-    const memo = `見積ファイル「${r.fileName}」(自社見積書Excel)から取り込み。見積番号 ${d.cover.quoteNo || "不明"}。${rateChoice === "none" ? "元請が絡まないため、100%の単価のまま登録" : `元請が絡むため、単価×${rate}でIGUMIの販売金額に戻して登録`}。ファイルの税抜合計(100%) ${fileTotal?.toLocaleString()}円`;
+    const memo = `見積ファイル「${r.fileName}」(自社見積書Excel)から取り込み。見積番号 ${d.cover.quoteNo || "不明"}。${rateChoice === "none" ? "掛け率1.0のまま登録" : `掛け率×${rate}でIGUMIの販売金額を計算して登録`}。ファイルの税抜合計(100%) ${fileTotal?.toLocaleString()}円`;
     const appliedRates = { rate, choice: rateChoice, quote_no: d.cover.quoteNo || null };
     const pQuote = { title: title.trim(), price_set_id: priceSetId, status, total_amount: Math.round(total), issued_at: issuedDate || null, memo };
     const pItems = view.map(l => ({
@@ -1596,21 +1619,16 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
             </div>
           )}
 
-          {/* 元請が絡むか(必須) */}
+          {/* 掛け率(必須) */}
           <div style={{ border: `2px solid ${rateChoice ? "#E5E7EB" : "#E07B39"}`, borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: "#1A3A5C", marginBottom: 6 }}>元請さんが絡む案件ですか? *(必須)</div>
-            <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 13, marginBottom: 4, cursor: "pointer" }}>
-              <input type="radio" name={`mk-${r.key}`} checked={rateChoice === "925"} onChange={() => setRateChoice("925")} />
-              <span><b>絡む</b> → 単価 × {MARKUP_BACK_RATE} した金額を、IGUMIの販売金額にする</span>
-            </label>
-            <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 13, marginBottom: 4, cursor: "pointer" }}>
-              <input type="radio" name={`mk-${r.key}`} checked={rateChoice === "90"} onChange={() => setRateChoice("90")} />
-              <span><b>0.9</b> → 単価 × 0.9 した金額を、IGUMIの販売金額にする</span>
-            </label>
-            <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 13, marginBottom: 4, cursor: "pointer" }}>
-              <input type="radio" name={`mk-${r.key}`} checked={rateChoice === "custom"} onChange={() => setRateChoice("custom")} />
-              <span><b>カスタム</b> → 単価 × 入力した掛け率({CUSTOM_RATE_MIN}〜{CUSTOM_RATE_MAX})にする</span>
-            </label>
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#1A3A5C", marginBottom: 6 }}>② 掛け率 *(必須)</div>
+            <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 6 }}>IGUMIの販売金額 = 100%の単価 × 掛け率</div>
+            {MARKUP_CHOICE_OPTIONS.map(o => (
+              <label key={o.key} style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 13, marginBottom: 4, cursor: "pointer" }}>
+                <input type="radio" name={`mk-${r.key}`} checked={rateChoice === o.key} onChange={() => setRateChoice(o.key)} />
+                <span><b>{o.label}</b></span>
+              </label>
+            ))}
             {rateChoice === "custom" && (
               <div style={{ marginLeft: 22, marginBottom: 4 }}>
                 <input type="number" step="0.001" min={CUSTOM_RATE_MIN} max={CUSTOM_RATE_MAX} value={customRate} onChange={e => setCustomRate(e.target.value)}
@@ -1618,10 +1636,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
                 {!customRateValid && <span style={{ fontSize: 11, color: "#DC2626", marginLeft: 6 }}>{CUSTOM_RATE_MIN}〜{CUSTOM_RATE_MAX}の範囲で入力してください</span>}
               </div>
             )}
-            <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 13, cursor: "pointer" }}>
-              <input type="radio" name={`mk-${r.key}`} checked={rateChoice === "none"} onChange={() => setRateChoice("none")} />
-              <span><b>絡まない</b> → 100%の単価のまま、IGUMIの販売金額にする</span>
-            </label>
+            {rateAutoSource != null && !rateTouched && <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>取引先の初期値(×{rateAutoSource})を使っています</div>}
             {rateChoice && rateChoice !== "none" && (customRateValid || rateChoice !== "custom") && (
               <div style={{ marginTop: 8, background: "#F9FAFB", borderRadius: 8, padding: "8px 10px", fontSize: 12, color: "#374151" }}>
                 100%の合計 {yen(fileTotal)} × {rate} = {yen(roundYen(fileTotal * rate))} / 単価ごとに戻した合計 {yen(total)}
