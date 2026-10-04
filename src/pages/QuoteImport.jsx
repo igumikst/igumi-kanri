@@ -7,7 +7,9 @@ import { buildPriceIndex, matchLine, searchItems, similarity, aliasKey, normaliz
 import { toBasePrice, lineAmount, roundYen, MARKUP_BACK_RATE } from "../lib/quoteImport/markup";
 import { buildEstTree, flattenEstTree, reverseSiblingOrder } from "../lib/quoteImport/parseEst";
 import GroupTree, { BundleToolbar } from "../components/GroupTree";
+import ClientBranchRepPicker from "../components/ClientBranchRepPicker";
 import { QUOTE_FILE_BUCKET, FILE_TYPES } from "../lib/quoteFiles";
+import { computeQuoteFinancials, CONSTRUCTION_TYPES } from "../lib/quoteFinancials";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ACCEPT_RE = /\.(xls|xlsx|est)$/i;
@@ -31,7 +33,33 @@ const yen = v => (v == null ? "—" : `¥${Math.round(Number(v)).toLocaleString(
 // 見積などの対応をした日時。datetime-local入力(ローカル時刻)の初期値(いま)
 const nowLocal = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
 
-export default function QuoteImport({ pjs, setPjs, cos, salesReps, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteImportCtx, setQuoteProjectId }) {
+// import_quote の後始末(下請け関連)。import_quote 自体のSQLは直さず、登録後の更新で済ませる
+// (新しい列を増やすたびに import_quote を直すと、その都度DB実行待ちが必要になるため)
+// - subFlagsBySortOrder: 下請け施工チェックが付いた行の sort_order(= p_items の配列index)一覧
+// - subCosts: この画面でローカルに保持していた下請けの原価の下書き([{subcontractor_id, amount, note, file}])
+async function applySubcontractorFollowUps({ quoteId, subFlagsBySortOrder, subCosts }) {
+  if (subFlagsBySortOrder?.length) {
+    const { data: insertedItems } = await supabase.from("quote_items").select("id, sort_order").eq("quote_id", quoteId);
+    const idBySortOrder = Object.fromEntries((insertedItems || []).map(r => [r.sort_order, r.id]));
+    const ids = subFlagsBySortOrder.map(i => idBySortOrder[i]).filter(Boolean);
+    if (ids.length) await supabase.from("quote_items").update({ is_subcontracted: true }).in("id", ids);
+  }
+  for (const c of subCosts || []) {
+    let file_storage_path = null, file_original_name = null;
+    if (c.file) {
+      const ext = (c.file.name.match(/\.([a-zA-Z0-9]+)$/)?.[1] || "").toLowerCase();
+      const storagePath = `${crypto.randomUUID()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from(QUOTE_FILE_BUCKET).upload(storagePath, c.file, { contentType: FILE_TYPES[ext], upsert: false });
+      if (!upErr) { file_storage_path = storagePath; file_original_name = c.file.name; }
+    }
+    await supabase.from("quote_subcontractor_costs").insert([{
+      quote_id: quoteId, subcontractor_id: c.subcontractor_id, amount: Number(c.amount) || 0,
+      note: c.note || null, file_storage_path, file_original_name,
+    }]);
+  }
+}
+
+export default function QuoteImport({ pjs, setPjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteImportCtx, setQuoteProjectId }) {
   const pending = tks.filter(t => !t.done);
   const [results, setResults] = useState([]);
   const [reading, setReading] = useState(false);
@@ -111,7 +139,7 @@ export default function QuoteImport({ pjs, setPjs, cos, salesReps, cust, isPC, p
         </div>
 
         {results.map(r => (
-          <FileCard key={r.key} r={r} price={price} pjs={pjs} cos={cos} salesReps={salesReps || []}
+          <FileCard key={r.key} r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps || []} setSalesReps={setSalesReps} branches={branches || []} setBranches={setBranches}
             defaultProjectId={quoteImportCtx?.projectId || ""}
             onRegistered={addProjectToState}
             onOpenQuote={projectId => { setQuoteProjectId(projectId); nav("quotes"); }}
@@ -122,7 +150,7 @@ export default function QuoteImport({ pjs, setPjs, cos, salesReps, cust, isPC, p
   );
 }
 
-function FileCard({ r, price, pjs, cos, salesReps, defaultProjectId, onRegistered, onOpenQuote, onRemove }) {
+function FileCard({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, defaultProjectId, onRegistered, onOpenQuote, onRemove }) {
   if (r.error) {
     return (
       <div style={{ ...card, borderLeft: "4px solid #DC2626" }}>
@@ -131,8 +159,8 @@ function FileCard({ r, price, pjs, cos, salesReps, defaultProjectId, onRegistere
       </div>
     );
   }
-  if (r.kind === "est") return <EstImportForm r={r} price={price} pjs={pjs} cos={cos} salesReps={salesReps} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onRemove={onRemove} />;
-  return <ImportForm r={r} price={price} pjs={pjs} cos={cos} salesReps={salesReps} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onRemove={onRemove} />;
+  if (r.kind === "est") return <EstImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onRemove={onRemove} />;
+  return <ImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onRemove={onRemove} />;
 }
 
 const CardHead = ({ fileName, onRemove, locked }) => (
@@ -144,7 +172,7 @@ const CardHead = ({ fileName, onRemove, locked }) => (
 
 let lineSeq = 0;
 
-function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegistered, onOpenQuote, onRemove }) {
+function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, defaultProjectId, onRegistered, onOpenQuote, onRemove }) {
   const d = r.data;
   const [title, setTitle] = useState(d.cover.title || "");
   const [issuedDate, setIssuedDate] = useState(d.cover.issuedDate || "");
@@ -153,18 +181,29 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
   const [pickedSetId, setPriceSetId] = useState("");
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
-  const [np, setNp] = useState({ name: d.cover.title || "", clientId: "", salesRepId: "", inCharge: "", respondedAt: nowLocal() });
+  const [np, setNp] = useState({ name: d.cover.title || "", clientId: "", branchId: "", salesRepId: "", inCharge: "", respondedAt: nowLocal(), constructionType: "自社のみ" });
   const [lines, setLines] = useState(() => d.lines.map(l => ({
     key: "il" + (++lineSeq), groupName: l.groupName, name: l.name, spec: l.spec, qty: l.qty ?? 0, unit: l.unit,
     price: l.price ?? 0, note: l.note, summaryOnly: l.summaryOnly, nameFromSpec: l.nameFromSpec, fileAmount: l.amount,
     pickedItemId: undefined, // undefined = 自動 / null = 当てはめない / id = 手で選んだ
     costOverride: undefined, // undefined = 単価表の原価をそのまま使う / { price, confirmed } = 手で直した原価
+    isSubcontracted: false,
   })));
   const [searchKey, setSearchKey] = useState(null);
   const [searchText, setSearchText] = useState("");
   const [registering, setRegistering] = useState(false);
   const [result, setResult] = useState(null); // { ok, message, projectId, quoteNo }
   const [selectedKeys, setSelectedKeys] = useState(new Set());
+  // 下請けの原価(まだ案件・見積が無いので、登録が終わるまではこの画面のローカル状態に置く)
+  const [subCosts, setSubCosts] = useState([]);
+  const [subForm, setSubForm] = useState({ subcontractor_id: "", amount: "", note: "", file: null });
+  const subcontractors = cos.filter(c => c.type === "協力業者");
+  const addSubCostDraft = () => {
+    if (!subForm.subcontractor_id || !subForm.amount) { alert("下請け会社と金額を入力してください"); return; }
+    setSubCosts(prev => [...prev, { key: "sc" + Date.now(), subcontractor_id: subForm.subcontractor_id, amount: Number(subForm.amount) || 0, note: subForm.note || "", file: subForm.file }]);
+    setSubForm({ subcontractor_id: "", amount: "", note: "", file: null });
+  };
+  const removeSubCostDraft = key => setSubCosts(prev => prev.filter(c => c.key !== key));
 
   // ドラッグ・ボタンでの並べ替え・グループ分け(ステップ2)。group_nameを直接書き換える
   const handleArrangeConclu = newLines => setLines(prev => {
@@ -204,10 +243,19 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
   const total = view.reduce((s, l) => s + l.amount, 0);
   const fileTotal = d.grandTotal ?? d.linesTotal;
   const expectedAfter = roundYen(fileTotal * MARKUP_BACK_RATE);
-  const costTotal = view.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.costPrice) || 0), 0);
-  const gp = total - costTotal;
-  const gpRate = total ? (gp / total) * 100 : null;
-  const provisional = view.some(l => !l.costConfirmed);
+  const selectedProject = projectMode === "existing" ? pjs.find(p => p.id === projectId) : null;
+  const constructionType = projectMode === "existing" ? (selectedProject?.constructionType || "自社のみ") : (np.constructionType || "自社のみ");
+  const isMixed = constructionType === "自社+下請け";
+  const isSubOnly = constructionType === "下請けのみ";
+  const showSubCheckCol = isMixed;
+  const showCostCol = !isSubOnly;
+  const subAmountTotal = subCosts.reduce((s, c) => s + (Number(c.amount) || 0), 0);
+  const financials = computeQuoteFinancials({
+    constructionType, saleTotal: total,
+    lines: view.map(l => ({ qty: l.qty, costPrice: l.costPrice, costConfirmed: l.costConfirmed, isSubcontracted: l.isSubcontracted })),
+    subAmountTotal, subCount: subCosts.length,
+  });
+  const { costTotal, gp, gpRate, provisional, subMissing, ownUnconfirmed } = financials;
   const unmatchedCount = view.filter(l => !l.item).length;
   const ngChecks = d.checks.filter(c => c.ok === false);
 
@@ -221,8 +269,6 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
     }).filter(x => x.score >= 0.5).sort((a, b) => b.score - a.score).slice(0, 5);
   }, [pjs, title]);
 
-  const clients = cos.filter(c => c.type === "取引先");
-  const repsForClient = salesReps.filter(s => !np.clientId || s.company_id === np.clientId);
   const repName = s => s?.name || s?.display_name || "";
 
   const updateLine = (key, patch) => setLines(prev => prev.map(l => (l.key === key ? { ...l, ...patch } : l)));
@@ -256,6 +302,7 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
       note: l.note || null,
       cost_price: l.costPrice, cost_confirmed: l.costConfirmed,
     }));
+    const subFlagsBySortOrder = view.map((l, i) => [i, !!l.isSubcontracted]).filter(([, flag]) => flag).map(([i]) => i);
     const pAliases = view.filter(l => l.matchStatus === "manual" && l.item).map(l => ({ alias: aliasKey(l.name, l.spec), price_item_id: l.item.id }));
 
     // 1) 元ファイルを Storage(非公開バケット)に保存。保存名は ID + 拡張子、元の名前は別に記録する
@@ -278,9 +325,14 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
       setRegistering(false);
       return;
     }
-    if (projectMode === "new" && np.respondedAt) {
-      await supabase.from("projects").update({ respondedAt: new Date(np.respondedAt).toISOString() }).eq("id", data.project_id);
+    if (projectMode === "new" && (np.respondedAt || np.branchId || np.constructionType)) {
+      await supabase.from("projects").update({
+        ...(np.respondedAt ? { respondedAt: new Date(np.respondedAt).toISOString() } : {}),
+        ...(np.branchId ? { branchId: np.branchId } : {}),
+        ...(np.constructionType ? { constructionType: np.constructionType } : {}),
+      }).eq("id", data.project_id);
     }
+    await applySubcontractorFollowUps({ quoteId: data.quote_id, subFlagsBySortOrder, subCosts });
     await onRegistered(data.project_id);
     setResult({ ok: true, projectId: data.project_id, quoteNo: data.quote_no, projectName: projectMode === "existing" ? pjs.find(p => p.id === projectId)?.name : np.name.trim() });
     setRegistering(false);
@@ -404,6 +456,7 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
                   <option value="">選択してください</option>
                   {pjs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
+                {selectedProject && <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>施工形態: {constructionType}(案件の設定。変更は案件の編集画面で行います)</div>}
               </div>
             ) : (
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
@@ -411,19 +464,12 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
                   <div style={label}>案件名 *(初期値 = 工事名称)</div>
                   <input value={np.name} onChange={e => setNp({ ...np, name: e.target.value })} style={inp} />
                 </div>
-                <div style={{ flex: 1, minWidth: 160 }}>
-                  <div style={label}>元請</div>
-                  <select value={np.clientId} onChange={e => setNp({ ...np, clientId: e.target.value, salesRepId: "" })} style={inp}>
-                    <option value="">未設定</option>
-                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}{c.branch ? " " + c.branch : ""}</option>)}
-                  </select>
-                </div>
-                <div style={{ flex: 1, minWidth: 160 }}>
-                  <div style={label}>元請側の担当者</div>
-                  <select value={np.salesRepId} onChange={e => setNp({ ...np, salesRepId: e.target.value })} style={inp}>
-                    <option value="">未設定</option>
-                    {repsForClient.map(s => <option key={s.id} value={s.id}>{repName(s) || s.id}</option>)}
-                  </select>
+                <div style={{ flex: "1 1 100%" }}>
+                  <ClientBranchRepPicker
+                    clientId={np.clientId} branchId={np.branchId} salesRepId={np.salesRepId}
+                    cos={cos} setCos={setCos} branches={branches} setBranches={setBranches} salesReps={salesReps} setSalesReps={setSalesReps}
+                    onChange={patch => setNp({ ...np, clientId: patch.clientId, branchId: patch.branchId, salesRepId: patch.salesRepId })}
+                  />
                 </div>
                 <div style={{ flex: 1, minWidth: 160 }}>
                   <div style={label}>現場担当(社内)</div>
@@ -432,6 +478,12 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
                 <div style={{ flex: 1, minWidth: 200 }}>
                   <div style={label}>対応日時(見積などの対応をした日時)</div>
                   <input type="datetime-local" value={np.respondedAt} onChange={e => setNp({ ...np, respondedAt: e.target.value })} style={inp} />
+                </div>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <div style={label}>施工形態</div>
+                  <select value={np.constructionType} onChange={e => setNp({ ...np, constructionType: e.target.value })} style={inp}>
+                    {CONSTRUCTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
                 </div>
               </div>
             )}
@@ -470,7 +522,8 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
                   {markup === "after" && <th style={th}>単価(載せる前)</th>}
                   <th style={{ ...th, textAlign: "right" }}>金額</th>
                   <th style={th}>備考</th>
-                  <th style={th}>単価表の項目(原価)</th>
+                  {showSubCheckCol && <th style={{ ...th, textAlign: "center" }}>下請け施工</th>}
+                  <th style={th}>単価表の項目{showCostCol ? "(原価)" : ""}</th>
                   <th style={th}></th>
                 </tr>
               </thead>
@@ -480,7 +533,7 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
                   onChange={handleArrangeConclu}
                   amountOf={l => l.amount}
                   formatAmount={yen}
-                  columnCount={markup === "after" ? 8 : 7}
+                  columnCount={(markup === "after" ? 8 : 7) + (showSubCheckCol ? 1 : 0)}
                   rowStyle={l => (l.summaryOnly ? "#FFF7ED" : !l.item ? "#FFFBEB" : "transparent")}
                   selectedKeys={selectedKeys}
                   onToggleSelect={key => setSelectedKeys(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; })}
@@ -497,8 +550,18 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
                     cells.push(
                       <td key="amount" style={{ ...td, textAlign: "right", fontWeight: 700, color: "#E07B39", width: 80 }}>{num(l.amount)}</td>,
                       <td key="note" style={{ ...td, width: 110 }}><input value={l.note} onChange={e => updateLine(l.key, { note: e.target.value })} style={{ ...cellInp, fontSize: 11 }} /></td>,
+                    );
+                    if (showSubCheckCol) {
+                      cells.push(
+                        <td key="subflag" style={{ ...td, textAlign: "center", width: 60 }}>
+                          <input type="checkbox" checked={!!l.isSubcontracted} onChange={e => updateLine(l.key, { isSubcontracted: e.target.checked })} />
+                        </td>
+                      );
+                    }
+                    cells.push(
                       <td key="cost" style={{ ...td, width: 230 }}>
                         <MatchCell l={l} index={index} costs={price?.costs || {}}
+                          showCost={showCostCol} excluded={isMixed && l.isSubcontracted}
                           searching={searchKey === l.key} searchText={searchText}
                           onSearchOpen={() => { setSearchKey(searchKey === l.key ? null : l.key); setSearchText(""); }}
                           onSearchText={setSearchText}
@@ -514,6 +577,35 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
           </div>
           <div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 12 }}>黄色の行 = 単価表に当てはまらない行(原価未入力)/ オレンジの行 = 総括のみ(内訳ページなし。原価未入力)</div>
 
+          {constructionType !== "自社のみ" && (
+            <div style={{ background: "#F9FAFB", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+              <div style={sectionTitle}>🏗 下請けの原価({subCosts.length}件)</div>
+              {subCosts.length === 0 && <div style={{ padding: "4px 0", fontSize: 12, color: "#9CA3AF" }}>まだ登録されていません(粗利は暫定になります)</div>}
+              {subCosts.map(c => {
+                const subCo = cos.find(x => x.id === c.subcontractor_id);
+                return (
+                  <div key={c.key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderTop: "1px solid #F3F4F6" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#1F2937" }}>{subCo?.name || "不明な会社"}</div>
+                      <div style={{ fontSize: 11, color: "#9CA3AF" }}>{yen(c.amount)}{c.note ? ` ・ ${c.note}` : ""}{c.file ? ` ・ 📎 ${c.file.name}` : ""}</div>
+                    </div>
+                    <button onClick={() => removeSubCostDraft(c.key)} style={{ background: "none", border: "none", fontSize: 12, color: "#DC2626", fontWeight: 700, cursor: "pointer" }}>🗑</button>
+                  </div>
+                );
+              })}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, paddingTop: 8, borderTop: "1px solid #F3F4F6" }}>
+                <select value={subForm.subcontractor_id} onChange={e => setSubForm({ ...subForm, subcontractor_id: e.target.value })} style={{ flex: 1, minWidth: 160, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, background: "#fff", color: "#1F2937" }}>
+                  <option value="">下請け会社を選択</option>
+                  {subcontractors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <input type="number" value={subForm.amount} onChange={e => setSubForm({ ...subForm, amount: e.target.value })} placeholder="金額(税抜)" style={{ width: 120, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
+                <input value={subForm.note} onChange={e => setSubForm({ ...subForm, note: e.target.value })} placeholder="備考(任意)" style={{ flex: 1, minWidth: 140, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
+                <input type="file" accept=".xls,.xlsx,.pdf" onChange={e => setSubForm({ ...subForm, file: e.target.files?.[0] || null })} style={{ fontSize: 11 }} />
+                <button onClick={addSubCostDraft} style={{ background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ 追加</button>
+              </div>
+            </div>
+          )}
+
           {/* 合計・粗利 */}
           <div style={{ background: "#F9FAFB", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -527,7 +619,8 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
               <div><span style={{ fontSize: 11, color: "#9CA3AF" }}>粗利 </span><span style={{ fontSize: 13, fontWeight: 700, color: "#059669" }}>{yen(gp)}{provisional ? "(暫定)" : ""}</span></div>
               <div><span style={{ fontSize: 11, color: "#9CA3AF" }}>粗利率 </span><span style={{ fontSize: 13, fontWeight: 700, color: "#059669" }}>{gpRate == null ? "—" : `${gpRate.toFixed(1)}%`}</span></div>
             </div>
-            {provisional && <div style={{ marginTop: 6, fontSize: 11, color: "#DC2626", fontWeight: 700 }}>⚠️ 原価が未入力・未確認の明細があります。粗利は暫定です</div>}
+            {ownUnconfirmed && <div style={{ marginTop: 6, fontSize: 11, color: "#DC2626", fontWeight: 700 }}>⚠️ 原価が未入力・未確認の明細があります。粗利は暫定です</div>}
+            {subMissing && <div style={{ marginTop: 6, fontSize: 11, color: "#DC2626", fontWeight: 700 }}>⚠️ 下請けの原価が1件も登録されていません。粗利は暫定です</div>}
             <div style={{ marginTop: 4, fontSize: 11, color: "#6B7280" }}>※ 原価は、いまの単価表の原価をコピーします。過去の見積の場合、粗利は「いまの原価」での目安です</div>
           </div>
 
@@ -560,7 +653,7 @@ const MATCH_BADGE = {
   none: { text: "未当てはめ", color: "#92400E", bg: "#FEF3C7" },
 };
 
-function MatchCell({ l, index, costs, searching, searchText, onSearchOpen, onSearchText, onPick, onCostChange }) {
+function MatchCell({ l, index, costs, showCost = true, excluded = false, searching, searchText, onSearchOpen, onSearchText, onPick, onCostChange }) {
   if (l.summaryOnly) return <span style={{ fontSize: 11, color: "#9A3412", fontWeight: 700 }}>総括のみ(原価未入力)</span>;
   if (!index) return <span style={{ fontSize: 11, color: "#9CA3AF" }}>単価表を読み込み中...</span>;
   const b = MATCH_BADGE[l.matchStatus];
@@ -598,16 +691,24 @@ function MatchCell({ l, index, costs, searching, searchText, onSearchOpen, onSea
           </div>
         </div>
       )}
-      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-        <span style={{ fontSize: 10, color: "#9CA3AF", whiteSpace: "nowrap" }}>原価単価</span>
-        <input type="number" value={l.costPrice ?? ""} placeholder="未入力" onChange={e => onCostChange(e.target.value)}
-          style={{ ...cellInp, fontSize: 11, width: 72, borderColor: l.costConfirmed ? "#E5E7EB" : "#FCA5A5" }} />
-      </div>
-      <div style={{ fontSize: 10, marginTop: 2 }}>
-        {!l.costConfirmed
-          ? <span style={{ color: "#DC2626", fontWeight: 700 }}>未確認(粗利は暫定)</span>
-          : <span style={{ color: "#6B7280" }}>原価計 {Math.round(lineCostTotal).toLocaleString()} / 粗利 {Math.round(lineGp).toLocaleString()}</span>}
-      </div>
+      {excluded ? (
+        <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 2 }}>下請け施工(原価算入対象外)</div>
+      ) : !showCost ? (
+        <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 2 }}>下請けのみのため、原価はこの画面では入力しません</div>
+      ) : (
+        <>
+          <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+            <span style={{ fontSize: 10, color: "#9CA3AF", whiteSpace: "nowrap" }}>原価単価</span>
+            <input type="number" value={l.costPrice ?? ""} placeholder="未入力" onChange={e => onCostChange(e.target.value)}
+              style={{ ...cellInp, fontSize: 11, width: 72, borderColor: l.costConfirmed ? "#E5E7EB" : "#FCA5A5" }} />
+          </div>
+          <div style={{ fontSize: 10, marginTop: 2 }}>
+            {!l.costConfirmed
+              ? <span style={{ color: "#DC2626", fontWeight: 700 }}>未確認(粗利は暫定)</span>
+              : <span style={{ color: "#6B7280" }}>原価計 {Math.round(lineCostTotal).toLocaleString()} / 粗利 {Math.round(lineGp).toLocaleString()}</span>}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -638,22 +739,32 @@ function sumLeafAmount(node, markupChoice) {
 }
 
 // ESTファイル(見積ソフトのバイナリ形式)の確認画面。ステップ3: 登録・原価の当てはめ・粗利の計算まで行う
-function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegistered, onOpenQuote, onRemove }) {
+function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, defaultProjectId, onRegistered, onOpenQuote, onRemove }) {
   const d = r.data;
-  const [lines, setLines] = useState(() => d.lines.map(l => ({ ...l, pickedItemId: undefined, costOverride: undefined })));
+  const [lines, setLines] = useState(() => d.lines.map(l => ({ ...l, pickedItemId: undefined, costOverride: undefined, isSubcontracted: false })));
   const [markupChoice, setMarkupChoice] = useState(null); // "with"(元請絡む・×0.925) | "without"(絡まない) ※必須
   const [outputRateChoice, setOutputRateChoice] = useState(d.cover.detectedRate === 100 ? "100" : "file");
   const [status, setStatus] = useState("submitted");
   const [pickedSetId, setPriceSetId] = useState("");
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
-  const [np, setNp] = useState({ name: d.cover.title || "", clientId: "", salesRepId: "", inCharge: "", respondedAt: nowLocal() });
+  const [np, setNp] = useState({ name: d.cover.title || "", clientId: "", branchId: "", salesRepId: "", inCharge: "", respondedAt: nowLocal(), constructionType: "自社のみ" });
   const [searchKey, setSearchKey] = useState(null);
   const [searchText, setSearchText] = useState("");
   const [registering, setRegistering] = useState(false);
   const [result, setResult] = useState(null); // { ok, message, projectId, quoteNo }
   const [arrangedMeta, setArrangedMeta] = useState([]); // [{key, group_name}] 手でドラッグ・移動した並び・グループ(ステップ2)
   const [selectedKeys, setSelectedKeys] = useState(new Set());
+  // 下請けの原価(まだ案件・見積が無いので、登録が終わるまではこの画面のローカル状態に置く)
+  const [subCosts, setSubCosts] = useState([]);
+  const [subForm, setSubForm] = useState({ subcontractor_id: "", amount: "", note: "", file: null });
+  const subcontractors = cos.filter(c => c.type === "協力業者");
+  const addSubCostDraft = () => {
+    if (!subForm.subcontractor_id || !subForm.amount) { alert("下請け会社と金額を入力してください"); return; }
+    setSubCosts(prev => [...prev, { key: "sc" + Date.now(), subcontractor_id: subForm.subcontractor_id, amount: Number(subForm.amount) || 0, note: subForm.note || "", file: subForm.file }]);
+    setSubForm({ subcontractor_id: "", amount: "", note: "", file: null });
+  };
+  const removeSubCostDraft = key => setSubCosts(prev => prev.filter(c => c.key !== key));
 
   const updateLine = (key, patch) => setLines(prev => prev.map(l => (l.key === key ? { ...l, ...patch } : l)));
   const toggleGroup = key => setLines(prev => prev.map(l => {
@@ -720,10 +831,19 @@ function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegi
   });
   const viewByKey = useMemo(() => Object.fromEntries(view.map(v => [v.key, v])), [view]);
 
-  const costTotal = view.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.costPrice) || 0), 0);
-  const gp = adjustedTotal - costTotal;
-  const gpRate = adjustedTotal ? (gp / adjustedTotal) * 100 : null;
-  const provisional = view.some(l => !l.costConfirmed);
+  const selectedProject = projectMode === "existing" ? pjs.find(p => p.id === projectId) : null;
+  const constructionType = projectMode === "existing" ? (selectedProject?.constructionType || "自社のみ") : (np.constructionType || "自社のみ");
+  const isMixed = constructionType === "自社+下請け";
+  const isSubOnly = constructionType === "下請けのみ";
+  const showSubCheckCol = isMixed;
+  const showCostCol = !isSubOnly;
+  const subAmountTotal = subCosts.reduce((s, c) => s + (Number(c.amount) || 0), 0);
+  const financials = computeQuoteFinancials({
+    constructionType, saleTotal: adjustedTotal,
+    lines: view.map(l => ({ qty: l.qty, costPrice: l.costPrice, costConfirmed: l.costConfirmed, isSubcontracted: l.isSubcontracted })),
+    subAmountTotal, subCount: subCosts.length,
+  });
+  const { costTotal, gp, gpRate, provisional, subMissing, ownUnconfirmed } = financials;
   const unmatchedCount = view.filter(l => !l.item).length;
 
   const similarProjects = useMemo(() => {
@@ -736,8 +856,6 @@ function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegi
     }).filter(x => x.score >= 0.5).sort((a, b) => b.score - a.score).slice(0, 5);
   }, [pjs, projectMode, np.name]);
 
-  const clients = cos.filter(c => c.type === "取引先");
-  const repsForClient = salesReps.filter(s => !np.clientId || s.company_id === np.clientId);
   const repName = s => s?.name || s?.display_name || "";
 
   const problems = [];
@@ -767,6 +885,7 @@ function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegi
       note: l.note || null,
       cost_price: l.costPrice, cost_confirmed: l.costConfirmed,
     }));
+    const subFlagsBySortOrder = view.map((l, i) => [i, !!l.isSubcontracted]).filter(([, flag]) => flag).map(([i]) => i);
     const pAliases = view.filter(l => l.matchStatus === "manual" && l.item).map(l => ({ alias: aliasKey(l.name, l.spec), price_item_id: l.item.id }));
 
     const { data, error } = await supabase.rpc("import_quote", { p_project: pProject, p_quote: pQuote, p_items: pItems, p_aliases: pAliases });
@@ -776,9 +895,14 @@ function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegi
       setRegistering(false);
       return;
     }
-    if (projectMode === "new" && np.respondedAt) {
-      await supabase.from("projects").update({ respondedAt: new Date(np.respondedAt).toISOString() }).eq("id", data.project_id);
+    if (projectMode === "new" && (np.respondedAt || np.branchId || np.constructionType)) {
+      await supabase.from("projects").update({
+        ...(np.respondedAt ? { respondedAt: new Date(np.respondedAt).toISOString() } : {}),
+        ...(np.branchId ? { branchId: np.branchId } : {}),
+        ...(np.constructionType ? { constructionType: np.constructionType } : {}),
+      }).eq("id", data.project_id);
     }
+    await applySubcontractorFollowUps({ quoteId: data.quote_id, subFlagsBySortOrder, subCosts });
     await onRegistered(data.project_id);
     setResult({ ok: true, projectId: data.project_id, quoteNo: data.quote_no, projectName: projectMode === "existing" ? pjs.find(p => p.id === projectId)?.name : np.name.trim() });
     setRegistering(false);
@@ -884,6 +1008,7 @@ function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegi
               <option value="">選択してください</option>
               {pjs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
+            {selectedProject && <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>施工形態: {constructionType}(案件の設定。変更は案件の編集画面で行います)</div>}
           </div>
         ) : (
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
@@ -891,19 +1016,12 @@ function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegi
               <div style={label}>案件名 *(初期値 = 工事名称)</div>
               <input value={np.name} onChange={e => setNp({ ...np, name: e.target.value })} style={inp} />
             </div>
-            <div style={{ flex: 1, minWidth: 160 }}>
-              <div style={label}>元請</div>
-              <select value={np.clientId} onChange={e => setNp({ ...np, clientId: e.target.value, salesRepId: "" })} style={inp}>
-                <option value="">未設定</option>
-                {clients.map(c => <option key={c.id} value={c.id}>{c.name}{c.branch ? " " + c.branch : ""}</option>)}
-              </select>
-            </div>
-            <div style={{ flex: 1, minWidth: 160 }}>
-              <div style={label}>元請側の担当者</div>
-              <select value={np.salesRepId} onChange={e => setNp({ ...np, salesRepId: e.target.value })} style={inp}>
-                <option value="">未設定</option>
-                {repsForClient.map(s => <option key={s.id} value={s.id}>{repName(s) || s.id}</option>)}
-              </select>
+            <div style={{ flex: "1 1 100%" }}>
+              <ClientBranchRepPicker
+                clientId={np.clientId} branchId={np.branchId} salesRepId={np.salesRepId}
+                cos={cos} setCos={setCos} branches={branches} setBranches={setBranches} salesReps={salesReps} setSalesReps={setSalesReps}
+                onChange={patch => setNp({ ...np, clientId: patch.clientId, branchId: patch.branchId, salesRepId: patch.salesRepId })}
+              />
             </div>
             <div style={{ flex: 1, minWidth: 160 }}>
               <div style={label}>現場担当(社内)</div>
@@ -912,6 +1030,12 @@ function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegi
             <div style={{ flex: 1, minWidth: 200 }}>
               <div style={label}>対応日時(見積などの対応をした日時)</div>
               <input type="datetime-local" value={np.respondedAt} onChange={e => setNp({ ...np, respondedAt: e.target.value })} style={inp} />
+            </div>
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <div style={label}>施工形態</div>
+              <select value={np.constructionType} onChange={e => setNp({ ...np, constructionType: e.target.value })} style={inp}>
+                {CONSTRUCTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
             </div>
           </div>
         )}
@@ -949,7 +1073,8 @@ function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegi
               {markupChoice === "with" && <th style={th}>単価(IGUMI販売)</th>}
               <th style={{ ...th, textAlign: "right" }}>金額</th>
               <th style={th}>備考</th>
-              <th style={th}>単価表の項目(原価)</th>
+              {showSubCheckCol && <th style={{ ...th, textAlign: "center" }}>下請け施工</th>}
+              <th style={th}>単価表の項目{showCostCol ? "(原価)" : ""}</th>
               <th style={th}></th>
             </tr>
           </thead>
@@ -978,9 +1103,15 @@ function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegi
                   {markupChoice === "with" && <td style={{ ...td, textAlign: "right", width: 80 }}>{num(basePrice)}</td>}
                   <td style={{ ...td, textAlign: "right", fontWeight: 700, color: "#E07B39", width: 80 }}>{num(amount)}</td>
                   <td style={{ ...td, width: 110 }}><input value={l.note} onChange={e => updateLine(l.key, { note: e.target.value })} style={{ ...cellInp, fontSize: 11 }} /></td>
+                  {showSubCheckCol && (
+                    <td style={{ ...td, textAlign: "center", width: 60 }}>
+                      {isLeaf && <input type="checkbox" checked={!!l.isSubcontracted} onChange={e => updateLine(l.key, { isSubcontracted: e.target.checked })} />}
+                    </td>
+                  )}
                   <td style={{ ...td, width: 230 }}>
                     {isLeaf
                       ? <MatchCell l={v} index={index} costs={price?.costs || {}}
+                          showCost={showCostCol} excluded={isMixed && l.isSubcontracted}
                           searching={searchKey === l.key} searchText={searchText}
                           onSearchOpen={() => { setSearchKey(searchKey === l.key ? null : l.key); setSearchText(""); }}
                           onSearchText={setSearchText}
@@ -1015,7 +1146,8 @@ function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegi
               <th style={th}>名称</th><th style={th}>材質・寸法</th>
               <th style={th}>数量</th>
               <th style={{ ...th, textAlign: "right" }}>金額</th>
-              <th style={th}>単価表の項目(原価)</th>
+              {showSubCheckCol && <th style={{ ...th, textAlign: "center" }}>下請け施工</th>}
+              <th style={th}>単価表の項目{showCostCol ? "(原価)" : ""}</th>
               <th style={th}></th>
             </tr>
           </thead>
@@ -1025,27 +1157,69 @@ function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegi
               onChange={handleArrange}
               amountOf={l => l.amount}
               formatAmount={yen}
-              columnCount={5}
+              columnCount={4 + (showSubCheckCol ? 1 : 0) + 1}
               selectedKeys={selectedKeys}
               onToggleSelect={key => setSelectedKeys(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; })}
-              renderLeafCells={l => [
-                <td key="name" style={{ ...td, width: 150 }}>{l.name}</td>,
-                <td key="spec" style={{ ...td, width: 150, fontSize: 11 }}>{l.spec}</td>,
-                <td key="qty" style={{ ...td, width: 50, textAlign: "right" }}>{num(l.qty)}{l.unit}</td>,
-                <td key="amount" style={{ ...td, textAlign: "right", fontWeight: 700, color: "#E07B39", width: 80 }}>{num(l.amount)}</td>,
-                <td key="cost" style={{ ...td, width: 220 }}>
-                  <MatchCell l={l} index={index} costs={price?.costs || {}}
-                    searching={searchKey === l.key} searchText={searchText}
-                    onSearchOpen={() => { setSearchKey(searchKey === l.key ? null : l.key); setSearchText(""); }}
-                    onSearchText={setSearchText}
-                    onPick={id => { updateLine(l.key, { pickedItemId: id, costOverride: undefined }); setSearchKey(null); }}
-                    onCostChange={val => updateLine(l.key, { costOverride: val === "" ? { price: null, confirmed: false } : { price: Number(val), confirmed: true } })} />
-                </td>,
-              ]}
+              renderLeafCells={l => {
+                const cells = [
+                  <td key="name" style={{ ...td, width: 150 }}>{l.name}</td>,
+                  <td key="spec" style={{ ...td, width: 150, fontSize: 11 }}>{l.spec}</td>,
+                  <td key="qty" style={{ ...td, width: 50, textAlign: "right" }}>{num(l.qty)}{l.unit}</td>,
+                  <td key="amount" style={{ ...td, textAlign: "right", fontWeight: 700, color: "#E07B39", width: 80 }}>{num(l.amount)}</td>,
+                ];
+                if (showSubCheckCol) {
+                  cells.push(
+                    <td key="subflag" style={{ ...td, textAlign: "center", width: 60 }}>
+                      <input type="checkbox" checked={!!l.isSubcontracted} onChange={e => updateLine(l.key, { isSubcontracted: e.target.checked })} />
+                    </td>
+                  );
+                }
+                cells.push(
+                  <td key="cost" style={{ ...td, width: 220 }}>
+                    <MatchCell l={l} index={index} costs={price?.costs || {}}
+                      showCost={showCostCol} excluded={isMixed && l.isSubcontracted}
+                      searching={searchKey === l.key} searchText={searchText}
+                      onSearchOpen={() => { setSearchKey(searchKey === l.key ? null : l.key); setSearchText(""); }}
+                      onSearchText={setSearchText}
+                      onPick={id => { updateLine(l.key, { pickedItemId: id, costOverride: undefined }); setSearchKey(null); }}
+                      onCostChange={val => updateLine(l.key, { costOverride: val === "" ? { price: null, confirmed: false } : { price: Number(val), confirmed: true } })} />
+                  </td>
+                );
+                return cells;
+              }}
             />
           </tbody>
         </table>
       </div>
+
+      {constructionType !== "自社のみ" && (
+        <div style={{ background: "#F9FAFB", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+          <div style={sectionTitle}>🏗 下請けの原価({subCosts.length}件)</div>
+          {subCosts.length === 0 && <div style={{ padding: "4px 0", fontSize: 12, color: "#9CA3AF" }}>まだ登録されていません(粗利は暫定になります)</div>}
+          {subCosts.map(c => {
+            const subCo = cos.find(x => x.id === c.subcontractor_id);
+            return (
+              <div key={c.key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderTop: "1px solid #F3F4F6" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#1F2937" }}>{subCo?.name || "不明な会社"}</div>
+                  <div style={{ fontSize: 11, color: "#9CA3AF" }}>{yen(c.amount)}{c.note ? ` ・ ${c.note}` : ""}{c.file ? ` ・ 📎 ${c.file.name}` : ""}</div>
+                </div>
+                <button onClick={() => removeSubCostDraft(c.key)} style={{ background: "none", border: "none", fontSize: 12, color: "#DC2626", fontWeight: 700, cursor: "pointer" }}>🗑</button>
+              </div>
+            );
+          })}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, paddingTop: 8, borderTop: "1px solid #F3F4F6" }}>
+            <select value={subForm.subcontractor_id} onChange={e => setSubForm({ ...subForm, subcontractor_id: e.target.value })} style={{ flex: 1, minWidth: 160, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, background: "#fff", color: "#1F2937" }}>
+              <option value="">下請け会社を選択</option>
+              {subcontractors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <input type="number" value={subForm.amount} onChange={e => setSubForm({ ...subForm, amount: e.target.value })} placeholder="金額(税抜)" style={{ width: 120, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
+            <input value={subForm.note} onChange={e => setSubForm({ ...subForm, note: e.target.value })} placeholder="備考(任意)" style={{ flex: 1, minWidth: 140, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
+            <input type="file" accept=".xls,.xlsx,.pdf" onChange={e => setSubForm({ ...subForm, file: e.target.files?.[0] || null })} style={{ fontSize: 11 }} />
+            <button onClick={addSubCostDraft} style={{ background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ 追加</button>
+          </div>
+        </div>
+      )}
 
       {/* 合計・粗利 */}
       <div style={{ background: "#F9FAFB", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
@@ -1059,7 +1233,8 @@ function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegi
           <div><span style={{ fontSize: 11, color: "#9CA3AF" }}>粗利 </span><span style={{ fontSize: 13, fontWeight: 700, color: "#059669" }}>{yen(gp)}{provisional ? "(暫定)" : ""}</span></div>
           <div><span style={{ fontSize: 11, color: "#9CA3AF" }}>粗利率 </span><span style={{ fontSize: 13, fontWeight: 700, color: "#059669" }}>{gpRate == null ? "—" : `${gpRate.toFixed(1)}%`}</span></div>
         </div>
-        {provisional && <div style={{ marginTop: 6, fontSize: 11, color: "#DC2626", fontWeight: 700 }}>⚠️ 原価が未入力・未確認の明細があります。粗利は暫定です</div>}
+        {ownUnconfirmed && <div style={{ marginTop: 6, fontSize: 11, color: "#DC2626", fontWeight: 700 }}>⚠️ 原価が未入力・未確認の明細があります。粗利は暫定です</div>}
+        {subMissing && <div style={{ marginTop: 6, fontSize: 11, color: "#DC2626", fontWeight: 700 }}>⚠️ 下請けの原価が1件も登録されていません。粗利は暫定です</div>}
         <div style={{ marginTop: 4, fontSize: 11, color: "#6B7280" }}>※ 原価は、いまの単価表の原価をコピーします。過去の見積の場合、粗利は「いまの原価」での目安です</div>
       </div>
 

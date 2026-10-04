@@ -26,7 +26,7 @@ export function computeQuoteFinancials({ constructionType, saleTotal, lines, sub
   const subMissing = needsSubCost && (subCount || 0) === 0;
   const provisional = isSubOnly ? subMissing : (ownUnconfirmed || (isMixed && subMissing));
 
-  return { ownCostTotal, subCostTotal: subTotal, costTotal, gp, gpRate, provisional, subMissing };
+  return { ownCostTotal, subCostTotal: subTotal, costTotal, gp, gpRate, provisional, subMissing, ownUnconfirmed };
 }
 
 export const CONSTRUCTION_TYPES = ["自社のみ", "下請けのみ", "自社+下請け"];

@@ -115,18 +115,22 @@ export default function Companies({ pjs, cos, setCos, cust, isPC, pp, nav, rpOpe
               <button onClick={() => setModal("addCt")} style={{ padding: "4px 12px", borderRadius: 14, background: "#E07B39", color: "#fff", border: "none", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>＋ 追加</button>
             </div>
             {(selC.contacts || []).length === 0 && <div style={{ color: "#9CA3AF", fontSize: 13, marginBottom: 14 }}>担当者が未登録です</div>}
-            {[...new Set((selC.contacts || []).map(ct => ct.role))].map(role => (
-              <div key={role} style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#6B7280", borderLeft: "3px solid #E07B39", paddingLeft: 7, marginBottom: 6 }}>{role}</div>
-                {(selC.contacts || []).filter(ct => ct.role === role).map(ct => (
-                  <div key={ct.id} onClick={() => setSelCt(ct)} style={{ background: "#F9FAFB", borderRadius: 8, padding: "10px 12px", marginBottom: 5, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#1A3A5C", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, color: "#fff", fontWeight: 800 }}>{ct.name.charAt(0)}</div>
-                    <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 13, color: "#1F2937" }}>{ct.name}</div><div style={{ fontSize: 11, color: "#9CA3AF" }}>{[ct.tel, ct.email].filter(Boolean).join(" · ") || "連絡先未登録"}</div></div>
-                    <span style={{ color: "#9CA3AF", fontSize: 14 }}>›</span>
-                  </div>
-                ))}
-              </div>
-            ))}
+            {(() => {
+              const hasBranches = branches.some(b => b.company_id === selC.id);
+              const groupKey = ct => (hasBranches ? (ct.branch || "(営業所未設定)") : ct.role);
+              return [...new Set((selC.contacts || []).map(groupKey))].map(g => (
+                <div key={g} style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#6B7280", borderLeft: "3px solid #E07B39", paddingLeft: 7, marginBottom: 6 }}>{hasBranches ? "🏢 " : ""}{g}</div>
+                  {(selC.contacts || []).filter(ct => groupKey(ct) === g).map(ct => (
+                    <div key={ct.id} onClick={() => setSelCt(ct)} style={{ background: "#F9FAFB", borderRadius: 8, padding: "10px 12px", marginBottom: 5, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#1A3A5C", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, color: "#fff", fontWeight: 800 }}>{ct.name.charAt(0)}</div>
+                      <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 13, color: "#1F2937" }}>{ct.name}</div><div style={{ fontSize: 11, color: "#9CA3AF" }}>{[ct.role, ct.tel, ct.email].filter(Boolean).join(" · ") || "連絡先未登録"}</div></div>
+                      <span style={{ color: "#9CA3AF", fontSize: 14 }}>›</span>
+                    </div>
+                  ))}
+                </div>
+              ));
+            })()}
             <div style={{ borderTop: "1px solid #F3F4F6", paddingTop: 14 }}>
               <div style={{ fontWeight: 700, fontSize: 13, color: "#1A3A5C", marginBottom: 8 }}>📋 関連案件</div>
               {getPF(selC.id).length === 0 && <div style={{ color: "#9CA3AF", fontSize: 13 }}>案件なし</div>}
