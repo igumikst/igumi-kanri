@@ -73,10 +73,12 @@ Backend API (Vercel env vars, no `VITE_` prefix):
 
 ### Deploy
 
-`main`へのプッシュで、Vercelが本番へ自動デプロイする。`main`へのプッシュ前には、
-`node scripts/predeploy-check.mjs`(build/lint/差分の内容チェック)が
+`main`へのプッシュで、Vercelが本番(https://igumi-kanri.vercel.app)へ自動デプロイする。
+`main`へのプッシュ前には、`node scripts/predeploy-check.mjs`(build/lint/差分の内容チェック)が
 git の pre-push フックで自動実行され、失敗するとプッシュが止まる。
 DBの変更を伴う作業は、SQLを提案して実行者の確認を待ってからデプロイする。
+デプロイ後は、https://igumi-kanri.vercel.app で、トップ・案件管理・ダッシュボード・
+単価管理・取引先が開くことを確認する。
 
 ### Styling conventions
 
