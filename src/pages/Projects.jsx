@@ -14,7 +14,7 @@ function toLocalInput(d) {
   return adj.toISOString().slice(0, 16);
 }
 
-export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, setQuoteProjectId, setQuoteImportCtx }) {
+export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, setQuoteProjectId, setQuoteImportCtx, branches }) {
   const [selP, setSelP] = useState(null);
   const [modal, setModal] = useState(null);
   const [fltS, setFltS] = useState("すべて");
@@ -24,7 +24,7 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
   const [conf, setConf] = useState(null);
   const [editP, setEditP] = useState(null);
   const [newSalesRep, setNewSalesRep] = useState(""); // 新規担当者入力
-  const blankP = { name: "", status: "発注待ち", clientId: "", salesRep: "", inCharge: "崎岡", subIds: [], amount: "", gp: "", qDate: "", respondedAt: nowLocal(), constructionType: "自社のみ" };
+  const blankP = { name: "", status: "発注待ち", clientId: "", branchId: "", salesRepId: "", salesRep: "", inCharge: "崎岡", subIds: [], amount: "", gp: "", qDate: "", respondedAt: nowLocal(), constructionType: "自社のみ" };
   const [nP, setNP] = useState(blankP);
   const [newNSalesRep, setNewNSalesRep] = useState(""); // 新規案件用
 
@@ -66,7 +66,7 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
       await addContactToCompany(nP.clientId, newNSalesRep);
       salesRep = newNSalesRep;
     }
-    const { data } = await supabase.from("projects").insert([{ name: nP.name, status: nP.status, clientId: nP.clientId || null, salesRep, inCharge: nP.inCharge, subcontractorIds: nP.subIds || [], amount: Number(nP.amount) || 0, grossProfit: Number(nP.gp) || 0, quoteDate: nP.qDate, respondedAt: nP.respondedAt ? new Date(nP.respondedAt).toISOString() : null, constructionType: nP.constructionType || "自社のみ" }]).select();
+    const { data } = await supabase.from("projects").insert([{ name: nP.name, status: nP.status, clientId: nP.clientId || null, branchId: nP.branchId || null, salesRepId: nP.salesRepId || null, salesRep, inCharge: nP.inCharge, subcontractorIds: nP.subIds || [], amount: Number(nP.amount) || 0, grossProfit: Number(nP.gp) || 0, quoteDate: nP.qDate, respondedAt: nP.respondedAt ? new Date(nP.respondedAt).toISOString() : null, constructionType: nP.constructionType || "自社のみ" }]).select();
     if (data) setPjs([{ ...data[0], subIds: data[0].subcontractorIds || [], gp: data[0].grossProfit || 0, qDate: data[0].quoteDate || "" }, ...pjs]);
     setNP(blankP); setNewNSalesRep(""); setModal(null);
   };
@@ -80,7 +80,7 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
       salesRep = newSalesRep;
     }
     const respondedAtIso = editP.respondedAt ? new Date(editP.respondedAt).toISOString() : null;
-    await supabase.from("projects").update({ name: editP.name, status: editP.status, clientId: editP.clientId || null, salesRep, inCharge: editP.inCharge, subcontractorIds: editP.subIds || [], amount: Number(editP.amount) || 0, grossProfit: Number(editP.gp) || 0, quoteDate: editP.qDate, respondedAt: respondedAtIso, constructionType: editP.constructionType || "自社のみ" }).eq("id", editP.id);
+    await supabase.from("projects").update({ name: editP.name, status: editP.status, clientId: editP.clientId || null, branchId: editP.branchId || null, salesRepId: editP.salesRepId || null, salesRep, inCharge: editP.inCharge, subcontractorIds: editP.subIds || [], amount: Number(editP.amount) || 0, grossProfit: Number(editP.gp) || 0, quoteDate: editP.qDate, respondedAt: respondedAtIso, constructionType: editP.constructionType || "自社のみ" }).eq("id", editP.id);
     const updated = { ...editP, salesRep, gp: Number(editP.gp) || 0, amount: Number(editP.amount) || 0, respondedAt: respondedAtIso };
     setPjs(pjs.map(p => p.id === editP.id ? updated : p));
     setSelP(updated); setEditP(null); setNewSalesRep("");
@@ -152,11 +152,20 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
               <Sel label="ステータス" opts={STATUSES} value={editP.status} onChange={e => setEditP({ ...editP, status: e.target.value })} />
               <div style={{ marginBottom: 10 }}>
                 <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 3 }}>取引先</div>
-                <select value={editP.clientId || ""} onChange={e => setEditP({ ...editP, clientId: e.target.value, salesRep: "" })} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, background: "#FAFAFA", boxSizing: "border-box", color: "#1F2937" }}>
+                <select value={editP.clientId || ""} onChange={e => setEditP({ ...editP, clientId: e.target.value, branchId: "", salesRep: "" })} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, background: "#FAFAFA", boxSizing: "border-box", color: "#1F2937" }}>
                   <option value="">未設定</option>
                   {cos.filter(c => c.type === "取引先").map(c => <option key={c.id} value={c.id}>{c.name}{c.branch ? " " + c.branch : ""}</option>)}
                 </select>
               </div>
+              {editP.clientId && branches.some(b => b.company_id === editP.clientId) && (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 3 }}>営業所</div>
+                  <select value={editP.branchId || ""} onChange={e => setEditP({ ...editP, branchId: e.target.value })} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, background: "#FAFAFA", boxSizing: "border-box", color: "#1F2937" }}>
+                    <option value="">未設定</option>
+                    {branches.filter(b => b.company_id === editP.clientId).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  </select>
+                </div>
+              )}
               <Inp label="社内担当" value={editP.inCharge || ""} onChange={e => setEditP({ ...editP, inCharge: e.target.value })} />
               <SalesRepSelector
                 clientId={editP.clientId}
@@ -190,7 +199,7 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
                 <div style={{ flex: 1, background: "#F0FDF4", borderRadius: 10, padding: "10px 12px" }}><div style={{ fontSize: 10, color: "#9CA3AF" }}>粗利 / 粗利率</div><div style={{ fontSize: 14, fontWeight: 800, color: "#059669" }}>{fmt(selP.gp)}</div><div style={{ fontSize: 11, color: "#059669" }}>{pct(selP.gp, selP.amount)}</div></div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginBottom: 12 }}>
-                {[["ステータス", selP.status], ["社内担当", selP.inCharge], ["営業担当", selP.salesRep], ["見積提出日", selP.qDate], ["対応日時", selP.respondedAt ? new Date(selP.respondedAt).toLocaleString("ja-JP", { dateStyle: "medium", timeStyle: "short" }) : ""], ["施工形態", selP.constructionType || "自社のみ"]].map(([l, v]) => (
+                {[["ステータス", selP.status], ["社内担当", selP.inCharge], ["営業所", branches.find(b => b.id === selP.branchId)?.name], ["営業担当", selP.salesRep], ["見積提出日", selP.qDate], ["対応日時", selP.respondedAt ? new Date(selP.respondedAt).toLocaleString("ja-JP", { dateStyle: "medium", timeStyle: "short" }) : ""], ["施工形態", selP.constructionType || "自社のみ"]].map(([l, v]) => (
                   <div key={l} style={{ marginBottom: 8 }}><div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 2 }}>{l}</div><div style={{ fontSize: 13, fontWeight: 600, color: "#1F2937" }}>{v || "—"}</div></div>
                 ))}
               </div>
@@ -249,11 +258,20 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
         <Inp label="社内担当" value={nP.inCharge} onChange={e => setNP({ ...nP, inCharge: e.target.value })} />
         <div style={{ marginBottom: 10 }}>
           <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 3 }}>取引先</div>
-          <select value={nP.clientId || ""} onChange={e => setNP({ ...nP, clientId: e.target.value, salesRep: "" })} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, background: "#FAFAFA", boxSizing: "border-box", color: "#1F2937" }}>
+          <select value={nP.clientId || ""} onChange={e => setNP({ ...nP, clientId: e.target.value, branchId: "", salesRep: "" })} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, background: "#FAFAFA", boxSizing: "border-box", color: "#1F2937" }}>
             <option value="">未設定</option>
             {cos.filter(c => c.type === "取引先").map(c => <option key={c.id} value={c.id}>{c.name}{c.branch ? " " + c.branch : ""}</option>)}
           </select>
         </div>
+        {nP.clientId && branches.some(b => b.company_id === nP.clientId) && (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 3 }}>営業所</div>
+            <select value={nP.branchId || ""} onChange={e => setNP({ ...nP, branchId: e.target.value })} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, background: "#FAFAFA", boxSizing: "border-box", color: "#1F2937" }}>
+              <option value="">未設定</option>
+              {branches.filter(b => b.company_id === nP.clientId).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          </div>
+        )}
         <SalesRepSelector
           clientId={nP.clientId}
           value={nP.salesRep || ""}
