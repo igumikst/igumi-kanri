@@ -69,6 +69,7 @@ const beforeNameCheck = problems.length;
 for (const name of diffNames) {
   const base = path.basename(name);
   if (/^scratch_/i.test(base)) fail(`"${name}" は scratch_ で始まる一時ファイルです`);
+  if (/\.tmp\./i.test(base)) fail(`"${name}" は .tmp. を含む一時ファイルです`);
   if (/\.(xlsx?|est|pdf)$/i.test(name)) fail(`"${name}" は差分に含めてはいけない形式のファイルです(.xls/.xlsx/.est/.pdf)`);
   if (/^\.env$/i.test(base)) fail(`"${name}" は .env ファイルです`);
   if (/^docs\/igumi_.*_instructions\.md$/i.test(name)) fail(`"${name}" は社内向け指示書です(docs/igumi_*_instructions.md)`);
