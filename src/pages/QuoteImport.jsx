@@ -699,6 +699,12 @@ function MatchCell({ l, index, costs, showCost = true, excluded = false, searchi
         <span style={{ fontSize: 10, fontWeight: 700, color: b.color, background: b.bg, borderRadius: 4, padding: "1px 6px", whiteSpace: "nowrap" }}>{badgeText}</span>
         {l.itemSetLabel && <span style={{ fontSize: 9, color: "#9CA3AF", whiteSpace: "nowrap" }}>単価セット: {l.itemSetLabel}</span>}
       </div>
+      {l.matchStatus === "auto" && l.item && (
+        <div style={{ fontSize: 10, color: "#92400E", marginBottom: 3 }}>
+          ⚠ 自動(類似{Math.round(l.score * 100)}%): 「{l.name}{l.spec ? " " + l.spec : ""}」→「{l.item.name}{l.item.spec ? " " + l.item.spec : ""}」
+          {l.item.sale_price == null && <span style={{ color: "#B45309" }}> (単価なし)</span>}
+        </div>
+      )}
       <div style={{ display: "flex", gap: 3, marginBottom: 3 }}>
         <select value={l.item?.id || ""} onChange={e => onPick(e.target.value || null)} style={{ ...cellInp, fontSize: 11, flex: 1, minWidth: 0 }}>
           <option value="">当てはめない(原価未入力)</option>
@@ -925,6 +931,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
   });
   const { costTotal, gp, gpRate, provisional, subMissing, ownUnconfirmed } = financials;
   const unmatchedCount = view.filter(l => !l.item).length;
+  const autoMatchCount = view.filter(l => l.matchStatus === "auto").length;
 
   const similarProjects = useMemo(() => {
     const t = normalizeText(projectMode === "new" ? np.name : "");
@@ -1026,6 +1033,12 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
       ) : (
       <>
 
+
+      {autoMatchCount > 0 && (
+        <div style={{ background: "#EDE9FE", color: "#5B21B6", borderRadius: 10, padding: "8px 12px", fontSize: 12, fontWeight: 700, marginBottom: 12 }}>
+          ⚠ 自動(類似)で当てはめた行: {autoMatchCount}件(下の明細一覧で、当てはめ先を確認してください)
+        </div>
+      )}
 
       {/* 表紙 */}
       <div style={{ background: "#F9FAFB", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
@@ -1513,6 +1526,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
   });
   const { costTotal, gp, gpRate, provisional, subMissing, ownUnconfirmed } = financials;
   const unmatchedCount = view.filter(l => !l.item).length;
+  const autoMatchCount = view.filter(l => l.matchStatus === "auto").length;
   const ngChecks = d.checks.filter(c => c.ok === false);
 
   const similarProjects = useMemo(() => {
@@ -1615,6 +1629,12 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
         </div>
       ) : (
         <>
+          {autoMatchCount > 0 && (
+            <div style={{ background: "#EDE9FE", color: "#5B21B6", borderRadius: 10, padding: "8px 12px", fontSize: 12, fontWeight: 700, marginBottom: 12 }}>
+              ⚠ 自動(類似)で当てはめた行: {autoMatchCount}件(下の明細一覧で、当てはめ先を確認してください)
+            </div>
+          )}
+
           {/* 表紙 */}
           <div style={{ background: "#F9FAFB", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
             <div style={sectionTitle}>表紙(自社見積書)</div>
