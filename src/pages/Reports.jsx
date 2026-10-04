@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { Confirm } from "../components/UI";
+import { normalizeText, similarity } from "../lib/priceMatch";
 
 const HEADER_COLOR = "#1a56a0";
 const TYPE_LABELS = { normal: "通常", tama: "多摩", union: "ユニオン", manual: "手動登録", "": "未分類" };
@@ -43,6 +44,29 @@ export default function Reports({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     setItems((prev) => prev.filter((i) => i.id !== id));
     setDeleteTarget(null);
     if (selected?.id === id) setSelected(null);
+  };
+
+  // 案件とのつなぎ(自動では紐づけない。物件名から候補を出すだけ)
+  const linkReportToProject = async (reportId, projectId) => {
+    const { error } = await supabase.from("reports").update({ project_id: projectId }).eq("id", reportId);
+    if (error) { alert("紐づけに失敗しました：" + error.message); return; }
+    setItems((prev) => prev.map((i) => (i.id === reportId ? { ...i, project_id: projectId } : i)));
+    if (selected?.id === reportId) setSelected((s) => ({ ...s, project_id: projectId }));
+  };
+  const unlinkReport = (reportId) => linkReportToProject(reportId, null);
+
+  const projectCandidates = (propertyName) => {
+    const t = normalizeText(propertyName || "");
+    if (!t) return [];
+    return (pjs || [])
+      .map((p) => {
+        const n = normalizeText(p.name);
+        const score = n && (n.includes(t) || t.includes(n)) ? 1 : similarity(t, p.name);
+        return { p, score };
+      })
+      .filter((x) => x.score >= 0.4)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
   };
 
   const saveManual = async () => {
@@ -146,6 +170,9 @@ export default function Reports({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
                 {item.property_name && (
                   <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>🏠 {item.property_name}</div>
                 )}
+                {item.project_id && (
+                  <div style={{ fontSize: 11, color: HEADER_COLOR, marginBottom: 4, fontWeight: 700 }}>🔗 {(pjs || []).find((p) => p.id === item.project_id)?.name || "案件に紐づけ済み"}</div>
+                )}
                 <div style={{ fontSize: 12, color: "#9ca3af" }}>
                   {fmtDate(item.created_at)}
                   {item.created_by ? ` · ${item.created_by}` : ""}
@@ -174,6 +201,34 @@ export default function Reports({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
               </div>
               <button onClick={() => setSelected(null)} style={{ background: "#f3f4f6", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", fontSize: 15, flexShrink: 0 }}>✕</button>
             </div>
+
+            <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 10, padding: 12, marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#1f2937", marginBottom: 6 }}>📋 案件とのつなぎ</div>
+              {selected.project_id ? (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: HEADER_COLOR }}>{(pjs || []).find((p) => p.id === selected.project_id)?.name || "(案件が見つかりません)"}</div>
+                  <button onClick={() => unlinkReport(selected.id)} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "4px 10px", fontSize: 11, color: "#dc2626", cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" }}>解除</button>
+                </div>
+              ) : (
+                <>
+                  {projectCandidates(selected.property_name).length > 0 && (
+                    <div style={{ marginBottom: 8 }}>
+                      <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 4 }}>物件名から見つかった候補</div>
+                      {projectCandidates(selected.property_name).map(({ p }) => (
+                        <button key={p.id} onClick={() => linkReportToProject(selected.id, p.id)} style={{ display: "block", width: "100%", textAlign: "left", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "6px 10px", marginBottom: 4, fontSize: 12, cursor: "pointer", color: "#1f2937" }}>
+                          {p.name}<span style={{ float: "right", color: HEADER_COLOR, fontWeight: 700 }}>これに紐づける →</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <select defaultValue="" onChange={(e) => { if (e.target.value) linkReportToProject(selected.id, e.target.value); }} style={{ width: "100%", padding: "7px 10px", borderRadius: 8, border: "1.5px solid #e5e7eb", fontSize: 12, color: "#1f2937", background: "#fff" }}>
+                    <option value="">案件を選んで紐づける…</option>
+                    {(pjs || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </>
+              )}
+            </div>
+
             <div style={{ whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.7, color: "#374151", background: "#f8fafc", borderRadius: 10, padding: 14, border: "1px solid #e5e7eb", marginBottom: 16, maxHeight: "50vh", overflowY: "auto" }}>
               {selected.content || "（本文なし）"}
             </div>
