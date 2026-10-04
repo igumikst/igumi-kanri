@@ -96,6 +96,18 @@ const countDropNodes = (nodes) => {
   return { folders, files, bytes };
 };
 
+const flattenDropFiles = (nodes) => {
+  const files = [];
+  const walk = (list) => {
+    for (const n of list) {
+      if (n.type === "folder") walk(n.children || []);
+      else files.push(n);
+    }
+  };
+  walk(nodes);
+  return files;
+};
+
 const formatDropMb = (bytes) => {
   const mb = bytes / (1024 * 1024);
   return mb >= 10 ? String(Math.round(mb)) : mb.toFixed(1).replace(/\.0$/, "");
@@ -320,12 +332,25 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     return nodes;
   };
 
-  const registerDropNodes = async (nodes, parentId) => {
+  const registerDropNodes = async (nodes, parentId, monthCtx) => {
     const failed = [];
-    let localFolders = [...finFolders];
     const { files: totalFiles } = countDropNodes(nodes);
     let doneFiles = 0;
     if (totalFiles > 0) setBulkProgress({ current: 0, total: totalFiles });
+
+    // 月フォルダ画面: フォルダは作らず、配下ファイルを年月付きで一括登録
+    if (monthCtx) {
+      for (const node of flattenDropFiles(nodes)) {
+        const { error } = await persistFinFile(node.file, monthCtx.rootId, monthCtx.year, monthCtx.month);
+        if (error) failed.push({ name: node.name, reason: error.message || "アップロード失敗" });
+        doneFiles += 1;
+        setBulkProgress({ current: doneFiles, total: totalFiles });
+      }
+      setBulkProgress(null);
+      return failed;
+    }
+
+    let localFolders = [...finFolders];
 
     const localChildren = (pid) =>
       localFolders
@@ -413,7 +438,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     if (!fileDragOver) setFileDragOver(true);
   };
 
-  const handleFolderListFileDrop = async (e, parentId) => {
+  const handleFolderListFileDrop = async (e, parentId, monthCtx) => {
     if (!isPC || !isExternalFileDrag(e)) return;
     e.preventDefault();
     e.stopPropagation();
@@ -428,7 +453,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     }
     if (!nodes.length) return;
 
-    if (parentId == null && nodes.every(n => n.type === "file")) {
+    if (!monthCtx && parentId == null && nodes.every(n => n.type === "file")) {
       alert("ファイルはフォルダを開いた状態でドロップしてください");
       return;
     }
@@ -440,7 +465,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
       okColor: "#1A3A5C",
       onOk: async () => {
         setConf(null);
-        const failed = await registerDropNodes(nodes, parentId);
+        const failed = await registerDropNodes(nodes, parentId, monthCtx);
         if (failed.length) {
           setDropResult({
             title: "登録完了（一部失敗）",
@@ -453,7 +478,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     });
   };
 
-  const renderFileDropOverlay = (parentId) => fileDragOver && isPC ? (
+  const renderFileDropOverlay = (parentId, monthCtx) => fileDragOver && isPC ? (
     <div
       onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
       onDragOver={handleFolderListFileDragOver}
@@ -462,7 +487,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
         e.stopPropagation();
         if (!e.currentTarget.contains(e.relatedTarget)) setFileDragOver(false);
       }}
-      onDrop={(e) => { void handleFolderListFileDrop(e, parentId); }}
+      onDrop={(e) => { void handleFolderListFileDrop(e, parentId, monthCtx); }}
       style={{
         position: "absolute", inset: 0, zIndex: 40,
         background: "rgba(26,58,92,0.12)", border: "3px dashed #1A3A5C", borderRadius: 14,
@@ -997,7 +1022,13 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
             <input type="file" accept="image/*,application/pdf,.xlsx,.docx,.xls,.doc" multiple onChange={async e => { for (const f of Array.from(e.target.files)) { await uploadFinFile(f, rootId, meta.year, meta.month); } e.target.value = ""; }} style={{ display: "none" }} />
           </label>
         </div>
-        <div style={{ padding: isPC ? "14px 0" : 14 }}>
+        <div
+          style={{ padding: isPC ? "14px 0" : 14, position: "relative", minHeight: 240 }}
+          onDragEnter={isPC ? handleFolderListFileDragEnter : undefined}
+          onDragOver={isPC ? handleFolderListFileDragOver : undefined}
+          onDrop={isPC ? (e) => { void handleFolderListFileDrop(e, finItem.id, { rootId, year: meta.year, month: meta.month }); } : undefined}
+        >
+          {renderFileDropOverlay(finItem.id, { rootId, year: meta.year, month: meta.month })}
           {monthFiles.length === 0
             ? <div style={{ textAlign: "center", padding: 40, color: "#9CA3AF" }}><div style={{ fontSize: 48, marginBottom: 12 }}>📂</div><div style={{ fontSize: 14 }}>ファイルがありません</div></div>
             : monthFiles.map(renderFileRow)}
