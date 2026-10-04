@@ -3,6 +3,46 @@ import { supabase } from "../lib/supabase";
 import { COMPANY_TYPES, CONTACT_ROLES, fmt } from "../lib/constants";
 import { Badge, Inp, Sel, Modal, Hdr, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
+import { MARKUP_CHOICE_OPTIONS, CUSTOM_RATE_MIN, CUSTOM_RATE_MAX, resolveMarkupChoice } from "../lib/quoteImport/markup";
+
+const markupSelStyle = { padding: "5px 8px", borderRadius: 6, border: "1.5px solid #E5E7EB", fontSize: 12, background: "#fff", color: "#1F2937" };
+const markupInputStyle = { width: 90, padding: "5px 8px", borderRadius: 6, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" };
+const markupBtnStyle = { padding: "5px 10px", borderRadius: 6, border: "none", background: "#1A3A5C", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" };
+
+// 掛け率の初期値を選ぶ・直接保存する小さな部品(取引先・営業所の両方で使う)。
+// 保存されている値は、数字の文字列(例"0.925")か null(未設定/取引先に合わせる)。
+// 呼び出し側で key={value} を渡し、外から value が変わったら(保存後など)初期状態を作り直す。
+function MarkupDefaultEditor({ value, onSave, unsetLabel }) {
+  const resolved = resolveMarkupChoice(value);
+  const [choice, setChoice] = useState(resolved?.choice || "");
+  const [customRate, setCustomRate] = useState(resolved?.choice === "custom" ? String(resolved.rate) : "");
+
+  const customRateNum = Number(customRate);
+  const customValid = customRate.trim() !== "" && Number.isFinite(customRateNum) && customRateNum >= CUSTOM_RATE_MIN && customRateNum <= CUSTOM_RATE_MAX;
+
+  const handleChoice = v => {
+    setChoice(v);
+    if (v === "") { onSave(null); return; }
+    if (v === "custom") return; // 数字の入力を待つ(確定ボタンで保存)
+    onSave(String(MARKUP_CHOICE_OPTIONS.find(o => o.key === v).rate));
+  };
+
+  return (
+    <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+      <select value={choice} onChange={e => handleChoice(e.target.value)} style={markupSelStyle}>
+        <option value="">{unsetLabel}</option>
+        {MARKUP_CHOICE_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+      </select>
+      {choice === "custom" && (
+        <>
+          <input type="number" step="0.001" min={CUSTOM_RATE_MIN} max={CUSTOM_RATE_MAX} value={customRate} onChange={e => setCustomRate(e.target.value)}
+            placeholder={`${CUSTOM_RATE_MIN}〜${CUSTOM_RATE_MAX}`} style={{ ...markupInputStyle, borderColor: customValid || !customRate ? "#E5E7EB" : "#FCA5A5" }} />
+          <button type="button" disabled={!customValid} onClick={() => onSave(customRate)} style={{ ...markupBtnStyle, opacity: customValid ? 1 : 0.5, cursor: customValid ? "pointer" : "default" }}>確定</button>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function Companies({ pjs, cos, setCos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, branches, setBranches }) {
   const [selC, setSelC] = useState(null);
@@ -56,6 +96,10 @@ export default function Companies({ pjs, cos, setCos, cust, isPC, pp, nav, rpOpe
     await supabase.from("company_branches").delete().eq("id", id);
     setBranches(branches.filter(b => b.id !== id));
   };
+  const updateBranchMarkup = async (id, value) => {
+    await supabase.from("company_branches").update({ markup_default: value }).eq("id", id);
+    setBranches(branches.map(b => b.id === id ? { ...b, markup_default: value } : b));
+  };
 
   const saveCt = async () => {
     if (!nCt.name || !selC) return;
@@ -95,7 +139,12 @@ export default function Companies({ pjs, cos, setCos, cust, isPC, pp, nav, rpOpe
               <div style={{ fontWeight: 800, fontSize: 18, color: "#1F2937" }}>{selC.name}{selC.branch ? ` ${selC.branch}` : ""}</div>
               <button onClick={() => { setEditCoForm({ name: selC.name, branch: selC.branch || "", type: selC.type }); setModal("editCo"); }} style={{ background: "#EFF6FF", border: "1.5px solid #BFDBFE", color: "#1A3A5C", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>✏️ 編集</button>
             </div>
-            <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 16 }}>{selC.type}</div>
+            <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 10 }}>{selC.type}</div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+              <div style={{ fontSize: 12, color: "#6B7280", fontWeight: 700 }}>掛け率の初期値</div>
+              <MarkupDefaultEditor key={`co-${selC.id}-${selC.markupDefault ?? ""}`} value={selC.markupDefault} onSave={v => updateCo(selC.id, { markupDefault: v })} unsetLabel="未設定" />
+            </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div style={{ fontWeight: 700, fontSize: 13, color: "#1A3A5C" }}>🏢 営業所</div>
@@ -103,10 +152,16 @@ export default function Companies({ pjs, cos, setCos, cust, isPC, pp, nav, rpOpe
             </div>
             {branches.filter(b => b.company_id === selC.id).length === 0 && <div style={{ color: "#9CA3AF", fontSize: 13, marginBottom: 14 }}>営業所が未登録です</div>}
             {branches.filter(b => b.company_id === selC.id).map(b => (
-              <div key={b.id} style={{ background: "#F9FAFB", borderRadius: 8, padding: "9px 12px", marginBottom: 6, display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ flex: 1, fontWeight: 600, fontSize: 13, color: "#1F2937" }}>{b.name}</div>
-                <button onClick={() => { setEditBranch({ id: b.id, name: b.name }); setModal("editBranch"); }} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 13 }}>✏️</button>
-                <button onClick={() => setConf({ msg: `「${b.name}」\n\nこの操作は元に戻せません。\n削除しますか？`, onOk: () => { delBranch(b.id); setConf(null); } })} style={{ border: "none", background: "none", cursor: "pointer", color: "#DC2626", fontSize: 13 }}>🗑</button>
+              <div key={b.id} style={{ background: "#F9FAFB", borderRadius: 8, padding: "9px 12px", marginBottom: 6 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ flex: 1, fontWeight: 600, fontSize: 13, color: "#1F2937" }}>{b.name}</div>
+                  <button onClick={() => { setEditBranch({ id: b.id, name: b.name }); setModal("editBranch"); }} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 13 }}>✏️</button>
+                  <button onClick={() => setConf({ msg: `「${b.name}」\n\nこの操作は元に戻せません。\n削除しますか？`, onOk: () => { delBranch(b.id); setConf(null); } })} style={{ border: "none", background: "none", cursor: "pointer", color: "#DC2626", fontSize: 13 }}>🗑</button>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 11, color: "#6B7280", fontWeight: 700 }}>掛け率の初期値</div>
+                  <MarkupDefaultEditor key={`br-${b.id}-${b.markup_default ?? ""}`} value={b.markup_default} onSave={v => updateBranchMarkup(b.id, v)} unsetLabel="取引先に合わせる" />
+                </div>
               </div>
             ))}
 
