@@ -154,13 +154,71 @@ function findTitle(buf, afterOff, dec) {
   return best ? { title: best.text, markerOff: best.off } : { title: "", markerOff: -1 };
 }
 
-// 工事名称の文字レコードの「長さ位置」から、+168(130%合計)・+176(100%合計)に保存されている合計金額を読む
-function findGrandTotals(dv, titleOff, len) {
-  if (titleOff < 0 || titleOff + 184 > len) return { totalExTax: null, totalExTax130: null };
-  return {
-    totalExTax130: dv.getFloat64(titleOff + 168, true),
-    totalExTax: dv.getFloat64(titleOff + 176, true),
-  };
+// 全角/半角スペースの違いを無視して比べるため、文字列をそろえる
+const IDEOGRAPHIC_SPACE_RE = new RegExp(String.fromCharCode(0x3000), "g");
+const normalizeForMatch = s => s.replace(IDEOGRAPHIC_SPACE_RE, " ").replace(/\s+/g, " ").trim();
+
+// 「長さ(uint16LE)+Shift-JIS」の文字列レコードを、afterOffから走査し、
+// 正規化した文字列がtargetと完全一致する最初のレコードの位置を返す(無ければ-1)
+function findOffsetByExactText(buf, afterOff, dec, target) {
+  if (!target) return -1;
+  let off = afterOff;
+  while (off + 2 <= buf.length) {
+    const strLen = buf[off] | (buf[off + 1] << 8);
+    if (strLen >= 2 && strLen < 300 && off + 2 + strLen <= buf.length) {
+      const raw = buf.subarray(off + 2, off + 2 + strLen);
+      let ok = true;
+      for (let j = 0; j < raw.length; j++) { if (raw[j] !== 0 && raw[j] < 0x20) { ok = false; break; } }
+      if (ok) {
+        try {
+          const text = normalizeForMatch(dec.decode(raw).replace(/\0/g, ""));
+          if (text === target) return off;
+        } catch { /* ignore */ }
+      }
+    }
+    off++;
+  }
+  return -1;
+}
+
+// 手がかりの位置から合わなかった場合、近く(前後400バイト)を1バイトずつ探し直して、
+// 組み立てた明細の合計(target)に一致するdoubleを探す。見つかれば、その8バイト手前を130%合計とする
+function searchNearbyForTotal(dv, len, centerOff, target) {
+  if (centerOff < 0 || target == null) return null;
+  const RANGE = 400;
+  const start = Math.max(8, centerOff - RANGE);
+  const end = Math.min(len - 8, centerOff + RANGE);
+  for (let p = start; p <= end; p++) {
+    const v = dv.getFloat64(p, true);
+    if (isReasonable(v) && close(v, target, Math.max(0.5, Math.abs(target) * 0.0005))) {
+      return { totalExTax: v, totalExTax130: p - 8 >= 0 ? dv.getFloat64(p - 8, true) : null, foundAt: p };
+    }
+  }
+  return null;
+}
+
+// 合計(税抜)の位置Tを、(a)ファイル名の文字列レコードを探す → (b)見つからなければ、
+// 末尾付近の工事名称らしき文字列(プレースホルダの手前)を探す、の順で決める。
+// T+168(130%合計)・T+176(100%合計)を読み、組み立てた明細の合計(topSum100)と一致するかを検証する。
+// 一致しなければ近くを探し直し、それでも合わなければ null を返す(0円のまま黙らない)
+function findGrandTotalsRobust(buf, dv, dec, afterOff, fileNameNoExt, topSum100) {
+  const byFileName = findOffsetByExactText(buf, afterOff, dec, normalizeForMatch(fileNameNoExt || ""));
+  const anchorOff = byFileName >= 0 ? byFileName : findTitle(buf, afterOff, dec).markerOff;
+
+  let totalExTax = null, totalExTax130 = null;
+  if (anchorOff >= 0 && anchorOff + 184 <= buf.length) {
+    const cand100 = dv.getFloat64(anchorOff + 176, true);
+    const cand130 = dv.getFloat64(anchorOff + 168, true);
+    if (topSum100 == null || (isReasonable(cand100) && close(cand100, topSum100, Math.max(0.5, Math.abs(topSum100) * 0.0005)))) {
+      totalExTax = cand100;
+      totalExTax130 = cand130;
+    }
+  }
+  if (totalExTax == null && topSum100 != null) {
+    const found = searchNearbyForTotal(dv, buf.length, anchorOff >= 0 ? anchorOff + 176 : -1, topSum100);
+    if (found) { totalExTax = found.totalExTax; totalExTax130 = found.totalExTax130; }
+  }
+  return { totalExTax, totalExTax130 };
 }
 
 // スタック方式で、階層(小計/明細)を組み立てる。
@@ -226,7 +284,9 @@ export function flattenEstTree(top, pathPrefix = []) {
   return out;
 }
 
-export function parseEstFile(arrayBuffer) {
+// fileName: 元のファイル名(拡張子つき)。工事名称の初期値は画面側がこれから作るが、
+// 合計金額の位置Tを探す手がかりにも、同じファイル名の文字を使う
+export function parseEstFile(arrayBuffer, fileName = "") {
   const buf = new Uint8Array(arrayBuffer);
   const dv = new DataView(arrayBuffer);
   const dec = new TextDecoder("shift_jis");
@@ -238,9 +298,6 @@ export function parseEstFile(arrayBuffer) {
 
   const table = findStringTable(buf, numericEnd, records.length, dec);
   if (!table) throw new Error("明細の名称・仕様などの文字レコードが見つかりませんでした");
-
-  const { title, markerOff } = findTitle(buf, table.end, dec);
-  const { totalExTax, totalExTax130 } = findGrandTotals(dv, markerOff, buf.length);
 
   const warnings = [];
   const checks = [];
@@ -279,7 +336,12 @@ export function parseEstFile(arrayBuffer) {
 
   if (mismatchKeys.length) warnings.push("階層(小計)の組み立てで、金額が一致しない箇所がありました(明細一覧で確認してください)");
 
+  // 組み立てた明細の合計(100%)を先に出しておき、合計金額の位置探しの検算に使う
   const topSum100 = top.reduce((s, n) => s + (Number(n.amountA) || 0), 0);
+
+  const fileNameNoExt = fileName.replace(/\.[^.]+$/, "");
+  const { totalExTax, totalExTax130 } = findGrandTotalsRobust(buf, dv, dec, table.end, fileNameNoExt, topSum100);
+
   if (totalExTax != null) {
     const ok = Math.abs(topSum100 - totalExTax) < 1;
     checks.push({ label: "組み立てた明細の合計(100%) = ファイル保存の合計(100%)", actual: topSum100, expected: totalExTax, ok });
@@ -289,7 +351,7 @@ export function parseEstFile(arrayBuffer) {
   }
 
   return {
-    cover: { title, issuedDate: "", totalExTax, totalExTax130, detectedRate },
+    cover: { title: fileNameNoExt, issuedDate: "", totalExTax, totalExTax130, detectedRate },
     lines: linesWithAuto,
     topSum100,
     checks,
