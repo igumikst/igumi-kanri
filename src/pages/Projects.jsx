@@ -4,6 +4,15 @@ import { STATUSES, STATUS_STYLE, fmt, pct } from "../lib/constants";
 import { Badge, Inp, Sel, Modal, Hdr, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 
+// 見積などの対応をした日時。datetime-local入力(ローカル時刻)との変換用
+const nowLocal = () => toLocalInput(new Date());
+function toLocalInput(d) {
+  const dt = d instanceof Date ? d : new Date(d);
+  if (!d || Number.isNaN(dt.getTime())) return "";
+  const adj = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000);
+  return adj.toISOString().slice(0, 16);
+}
+
 export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, setQuoteProjectId, setQuoteImportCtx }) {
   const [selP, setSelP] = useState(null);
   const [modal, setModal] = useState(null);
@@ -14,7 +23,7 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
   const [conf, setConf] = useState(null);
   const [editP, setEditP] = useState(null);
   const [newSalesRep, setNewSalesRep] = useState(""); // 新規担当者入力
-  const blankP = { name: "", status: "発注待ち", clientId: "", salesRep: "", inCharge: "崎岡", subIds: [], amount: "", gp: "", qDate: "" };
+  const blankP = { name: "", status: "発注待ち", clientId: "", salesRep: "", inCharge: "崎岡", subIds: [], amount: "", gp: "", qDate: "", respondedAt: nowLocal() };
   const [nP, setNP] = useState(blankP);
   const [newNSalesRep, setNewNSalesRep] = useState(""); // 新規案件用
 
@@ -56,7 +65,7 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
       await addContactToCompany(nP.clientId, newNSalesRep);
       salesRep = newNSalesRep;
     }
-    const { data } = await supabase.from("projects").insert([{ name: nP.name, status: nP.status, clientId: nP.clientId || null, salesRep, inCharge: nP.inCharge, subcontractorIds: nP.subIds || [], amount: Number(nP.amount) || 0, grossProfit: Number(nP.gp) || 0, quoteDate: nP.qDate }]).select();
+    const { data } = await supabase.from("projects").insert([{ name: nP.name, status: nP.status, clientId: nP.clientId || null, salesRep, inCharge: nP.inCharge, subcontractorIds: nP.subIds || [], amount: Number(nP.amount) || 0, grossProfit: Number(nP.gp) || 0, quoteDate: nP.qDate, respondedAt: nP.respondedAt ? new Date(nP.respondedAt).toISOString() : null }]).select();
     if (data) setPjs([{ ...data[0], subIds: data[0].subcontractorIds || [], gp: data[0].grossProfit || 0, qDate: data[0].quoteDate || "" }, ...pjs]);
     setNP(blankP); setNewNSalesRep(""); setModal(null);
   };
@@ -69,8 +78,9 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
       await addContactToCompany(editP.clientId, newSalesRep);
       salesRep = newSalesRep;
     }
-    await supabase.from("projects").update({ name: editP.name, status: editP.status, clientId: editP.clientId || null, salesRep, inCharge: editP.inCharge, subcontractorIds: editP.subIds || [], amount: Number(editP.amount) || 0, grossProfit: Number(editP.gp) || 0, quoteDate: editP.qDate }).eq("id", editP.id);
-    const updated = { ...editP, salesRep, gp: Number(editP.gp) || 0, amount: Number(editP.amount) || 0 };
+    const respondedAtIso = editP.respondedAt ? new Date(editP.respondedAt).toISOString() : null;
+    await supabase.from("projects").update({ name: editP.name, status: editP.status, clientId: editP.clientId || null, salesRep, inCharge: editP.inCharge, subcontractorIds: editP.subIds || [], amount: Number(editP.amount) || 0, grossProfit: Number(editP.gp) || 0, quoteDate: editP.qDate, respondedAt: respondedAtIso }).eq("id", editP.id);
+    const updated = { ...editP, salesRep, gp: Number(editP.gp) || 0, amount: Number(editP.amount) || 0, respondedAt: respondedAtIso };
     setPjs(pjs.map(p => p.id === editP.id ? updated : p));
     setSelP(updated); setEditP(null); setNewSalesRep("");
   };
@@ -157,6 +167,7 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
               <Inp label="受注金額" type="number" value={editP.amount || ""} onChange={e => setEditP({ ...editP, amount: e.target.value })} />
               <Inp label="粗利" type="number" value={editP.gp || ""} onChange={e => setEditP({ ...editP, gp: e.target.value })} />
               <Inp label="見積提出日" type="date" value={editP.qDate || ""} onChange={e => setEditP({ ...editP, qDate: e.target.value })} />
+              <Inp label="対応日時(見積などの対応をした日時)" type="datetime-local" value={editP.respondedAt || ""} onChange={e => setEditP({ ...editP, respondedAt: e.target.value })} />
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={() => { setEditP(null); setNewSalesRep(""); }} style={{ flex: 1, padding: "12px 0", background: "#F3F4F6", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer", color: "#374151" }}>キャンセル</button>
                 <button onClick={updatePj} style={{ flex: 2, padding: "12px 0", background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>💾 保存する</button>
@@ -169,7 +180,7 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
                 <Badge s={selP.status} />
               </div>
               <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-                <button onClick={() => { setEditP({ ...selP }); setNewSalesRep(""); }} style={{ flex: 2, padding: "8px 0", background: "#EFF6FF", color: "#1A3A5C", border: "1.5px solid #BFDBFE", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✏️ 編集</button>
+                <button onClick={() => { setEditP({ ...selP, respondedAt: selP.respondedAt ? toLocalInput(selP.respondedAt) : nowLocal() }); setNewSalesRep(""); }} style={{ flex: 2, padding: "8px 0", background: "#EFF6FF", color: "#1A3A5C", border: "1.5px solid #BFDBFE", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✏️ 編集</button>
                 <button onClick={() => setConf({ msg: `「${selP.name}」\n\nこの操作は元に戻せません。\n削除しますか？`, onOk: () => { delPj(selP.id); setConf(null); } })} style={{ flex: 1, padding: "8px 0", background: "#FEF2F2", color: "#DC2626", border: "1.5px solid #FECACA", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>🗑 削除</button>
               </div>
               <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
@@ -177,7 +188,7 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
                 <div style={{ flex: 1, background: "#F0FDF4", borderRadius: 10, padding: "10px 12px" }}><div style={{ fontSize: 10, color: "#9CA3AF" }}>粗利 / 粗利率</div><div style={{ fontSize: 14, fontWeight: 800, color: "#059669" }}>{fmt(selP.gp)}</div><div style={{ fontSize: 11, color: "#059669" }}>{pct(selP.gp, selP.amount)}</div></div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginBottom: 12 }}>
-                {[["ステータス", selP.status], ["社内担当", selP.inCharge], ["営業担当", selP.salesRep], ["見積提出日", selP.qDate]].map(([l, v]) => (
+                {[["ステータス", selP.status], ["社内担当", selP.inCharge], ["営業担当", selP.salesRep], ["見積提出日", selP.qDate], ["対応日時", selP.respondedAt ? new Date(selP.respondedAt).toLocaleString("ja-JP", { dateStyle: "medium", timeStyle: "short" }) : ""]].map(([l, v]) => (
                   <div key={l} style={{ marginBottom: 8 }}><div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 2 }}>{l}</div><div style={{ fontSize: 13, fontWeight: 600, color: "#1F2937" }}>{v || "—"}</div></div>
                 ))}
               </div>
@@ -249,6 +260,7 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
           onNewChange={setNewNSalesRep}
         />
         <Inp label="見積提出日" type="date" value={nP.qDate} onChange={e => setNP({ ...nP, qDate: e.target.value })} />
+        <Inp label="対応日時(見積などの対応をした日時)" type="datetime-local" value={nP.respondedAt} onChange={e => setNP({ ...nP, respondedAt: e.target.value })} />
         <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: -4, marginBottom: 10 }}>受注金額・粗利は、見積を作成して「採用」すると自動で入ります</div>
       </Modal>)}
       {conf && <Confirm msg={conf.msg} onCancel={() => setConf(null)} onOk={conf.onOk} />}

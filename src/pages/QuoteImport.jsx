@@ -28,6 +28,8 @@ const label = { fontSize: 11, color: "#6B7280", marginBottom: 3 };
 const sectionTitle = { fontSize: 11, fontWeight: 700, color: "#6B7280", marginBottom: 6 };
 const num = v => (v == null ? "—" : Number(v).toLocaleString());
 const yen = v => (v == null ? "—" : `¥${Math.round(Number(v)).toLocaleString()}`);
+// 見積などの対応をした日時。datetime-local入力(ローカル時刻)の初期値(いま)
+const nowLocal = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
 
 export default function QuoteImport({ pjs, setPjs, cos, salesReps, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteImportCtx, setQuoteProjectId }) {
   const pending = tks.filter(t => !t.done);
@@ -151,7 +153,7 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
   const [pickedSetId, setPriceSetId] = useState("");
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
-  const [np, setNp] = useState({ name: d.cover.title || "", clientId: "", salesRepId: "", inCharge: "" });
+  const [np, setNp] = useState({ name: d.cover.title || "", clientId: "", salesRepId: "", inCharge: "", respondedAt: nowLocal() });
   const [lines, setLines] = useState(() => d.lines.map(l => ({
     key: "il" + (++lineSeq), groupName: l.groupName, name: l.name, spec: l.spec, qty: l.qty ?? 0, unit: l.unit,
     price: l.price ?? 0, note: l.note, summaryOnly: l.summaryOnly, nameFromSpec: l.nameFromSpec, fileAmount: l.amount,
@@ -275,6 +277,9 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
       setResult({ ok: false, message: `登録できませんでした。案件・見積は登録されていません。(${error.message})${missing ? " ※ 取り込み用のSQLが未実行の可能性があります" : ""}`, orphanPath: storagePath });
       setRegistering(false);
       return;
+    }
+    if (projectMode === "new" && np.respondedAt) {
+      await supabase.from("projects").update({ respondedAt: new Date(np.respondedAt).toISOString() }).eq("id", data.project_id);
     }
     await onRegistered(data.project_id);
     setResult({ ok: true, projectId: data.project_id, quoteNo: data.quote_no, projectName: projectMode === "existing" ? pjs.find(p => p.id === projectId)?.name : np.name.trim() });
@@ -423,6 +428,10 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
                 <div style={{ flex: 1, minWidth: 160 }}>
                   <div style={label}>現場担当(社内)</div>
                   <input value={np.inCharge} onChange={e => setNp({ ...np, inCharge: e.target.value })} style={inp} />
+                </div>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <div style={label}>対応日時(見積などの対応をした日時)</div>
+                  <input type="datetime-local" value={np.respondedAt} onChange={e => setNp({ ...np, respondedAt: e.target.value })} style={inp} />
                 </div>
               </div>
             )}
@@ -638,7 +647,7 @@ function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegi
   const [pickedSetId, setPriceSetId] = useState("");
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
-  const [np, setNp] = useState({ name: d.cover.title || "", clientId: "", salesRepId: "", inCharge: "" });
+  const [np, setNp] = useState({ name: d.cover.title || "", clientId: "", salesRepId: "", inCharge: "", respondedAt: nowLocal() });
   const [searchKey, setSearchKey] = useState(null);
   const [searchText, setSearchText] = useState("");
   const [registering, setRegistering] = useState(false);
@@ -766,6 +775,9 @@ function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegi
       setResult({ ok: false, message: `登録できませんでした。案件・見積は登録されていません。(${error.message})${missing ? " ※ 取り込み用のSQLが未実行の可能性があります" : ""}` });
       setRegistering(false);
       return;
+    }
+    if (projectMode === "new" && np.respondedAt) {
+      await supabase.from("projects").update({ respondedAt: new Date(np.respondedAt).toISOString() }).eq("id", data.project_id);
     }
     await onRegistered(data.project_id);
     setResult({ ok: true, projectId: data.project_id, quoteNo: data.quote_no, projectName: projectMode === "existing" ? pjs.find(p => p.id === projectId)?.name : np.name.trim() });
@@ -896,6 +908,10 @@ function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegi
             <div style={{ flex: 1, minWidth: 160 }}>
               <div style={label}>現場担当(社内)</div>
               <input value={np.inCharge} onChange={e => setNp({ ...np, inCharge: e.target.value })} style={inp} />
+            </div>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={label}>対応日時(見積などの対応をした日時)</div>
+              <input type="datetime-local" value={np.respondedAt} onChange={e => setNp({ ...np, respondedAt: e.target.value })} style={inp} />
             </div>
           </div>
         )}
