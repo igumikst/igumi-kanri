@@ -4,7 +4,8 @@ import { Hdr, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import GroupTree, { BundleToolbar } from "../components/GroupTree";
 import { fmt } from "../lib/constants";
-import { openQuoteFile } from "../lib/quoteFiles";
+import { openQuoteFile, QUOTE_FILE_BUCKET, FILE_TYPES } from "../lib/quoteFiles";
+import { computeQuoteFinancials } from "../lib/quoteFinancials";
 
 // 見積の状態は、画面上は「発注前」「完工済」の2つだけ。DBの値は既存の制約に合わせる
 // (発注前=submitted / 完工済=won)。既存の下書き(draft)・失注(lost)は、画面では発注前と表示する
@@ -46,6 +47,10 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
   const [laborPick, setLaborPick] = useState(null);
   const [laborCountInput, setLaborCountInput] = useState("");
   const [selectedKeys, setSelectedKeys] = useState(new Set());
+  const [subCosts, setSubCosts] = useState([]); // 下請けの原価(quote_subcontractor_costs)
+  const [subForm, setSubForm] = useState({ subcontractor_id: "", amount: "", note: "", file: null });
+  const [savingSub, setSavingSub] = useState(false);
+  const constructionType = project?.constructionType || "自社のみ";
 
   const loadQuotes = async () => {
     if (!quoteProjectId) return;
@@ -79,9 +84,15 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
 
   const groupsMap = useMemo(() => Object.fromEntries(priceGroups.map(g => [g.id, g])), [priceGroups]);
 
+  const loadSubCosts = async quoteId => {
+    const { data } = await supabase.from("quote_subcontractor_costs").select("*").eq("quote_id", quoteId).order("created_at");
+    setSubCosts(data || []);
+  };
+
   const openNewQuote = async () => {
     await ensurePriceData();
     setEd({ ...blankEd });
+    setSubCosts([]); setSubForm({ subcontractor_id: "", amount: "", note: "", file: null });
     setSearch(""); setCategoryFilter(""); setGroupFilter("");
     setView("edit");
   };
@@ -104,12 +115,42 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
       sale_price: r.sale_price,
       cost_price: costsByItem[r.id]?.cost_price ?? null,
       cost_confirmed: costsByItem[r.id]?.cost_confirmed ?? false,
+      is_subcontracted: !!r.is_subcontracted,
       labor_count: r.line_type === "labor" ? (parseFloat(r.spec) || "") : undefined,
       note: r.note || "",
     }));
     setEd({ id: q.id, quote_no: q.quote_no, title: q.title, price_set_id: q.price_set_id || "", status: q.status === "won" ? "won" : "submitted", lines });
+    setSubForm({ subcontractor_id: "", amount: "", note: "", file: null });
+    await loadSubCosts(q.id);
     setSearch(""); setCategoryFilter(""); setGroupFilter("");
     setView("edit");
+  };
+
+  const addSubCost = async () => {
+    if (!ed.id) { alert("先に見積を保存してください"); return; }
+    if (!subForm.subcontractor_id || !subForm.amount) { alert("下請け会社と金額を入力してください"); return; }
+    setSavingSub(true);
+    let file_storage_path = null, file_original_name = null;
+    if (subForm.file) {
+      const ext = (subForm.file.name.match(/\.([a-zA-Z0-9]+)$/)?.[1] || "").toLowerCase();
+      const storagePath = `${crypto.randomUUID()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from(QUOTE_FILE_BUCKET).upload(storagePath, subForm.file, { contentType: FILE_TYPES[ext], upsert: false });
+      if (upErr) { alert("ファイルの保存に失敗しました: " + upErr.message); setSavingSub(false); return; }
+      file_storage_path = storagePath; file_original_name = subForm.file.name;
+    }
+    const { data, error } = await supabase.from("quote_subcontractor_costs").insert([{
+      quote_id: ed.id, subcontractor_id: subForm.subcontractor_id, amount: Number(subForm.amount) || 0,
+      note: subForm.note || null, file_storage_path, file_original_name,
+    }]).select();
+    setSavingSub(false);
+    if (error) { alert("下請けの原価の保存に失敗しました: " + error.message); return; }
+    setSubCosts(prev => [...prev, data[0]]);
+    setSubForm({ subcontractor_id: "", amount: "", note: "", file: null });
+  };
+
+  const removeSubCost = async id => {
+    await supabase.from("quote_subcontractor_costs").delete().eq("id", id);
+    setSubCosts(prev => prev.filter(c => c.id !== id));
   };
 
   const delQuote = async id => {
@@ -118,15 +159,21 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
   };
 
   const computeQuoteTotals = async quote => {
-    const { data: itemsData } = await supabase.from("quote_items").select("*").eq("quote_id", quote.id);
+    const [{ data: itemsData }, { data: subData }] = await Promise.all([
+      supabase.from("quote_items").select("*").eq("quote_id", quote.id),
+      supabase.from("quote_subcontractor_costs").select("amount").eq("quote_id", quote.id),
+    ]);
     const ids = (itemsData || []).map(r => r.id);
     const { data: costsData } = ids.length ? await supabase.from("quote_item_costs").select("*").in("quote_item_id", ids) : { data: [] };
     const costsByItem = Object.fromEntries((costsData || []).map(c => [c.quote_item_id, c]));
     const total = quote.total_amount || 0;
-    const costTotal = (itemsData || []).reduce((s, r) => s + (Number(r.qty) || 0) * (Number(costsByItem[r.id]?.cost_price) || 0), 0);
-    const gp = total - costTotal;
-    const hasUnconfirmed = (itemsData || []).some(r => !costsByItem[r.id]?.cost_confirmed || costsByItem[r.id]?.cost_price == null);
-    return { total, costTotal, gp, hasUnconfirmed };
+    const lines = (itemsData || []).map(r => ({
+      qty: r.qty, costPrice: costsByItem[r.id]?.cost_price ?? null, costConfirmed: !!costsByItem[r.id]?.cost_confirmed, isSubcontracted: !!r.is_subcontracted,
+    }));
+    const subAmountTotal = (subData || []).reduce((s, c) => s + (Number(c.amount) || 0), 0);
+    const ct = project?.constructionType || "自社のみ";
+    const { costTotal, gp, provisional } = computeQuoteFinancials({ constructionType: ct, saleTotal: total, lines, subAmountTotal, subCount: (subData || []).length });
+    return { total, costTotal, gp, hasUnconfirmed: provisional };
   };
 
   // 「採用にする」= 完工済にする、と同じ処理(見積の状態もwonにし、案件のstatusも完了にする)
@@ -206,10 +253,13 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
   const toggleSelect = key => setSelectedKeys(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
   const total = ed.lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.sale_price) || 0), 0);
-  const costTotal = ed.lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.cost_price) || 0), 0);
-  const gp = total - costTotal;
-  const gpRate = total ? (gp / total * 100) : null;
-  const hasUnconfirmed = ed.lines.some(l => !l.cost_confirmed || l.cost_price == null);
+  const subAmountTotal = subCosts.reduce((s, c) => s + (Number(c.amount) || 0), 0);
+  const financials = computeQuoteFinancials({
+    constructionType, saleTotal: total,
+    lines: ed.lines.map(l => ({ qty: l.qty, costPrice: l.cost_price, costConfirmed: l.cost_confirmed, isSubcontracted: l.is_subcontracted })),
+    subAmountTotal, subCount: subCosts.length,
+  });
+  const { costTotal, gp, gpRate, provisional: hasUnconfirmed, subMissing } = financials;
 
   // 状態を「完工済」にして保存する場合は、採用(案件のamount/grossProfit・statusへの反映)も
   // あわせて行う。「発注前」に戻す場合は、採用を解除する。どちらも確認ダイアログを先に出す
