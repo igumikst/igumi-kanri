@@ -6,6 +6,7 @@ import GroupTree, { BundleToolbar } from "../components/GroupTree";
 import { fmt } from "../lib/constants";
 import { openQuoteFile, QUOTE_FILE_BUCKET, FILE_TYPES } from "../lib/quoteFiles";
 import { computeQuoteFinancials } from "../lib/quoteFinancials";
+import SubQuoteFileReader from "../components/SubQuoteFileReader";
 
 // 見積の状態は、画面上は「発注前」「完工済」の2つだけ。DBの値は既存の制約に合わせる
 // (発注前=submitted / 完工済=won)。既存の下書き(draft)・失注(lost)は、画面では発注前と表示する
@@ -642,6 +643,11 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
                   <input type="file" accept=".xls,.xlsx,.pdf" onChange={e => setSubForm({ ...subForm, file: e.target.files?.[0] || null })} style={{ fontSize: 11 }} />
                   <button onClick={addSubCost} disabled={savingSub} style={{ background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 700, cursor: savingSub ? "default" : "pointer", opacity: savingSub ? 0.6 : 1 }}>{savingSub ? "追加中..." : "+ 追加"}</button>
                 </div>
+                <SubQuoteFileReader
+                  file={subForm.file} subcontractors={subcontractors} hasCompanySelected={!!subForm.subcontractor_id}
+                  onPickAmount={v => setSubForm(f => ({ ...f, amount: String(v) }))}
+                  onPickCompany={id => setSubForm(f => ({ ...f, subcontractor_id: id }))}
+                />
                 {!ed.id && <div style={{ fontSize: 11, color: "#9A3412", marginTop: 6 }}>※ 先に見積を保存すると、下請けの原価を追加できます</div>}
               </div>
             )}

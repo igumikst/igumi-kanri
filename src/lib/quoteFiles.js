@@ -7,6 +7,7 @@ export const FILE_TYPES = {
   xls: "application/vnd.ms-excel",
   xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   pdf: "application/pdf",
+  est: "application/octet-stream",
 };
 
 // 署名付きURL(60秒だけ有効)を作って開く。ダウンロード時の名前は元のファイル名
