@@ -9,6 +9,8 @@ import { buildEstTree, flattenEstTree, reverseSiblingOrder } from "../lib/quoteI
 import GroupTree, { BundleToolbar } from "../components/GroupTree";
 import ClientBranchRepPicker from "../components/ClientBranchRepPicker";
 import SubQuoteFileReader from "../components/SubQuoteFileReader";
+import FileDropZone from "../components/FileDropZone";
+import { usePreventWindowFileDrop } from "../lib/useFileDropGuard";
 import { QUOTE_FILE_BUCKET, FILE_TYPES } from "../lib/quoteFiles";
 import { computeQuoteFinancials, CONSTRUCTION_TYPES } from "../lib/quoteFinancials";
 
@@ -61,6 +63,7 @@ async function applySubcontractorFollowUps({ quoteId, subFlagsBySortOrder, subCo
 }
 
 export default function QuoteImport({ pjs, setPjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteImportCtx, setQuoteProjectId }) {
+  usePreventWindowFileDrop();
   const pending = tks.filter(t => !t.done);
   const [results, setResults] = useState([]);
   const [reading, setReading] = useState(false);
@@ -133,10 +136,12 @@ export default function QuoteImport({ pjs, setPjs, cos, setCos, salesReps, setSa
             内容を確認・修正してから、ファイルごとに「登録する」を押してください。
           </div>
           {price?.error && <div style={{ background: "#FEF2F2", color: "#991B1B", borderRadius: 10, padding: "8px 12px", fontSize: 12, fontWeight: 700, marginBottom: 10 }}>⚠️ {price.error}</div>}
-          <label style={{ display: "block", width: "100%", padding: "12px 0", background: "#1A3A5C", color: "#fff", borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: reading ? "default" : "pointer", textAlign: "center", opacity: reading ? 0.6 : 1 }}>
-            {reading ? "読み取り中..." : "📂 ファイルを選ぶ"}
-            <input type="file" accept=".xls,.xlsx,.est" multiple disabled={reading} onChange={e => { readFiles(e.target.files); e.target.value = ""; }} style={{ display: "none" }} />
-          </label>
+          <FileDropZone onFiles={files => { if (!reading) readFiles(files); }} disabled={reading} activeLabel="ここに落とす" style={{ display: "block" }}>
+            <label style={{ display: "block", width: "100%", padding: "12px 0", background: "#1A3A5C", color: "#fff", borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: reading ? "default" : "pointer", textAlign: "center", opacity: reading ? 0.6 : 1 }}>
+              {reading ? "読み取り中..." : "📂 ファイルを選ぶ(ここにドラッグもできます)"}
+              <input type="file" accept=".xls,.xlsx,.est" multiple disabled={reading} onChange={e => { readFiles(e.target.files); e.target.value = ""; }} style={{ display: "none" }} />
+            </label>
+          </FileDropZone>
         </div>
 
         {results.map(r => (
@@ -601,7 +606,12 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
                 </select>
                 <input type="number" value={subForm.amount} onChange={e => setSubForm({ ...subForm, amount: e.target.value })} placeholder="金額(税抜)" style={{ width: 120, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
                 <input value={subForm.note} onChange={e => setSubForm({ ...subForm, note: e.target.value })} placeholder="備考(任意)" style={{ flex: 1, minWidth: 140, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
-                <input type="file" accept=".xls,.xlsx,.pdf" onChange={e => setSubForm({ ...subForm, file: e.target.files?.[0] || null })} style={{ fontSize: 11 }} />
+                <FileDropZone
+                  onFiles={files => { const f = files[0]; if (!f) return; if (!/\.pdf$/i.test(f.name)) { alert("PDFファイルを落としてください"); return; } setSubForm({ ...subForm, file: f }); }}
+                  activeLabel="PDFをここに落とす" style={{ display: "inline-block" }}
+                >
+                  <input type="file" accept=".xls,.xlsx,.pdf" onChange={e => setSubForm({ ...subForm, file: e.target.files?.[0] || null })} style={{ fontSize: 11 }} />
+                </FileDropZone>
                 <button onClick={addSubCostDraft} style={{ background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ 追加</button>
               </div>
               <SubQuoteFileReader
@@ -1235,7 +1245,12 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
             </select>
             <input type="number" value={subForm.amount} onChange={e => setSubForm({ ...subForm, amount: e.target.value })} placeholder="金額(税抜)" style={{ width: 120, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
             <input value={subForm.note} onChange={e => setSubForm({ ...subForm, note: e.target.value })} placeholder="備考(任意)" style={{ flex: 1, minWidth: 140, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
-            <input type="file" accept=".xls,.xlsx,.pdf" onChange={e => setSubForm({ ...subForm, file: e.target.files?.[0] || null })} style={{ fontSize: 11 }} />
+            <FileDropZone
+              onFiles={files => { const f = files[0]; if (!f) return; if (!/\.pdf$/i.test(f.name)) { alert("PDFファイルを落としてください"); return; } setSubForm({ ...subForm, file: f }); }}
+              activeLabel="PDFをここに落とす" style={{ display: "inline-block" }}
+            >
+              <input type="file" accept=".xls,.xlsx,.pdf" onChange={e => setSubForm({ ...subForm, file: e.target.files?.[0] || null })} style={{ fontSize: 11 }} />
+            </FileDropZone>
             <button onClick={addSubCostDraft} style={{ background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ 追加</button>
           </div>
           <SubQuoteFileReader

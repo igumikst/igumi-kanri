@@ -7,6 +7,8 @@ import { fmt } from "../lib/constants";
 import { openQuoteFile, QUOTE_FILE_BUCKET, FILE_TYPES } from "../lib/quoteFiles";
 import { computeQuoteFinancials } from "../lib/quoteFinancials";
 import SubQuoteFileReader from "../components/SubQuoteFileReader";
+import FileDropZone from "../components/FileDropZone";
+import { usePreventWindowFileDrop } from "../lib/useFileDropGuard";
 
 // 見積の状態は、画面上は「発注前」「完工済」の2つだけ。DBの値は既存の制約に合わせる
 // (発注前=submitted / 完工済=won)。既存の下書き(draft)・失注(lost)は、画面では発注前と表示する
@@ -29,6 +31,7 @@ const newKey = () => "l" + Date.now() + Math.random().toString(36).slice(2);
 const quoteNoNum = q => parseInt(String(q.quote_no ?? "").replace(/[^0-9]/g, ""), 10) || 0;
 
 export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteProjectId, setQuoteImportCtx }) {
+  usePreventWindowFileDrop();
   const project = pjs.find(p => p.id === quoteProjectId);
   const pending = tks.filter(t => !t.done);
 
@@ -640,7 +643,12 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
                   </select>
                   <input type="number" value={subForm.amount} onChange={e => setSubForm({ ...subForm, amount: e.target.value })} placeholder="金額(税抜)" style={{ width: 120, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
                   <input value={subForm.note} onChange={e => setSubForm({ ...subForm, note: e.target.value })} placeholder="備考(任意)" style={{ flex: 1, minWidth: 140, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
-                  <input type="file" accept=".xls,.xlsx,.pdf" onChange={e => setSubForm({ ...subForm, file: e.target.files?.[0] || null })} style={{ fontSize: 11 }} />
+                  <FileDropZone
+                    onFiles={files => { const f = files[0]; if (!f) return; if (!/\.pdf$/i.test(f.name)) { alert("PDFファイルを落としてください"); return; } setSubForm({ ...subForm, file: f }); }}
+                    activeLabel="PDFをここに落とす" style={{ display: "inline-block" }}
+                  >
+                    <input type="file" accept=".xls,.xlsx,.pdf" onChange={e => setSubForm({ ...subForm, file: e.target.files?.[0] || null })} style={{ fontSize: 11 }} />
+                  </FileDropZone>
                   <button onClick={addSubCost} disabled={savingSub} style={{ background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 700, cursor: savingSub ? "default" : "pointer", opacity: savingSub ? 0.6 : 1 }}>{savingSub ? "追加中..." : "+ 追加"}</button>
                 </div>
                 <SubQuoteFileReader
