@@ -85,7 +85,8 @@ export default function Home({ pjs, cos, tks, links, cust, tileConf, tileEdit, s
   }, []);
 
   const pending = tks.filter(t => !t.done);
-  const active = pjs.filter(p => p.created_at >= PROJECT_STATS_SINCE && p.status !== "完了" && p.status !== "中断");
+  // 進行中案件の期間の基準は「対応日」(無ければ登録日)
+  const active = pjs.filter(p => (p.respondedAt || p.created_at || "") >= PROJECT_STATS_SINCE && p.status !== "完了" && p.status !== "中断");
   const pendingCalls = (calls || []).filter(c => c.status === "未対応");
   const pendingCallsCount = pendingCalls.length;
   const todayLabel = new Date().toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "short" });

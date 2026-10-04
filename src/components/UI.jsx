@@ -29,13 +29,14 @@ export const Hdr = ({title,back,right}) => (
   </div>
 );
 
-export const Confirm = ({msg,onCancel,onOk,okLabel="削除する",okColor="#DC2626"}) => (
+export const Confirm = ({msg,onCancel,onOk,okLabel="削除する",okColor="#DC2626",extra}) => (
   <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 24px"}}>
     <div style={{background:"#fff",borderRadius:16,padding:24,width:"100%",maxWidth:320}}>
       <div style={{fontSize:24,textAlign:"center",marginBottom:12}}>⚠️</div>
       {msg.split('\n').map((line,i)=>(
         <div key={i} style={{fontSize:line.includes('元に戻せません')?12:14,color:line.includes('元に戻せません')?'#EF4444':'#374151',marginBottom:line.includes('元に戻せません')?16:4,lineHeight:1.6,textAlign:"center",fontWeight:line.includes('元に戻せません')?700:400}}>{line}</div>
       ))}
+      {extra}
       <div style={{display:"flex",gap:10}}>
         <button onClick={onCancel} style={{flex:1,padding:12,background:"#F3F4F6",border:"none",borderRadius:10,fontWeight:700,cursor:"pointer"}}>キャンセル</button>
         <button onClick={onOk} style={{flex:1,padding:12,background:okColor,color:"#fff",border:"none",borderRadius:10,fontWeight:800,cursor:"pointer"}}>{okLabel}</button>

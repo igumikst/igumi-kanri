@@ -64,4 +64,8 @@ export const BLOG_LIST_URL = "https://www.igumi-inc.jp/blog";
 export const DEFAULT_CUST = {name:"株式会社IGUMI",sys:"案件管理システム",c1:"#1A3A5C",c2:"#2563EB",acc:"#E07B39",bg:"#F0F4F8",showSidebar:true,showRightPanel:true,showLauncher:true};
 export const PRIO = {high:{l:"高",c:"#EF4444"},mid:{l:"中",c:"#F59E0B"},low:{l:"低",c:"#10B981"}};
 export const fmt = n => n?"¥"+Number(n).toLocaleString():"—";
+// 今日の日付(ローカル時刻)を date input 用の "YYYY-MM-DD" にする
+export const todayStr = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+// "YYYY-MM-DD" を、タイムゾーンのズレなしで "YYYY/MM/DD" 表示にする(Dateに変換しない)
+export const dateJp = s => (s ? String(s).slice(0, 10).replace(/-/g, "/") : "");
 export const pct = (g,a) => a?((g/a)*100).toFixed(1)+"%":"—";
