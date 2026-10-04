@@ -1011,27 +1011,29 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
 
     return layoutShell(
       <>
-        <div style={{ background: "#1A3A5C", color: "#fff", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 50 }}>
-          <button onClick={goBackFromFolder} style={{ background: "none", border: "none", color: "#fff", fontSize: 20, cursor: "pointer" }}>←</button>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 800, fontSize: 15 }}>{displayFolderIcon(finItem, meta)} {displayFolderLabel(finItem, meta)}</div>
-            {breadcrumbNav(breadcrumb)}
+        <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+          <div style={{ background: "#1A3A5C", color: "#fff", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 50, flexShrink: 0 }}>
+            <button onClick={goBackFromFolder} style={{ background: "none", border: "none", color: "#fff", fontSize: 20, cursor: "pointer" }}>←</button>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 800, fontSize: 15 }}>{displayFolderIcon(finItem, meta)} {displayFolderLabel(finItem, meta)}</div>
+              {breadcrumbNav(breadcrumb)}
+            </div>
+            <label style={{ background: "#E07B39", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+              ＋ 追加
+              <input type="file" accept="image/*,application/pdf,.xlsx,.docx,.xls,.doc" multiple onChange={async e => { for (const f of Array.from(e.target.files)) { await uploadFinFile(f, rootId, meta.year, meta.month); } e.target.value = ""; }} style={{ display: "none" }} />
+            </label>
           </div>
-          <label style={{ background: "#E07B39", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
-            ＋ 追加
-            <input type="file" accept="image/*,application/pdf,.xlsx,.docx,.xls,.doc" multiple onChange={async e => { for (const f of Array.from(e.target.files)) { await uploadFinFile(f, rootId, meta.year, meta.month); } e.target.value = ""; }} style={{ display: "none" }} />
-          </label>
-        </div>
-        <div
-          style={{ padding: isPC ? "14px 0" : 14, position: "relative", minHeight: 240 }}
-          onDragEnter={isPC ? handleFolderListFileDragEnter : undefined}
-          onDragOver={isPC ? handleFolderListFileDragOver : undefined}
-          onDrop={isPC ? (e) => { void handleFolderListFileDrop(e, finItem.id, { rootId, year: meta.year, month: meta.month }); } : undefined}
-        >
-          {renderFileDropOverlay(finItem.id, { rootId, year: meta.year, month: meta.month })}
-          {monthFiles.length === 0
-            ? <div style={{ textAlign: "center", padding: 40, color: "#9CA3AF" }}><div style={{ fontSize: 48, marginBottom: 12 }}>📂</div><div style={{ fontSize: 14 }}>ファイルがありません</div></div>
-            : monthFiles.map(renderFileRow)}
+          <div
+            style={{ padding: isPC ? "14px 0" : 14, position: "relative", flex: 1 }}
+            onDragEnter={isPC ? handleFolderListFileDragEnter : undefined}
+            onDragOver={isPC ? handleFolderListFileDragOver : undefined}
+            onDrop={isPC ? (e) => { void handleFolderListFileDrop(e, finItem.id, { rootId, year: meta.year, month: meta.month }); } : undefined}
+          >
+            {renderFileDropOverlay(finItem.id, { rootId, year: meta.year, month: meta.month })}
+            {monthFiles.length === 0
+              ? <div style={{ textAlign: "center", padding: 40, color: "#9CA3AF" }}><div style={{ fontSize: 48, marginBottom: 12 }}>📂</div><div style={{ fontSize: 14 }}>ファイルがありません</div></div>
+              : monthFiles.map(renderFileRow)}
+          </div>
         </div>
         {modals}
       </>
@@ -1047,59 +1049,61 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
 
     return layoutShell(
       <>
-        <div style={{ background: "#1A3A5C", color: "#fff", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 50 }}>
-          <button onClick={goBackFromFolder} style={{ background: "none", border: "none", color: "#fff", fontSize: 20, cursor: "pointer" }}>←</button>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 800, fontSize: 15 }}>{displayFolderIcon(finItem, headerMeta)} {displayFolderLabel(finItem, headerMeta)}</div>
-            {breadcrumbNav(breadcrumb)}
+        <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+          <div style={{ background: "#1A3A5C", color: "#fff", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 50, flexShrink: 0 }}>
+            <button onClick={goBackFromFolder} style={{ background: "none", border: "none", color: "#fff", fontSize: 20, cursor: "pointer" }}>←</button>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 800, fontSize: 15 }}>{displayFolderIcon(finItem, headerMeta)} {displayFolderLabel(finItem, headerMeta)}</div>
+              {breadcrumbNav(breadcrumb)}
+            </div>
+            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+              {isYearFolder(finItem) && (
+                <button onClick={openAddMonth} style={{ background: "#E07B39", border: "none", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer", fontWeight: 800 }}>＋ 月を追加</button>
+              )}
+              {!isYearFolder(finItem) && (
+                <button onClick={() => openAddFolder(finItem.id)} style={{ background: "#E07B39", border: "none", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer", fontWeight: 800 }}>＋ フォルダ</button>
+              )}
+              <label style={{ background: "#059669", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
+                ＋ ファイル
+                <input type="file" accept="image/*,application/pdf,.xlsx,.docx,.xls,.doc" multiple onChange={async e => { for (const f of Array.from(e.target.files)) { await uploadDirectFile(f, finItem.id); } e.target.value = ""; }} style={{ display: "none" }} />
+              </label>
+            </div>
           </div>
-          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-            {isYearFolder(finItem) && (
-              <button onClick={openAddMonth} style={{ background: "#E07B39", border: "none", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer", fontWeight: 800 }}>＋ 月を追加</button>
+
+          <div
+            style={{ padding: isPC ? "14px 0" : 14, position: "relative", flex: 1 }}
+            onDragEnter={isPC ? handleFolderListFileDragEnter : undefined}
+            onDragOver={isPC ? handleFolderListFileDragOver : undefined}
+            onDrop={isPC ? (e) => { void handleFolderListFileDrop(e, finItem.id); } : undefined}
+          >
+            {renderFileDropOverlay(finItem.id)}
+            {siblings.length > 1 && (
+              <div style={{ fontSize: 11, color: "#9CA3AF", textAlign: "center", marginBottom: 8 }}>
+                ☰ を長押し（スマホ）またはドラッグ（PC）で並べ替え
+              </div>
             )}
-            {!isYearFolder(finItem) && (
-              <button onClick={() => openAddFolder(finItem.id)} style={{ background: "#E07B39", border: "none", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer", fontWeight: 800 }}>＋ フォルダ</button>
+
+            {siblings.length > 0 && (
+              <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", marginBottom: 12 }}>
+                {renderFolderRows(siblings, { onOpen: enterSubfolder })}
+              </div>
             )}
-            <label style={{ background: "#059669", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
-              ＋ ファイル
-              <input type="file" accept="image/*,application/pdf,.xlsx,.docx,.xls,.doc" multiple onChange={async e => { for (const f of Array.from(e.target.files)) { await uploadDirectFile(f, finItem.id); } e.target.value = ""; }} style={{ display: "none" }} />
-            </label>
+
+            {directFiles.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#6B7280", marginBottom: 8, paddingLeft: 4 }}>📄 このフォルダのファイル</div>
+                {directFiles.map(renderFileRow)}
+              </div>
+            )}
+
+            {siblings.length === 0 && directFiles.length === 0 && !ymSyncing && (
+              <div style={{ textAlign: "center", padding: 32, color: "#9CA3AF" }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>📂</div>
+                <div style={{ fontSize: 14 }}>まだ何もありません</div>
+                <div style={{ fontSize: 12, marginTop: 4 }}>上のボタンからフォルダ・ファイルを追加できます</div>
+              </div>
+            )}
           </div>
-        </div>
-
-        <div
-          style={{ padding: isPC ? "14px 0" : 14, position: "relative", minHeight: 240 }}
-          onDragEnter={isPC ? handleFolderListFileDragEnter : undefined}
-          onDragOver={isPC ? handleFolderListFileDragOver : undefined}
-          onDrop={isPC ? (e) => { void handleFolderListFileDrop(e, finItem.id); } : undefined}
-        >
-          {renderFileDropOverlay(finItem.id)}
-          {siblings.length > 1 && (
-            <div style={{ fontSize: 11, color: "#9CA3AF", textAlign: "center", marginBottom: 8 }}>
-              ☰ を長押し（スマホ）またはドラッグ（PC）で並べ替え
-            </div>
-          )}
-
-          {siblings.length > 0 && (
-            <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", marginBottom: 12 }}>
-              {renderFolderRows(siblings, { onOpen: enterSubfolder })}
-            </div>
-          )}
-
-          {directFiles.length > 0 && (
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#6B7280", marginBottom: 8, paddingLeft: 4 }}>📄 このフォルダのファイル</div>
-              {directFiles.map(renderFileRow)}
-            </div>
-          )}
-
-          {siblings.length === 0 && directFiles.length === 0 && !ymSyncing && (
-            <div style={{ textAlign: "center", padding: 32, color: "#9CA3AF" }}>
-              <div style={{ fontSize: 48, marginBottom: 12 }}>📂</div>
-              <div style={{ fontSize: 14 }}>まだ何もありません</div>
-              <div style={{ fontSize: 12, marginTop: 4 }}>上のボタンからフォルダ・ファイルを追加できます</div>
-            </div>
-          )}
         </div>
         {modals}
       </>
@@ -1110,37 +1114,39 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
   return layoutShell(
     <>
       {(cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
-      <div style={{ background: "#1A3A5C", color: "#fff", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 50 }}>
-        <button onClick={() => nav("home")} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>←</button>
-        <div style={{ flex: 1, fontWeight: 800, fontSize: 16 }}>🗃 財務・書類管理</div>
-        <button onClick={() => openAddFolder(null)} style={{ background: "#E07B39", border: "none", color: "#fff", borderRadius: 8, padding: "5px 12px", fontSize: 12, cursor: "pointer", fontWeight: 800 }}>＋ フォルダ</button>
-      </div>
+      <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+        <div style={{ background: "#1A3A5C", color: "#fff", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 50, flexShrink: 0 }}>
+          <button onClick={() => nav("home")} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>←</button>
+          <div style={{ flex: 1, fontWeight: 800, fontSize: 16 }}>🗃 財務・書類管理</div>
+          <button onClick={() => openAddFolder(null)} style={{ background: "#E07B39", border: "none", color: "#fff", borderRadius: 8, padding: "5px 12px", fontSize: 12, cursor: "pointer", fontWeight: 800 }}>＋ フォルダ</button>
+        </div>
 
-      {initializing && <div style={{ textAlign: "center", padding: 24, color: "#9CA3AF", fontSize: 13 }}>初期データを読み込み中...</div>}
+        {initializing && <div style={{ textAlign: "center", padding: 24, color: "#9CA3AF", fontSize: 13 }}>初期データを読み込み中...</div>}
 
-      <div
-        style={{ padding: isPC ? "14px 0" : 14, position: "relative", minHeight: 240 }}
-        onDragEnter={isPC ? handleFolderListFileDragEnter : undefined}
-        onDragOver={isPC ? handleFolderListFileDragOver : undefined}
-        onDrop={isPC ? (e) => { void handleFolderListFileDrop(e, null); } : undefined}
-      >
-        {renderFileDropOverlay(null)}
-        {rootFolders.length > 1 && (
-          <div style={{ fontSize: 11, color: "#9CA3AF", textAlign: "center", marginBottom: 8 }}>
-            ☰ を長押し（スマホ）またはドラッグ（PC）で並べ替え
-          </div>
-        )}
-        <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
-          {renderFolderRows(rootFolders, {
-            onOpen: (item) => { if (!isFolderHidden(item.id)) { setFinItem(item); setFolderPath([]); } },
-          })}
-          {rootFolders.length === 0 && !initializing && (
-            <div style={{ textAlign: "center", padding: 40, color: "#9CA3AF" }}>
-              <div style={{ fontSize: 48, marginBottom: 12 }}>📂</div>
-              <div style={{ fontSize: 14 }}>フォルダがありません</div>
-              <div style={{ fontSize: 12, marginTop: 4 }}>「＋ フォルダ」で追加できます</div>
+        <div
+          style={{ padding: isPC ? "14px 0" : 14, position: "relative", flex: 1 }}
+          onDragEnter={isPC ? handleFolderListFileDragEnter : undefined}
+          onDragOver={isPC ? handleFolderListFileDragOver : undefined}
+          onDrop={isPC ? (e) => { void handleFolderListFileDrop(e, null); } : undefined}
+        >
+          {renderFileDropOverlay(null)}
+          {rootFolders.length > 1 && (
+            <div style={{ fontSize: 11, color: "#9CA3AF", textAlign: "center", marginBottom: 8 }}>
+              ☰ を長押し（スマホ）またはドラッグ（PC）で並べ替え
             </div>
           )}
+          <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
+            {renderFolderRows(rootFolders, {
+              onOpen: (item) => { if (!isFolderHidden(item.id)) { setFinItem(item); setFolderPath([]); } },
+            })}
+            {rootFolders.length === 0 && !initializing && (
+              <div style={{ textAlign: "center", padding: 40, color: "#9CA3AF" }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>📂</div>
+                <div style={{ fontSize: 14 }}>フォルダがありません</div>
+                <div style={{ fontSize: 12, marginTop: 4 }}>「＋ フォルダ」で追加できます</div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
       {modals}
