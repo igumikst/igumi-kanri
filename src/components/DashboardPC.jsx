@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { STATUS_STYLE, fmt } from "../lib/constants";
+import { STATUS_STYLE, fmt, PROJECT_STATS_SINCE } from "../lib/constants";
 import "./DashboardPC.css";
 
 const PERIODS = [
@@ -108,7 +108,7 @@ function Trend({ months, sell, gp }) {
         <span><i style={{ background: "#e07b39" }} />売上</span>
         <span><i style={{ background: "#059669" }} />粗利</span>
       </div>
-      <div className="axis">万円・登録月</div>
+      <div className="axis">万円・対応月</div>
     </div>
   );
 }
@@ -200,6 +200,7 @@ export default function DashboardPC({
 
   const baseFiltered = useMemo(() => jobs.filter(j => {
     if (!inPeriod(j.registeredAt, period)) return false;
+    if ((j.registeredAt || "") < PROJECT_STATS_SINCE) return false;
     if (client && j.clientId !== client) return false;
     if (branch && j.branchId !== branch) return false;
     return true;
@@ -226,12 +227,23 @@ export default function DashboardPC({
     return true;
   }), [baseFiltered, owner]);
 
-  const totalAmt = filtered.reduce((s, j) => s + (j.sell || 0), 0);
-  const confirmed = filtered.filter(j => j.cost != null);
-  const unconfirmedCount = filtered.length - confirmed.length;
+  // 売上合計・粗利合計・粗利率・完工件数は「完工日」基準で別集計する（対応日基準の filtered とは独立）
+  const completedFiltered = useMemo(() => jobs.filter(j => {
+    if (!j.completedOn || j.completedOn < PROJECT_STATS_SINCE) return false;
+    if (!inPeriod(j.completedOn, period)) return false;
+    if (client && j.clientId !== client) return false;
+    if (branch && j.branchId !== branch) return false;
+    if (owner && (j.ownerKey || j.owner || "unknown") !== owner) return false;
+    return true;
+  }), [jobs, period, client, branch, owner]);
+
+  const totalAmt = completedFiltered.reduce((s, j) => s + (j.sell || 0), 0);
+  const confirmed = completedFiltered.filter(j => j.cost != null);
+  const unconfirmedCount = completedFiltered.length - confirmed.length;
   const confirmedAmt = confirmed.reduce((s, j) => s + (j.sell || 0), 0);
   const totalGp = confirmed.reduce((s, j) => s + ((j.sell || 0) - j.cost), 0);
   const gpRate = confirmedAmt ? (totalGp / confirmedAmt) * 100 : null;
+  const completedCount = completedFiltered.length;
   const wonCount = filtered.filter(j => wonStatuses.includes(j.status)).length;
   const lostCount = filtered.filter(j => j.status === lostStatus).length;
   const winRate = (wonCount + lostCount) ? (wonCount / (wonCount + lostCount)) * 100 : null;
@@ -394,18 +406,19 @@ export default function DashboardPC({
             {branchOptions.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
           </select>
         </label>
-        <label>期間（登録日）
+        <label>期間（対応日）
           <select value={period} onChange={e => setPeriod(e.target.value)}>
             {PERIODS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
           </select>
         </label>
       </div>
 
-      <div className="pcgrid4">
+      <div className="pcgrid4 five">
         <div className="pckpi"><span>📋</span><small>案件数</small><b style={{ color: "#1a3a5c" }}>{filtered.length}件</b></div>
-        <div className="pckpi"><span>💰</span><small>売上合計</small><b style={{ color: "#e07b39" }}>{fmt(totalAmt)}</b></div>
-        <div className="pckpi"><span>📈</span><small>粗利合計</small><b style={{ color: "#059669" }}>{fmt(totalGp)}</b></div>
-        <div className="pckpi"><span>📊</span><small>粗利率</small><b style={{ color: "#7c3aed" }}>{pctLabel(gpRate)}</b></div>
+        <div className="pckpi"><span>💰</span><small>売上合計</small><b style={{ color: "#e07b39" }}>{fmt(totalAmt)}</b><div style={{ fontSize: 9, color: "#9ca3af", marginTop: 2 }}>完工日基準</div></div>
+        <div className="pckpi"><span>📈</span><small>粗利合計</small><b style={{ color: "#059669" }}>{fmt(totalGp)}</b><div style={{ fontSize: 9, color: "#9ca3af", marginTop: 2 }}>完工日基準</div></div>
+        <div className="pckpi"><span>📊</span><small>粗利率</small><b style={{ color: "#7c3aed" }}>{pctLabel(gpRate)}</b><div style={{ fontSize: 9, color: "#9ca3af", marginTop: 2 }}>完工日基準</div></div>
+        <div className="pckpi"><span>🏁</span><small>完工件数</small><b style={{ color: "#0891b2" }}>{completedCount}件</b><div style={{ fontSize: 9, color: "#9ca3af", marginTop: 2 }}>完工日基準</div></div>
       </div>
 
       {unconfirmedCount > 0 && (

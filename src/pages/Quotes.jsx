@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { Hdr, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import GroupTree, { BundleToolbar } from "../components/GroupTree";
-import { fmt } from "../lib/constants";
+import { fmt, todayStr } from "../lib/constants";
 import { openQuoteFile, QUOTE_FILE_BUCKET, FILE_TYPES } from "../lib/quoteFiles";
 import { computeQuoteFinancials } from "../lib/quoteFinancials";
 import SubQuoteFileReader from "../components/SubQuoteFileReader";
@@ -188,6 +188,18 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
     return { total, costTotal, gp, hasUnconfirmed: provisional, subMissing, ownUnconfirmed };
   };
 
+  // 完工日の入力欄(確認ダイアログの中に出す)。defaultValue制御で、ダイアログの再描画なしに最新値をrefで読む
+  const completedOnRef = useRef(todayStr());
+  const completedOnField = () => {
+    completedOnRef.current = todayStr();
+    return (
+      <div style={{ marginBottom: 14, textAlign: "left" }}>
+        <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 3 }}>完工日 *</div>
+        <input type="date" defaultValue={completedOnRef.current} onChange={e => { completedOnRef.current = e.target.value; }} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, color: "#1F2937", boxSizing: "border-box" }} />
+      </div>
+    );
+  };
+
   // 「採用にする」= 完工済にする、と同じ処理(見積の状態もwonにし、案件のstatusも完了にする)
   const adoptQuote = async quote => {
     const { total, gp, subMissing, ownUnconfirmed } = await computeQuoteTotals(quote);
@@ -203,12 +215,14 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
       "案件の状態も「完了」にし、案件の受注金額・粗利を上書きします。元に戻せません。",
       "よろしいですか？",
     ].filter(Boolean).join("\n");
-    setConf({ msg, okLabel: "完工済にする", okColor: "#059669", onOk: async () => {
+    setConf({ msg, okLabel: "完工済にする", okColor: "#059669", extra: completedOnField(), onOk: async () => {
+      if (!completedOnRef.current) { alert("完工日を入力してください"); return; }
+      const completedOn = completedOnRef.current;
       setConf(null);
       if (prevAdopted) await supabase.from("quotes").update({ is_adopted: false }).eq("id", prevAdopted.id);
       await supabase.from("quotes").update({ is_adopted: true, status: "won" }).eq("id", quote.id);
-      await supabase.from("projects").update({ amount: Math.round(total), grossProfit: Math.round(gp), status: "完了" }).eq("id", quoteProjectId);
-      setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, amount: Math.round(total), gp: Math.round(gp), status: "完了" } : p));
+      await supabase.from("projects").update({ amount: Math.round(total), grossProfit: Math.round(gp), status: "完了", completedOn }).eq("id", quoteProjectId);
+      setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, amount: Math.round(total), gp: Math.round(gp), status: "完了", completedOn } : p));
       await loadQuotes();
     } });
   };
@@ -294,7 +308,10 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
         "案件の状態も「完了」にし、案件の受注金額・粗利を上書きします。元に戻せません。",
         "よろしいですか？",
       ].filter(Boolean).join("\n");
-      setConf({ msg, okLabel: "完工済にする", okColor: "#059669", onOk: () => { setConf(null); persistQuote({ adopt: true, prevAdopted }); } });
+      setConf({ msg, okLabel: "完工済にする", okColor: "#059669", extra: completedOnField(), onOk: () => {
+        if (!completedOnRef.current) { alert("完工日を入力してください"); return; }
+        setConf(null); persistQuote({ adopt: true, prevAdopted, completedOn: completedOnRef.current });
+      } });
       return;
     }
     if (leavingDone) {
@@ -304,7 +321,7 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
     persistQuote({});
   };
 
-  const persistQuote = async ({ adopt, unadopt, prevAdopted }) => {
+  const persistQuote = async ({ adopt, unadopt, prevAdopted, completedOn }) => {
     setSaving(true);
     let quoteId = ed.id;
     const payload = { project_id: quoteProjectId, title: ed.title.trim(), price_set_id: ed.price_set_id, status: ed.status, total_amount: Math.round(total) };
@@ -336,8 +353,8 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
     if (adopt) {
       if (prevAdopted) await supabase.from("quotes").update({ is_adopted: false }).eq("id", prevAdopted.id);
       await supabase.from("quotes").update({ is_adopted: true }).eq("id", quoteId);
-      await supabase.from("projects").update({ amount: Math.round(total), grossProfit: Math.round(gp), status: "完了" }).eq("id", quoteProjectId);
-      setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, amount: Math.round(total), gp: Math.round(gp), status: "完了" } : p));
+      await supabase.from("projects").update({ amount: Math.round(total), grossProfit: Math.round(gp), status: "完了", completedOn }).eq("id", quoteProjectId);
+      setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, amount: Math.round(total), gp: Math.round(gp), status: "完了", completedOn } : p));
     } else if (unadopt) {
       await supabase.from("quotes").update({ is_adopted: false }).eq("id", quoteId);
     }
@@ -690,7 +707,7 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
           </div>
         </>
       )}
-      {conf && <Confirm msg={conf.msg} onCancel={() => setConf(null)} onOk={conf.onOk} okLabel={conf.okLabel} okColor={conf.okColor} />}
+      {conf && <Confirm msg={conf.msg} onCancel={() => setConf(null)} onOk={conf.onOk} okLabel={conf.okLabel} okColor={conf.okColor} extra={conf.extra} />}
     </div>
   );
 }

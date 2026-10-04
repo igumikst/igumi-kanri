@@ -1,7 +1,7 @@
 import { Hdr } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import DashboardPC from "../components/DashboardPC";
-import { STATUSES, PROJECT_STATS_SINCE } from "../lib/constants";
+import { STATUSES } from "../lib/constants";
 
 const WON_STATUSES = ["着工", "完了"];
 
@@ -9,7 +9,10 @@ export default function Dashboard({ pjs, cos, tks, links, cust, isPC, pp, nav, r
   const pending = (tks || []).filter(t => !t.done);
   const coMap = Object.fromEntries((cos || []).map(c => [c.id, c]));
   const branchMap = Object.fromEntries((branches || []).map(b => [b.id, b]));
-  const jobs = (pjs || []).filter(p => (p.created_at || "") >= PROJECT_STATS_SINCE).map(p => {
+  // registeredAt: 進行中・発注待ち・受注率などの期間の基準は「対応日」(無ければ登録日)。
+  // completedOn: 売上合計・粗利合計・粗利率・完工件数の基準(完工日)。無い案件はこれらの集計から外す。
+  // 2026-09-01以降の条件(PROJECT_STATS_SINCE)は、どちらの基準にも(それぞれの日付で)DashboardPC側で適用する
+  const jobs = (pjs || []).map(p => {
     const sell = Number(p.amount) || 0;
     const gp = Number(p.gp) || 0;
     return {
@@ -21,7 +24,8 @@ export default function Dashboard({ pjs, cos, tks, links, cust, isPC, pp, nav, r
       status: p.status || "未設定",
       sell,
       cost: gp > 0 ? sell - gp : null,
-      registeredAt: p.created_at,
+      registeredAt: p.respondedAt || p.created_at,
+      completedOn: p.completedOn || null,
       clientId: p.clientId || "",
       clientName: (p.clientId && coMap[p.clientId]?.name) || "",
       branchId: p.branchId || "",

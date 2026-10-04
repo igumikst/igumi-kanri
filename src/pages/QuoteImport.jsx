@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { supabase } from "../lib/supabase";
 import { Hdr } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
-import { fmt } from "../lib/constants";
+import { fmt, todayStr } from "../lib/constants";
 import { buildPriceIndex, matchLine, matchLineSmart, searchItems, similarity, aliasKey, normalizeText, AUTO_MATCH_LEARN_SCORE } from "../lib/priceMatch";
 import { toBasePrice, lineAmount, roundYen, applyRate, MARKUP_BACK_RATE, CUSTOM_RATE_MIN, CUSTOM_RATE_MAX, MARKUP_CHOICE_OPTIONS, resolveMarkupChoice } from "../lib/quoteImport/markup";
 import { buildEstTree, flattenEstTree, reverseSiblingOrder } from "../lib/quoteImport/parseEst";
@@ -33,9 +33,6 @@ const label = { fontSize: 11, color: "#6B7280", marginBottom: 3 };
 const sectionTitle = { fontSize: 11, fontWeight: 700, color: "#6B7280", marginBottom: 6 };
 const num = v => (v == null ? "—" : Number(v).toLocaleString());
 const yen = v => (v == null ? "—" : `¥${Math.round(Number(v)).toLocaleString()}`);
-// 見積などの対応をした日時。datetime-local入力(ローカル時刻)の初期値(いま)
-const nowLocal = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
-
 // import_quote の後始末(下請け関連)。import_quote 自体のSQLは直さず、登録後の更新で済ませる
 // (新しい列を増やすたびに import_quote を直すと、その都度DB実行待ちが必要になるため)
 // - subFlagsBySortOrder: 下請け施工チェックが付いた行の sort_order(= p_items の配列index)一覧
@@ -196,7 +193,7 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
   const [pickedSetId, setPriceSetId] = useState("");
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
-  const [np, setNp] = useState({ name: d.cover.title || "", clientId: "", branchId: "", salesRepId: "", inCharge: "", respondedAt: nowLocal(), constructionType: "自社のみ" });
+  const [np, setNp] = useState({ name: d.cover.title || "", clientId: "", branchId: "", salesRepId: "", inCharge: "", respondedAt: todayStr(), constructionType: "自社のみ" });
   const [lines, setLines] = useState(() => d.lines.map(l => ({
     key: "il" + (++lineSeq), groupName: l.groupName, name: l.name, spec: l.spec, qty: l.qty ?? 0, unit: l.unit,
     price: l.price ?? 0, note: l.note, summaryOnly: l.summaryOnly, nameFromSpec: l.nameFromSpec, fileAmount: l.amount,
@@ -342,7 +339,7 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
     }
     if (projectMode === "new" && (np.respondedAt || np.branchId || np.constructionType)) {
       await supabase.from("projects").update({
-        ...(np.respondedAt ? { respondedAt: new Date(np.respondedAt).toISOString() } : {}),
+        ...(np.respondedAt ? { respondedAt: np.respondedAt } : {}),
         ...(np.branchId ? { branchId: np.branchId } : {}),
         ...(np.constructionType ? { constructionType: np.constructionType } : {}),
       }).eq("id", data.project_id);
@@ -491,8 +488,8 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
                   <input value={np.inCharge} onChange={e => setNp({ ...np, inCharge: e.target.value })} style={inp} />
                 </div>
                 <div style={{ flex: 1, minWidth: 200 }}>
-                  <div style={label}>対応日時(見積などの対応をした日時)</div>
-                  <input type="datetime-local" value={np.respondedAt} onChange={e => setNp({ ...np, respondedAt: e.target.value })} style={inp} />
+                  <div style={label}>対応日(見積などの対応をした日)</div>
+                  <input type="date" value={np.respondedAt} onChange={e => setNp({ ...np, respondedAt: e.target.value })} style={inp} />
                 </div>
                 <div style={{ flex: 1, minWidth: 160 }}>
                   <div style={label}>施工形態</div>
@@ -800,7 +797,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
   const [pickedSetId, setPriceSetId] = useState("");
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
-  const [np, setNp] = useState({ name: d.cover.title || "", clientId: "", branchId: "", salesRepId: "", inCharge: "", respondedAt: nowLocal(), constructionType: "自社のみ" });
+  const [np, setNp] = useState({ name: d.cover.title || "", clientId: "", branchId: "", salesRepId: "", inCharge: "", respondedAt: todayStr(), constructionType: "自社のみ" });
   const [searchKey, setSearchKey] = useState(null);
   const [searchText, setSearchText] = useState("");
   const [registering, setRegistering] = useState(false);
@@ -1003,7 +1000,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
     }
     if (projectMode === "new" && (np.respondedAt || np.branchId || np.constructionType)) {
       await supabase.from("projects").update({
-        ...(np.respondedAt ? { respondedAt: new Date(np.respondedAt).toISOString() } : {}),
+        ...(np.respondedAt ? { respondedAt: np.respondedAt } : {}),
         ...(np.branchId ? { branchId: np.branchId } : {}),
         ...(np.constructionType ? { constructionType: np.constructionType } : {}),
       }).eq("id", data.project_id);
@@ -1161,8 +1158,8 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
               <input value={np.inCharge} onChange={e => setNp({ ...np, inCharge: e.target.value })} style={inp} />
             </div>
             <div style={{ flex: 1, minWidth: 200 }}>
-              <div style={label}>対応日時(見積などの対応をした日時)</div>
-              <input type="datetime-local" value={np.respondedAt} onChange={e => setNp({ ...np, respondedAt: e.target.value })} style={inp} />
+              <div style={label}>対応日(見積などの対応をした日)</div>
+              <input type="date" value={np.respondedAt} onChange={e => setNp({ ...np, respondedAt: e.target.value })} style={inp} />
             </div>
             <div style={{ flex: 1, minWidth: 160 }}>
               <div style={label}>施工形態</div>
@@ -1420,7 +1417,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
   const [pickedSetId, setPriceSetId] = useState("");
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
-  const [np, setNp] = useState({ name: d.cover.title || "", clientId: "", branchId: "", salesRepId: "", inCharge: "", respondedAt: nowLocal(), constructionType: "自社のみ" });
+  const [np, setNp] = useState({ name: d.cover.title || "", clientId: "", branchId: "", salesRepId: "", inCharge: "", respondedAt: todayStr(), constructionType: "自社のみ" });
   const [lines, setLines] = useState(() => d.lines.map(l => ({
     key: "il" + (++lineSeq), groupName: l.groupName, name: l.name, spec: l.spec, qty: l.qty ?? 0, unit: l.unit,
     price: l.price ?? 0, note: l.note, summaryOnly: false, nameFromSpec: false, fileAmount: l.amount,
@@ -1600,7 +1597,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
     }
     if (projectMode === "new" && (np.respondedAt || np.branchId || np.constructionType)) {
       await supabase.from("projects").update({
-        ...(np.respondedAt ? { respondedAt: new Date(np.respondedAt).toISOString() } : {}),
+        ...(np.respondedAt ? { respondedAt: np.respondedAt } : {}),
         ...(np.branchId ? { branchId: np.branchId } : {}),
         ...(np.constructionType ? { constructionType: np.constructionType } : {}),
       }).eq("id", data.project_id);
@@ -1753,8 +1750,8 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
                   <input value={np.inCharge} onChange={e => setNp({ ...np, inCharge: e.target.value })} style={inp} />
                 </div>
                 <div style={{ flex: 1, minWidth: 200 }}>
-                  <div style={label}>対応日時(見積などの対応をした日時)</div>
-                  <input type="datetime-local" value={np.respondedAt} onChange={e => setNp({ ...np, respondedAt: e.target.value })} style={inp} />
+                  <div style={label}>対応日(見積などの対応をした日)</div>
+                  <input type="date" value={np.respondedAt} onChange={e => setNp({ ...np, respondedAt: e.target.value })} style={inp} />
                 </div>
                 <div style={{ flex: 1, minWidth: 160 }}>
                   <div style={label}>施工形態</div>

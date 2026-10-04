@@ -52,7 +52,8 @@ export const FloatLauncher = ({ links, isPC, nav }) => {
 };
 
 export const PCSidebar = ({ cust, tileConf, pjs, cos, pending, page, nav, setModal, setEc, SB_W }) => {
-  const statsPjs = pjs.filter(p => p.created_at >= PROJECT_STATS_SINCE);
+  // 進行中案件の期間の基準は「対応日」(無ければ登録日)
+  const statsPjs = pjs.filter(p => (p.respondedAt || p.created_at || "") >= PROJECT_STATS_SINCE);
   const active = statsPjs.filter(p => p.status !== "完了" && p.status !== "中断");
 
   // 🔒 財務パスワード関連のstate
@@ -294,10 +295,18 @@ export const PCRightPanel = ({ rpOpen, setRpOpen, pjs, tks, finFiles, tmplFiles,
   const [open, setOpen] = useState({ kpi: true, tasks: true, fishing: true, ai: true });
   const tog = k => setOpen(p => ({ ...p, [k]: !p[k] }));
   const pending = tks.filter(t => !t.done);
-  const statsPjs = pjs.filter(p => p.created_at >= PROJECT_STATS_SINCE);
-  const totalAmt = statsPjs.reduce((s, p) => s + (p.amount || 0), 0);
-  const totalGp = statsPjs.reduce((s, p) => s + (p.gp || 0), 0);
+  // 進行中案件の期間の基準は「対応日」(無ければ登録日)
+  const statsPjs = pjs.filter(p => (p.respondedAt || p.created_at || "") >= PROJECT_STATS_SINCE);
   const active = statsPjs.filter(p => p.status !== "完了" && p.status !== "中断");
+  // 受注合計・粗利率は「今月・完工日基準」(完工日がある案件のうち、完工日が今月のものだけ)
+  const nowD = new Date();
+  const thisMonthCompleted = pjs.filter(p => {
+    if (!p.completedOn || p.completedOn < PROJECT_STATS_SINCE) return false;
+    const d = new Date(p.completedOn);
+    return d.getFullYear() === nowD.getFullYear() && d.getMonth() === nowD.getMonth();
+  });
+  const totalAmt = thisMonthCompleted.reduce((s, p) => s + (p.amount || 0), 0);
+  const totalGp = thisMonthCompleted.reduce((s, p) => s + (p.gp || 0), 0);
   const SectionHdr = ({ id, label }) => (
     <button onClick={() => tog(id)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "none", border: "none", cursor: "pointer", padding: "10px 0 8px" }}>
       <div style={{ fontWeight: 800, fontSize: 13, color: "#1A3A5C" }}>{label}</div>
@@ -319,11 +328,12 @@ export const PCRightPanel = ({ rpOpen, setRpOpen, pjs, tks, finFiles, tmplFiles,
           <button onClick={() => setRpOpen(false)} style={{ background: "#F3F4F6", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, color: "#6B7280", cursor: "pointer", fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>閉じる ▶</button>
         </div>
         <SectionHdr id="kpi" label="📊 今日の状況" />
-        {open.kpi && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-          {[{ l: "進行中案件", v: `${active.length}件`, c: "#1A3A5C", bg: "#EFF6FF" }, { l: "未完了タスク", v: `${pending.length}件`, c: "#EF4444", bg: "#FEF2F2" }, { l: "受注合計", v: `¥${(totalAmt / 10000).toFixed(0)}万`, c: "#E07B39", bg: "#FFF7ED" }, { l: "粗利率", v: totalAmt ? `${(totalGp / totalAmt * 100).toFixed(1)}%` : "—", c: "#059669", bg: "#F0FDF4" }].map(x => (
+        {open.kpi && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 4 }}>
+          {[{ l: "進行中案件", v: `${active.length}件`, c: "#1A3A5C", bg: "#EFF6FF" }, { l: "未完了タスク", v: `${pending.length}件`, c: "#EF4444", bg: "#FEF2F2" }, { l: "受注合計", v: `¥${(totalAmt / 10000).toFixed(0)}万`, c: "#E07B39", bg: "#FFF7ED", note: true }, { l: "粗利率", v: totalAmt ? `${(totalGp / totalAmt * 100).toFixed(1)}%` : "—", c: "#059669", bg: "#F0FDF4", note: true }].map(x => (
             <div key={x.l} style={{ background: x.bg, borderRadius: 10, padding: "10px" }}>
               <div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 3 }}>{x.l}</div>
               <div style={{ fontSize: 15, fontWeight: 900, color: x.c }}>{x.v}</div>
+              {x.note && <div style={{ fontSize: 8, color: "#BFC7D1", marginTop: 2 }}>今月・完工日基準</div>}
             </div>
           ))}
         </div>}
