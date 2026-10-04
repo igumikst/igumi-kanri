@@ -52,6 +52,63 @@ const genYM = () => {
   return res;
 };
 
+const IGNORE_DROP_FILE_RE = /^(Thumbs\.db|\.DS_Store|desktop\.ini)$/i;
+const isIgnoredDropFile = (name) => IGNORE_DROP_FILE_RE.test(name) || name.startsWith("~$");
+const isExternalFileDrag = (e) => Array.from(e.dataTransfer?.types || []).includes("Files");
+
+const readAllDirectoryEntries = (reader) => new Promise((resolve, reject) => {
+  const all = [];
+  const readBatch = () => {
+    reader.readEntries((entries) => {
+      if (!entries.length) resolve(all);
+      else { all.push(...entries); readBatch(); }
+    }, reject);
+  };
+  readBatch();
+});
+
+const entryToDropNode = async (entry) => {
+  if (!entry) return null;
+  if (entry.isFile) {
+    const file = await new Promise((res, rej) => entry.file(res, rej));
+    if (isIgnoredDropFile(file.name)) return null;
+    return { type: "file", name: file.name, file };
+  }
+  if (entry.isDirectory) {
+    const entries = await readAllDirectoryEntries(entry.createReader());
+    const children = [];
+    for (const child of entries) {
+      const node = await entryToDropNode(child);
+      if (node) children.push(node);
+    }
+    return { type: "folder", name: entry.name, children };
+  }
+  return null;
+};
+
+const countDropNodes = (nodes) => {
+  let folders = 0, files = 0, bytes = 0;
+  const walk = (n) => {
+    if (n.type === "folder") { folders += 1; n.children.forEach(walk); }
+    else { files += 1; bytes += n.file?.size || 0; }
+  };
+  nodes.forEach(walk);
+  return { folders, files, bytes };
+};
+
+const formatDropMb = (bytes) => {
+  const mb = bytes / (1024 * 1024);
+  return mb >= 10 ? String(Math.round(mb)) : mb.toFixed(1).replace(/\.0$/, "");
+};
+
+const buildFinanceStoragePath = (file, itemId, year, month) => {
+  const safeName = file.name.replace(/[^\w.-]/g, "_");
+  const stamp = Date.now();
+  return year != null
+    ? `finance/${itemId}/${year}/${month}/${stamp}_${safeName}`
+    : `finance/${itemId}/direct/${stamp}_${safeName}`;
+};
+
 export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, setFinFiles, finFolders, setFinFolders, tmplFiles, fishWeather, tileConf, SB_W, RP_W }) {
   const [finItem, setFinItem] = useState(null);
   const [folderPath, setFolderPath] = useState([]);
@@ -69,12 +126,17 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
   const [initializing, setInitializing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [ymSyncing, setYmSyncing] = useState(false);
+  const [fileDragOver, setFileDragOver] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState(null);
+  const [dropConflict, setDropConflict] = useState(null);
+  const [dropResult, setDropResult] = useState(null);
 
   const [dragIdx, setDragIdx] = useState(null);
   const [overIdx, setOverIdx] = useState(null);
   const touchStartY = useRef(null);
   const touchDragIdx = useRef(null);
   const ymSyncedRef = useRef(new Set());
+  const dropConflictResolverRef = useRef(null);
 
   const pending = tks.filter(t => !t.done);
   const ym = genYM();
@@ -199,22 +261,26 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
   const isWord  = f => f.name?.match(/\.(docx|doc)$/i);
   const fileIcon = f => isImg(f) ? "🖼" : isPDF(f) ? "📕" : isExcel(f) ? "📗" : isWord(f) ? "📘" : "📄";
 
-  const uploadFinFile = async (file, itemId, year, month) => {
-    const safeName = file.name.replace(/[^\w.\-]/g, '_');
-    const path = year != null
-      ? `finance/${itemId}/${year}/${month}/${Date.now()}_${safeName}`
-      : `finance/${itemId}/direct/${Date.now()}_${safeName}`;
+  const persistFinFile = async (file, itemId, year, month) => {
+    const path = buildFinanceStoragePath(file, itemId, year, month);
     const { error } = await supabase.storage.from("files").upload(path, file);
-    if (error) { alert(`アップロードエラー: ${error.message}`); return; }
+    if (error) return { error };
     const { data: urlData } = supabase.storage.from("files").getPublicUrl(path);
     const row = {
       item_id: itemId,
       name: file.name, type: file.type, size: file.size, url: urlData.publicUrl, path,
     };
     if (year != null) { row.year = Number(year); row.month = Number(month); }
-    const { data } = await supabase.from("finance_files").insert([row])
+    const { data, error: dbErr } = await supabase.from("finance_files").insert([row])
       .select("id,item_id,year,month,name,type,size,url,path,created_at");
+    if (dbErr) return { error: dbErr };
     if (data) setFinFiles(prev => [...prev, data[0]]);
+    return { data: data?.[0] };
+  };
+
+  const uploadFinFile = async (file, itemId, year, month) => {
+    const { error } = await persistFinFile(file, itemId, year, month);
+    if (error) { alert(`アップロードエラー: ${error.message}`); return; }
   };
 
   const uploadDirectFile = async (file, itemId) => {
@@ -222,6 +288,197 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
     await uploadFinFile(file, itemId, null, null);
     setUploading(false);
   };
+
+  const askDropFolderConflict = (name) => new Promise((resolve) => {
+    dropConflictResolverRef.current = resolve;
+    setDropConflict({ name });
+  });
+
+  const resolveDropFolderConflict = (action) => {
+    const resolve = dropConflictResolverRef.current;
+    dropConflictResolverRef.current = null;
+    setDropConflict(null);
+    if (resolve) resolve(action);
+  };
+
+  const collectDropNodesFromEvent = async (e) => {
+    const items = e.dataTransfer?.items;
+    if (!items?.length) return [];
+    const nodes = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind !== "file") continue;
+      const entry = item.webkitGetAsEntry?.();
+      if (entry) {
+        const node = await entryToDropNode(entry);
+        if (node) nodes.push(node);
+      } else {
+        const file = item.getAsFile?.();
+        if (file && !isIgnoredDropFile(file.name)) nodes.push({ type: "file", name: file.name, file });
+      }
+    }
+    return nodes;
+  };
+
+  const registerDropNodes = async (nodes, parentId) => {
+    const failed = [];
+    let localFolders = [...finFolders];
+    const { files: totalFiles } = countDropNodes(nodes);
+    let doneFiles = 0;
+    if (totalFiles > 0) setBulkProgress({ current: 0, total: totalFiles });
+
+    const localChildren = (pid) =>
+      localFolders
+        .filter(f => normParent(f.parent_id) === normParent(pid))
+        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+
+    const allocLabel = (pid, base) => {
+      const labels = new Set(localChildren(pid).map(f => f.label));
+      if (!labels.has(base)) return base;
+      let n = 2;
+      while (labels.has(`${base} (${n})`)) n += 1;
+      return `${base} (${n})`;
+    };
+
+    const createFolderRow = async (pid, label) => {
+      const siblings = localChildren(pid);
+      const { data, error } = await supabase.from("finance_folders").insert([{
+        parent_id: pid, label, icon: "📁",
+        sort_order: siblings.length, is_default: false,
+      }]).select();
+      if (error) throw error;
+      const created = data[0];
+      localFolders = [...localFolders, created];
+      setFinFolders(prev => [...prev, created]);
+      return created.id;
+    };
+
+    const walk = async (list, pid) => {
+      for (const node of list) {
+        if (node.type === "folder") {
+          const existing = localChildren(pid).find(f => f.label === node.name);
+          let targetId;
+          try {
+            if (existing) {
+              const meta = parseFolderMeta(existing, localFolders);
+              if (meta.type !== "normal") {
+                targetId = await createFolderRow(pid, allocLabel(pid, node.name));
+              } else {
+                const action = await askDropFolderConflict(node.name);
+                if (action === "cancel") continue;
+                targetId = action === "merge"
+                  ? existing.id
+                  : await createFolderRow(pid, allocLabel(pid, node.name));
+              }
+            } else {
+              targetId = await createFolderRow(pid, node.name);
+            }
+          } catch (err) {
+            failed.push({ name: node.name, reason: err.message || "フォルダ作成に失敗" });
+            continue;
+          }
+          await walk(node.children || [], targetId);
+        } else {
+          if (pid == null) {
+            failed.push({ name: node.name, reason: "ルートにはファイルを直接登録できません" });
+            doneFiles += 1;
+            setBulkProgress({ current: doneFiles, total: totalFiles });
+            continue;
+          }
+          const { error } = await persistFinFile(node.file, pid, null, null);
+          if (error) failed.push({ name: node.name, reason: error.message || "アップロード失敗" });
+          doneFiles += 1;
+          setBulkProgress({ current: doneFiles, total: totalFiles });
+        }
+      }
+    };
+
+    await walk(nodes, parentId);
+    setBulkProgress(null);
+    return failed;
+  };
+
+  const handleFolderListFileDragEnter = (e) => {
+    if (!isPC || !isExternalFileDrag(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setFileDragOver(true);
+  };
+
+  const handleFolderListFileDragOver = (e) => {
+    if (!isPC || !isExternalFileDrag(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "copy";
+    if (!fileDragOver) setFileDragOver(true);
+  };
+
+  const handleFolderListFileDrop = async (e, parentId) => {
+    if (!isPC || !isExternalFileDrag(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setFileDragOver(false);
+
+    let nodes = [];
+    try {
+      nodes = await collectDropNodesFromEvent(e);
+    } catch (err) {
+      alert(`ドロップ内容の読み取りに失敗しました: ${err.message || err}`);
+      return;
+    }
+    if (!nodes.length) return;
+
+    if (parentId == null && nodes.every(n => n.type === "file")) {
+      alert("ファイルはフォルダを開いた状態でドロップしてください");
+      return;
+    }
+
+    const { folders, files, bytes } = countDropNodes(nodes);
+    setConf({
+      msg: `フォルダ${folders}個・ファイル${files}件・合計${formatDropMb(bytes)}MBを登録します。よろしいですか？`,
+      okLabel: "登録する",
+      okColor: "#1A3A5C",
+      onOk: async () => {
+        setConf(null);
+        const failed = await registerDropNodes(nodes, parentId);
+        if (failed.length) {
+          setDropResult({
+            title: "登録完了（一部失敗）",
+            lines: failed.map(f => `・${f.name}: ${f.reason}`),
+          });
+        } else {
+          setDropResult({ title: "登録完了", lines: [`フォルダ${folders}個・ファイル${files}件を登録しました`] });
+        }
+      },
+    });
+  };
+
+  const renderFileDropOverlay = (parentId) => fileDragOver && isPC ? (
+    <div
+      onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
+      onDragOver={handleFolderListFileDragOver}
+      onDragLeave={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!e.currentTarget.contains(e.relatedTarget)) setFileDragOver(false);
+      }}
+      onDrop={(e) => { void handleFolderListFileDrop(e, parentId); }}
+      style={{
+        position: "absolute", inset: 0, zIndex: 40,
+        background: "rgba(26,58,92,0.12)", border: "3px dashed #1A3A5C", borderRadius: 14,
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}
+    >
+      <div style={{
+        background: "#fff", borderRadius: 12, padding: "18px 28px",
+        boxShadow: "0 4px 20px rgba(0,0,0,0.12)", textAlign: "center", pointerEvents: "none",
+      }}>
+        <div style={{ fontSize: 28, marginBottom: 6 }}>📂</div>
+        <div style={{ fontWeight: 800, fontSize: 15, color: "#1A3A5C" }}>ここにドロップして登録</div>
+        <div style={{ fontSize: 12, color: "#6B7280", marginTop: 4 }}>フォルダ構造を保ったまま一括登録します</div>
+      </div>
+    </div>
+  ) : null;
 
   const deleteFinFile = async (id) => {
     const f = finFiles.find(f => f.id === id);
@@ -367,7 +624,11 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
   };
 
   const handleDragStart = (i) => setDragIdx(i);
-  const handleDragOver  = (e, i) => { e.preventDefault(); setOverIdx(i); };
+  const handleDragOver  = (e, i) => {
+    if (isExternalFileDrag(e)) return;
+    e.preventDefault();
+    setOverIdx(i);
+  };
   const handleDragEnd = () => { setDragIdx(null); setOverIdx(null); };
 
   const makeDropHandler = (siblings) => async (i) => {
@@ -402,6 +663,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
 
   const enterSubfolder = (folder) => {
     const meta = folderMeta(finItem);
+    setFileDragOver(false);
     setFolderPath(prev => [...prev, {
       id: finItem.id,
       label: displayFolderLabel(finItem, meta),
@@ -411,6 +673,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
   };
 
   const goBackFromFolder = () => {
+    setFileDragOver(false);
     if (folderPath.length === 0) {
       setFinItem(null);
       return;
@@ -554,6 +817,7 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
             onClick={() => {
               if (i >= breadcrumb.length - 1) return;
               const target = breadcrumb[i];
+              setFileDragOver(false);
               setFolderPath(breadcrumb.slice(0, i));
               setFinItem(finFolders.find(f => f.id === target.id) || target);
             }}
@@ -565,7 +829,36 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
 
   const modals = (
     <>
-      {conf && <Confirm msg={conf.msg} onCancel={() => setConf(null)} onOk={conf.onOk} />}
+      {conf && <Confirm msg={conf.msg} onCancel={() => setConf(null)} onOk={conf.onOk} okLabel={conf.okLabel} okColor={conf.okColor} />}
+      {dropConflict && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 410, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 24px" }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: "100%", maxWidth: 360 }}>
+            <div style={{ fontSize: 24, textAlign: "center", marginBottom: 12 }}>📁</div>
+            <div style={{ fontSize: 14, color: "#374151", textAlign: "center", lineHeight: 1.6, marginBottom: 8 }}>
+              「{dropConflict.name}」は同じ階層に既にあります。
+            </div>
+            <div style={{ fontSize: 12, color: "#6B7280", textAlign: "center", marginBottom: 16 }}>
+              どうしますか？
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <button onClick={() => resolveDropFolderConflict("merge")} style={{ width: "100%", padding: 12, background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, cursor: "pointer" }}>既存フォルダの中に追加</button>
+              <button onClick={() => resolveDropFolderConflict("rename")} style={{ width: "100%", padding: 12, background: "#E07B39", color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, cursor: "pointer" }}>名前を変えて新規作成</button>
+              <button onClick={() => resolveDropFolderConflict("cancel")} style={{ width: "100%", padding: 12, background: "#F3F4F6", border: "none", borderRadius: 10, fontWeight: 700, cursor: "pointer" }}>このフォルダをスキップ</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {dropResult && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 410, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 24px" }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: "100%", maxWidth: 360, maxHeight: "80vh", overflowY: "auto" }}>
+            <div style={{ fontWeight: 800, fontSize: 16, color: "#1F2937", textAlign: "center", marginBottom: 12 }}>{dropResult.title}</div>
+            {dropResult.lines.map((line, i) => (
+              <div key={i} style={{ fontSize: 13, color: "#374151", lineHeight: 1.6, marginBottom: 4, whiteSpace: "pre-wrap" }}>{line}</div>
+            ))}
+            <button onClick={() => setDropResult(null)} style={{ width: "100%", padding: 12, background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, cursor: "pointer", marginTop: 16 }}>閉じる</button>
+          </div>
+        </div>
+      )}
       {finModal === "add" && (
         <Modal title="📁 フォルダを追加" onClose={() => setFinModal(null)} onSave={addFolder}>
           <Inp label="アイコン（絵文字）" value={folderForm.icon} onChange={e => setFolderForm({ ...folderForm, icon: e.target.value })} />
@@ -620,11 +913,20 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
           </div>
         </div>
       )}
-      {uploading && (
+      {uploading && !bulkProgress && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
           <div style={{ background: "#fff", borderRadius: 14, padding: "24px 32px", textAlign: "center" }}>
             <div style={{ fontSize: 32, marginBottom: 8 }}>⏳</div>
             <div style={{ fontWeight: 700, color: "#1F2937" }}>アップロード中...</div>
+          </div>
+        </div>
+      )}
+      {bulkProgress && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+          <div style={{ background: "#fff", borderRadius: 14, padding: "24px 32px", textAlign: "center", minWidth: 220 }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>⏳</div>
+            <div style={{ fontWeight: 700, color: "#1F2937" }}>登録中...</div>
+            <div style={{ fontSize: 14, color: "#6B7280", marginTop: 8 }}>{bulkProgress.current}/{bulkProgress.total}件</div>
           </div>
         </div>
       )}
@@ -734,7 +1036,13 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
           </div>
         </div>
 
-        <div style={{ padding: isPC ? "14px 0" : 14 }}>
+        <div
+          style={{ padding: isPC ? "14px 0" : 14, position: "relative", minHeight: 240 }}
+          onDragEnter={isPC ? handleFolderListFileDragEnter : undefined}
+          onDragOver={isPC ? handleFolderListFileDragOver : undefined}
+          onDrop={isPC ? (e) => { void handleFolderListFileDrop(e, finItem.id); } : undefined}
+        >
+          {renderFileDropOverlay(finItem.id)}
           {siblings.length > 1 && (
             <div style={{ fontSize: 11, color: "#9CA3AF", textAlign: "center", marginBottom: 8 }}>
               ☰ を長押し（スマホ）またはドラッグ（PC）で並べ替え
@@ -779,7 +1087,13 @@ export default function Finance({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
 
       {initializing && <div style={{ textAlign: "center", padding: 24, color: "#9CA3AF", fontSize: 13 }}>初期データを読み込み中...</div>}
 
-      <div style={{ padding: isPC ? "14px 0" : 14 }}>
+      <div
+        style={{ padding: isPC ? "14px 0" : 14, position: "relative", minHeight: 240 }}
+        onDragEnter={isPC ? handleFolderListFileDragEnter : undefined}
+        onDragOver={isPC ? handleFolderListFileDragOver : undefined}
+        onDrop={isPC ? (e) => { void handleFolderListFileDrop(e, null); } : undefined}
+      >
+        {renderFileDropOverlay(null)}
         {rootFolders.length > 1 && (
           <div style={{ fontSize: 11, color: "#9CA3AF", textAlign: "center", marginBottom: 8 }}>
             ☰ を長押し（スマホ）またはドラッグ（PC）で並べ替え
