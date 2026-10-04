@@ -11,3 +11,6 @@ export const toBasePrice = (price, markup) => {
 };
 
 export const lineAmount = (qty, price) => roundYen((Number(qty) || 0) * (Number(price) || 0));
+
+// 単価 × 掛け率(円未満は0.5を切り上げでroundYenと同じ考え方)。rate=1なら100%のまま
+export const applyRate = (price, rate) => roundYen((Number(price) || 0) * (Number(rate) || 0));

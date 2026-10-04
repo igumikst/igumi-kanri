@@ -406,6 +406,7 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
                               </div>
                             </div>
                             <div style={{ fontSize: 15, fontWeight: 800, color: "#E07B39" }}>{fmt(q.total_amount)}</div>
+                            {q.applied_rates?.rate != null && <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 2 }}>掛け率 ×{q.applied_rates.rate}</div>}
                           </div>
                           <div style={{ display: "flex", borderTop: "1px solid #F3F4F6" }}>
                             <button onClick={() => openQuote(q)} style={{ flex: 1, padding: "8px 0", background: "none", border: "none", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#1A3A5C", fontWeight: 700, cursor: "pointer" }}>開く →</button>
