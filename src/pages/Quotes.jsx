@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { supabase } from "../lib/supabase";
 import { Hdr, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
+import GroupTree, { BundleToolbar } from "../components/GroupTree";
 import { fmt } from "../lib/constants";
 import { openQuoteFile } from "../lib/quoteFiles";
 
@@ -44,6 +45,7 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
   const [groupFilter, setGroupFilter] = useState("");
   const [laborPick, setLaborPick] = useState(null);
   const [laborCountInput, setLaborCountInput] = useState("");
+  const [selectedKeys, setSelectedKeys] = useState(new Set());
 
   const loadQuotes = async () => {
     if (!quoteProjectId) return;
@@ -200,14 +202,8 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
 
   const updateLine = (key, patch) => setEd(prev => ({ ...prev, lines: prev.lines.map(l => l.key === key ? { ...l, ...patch } : l) }));
   const removeLine = key => setEd(prev => ({ ...prev, lines: prev.lines.filter(l => l.key !== key) }));
-  const moveLine = (key, dir) => setEd(prev => {
-    const idx = prev.lines.findIndex(l => l.key === key);
-    const to = idx + dir;
-    if (to < 0 || to >= prev.lines.length) return prev;
-    const lines = [...prev.lines];
-    [lines[idx], lines[to]] = [lines[to], lines[idx]];
-    return { ...prev, lines };
-  });
+  const setLines = newLines => setEd(prev => ({ ...prev, lines: newLines }));
+  const toggleSelect = key => setSelectedKeys(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
   const total = ed.lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.sale_price) || 0), 0);
   const costTotal = ed.lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.cost_price) || 0), 0);
@@ -465,9 +461,12 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
                 <div style={{ padding: 16, textAlign: "center", fontSize: 12, color: "#9CA3AF" }}>まだ明細がありません</div>
               ) : (
                 <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", minWidth: 560, borderCollapse: "collapse" }}>
+                  <BundleToolbar lines={ed.lines} onChange={setLines} selectedKeys={selectedKeys} setSelectedKeys={setSelectedKeys} />
+                  <div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 6 }}>⠿をドラッグ、または↑↓・📂(このグループに移す)で並べ替え・グループ分けができます</div>
+                  <table style={{ width: "100%", minWidth: 640, borderCollapse: "collapse" }}>
                     <thead>
                       <tr style={{ borderBottom: "2px solid #F3F4F6" }}>
+                        <th style={{ padding: "6px 8px", fontSize: 11, color: "#6B7280", textAlign: "left" }}></th>
                         <th style={{ padding: "6px 8px", fontSize: 11, color: "#6B7280", textAlign: "left" }}>項目</th>
                         <th style={{ padding: "6px 8px", fontSize: 11, color: "#6B7280", textAlign: "left" }}>数量</th>
                         <th style={{ padding: "6px 8px", fontSize: 11, color: "#6B7280", textAlign: "left" }}>単価</th>
@@ -477,13 +476,21 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
                       </tr>
                     </thead>
                     <tbody>
-                      {ed.lines.map((l, i) => {
-                        const amount = (Number(l.qty) || 0) * (Number(l.sale_price) || 0);
-                        const lineCostTotal = (Number(l.qty) || 0) * (Number(l.cost_price) || 0);
-                        const unconfirmed = !l.cost_confirmed || l.cost_price == null;
-                        return (
-                          <tr key={l.key} style={{ borderBottom: "1px solid #F9FAFB" }}>
-                            <td style={{ padding: "6px 8px" }}>
+                      <GroupTree
+                        lines={ed.lines}
+                        onChange={setLines}
+                        amountOf={l => (Number(l.qty) || 0) * (Number(l.sale_price) || 0)}
+                        formatAmount={fmt}
+                        columnCount={5}
+                        selectedKeys={selectedKeys}
+                        onToggleSelect={toggleSelect}
+                        onDeleteLeaf={removeLine}
+                        renderLeafCells={(l) => {
+                          const amount = (Number(l.qty) || 0) * (Number(l.sale_price) || 0);
+                          const lineCostTotal = (Number(l.qty) || 0) * (Number(l.cost_price) || 0);
+                          const unconfirmed = !l.cost_confirmed || l.cost_price == null;
+                          return [
+                            <td key="item" style={{ padding: "6px 8px" }}>
                               {l.line_type === "adjust" ? (
                                 <>
                                   <input value={l.name} onChange={e => updateLine(l.key, { name: e.target.value })} placeholder="項目名" style={{ width: "100%", padding: "4px 6px", borderRadius: 6, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937", marginBottom: 3, boxSizing: "border-box" }} />
@@ -496,35 +503,30 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
                                 </>
                               )}
                               {l.note && <div style={{ fontSize: 10, color: "#6B7280", marginTop: 2 }}>備考: {l.note}</div>}
-                            </td>
-                            <td style={{ padding: "6px 8px" }}>
+                            </td>,
+                            <td key="qty" style={{ padding: "6px 8px" }}>
                               {l.line_type === "labor" ? (
                                 <input type="number" min="0" step="0.5" value={l.labor_count} onChange={e => updateLaborCount(l.key, e.target.value)} style={{ width: 64, padding: "4px 6px", borderRadius: 6, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
                               ) : (
                                 <input type="number" min="0" value={l.qty} onChange={e => updateLine(l.key, { qty: e.target.value })} style={{ width: 64, padding: "4px 6px", borderRadius: 6, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
                               )}
-                            </td>
-                            <td style={{ padding: "6px 8px" }}>
+                            </td>,
+                            <td key="price" style={{ padding: "6px 8px" }}>
                               {l.line_type !== "labor" ? (
                                 <input type="number" value={l.sale_price} onChange={e => updateLine(l.key, { sale_price: e.target.value })} style={{ width: 90, padding: "4px 6px", borderRadius: 6, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
                               ) : (
                                 <span style={{ fontSize: 12, color: "#374151" }}>{fmt(l.sale_price)}</span>
                               )}
-                            </td>
-                            <td style={{ padding: "6px 8px", fontSize: 12, fontWeight: 700, color: "#E07B39", whiteSpace: "nowrap" }}>{fmt(amount)}</td>
-                            <td style={{ padding: "6px 8px", fontSize: 11, whiteSpace: "nowrap" }}>
+                            </td>,
+                            <td key="amount" style={{ padding: "6px 8px", fontSize: 12, fontWeight: 700, color: "#E07B39", whiteSpace: "nowrap" }}>{fmt(amount)}</td>,
+                            <td key="cost" style={{ padding: "6px 8px", fontSize: 11, whiteSpace: "nowrap" }}>
                               {/* 原価単価を直すと、その行は「確認済み」になる。空にすると未入力に戻る */}
                               <input type="number" value={l.cost_price ?? ""} placeholder="未入力" onChange={e => updateLine(l.key, e.target.value === "" ? { cost_price: null, cost_confirmed: false } : { cost_price: e.target.value, cost_confirmed: true })} style={{ width: 80, padding: "4px 6px", borderRadius: 6, border: `1.5px solid ${unconfirmed ? "#FCA5A5" : "#E5E7EB"}`, fontSize: 12, color: "#1F2937" }} />
                               <div style={{ marginTop: 2 }}>{unconfirmed ? <span style={{ color: "#DC2626", fontWeight: 700 }}>未確認</span> : <span style={{ color: "#6B7280" }}>計 {fmt(lineCostTotal)}</span>}</div>
-                            </td>
-                            <td style={{ padding: "6px 4px", whiteSpace: "nowrap" }}>
-                              <button onClick={() => moveLine(l.key, -1)} disabled={i === 0} style={{ border: "none", background: "none", cursor: i === 0 ? "default" : "pointer", opacity: i === 0 ? 0.3 : 1, fontSize: 13 }}>↑</button>
-                              <button onClick={() => moveLine(l.key, 1)} disabled={i === ed.lines.length - 1} style={{ border: "none", background: "none", cursor: i === ed.lines.length - 1 ? "default" : "pointer", opacity: i === ed.lines.length - 1 ? 0.3 : 1, fontSize: 13 }}>↓</button>
-                              <button onClick={() => removeLine(l.key)} style={{ border: "none", background: "none", cursor: "pointer", color: "#DC2626", fontSize: 13 }}>🗑</button>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                            </td>,
+                          ];
+                        }}
+                      />
                     </tbody>
                   </table>
                 </div>
