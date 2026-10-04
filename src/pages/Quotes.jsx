@@ -38,6 +38,7 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
   const [view, setView] = useState("list");
   const [quotes, setQuotes] = useState([]);
   const [quoteFiles, setQuoteFiles] = useState([]);
+  const [reportFiles, setReportFiles] = useState([]);
   const [loadingQuotes, setLoadingQuotes] = useState(true);
   const [conf, setConf] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -64,12 +65,14 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
   const loadQuotes = async () => {
     if (!quoteProjectId) return;
     setLoadingQuotes(true);
-    const [{ data }, filesRes] = await Promise.all([
+    const [{ data }, filesRes, reportFilesRes] = await Promise.all([
       supabase.from("quotes").select("*").eq("project_id", quoteProjectId),
       supabase.from("quote_files").select("*").eq("project_id", quoteProjectId).order("created_at"),
+      supabase.from("report_files").select("*").eq("project_id", quoteProjectId),
     ]);
     if (data) setQuotes([...data].sort((a, b) => quoteNoNum(a) - quoteNoNum(b) || String(a.created_at).localeCompare(String(b.created_at))));
     setQuoteFiles(filesRes.data || []); // テーブルが未作成でも、見積一覧はそのまま表示する
+    setReportFiles(reportFilesRes.data || []);
     setLoadingQuotes(false);
   };
   useEffect(() => { loadQuotes(); }, [quoteProjectId]);
@@ -407,6 +410,7 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
                             </div>
                             <div style={{ fontSize: 15, fontWeight: 800, color: "#E07B39" }}>{fmt(q.total_amount)}</div>
                             {q.applied_rates?.rate != null && <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 2 }}>掛け率 ×{Number.isInteger(q.applied_rates.rate) ? q.applied_rates.rate.toFixed(1) : q.applied_rates.rate}</div>}
+                            {(() => { const n = reportFiles.filter(f => f.quote_id === q.id).length; return <div style={{ fontSize: 10, color: n ? "#059669" : "#9CA3AF", marginTop: 2 }}>{n ? `📎 報告書あり(${n}件)` : "報告書なし"}</div>; })()}
                           </div>
                           <div style={{ display: "flex", borderTop: "1px solid #F3F4F6" }}>
                             <button onClick={() => openQuote(q)} style={{ flex: 1, padding: "8px 0", background: "none", border: "none", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#1A3A5C", fontWeight: 700, cursor: "pointer" }}>開く →</button>

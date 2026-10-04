@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { STATUSES, STATUS_STYLE, fmt, pct } from "../lib/constants";
 import { Badge, Inp, Sel, Modal, Hdr, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import ClientBranchRepPicker from "../components/ClientBranchRepPicker";
-import { CONSTRUCTION_TYPES } from "../lib/quoteFinancials";
+import { CONSTRUCTION_TYPES, computeQuoteFinancials } from "../lib/quoteFinancials";
+import FileDropZone from "../components/FileDropZone";
+import { usePreventWindowFileDrop } from "../lib/useFileDropGuard";
+import { REPORT_FILE_BUCKET, REPORT_FILE_TYPES, REPORT_FILE_MAX_SIZE, reportFileExt, openReportFile } from "../lib/reportFiles";
 
 // 見積などの対応をした日時。datetime-local入力(ローカル時刻)との変換用
 const nowLocal = () => toLocalInput(new Date());
@@ -16,6 +19,7 @@ function toLocalInput(d) {
 }
 
 export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, setQuoteProjectId, setQuoteImportCtx, branches, setBranches, salesReps, setSalesReps }) {
+  usePreventWindowFileDrop();
   const [selP, setSelP] = useState(null);
   const [modal, setModal] = useState(null);
   const [fltS, setFltS] = useState("すべて");
@@ -26,6 +30,103 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
   const [editP, setEditP] = useState(null);
   const blankP = { name: "", status: "発注待ち", clientId: "", branchId: "", salesRepId: "", salesRep: "", inCharge: "崎岡", subIds: [], amount: "", gp: "", qDate: "", respondedAt: nowLocal(), constructionType: "自社のみ" };
   const [nP, setNP] = useState(blankP);
+
+  // 案件の詳細を開いている時だけ、その案件の見積・報告書ファイルを読み込む
+  const [quotes, setQuotes] = useState([]);
+  const [reportFiles, setReportFiles] = useState([]);
+  const [reportQuoteChoice, setReportQuoteChoice] = useState("");
+  const [reportUploading, setReportUploading] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      if (!selP) { setQuotes([]); setReportFiles([]); setReportQuoteChoice(""); return; }
+      const [{ data: qs }, { data: rf }] = await Promise.all([
+        supabase.from("quotes").select("*").eq("project_id", selP.id),
+        supabase.from("report_files").select("*").eq("project_id", selP.id).order("created_at", { ascending: false }),
+      ]);
+      setQuotes(qs || []);
+      setReportFiles(rf || []);
+      setReportQuoteChoice((qs || []).length === 1 ? qs[0].id : "");
+    })();
+  }, [selP]);
+
+  // 「完工済」の処理(Quotes.jsxのadoptQuoteと同じ考え方): 見積の原価・下請け原価から
+  // 受注金額・粗利を計算し、確認ダイアログのあと、見積をwon・案件を完了にする
+  const computeQuoteTotalsForAdopt = async quote => {
+    const [{ data: itemsData }, { data: subData }] = await Promise.all([
+      supabase.from("quote_items").select("*").eq("quote_id", quote.id),
+      supabase.from("quote_subcontractor_costs").select("amount").eq("quote_id", quote.id),
+    ]);
+    const ids = (itemsData || []).map(r => r.id);
+    const { data: costsData } = ids.length ? await supabase.from("quote_item_costs").select("*").in("quote_item_id", ids) : { data: [] };
+    const costsByItem = Object.fromEntries((costsData || []).map(c => [c.quote_item_id, c]));
+    const total = quote.total_amount || 0;
+    const lines = (itemsData || []).map(r => ({ qty: r.qty, costPrice: costsByItem[r.id]?.cost_price ?? null, costConfirmed: !!costsByItem[r.id]?.cost_confirmed, isSubcontracted: !!r.is_subcontracted }));
+    const subAmountTotal = (subData || []).reduce((s, c) => s + (Number(c.amount) || 0), 0);
+    const { gp, subMissing, ownUnconfirmed } = computeQuoteFinancials({ constructionType: selP.constructionType || "自社のみ", saleTotal: total, lines, subAmountTotal, subCount: (subData || []).length });
+    return { total, gp, subMissing, ownUnconfirmed };
+  };
+
+  const adoptQuoteFromReports = async quote => {
+    const { total, gp, subMissing, ownUnconfirmed } = await computeQuoteTotalsForAdopt(quote);
+    const prevAdopted = quotes.find(q => q.is_adopted && q.id !== quote.id);
+    const msg = [
+      `「${quote.title}」を完工済(採用)にします`,
+      prevAdopted ? `(現在「${prevAdopted.title}」が採用中です。切り替えます)` : "",
+      "",
+      `受注金額: ${fmt(selP.amount)} → ${fmt(total)}`,
+      `粗利: ${fmt(selP.gp)} → ${fmt(gp)}`,
+      ownUnconfirmed ? "⚠️ 原価が未確認の明細があります。粗利は暫定です" : "",
+      subMissing ? "⚠️ 下請けの原価が1件も登録されていません。粗利は暫定です" : "",
+      "",
+      "案件の状態も「完了」にし、案件の受注金額・粗利を上書きします。元に戻せません。",
+      "よろしいですか？",
+    ].filter(Boolean).join("\n");
+    setConf({ msg, okLabel: "完工済にする", okColor: "#059669", onOk: async () => {
+      if (prevAdopted) await supabase.from("quotes").update({ is_adopted: false }).eq("id", prevAdopted.id);
+      await supabase.from("quotes").update({ is_adopted: true, status: "won" }).eq("id", quote.id);
+      await supabase.from("projects").update({ amount: Math.round(total), grossProfit: Math.round(gp), status: "完了" }).eq("id", selP.id);
+      const updated = { ...selP, amount: Math.round(total), gp: Math.round(gp), status: "完了" };
+      setPjs(prev => prev.map(p => p.id === selP.id ? updated : p));
+      setSelP(updated);
+      setQuotes(prev => prev.map(q => q.id === quote.id ? { ...q, is_adopted: true, status: "won" } : (prevAdopted && q.id === prevAdopted.id) ? { ...q, is_adopted: false } : q));
+      setConf(null);
+    } });
+  };
+
+  const proposeAdopt = quote => {
+    setConf({ msg: `「${quote.title}」を完工済みにしますか？`, okLabel: "はい", onOk: () => adoptQuoteFromReports(quote) });
+  };
+
+  // 報告書ファイルの追加: .xlsx/.xls/.pdf のみ、1ファイル30MBまで。再圧縮はしない(超えたら理由を出して受け付けない)
+  const uploadReportFiles = async fileList => {
+    const files = [...(fileList || [])];
+    if (!files.length || !selP) return;
+    setReportUploading(true);
+    const rejected = [];
+    const added = [];
+    for (const file of files) {
+      const ext = reportFileExt(file.name);
+      if (!REPORT_FILE_TYPES[ext]) { rejected.push(`「${file.name}」: .xlsx / .xls / .pdf のファイルだけ追加できます`); continue; }
+      if (file.size > REPORT_FILE_MAX_SIZE) { rejected.push(`「${file.name}」: 30MBを超えています(${(file.size / 1024 / 1024).toFixed(1)}MB)。ファイルを小さくしてから追加してください`); continue; }
+      const storagePath = `${crypto.randomUUID()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from(REPORT_FILE_BUCKET).upload(storagePath, file, { contentType: REPORT_FILE_TYPES[ext], upsert: false });
+      if (upErr) { rejected.push(`「${file.name}」: 保存に失敗しました(${upErr.message})`); continue; }
+      const { data, error: insErr } = await supabase.from("report_files").insert([{
+        project_id: selP.id, quote_id: reportQuoteChoice || null, storage_path: storagePath, original_name: file.name, size_bytes: file.size,
+      }]).select();
+      if (insErr) { rejected.push(`「${file.name}」: 記録に失敗しました(${insErr.message})`); continue; }
+      added.push(data[0]);
+    }
+    if (added.length) setReportFiles(prev => [...added, ...prev]);
+    setReportUploading(false);
+    if (rejected.length) alert(rejected.join("\n"));
+    // 見積に紐づけて追加した時、その見積がまだ完工済みでなければ、完工済みにするか提案する(ブロックはしない)
+    if (added.length && reportQuoteChoice) {
+      const q = quotes.find(x => x.id === reportQuoteChoice);
+      if (q && q.status !== "won") proposeAdopt(q);
+    }
+  };
 
   const getC = id => cos.find(c => c.id === id);
   const inChargeList = ["すべて", ...new Set(pjs.map(p => p.inCharge).filter(Boolean))];
@@ -119,10 +220,47 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
                 <div style={{ fontWeight: 700, fontSize: 13, color: "#1A3A5C", marginBottom: 8 }}>🏢 取引先</div>
                 {getC(selP.clientId) ? <div style={{ background: "#F0F4F8", borderRadius: 10, padding: "10px 12px" }}><div style={{ fontWeight: 700, color: "#1F2937" }}>{getC(selP.clientId).name}</div></div> : <div style={{ color: "#9CA3AF", fontSize: 13 }}>未設定</div>}
               </div>
-              <div style={{ borderTop: "1px solid #F3F4F6", paddingTop: 14 }}>
+              <div style={{ borderTop: "1px solid #F3F4F6", paddingTop: 14, marginBottom: 14 }}>
                 <div style={{ fontWeight: 700, fontSize: 13, color: "#1A3A5C", marginBottom: 8 }}>📝 見積</div>
                 <button onClick={() => { setQuoteProjectId(selP.id); nav("quotes"); }} style={{ width: "100%", padding: "10px 0", background: "#EEF2FF", color: "#3730A3", border: "1.5px solid #C7D2FE", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>📝 見積一覧を見る・作成する →</button>
                 <button onClick={() => { setQuoteImportCtx({ from: "projects", projectId: selP.id }); nav("quoteImport"); }} style={{ width: "100%", marginTop: 8, padding: "10px 0", background: "#fff", color: "#1A3A5C", border: "1.5px dashed #94A3B8", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>📥 見積ファイルから登録</button>
+              </div>
+              <div style={{ borderTop: "1px solid #F3F4F6", paddingTop: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: "#1A3A5C" }}>📎 報告書</div>
+                  <button onClick={() => window.open("/report.html", "_blank")} style={{ border: "none", background: "none", color: "#2563EB", fontSize: 11, fontWeight: 700, cursor: "pointer", padding: 0 }}>報告書ツールを開く →</button>
+                </div>
+                {quotes.filter(q => q.status === "won" && !reportFiles.some(rf => rf.quote_id === q.id)).length > 0 && (
+                  <div style={{ background: "#FFFBEB", color: "#92400E", borderRadius: 8, padding: "6px 10px", fontSize: 11, marginBottom: 8 }}>
+                    ⚠️ 報告書が未登録です: {quotes.filter(q => q.status === "won" && !reportFiles.some(rf => rf.quote_id === q.id)).map(q => q.title).join("、")}
+                  </div>
+                )}
+                {reportFiles.length === 0
+                  ? <div style={{ color: "#9CA3AF", fontSize: 13, marginBottom: 10 }}>報告書が未登録です</div>
+                  : reportFiles.map(rf => (
+                    <div key={rf.id} style={{ background: "#F9FAFB", borderRadius: 8, padding: "8px 10px", marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 12, color: "#1F2937", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{rf.original_name}</div>
+                        <div style={{ fontSize: 10, color: "#9CA3AF" }}>
+                          {rf.quote_id ? (quotes.find(q => q.id === rf.quote_id)?.title || "見積") : "紐づけなし"} ・ {(rf.size_bytes / 1024 / 1024).toFixed(1)}MB ・ {new Date(rf.created_at).toLocaleDateString("ja-JP")}
+                        </div>
+                      </div>
+                      <button onClick={() => openReportFile(rf)} style={{ border: "1px solid #E5E7EB", background: "#fff", borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 700, color: "#1A3A5C", cursor: "pointer", whiteSpace: "nowrap" }}>📎 開く</button>
+                    </div>
+                  ))}
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 10, color: "#6B7280", marginBottom: 4 }}>どの見積の報告書か(任意)</div>
+                  <select value={reportQuoteChoice} onChange={e => setReportQuoteChoice(e.target.value)} style={{ width: "100%", padding: "7px 8px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937", marginBottom: 8 }}>
+                    <option value="">見積に紐づけない</option>
+                    {quotes.map(q => <option key={q.id} value={q.id}>{q.title}{q.status === "won" ? "(完工済)" : ""}</option>)}
+                  </select>
+                  <FileDropZone onFiles={files => uploadReportFiles(files)} disabled={reportUploading} activeLabel="ここに落とす">
+                    <label style={{ display: "block", border: "2px dashed #93C5FD", borderRadius: 10, padding: "14px 10px", textAlign: "center", cursor: reportUploading ? "default" : "pointer", background: "#F0F7FF", opacity: reportUploading ? 0.6 : 1 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#1A3A5C" }}>{reportUploading ? "追加中..." : "📂 報告書を追加(.xlsx / .xls / .pdf、30MBまで。複数可)"}</div>
+                      <input type="file" accept=".xlsx,.xls,.pdf" multiple disabled={reportUploading} onChange={e => { uploadReportFiles(e.target.files); e.target.value = ""; }} style={{ display: "none" }} />
+                    </label>
+                  </FileDropZone>
+                </div>
               </div>
             </div>
           )}
@@ -178,7 +316,7 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
         <Sel label="施工形態" opts={CONSTRUCTION_TYPES} value={nP.constructionType} onChange={e => setNP({ ...nP, constructionType: e.target.value })} />
         <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: -4, marginBottom: 10 }}>受注金額・粗利は、見積を作成して「採用」すると自動で入ります</div>
       </Modal>)}
-      {conf && <Confirm msg={conf.msg} onCancel={() => setConf(null)} onOk={conf.onOk} />}
+      {conf && <Confirm msg={conf.msg} onCancel={() => setConf(null)} onOk={conf.onOk} okLabel={conf.okLabel} okColor={conf.okColor} />}
     </div>
   );
 }
