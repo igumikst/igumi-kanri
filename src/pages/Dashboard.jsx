@@ -5,9 +5,10 @@ import { STATUSES, PROJECT_STATS_SINCE } from "../lib/constants";
 
 const WON_STATUSES = ["着工", "完了"];
 
-export default function Dashboard({ pjs, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, tileConf, SB_W, RP_W, embedded }) {
+export default function Dashboard({ pjs, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, tileConf, SB_W, RP_W, branches, salesReps, embedded }) {
   const pending = (tks || []).filter(t => !t.done);
   const coMap = Object.fromEntries((cos || []).map(c => [c.id, c]));
+  const branchMap = Object.fromEntries((branches || []).map(b => [b.id, b]));
   const jobs = (pjs || []).filter(p => (p.created_at || "") >= PROJECT_STATS_SINCE).map(p => {
     const sell = Number(p.amount) || 0;
     const gp = Number(p.gp) || 0;
@@ -23,6 +24,8 @@ export default function Dashboard({ pjs, cos, tks, links, cust, isPC, pp, nav, r
       registeredAt: p.created_at,
       clientId: p.clientId || "",
       clientName: (p.clientId && coMap[p.clientId]?.name) || "",
+      branchId: p.branchId || "",
+      branchName: (p.branchId && branchMap[p.branchId]?.name) || "",
     };
   });
 
@@ -32,7 +35,7 @@ export default function Dashboard({ pjs, cos, tks, links, cust, isPC, pp, nav, r
       {!embedded && isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} />}
       {!embedded && (cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
       {!embedded && <Hdr title="🧭 ダッシュボード" back={() => nav("home")} />}
-      <DashboardPC jobs={jobs} statuses={STATUSES} wonStatuses={WON_STATUSES} showTitle={!!embedded} />
+      <DashboardPC jobs={jobs} statuses={STATUSES} wonStatuses={WON_STATUSES} showTitle={!!embedded} branches={branches} salesReps={salesReps} />
     </div>
   );
 }

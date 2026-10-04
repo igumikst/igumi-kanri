@@ -174,20 +174,14 @@ export default function DashboardPC({
   kindColors,
   bigJobs,
   showTitle = false,
+  branches = [],
+  salesReps = [],
 }) {
   const [period, setPeriod] = useState("all");
   const [owner, setOwner] = useState("");
   const [client, setClient] = useState("");
+  const [branch, setBranch] = useState("");
   const [sort, setSort] = useState({ key: "amt", dir: "desc" });
-
-  const ownerOptions = useMemo(() => {
-    const map = new Map();
-    jobs.forEach(j => {
-      const k = j.ownerKey || j.owner || "unknown";
-      if (!map.has(k)) map.set(k, j.owner || "未設定");
-    });
-    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], "ja"));
-  }, [jobs]);
 
   const clientOptions = useMemo(() => {
     const map = new Map();
@@ -197,12 +191,40 @@ export default function DashboardPC({
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], "ja"));
   }, [jobs]);
 
-  const filtered = useMemo(() => jobs.filter(j => {
+  const branchOptions = useMemo(() => {
+    return branches
+      .filter(b => !client || b.company_id === client)
+      .map(b => [b.id, b.name || "(名称未設定)"])
+      .sort((a, b) => a[1].localeCompare(b[1], "ja"));
+  }, [branches, client]);
+
+  const baseFiltered = useMemo(() => jobs.filter(j => {
     if (!inPeriod(j.registeredAt, period)) return false;
-    if (owner && (j.ownerKey || j.owner || "unknown") !== owner) return false;
     if (client && j.clientId !== client) return false;
+    if (branch && j.branchId !== branch) return false;
     return true;
-  }), [jobs, period, owner, client]);
+  }), [jobs, period, client, branch]);
+
+  const ownerOptions = useMemo(() => {
+    const repOpts = salesReps
+      .filter(s => (!client || s.company_id === client) && (!branch || s.branch_id === branch))
+      .map(s => [s.id, s.name || s.display_name || "(名前未設定)"]);
+    const covered = new Set(repOpts.map(([k]) => k));
+    const extra = new Map();
+    baseFiltered.forEach(j => {
+      const k = j.ownerKey || j.owner || "unknown";
+      if (!covered.has(k) && !extra.has(k)) extra.set(k, j.owner || "未設定");
+    });
+    return [...repOpts, ...extra.entries()].sort((a, b) => a[1].localeCompare(b[1], "ja"));
+  }, [salesReps, client, branch, baseFiltered]);
+
+  const onClientChange = v => { setClient(v); setBranch(""); setOwner(""); };
+  const onBranchChange = v => { setBranch(v); setOwner(""); };
+
+  const filtered = useMemo(() => baseFiltered.filter(j => {
+    if (owner && (j.ownerKey || j.owner || "unknown") !== owner) return false;
+    return true;
+  }), [baseFiltered, owner]);
 
   const totalAmt = filtered.reduce((s, j) => s + (j.sell || 0), 0);
   const confirmed = filtered.filter(j => j.cost != null);
@@ -360,10 +382,16 @@ export default function DashboardPC({
             {ownerOptions.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
           </select>
         </label>
-        <label>元請
-          <select value={client} onChange={e => setClient(e.target.value)}>
+        <label>取引先
+          <select value={client} onChange={e => onClientChange(e.target.value)}>
             <option value="">すべて</option>
             {clientOptions.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+          </select>
+        </label>
+        <label>営業所
+          <select value={branch} onChange={e => onBranchChange(e.target.value)}>
+            <option value="">すべて</option>
+            {branchOptions.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
           </select>
         </label>
         <label>期間（登録日）
@@ -467,7 +495,7 @@ export default function DashboardPC({
           <table className="pt">
             <thead>
               <tr>
-                <th className="tl" onClick={() => toggleSort("clientName")}>元請{mark("clientName")}</th>
+                <th className="tl" onClick={() => toggleSort("clientName")}>取引先{mark("clientName")}</th>
                 <th className="tl" onClick={() => toggleSort("name")}>担当者{mark("name")}</th>
                 <th onClick={() => toggleSort("count")}>案件数{mark("count")}</th>
                 <th onClick={() => toggleSort("amt")}>売上合計{mark("amt")}</th>

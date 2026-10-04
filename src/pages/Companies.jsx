@@ -4,7 +4,7 @@ import { COMPANY_TYPES, CONTACT_ROLES, fmt } from "../lib/constants";
 import { Badge, Inp, Sel, Modal, Hdr, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 
-export default function Companies({ pjs, cos, setCos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W }) {
+export default function Companies({ pjs, cos, setCos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, branches, setBranches }) {
   const [selC, setSelC] = useState(null);
   const [selCt, setSelCt] = useState(null);
   const [modal, setModal] = useState(null);
@@ -14,6 +14,8 @@ export default function Companies({ pjs, cos, setCos, cust, isPC, pp, nav, rpOpe
   const [editCoForm, setEditCoForm] = useState({ name: "", branch: "", type: "取引先" });
   const [nCo, setNCo] = useState({ name: "", type: "協力業者", branch: "" });
   const [nCt, setNCt] = useState({ name: "", role: "営業", tel: "", email: "", memo: "" });
+  const [nBranchName, setNBranchName] = useState("");
+  const [editBranch, setEditBranch] = useState(null); // { id, name }
 
   const pending = tks.filter(t => !t.done);
   const getPF = cid => pjs.filter(p => p.clientId === cid || (p.subIds || []).includes(cid));
@@ -36,6 +38,23 @@ export default function Companies({ pjs, cos, setCos, cust, isPC, pp, nav, rpOpe
   const delCo = async id => {
     await supabase.from("companies").delete().eq("id", id);
     setCos(cos.filter(c => c.id !== id));
+  };
+
+  const addBranch = async () => {
+    if (!nBranchName.trim() || !selC) return;
+    const { data } = await supabase.from("company_branches").insert([{ company_id: selC.id, name: nBranchName.trim() }]).select();
+    if (data) setBranches([...branches, data[0]]);
+    setNBranchName(""); setModal(null);
+  };
+  const renameBranch = async () => {
+    if (!editBranch?.name.trim()) return;
+    await supabase.from("company_branches").update({ name: editBranch.name.trim() }).eq("id", editBranch.id);
+    setBranches(branches.map(b => b.id === editBranch.id ? { ...b, name: editBranch.name.trim() } : b));
+    setEditBranch(null); setModal(null);
+  };
+  const delBranch = async id => {
+    await supabase.from("company_branches").delete().eq("id", id);
+    setBranches(branches.filter(b => b.id !== id));
   };
 
   const saveCt = async () => {
@@ -77,23 +96,41 @@ export default function Companies({ pjs, cos, setCos, cust, isPC, pp, nav, rpOpe
               <button onClick={() => { setEditCoForm({ name: selC.name, branch: selC.branch || "", type: selC.type }); setModal("editCo"); }} style={{ background: "#EFF6FF", border: "1.5px solid #BFDBFE", color: "#1A3A5C", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>✏️ 編集</button>
             </div>
             <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 16 }}>{selC.type}</div>
+
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: "#1A3A5C" }}>🏢 営業所</div>
+              <button onClick={() => { setNBranchName(""); setModal("addBranch"); }} style={{ padding: "4px 12px", borderRadius: 14, background: "#E07B39", color: "#fff", border: "none", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>＋ 追加</button>
+            </div>
+            {branches.filter(b => b.company_id === selC.id).length === 0 && <div style={{ color: "#9CA3AF", fontSize: 13, marginBottom: 14 }}>営業所が未登録です</div>}
+            {branches.filter(b => b.company_id === selC.id).map(b => (
+              <div key={b.id} style={{ background: "#F9FAFB", borderRadius: 8, padding: "9px 12px", marginBottom: 6, display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ flex: 1, fontWeight: 600, fontSize: 13, color: "#1F2937" }}>{b.name}</div>
+                <button onClick={() => { setEditBranch({ id: b.id, name: b.name }); setModal("editBranch"); }} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 13 }}>✏️</button>
+                <button onClick={() => setConf({ msg: `「${b.name}」\n\nこの操作は元に戻せません。\n削除しますか？`, onOk: () => { delBranch(b.id); setConf(null); } })} style={{ border: "none", background: "none", cursor: "pointer", color: "#DC2626", fontSize: 13 }}>🗑</button>
+              </div>
+            ))}
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, marginTop: 14 }}>
               <div style={{ fontWeight: 700, fontSize: 13, color: "#1A3A5C" }}>👤 担当者</div>
               <button onClick={() => setModal("addCt")} style={{ padding: "4px 12px", borderRadius: 14, background: "#E07B39", color: "#fff", border: "none", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>＋ 追加</button>
             </div>
             {(selC.contacts || []).length === 0 && <div style={{ color: "#9CA3AF", fontSize: 13, marginBottom: 14 }}>担当者が未登録です</div>}
-            {[...new Set((selC.contacts || []).map(ct => ct.role))].map(role => (
-              <div key={role} style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#6B7280", borderLeft: "3px solid #E07B39", paddingLeft: 7, marginBottom: 6 }}>{role}</div>
-                {(selC.contacts || []).filter(ct => ct.role === role).map(ct => (
-                  <div key={ct.id} onClick={() => setSelCt(ct)} style={{ background: "#F9FAFB", borderRadius: 8, padding: "10px 12px", marginBottom: 5, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#1A3A5C", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, color: "#fff", fontWeight: 800 }}>{ct.name.charAt(0)}</div>
-                    <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 13, color: "#1F2937" }}>{ct.name}</div><div style={{ fontSize: 11, color: "#9CA3AF" }}>{[ct.tel, ct.email].filter(Boolean).join(" · ") || "連絡先未登録"}</div></div>
-                    <span style={{ color: "#9CA3AF", fontSize: 14 }}>›</span>
-                  </div>
-                ))}
-              </div>
-            ))}
+            {(() => {
+              const hasBranches = branches.some(b => b.company_id === selC.id);
+              const groupKey = ct => (hasBranches ? (ct.branch || "(営業所未設定)") : ct.role);
+              return [...new Set((selC.contacts || []).map(groupKey))].map(g => (
+                <div key={g} style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#6B7280", borderLeft: "3px solid #E07B39", paddingLeft: 7, marginBottom: 6 }}>{hasBranches ? "🏢 " : ""}{g}</div>
+                  {(selC.contacts || []).filter(ct => groupKey(ct) === g).map(ct => (
+                    <div key={ct.id} onClick={() => setSelCt(ct)} style={{ background: "#F9FAFB", borderRadius: 8, padding: "10px 12px", marginBottom: 5, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#1A3A5C", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, color: "#fff", fontWeight: 800 }}>{ct.name.charAt(0)}</div>
+                      <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 13, color: "#1F2937" }}>{ct.name}</div><div style={{ fontSize: 11, color: "#9CA3AF" }}>{[ct.role, ct.tel, ct.email].filter(Boolean).join(" · ") || "連絡先未登録"}</div></div>
+                      <span style={{ color: "#9CA3AF", fontSize: 14 }}>›</span>
+                    </div>
+                  ))}
+                </div>
+              ));
+            })()}
             <div style={{ borderTop: "1px solid #F3F4F6", paddingTop: 14 }}>
               <div style={{ fontWeight: 700, fontSize: 13, color: "#1A3A5C", marginBottom: 8 }}>📋 関連案件</div>
               {getPF(selC.id).length === 0 && <div style={{ color: "#9CA3AF", fontSize: 13 }}>案件なし</div>}
@@ -124,6 +161,8 @@ export default function Companies({ pjs, cos, setCos, cust, isPC, pp, nav, rpOpe
       )}
       {modal === "editCo" && (<Modal title="取引先を編集" onClose={() => setModal(null)} onSave={() => { updateCo(selC.id, { name: editCoForm.name, branch: editCoForm.branch, type: editCoForm.type }); setModal(null); }}><Inp label="会社名 *" value={editCoForm.name} onChange={e => setEditCoForm({ ...editCoForm, name: e.target.value })} /><Inp label="支店" value={editCoForm.branch} onChange={e => setEditCoForm({ ...editCoForm, branch: e.target.value })} /><Sel label="種別" opts={COMPANY_TYPES} value={editCoForm.type} onChange={e => setEditCoForm({ ...editCoForm, type: e.target.value })} /></Modal>)}
       {modal === "addCo" && (<Modal title="新規取引先を追加" onClose={() => setModal(null)} onSave={saveCo}><Inp label="会社名 *" value={nCo.name} onChange={e => setNCo({ ...nCo, name: e.target.value })} placeholder="例: 山田工業" /><Inp label="支店" value={nCo.branch} onChange={e => setNCo({ ...nCo, branch: e.target.value })} /><Sel label="種別" opts={COMPANY_TYPES} value={nCo.type} onChange={e => setNCo({ ...nCo, type: e.target.value })} /></Modal>)}
+      {modal === "addBranch" && (<Modal title="営業所を追加" onClose={() => setModal(null)} onSave={addBranch}><Inp label="営業所名 *" value={nBranchName} onChange={e => setNBranchName(e.target.value)} placeholder="例: 相模原" /></Modal>)}
+      {modal === "editBranch" && editBranch && (<Modal title="営業所名を変更" onClose={() => setModal(null)} onSave={renameBranch}><Inp label="営業所名 *" value={editBranch.name} onChange={e => setEditBranch({ ...editBranch, name: e.target.value })} /></Modal>)}
       {modal === "addCt" && (<Modal title="担当者を追加" onClose={() => setModal(null)} onSave={saveCt}><Inp label="担当者名 *" value={nCt.name} onChange={e => setNCt({ ...nCt, name: e.target.value })} /><Sel label="役割" opts={CONTACT_ROLES} value={nCt.role} onChange={e => setNCt({ ...nCt, role: e.target.value })} /><Inp label="電話番号" value={nCt.tel} onChange={e => setNCt({ ...nCt, tel: e.target.value })} /><Inp label="メール" value={nCt.email} onChange={e => setNCt({ ...nCt, email: e.target.value })} /></Modal>)}
       {conf && <Confirm msg={conf.msg} onCancel={() => setConf(null)} onOk={conf.onOk} />}
     </div>
