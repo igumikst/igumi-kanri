@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabase";
 import { Hdr } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { fmt } from "../lib/constants";
-import { buildPriceIndex, matchLine, searchItems, similarity, aliasKey, normalizeText } from "../lib/priceMatch";
+import { buildPriceIndex, matchLine, matchLineSmart, searchItems, similarity, aliasKey, normalizeText, AUTO_MATCH_LEARN_SCORE } from "../lib/priceMatch";
 import { toBasePrice, lineAmount, roundYen, applyRate, MARKUP_BACK_RATE, CUSTOM_RATE_MIN, CUSTOM_RATE_MAX, MARKUP_CHOICE_OPTIONS, resolveMarkupChoice } from "../lib/quoteImport/markup";
 import { buildEstTree, flattenEstTree, reverseSiblingOrder } from "../lib/quoteImport/parseEst";
 import GroupTree, { BundleToolbar } from "../components/GroupTree";
@@ -673,6 +673,7 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
 const MATCH_BADGE = {
   exact: { text: "一致", color: "#065F46", bg: "#D1FAE5" },
   alias: { text: "別名辞書", color: "#065F46", bg: "#D1FAE5" },
+  auto: { text: "自動(類似)", color: "#5B21B6", bg: "#EDE9FE" },
   manual: { text: "手で選択", color: "#1E40AF", bg: "#DBEAFE" },
   skip: { text: "当てはめない", color: "#6B7280", bg: "#F3F4F6" },
   none: { text: "未当てはめ", color: "#92400E", bg: "#FEF3C7" },
@@ -682,6 +683,7 @@ function MatchCell({ l, index, costs, showCost = true, excluded = false, searchi
   if (l.summaryOnly) return <span style={{ fontSize: 11, color: "#9A3412", fontWeight: 700 }}>総括のみ(原価未入力)</span>;
   if (!index) return <span style={{ fontSize: 11, color: "#9CA3AF" }}>単価表を読み込み中...</span>;
   const b = MATCH_BADGE[l.matchStatus];
+  const badgeText = l.matchStatus === "auto" && l.score != null ? `自動(類似${Math.round(l.score * 100)}%)` : b.text;
   const options = [];
   if (l.item) options.push(l.item);
   if (l.auto.item && !options.some(o => o.id === l.auto.item.id)) options.push(l.auto.item);
@@ -694,7 +696,8 @@ function MatchCell({ l, index, costs, showCost = true, excluded = false, searchi
   return (
     <div>
       <div style={{ display: "flex", gap: 4, alignItems: "center", marginBottom: 3 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, color: b.color, background: b.bg, borderRadius: 4, padding: "1px 6px", whiteSpace: "nowrap" }}>{b.text}</span>
+        <span style={{ fontSize: 10, fontWeight: 700, color: b.color, background: b.bg, borderRadius: 4, padding: "1px 6px", whiteSpace: "nowrap" }}>{badgeText}</span>
+        {l.itemSetLabel && <span style={{ fontSize: 9, color: "#9CA3AF", whiteSpace: "nowrap" }}>単価セット: {l.itemSetLabel}</span>}
       </div>
       <div style={{ display: "flex", gap: 3, marginBottom: 3 }}>
         <select value={l.item?.id || ""} onChange={e => onPick(e.target.value || null)} style={{ ...cellInp, fontSize: 11, flex: 1, minWidth: 0 }}>
@@ -871,27 +874,41 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
     if (!price || !priceSetId) return null;
     return buildPriceIndex(price.items.filter(i => i.price_set_id === priceSetId), price.aliases);
   }, [price, priceSetId]);
+  // 選んでいる単価セットで見つからない・自動の対象にならない時に、他のセットも探すための全体索引
+  const allIndex = useMemo(() => (price ? buildPriceIndex(price.items, price.aliases) : null), [price]);
+  const setNameById = useMemo(() => new Map((price?.sets || []).map(s => [s.id, s.name])), [price]);
 
-  // 名称の頭の「N月N日」を外してから当てはめる(自社見積書Excelの取り込みと同じ)
+  // 名称の頭の「N月N日」を外してから当てはめる(自社見積書Excelの取り込みと同じ)。
+  // 選んでいる単価セットを優先し、見つからない時だけ他のセットも含めて探す
   const autoMatches = useMemo(() => {
     const out = {};
     if (!index) return out;
-    for (const l of leaves) out[l.key] = matchLine(index, l.name.replace(DATE_PREFIX_RE, ""), l.spec);
+    for (const l of leaves) {
+      const name = l.name.replace(DATE_PREFIX_RE, "");
+      let res = matchLineSmart(index, name, l.spec, l.priceA);
+      if (res.status === "none" && allIndex) {
+        const resAll = matchLineSmart(allIndex, name, l.spec, l.priceA);
+        if (resAll.status !== "none" || resAll.candidates.length) res = resAll;
+      }
+      out[l.key] = res;
+    }
     return out;
-  }, [index, leaves]);
+  }, [index, allIndex, leaves]);
 
   // 原価の当てはめ・粗利の計算は、明細(葉)だけを対象にする(小計行は子の積み上げなので対象外)
   const view = arrangedLeaves.map(l => {
     const auto = autoMatches[l.key] || { status: "none", item: null, candidates: [] };
     const picked = l.pickedItemId !== undefined;
-    const item = picked ? (l.pickedItemId ? index?.byId.get(l.pickedItemId) || null : null) : auto.item;
+    const item = picked ? (l.pickedItemId ? allIndex?.byId.get(l.pickedItemId) || null : null) : auto.item;
     const matchStatus = picked ? (item ? "manual" : "skip") : auto.status;
     const cost = item ? price?.costs[item.id] : null;
     const basePrice = applyRate(l.priceA, rate);
     const amount = lineAmount(l.qty, basePrice);
     const costPrice = l.costOverride !== undefined ? l.costOverride.price : (cost?.cost_price ?? null);
     const costConfirmed = l.costOverride !== undefined ? l.costOverride.confirmed : (!!cost?.cost_confirmed && costPrice != null);
-    return { ...l, auto, item, matchStatus, basePrice, amount, costPrice, costConfirmed };
+    const itemSetLabel = item && item.price_set_id !== priceSetId ? setNameById.get(item.price_set_id) : null;
+    const matchName = l.name.replace(DATE_PREFIX_RE, "");
+    return { ...l, auto, item, matchStatus, basePrice, amount, costPrice, costConfirmed, score: auto.score, itemSetLabel, matchName };
   });
   const viewByKey = useMemo(() => Object.fromEntries(view.map(v => [v.key, v])), [view]);
 
@@ -953,7 +970,9 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
       cost_price: l.costPrice, cost_confirmed: l.costConfirmed,
     }));
     const subFlagsBySortOrder = view.map((l, i) => [i, !!l.isSubcontracted]).filter(([, flag]) => flag).map(([i]) => i);
-    const pAliases = view.filter(l => l.matchStatus === "manual" && l.item).map(l => ({ alias: aliasKey(l.name, l.spec), price_item_id: l.item.id }));
+    // 別名辞書への保存: 手で選んだ行は必ず保存。自動(類似)で当てはめた行は、類似度0.85以上だけ保存する
+    const pAliases = view.filter(l => l.item && (l.matchStatus === "manual" || (l.matchStatus === "auto" && l.score >= AUTO_MATCH_LEARN_SCORE)))
+      .map(l => ({ alias: aliasKey(l.matchName, l.spec), price_item_id: l.item.id }));
 
     // 1) 元ファイル(EST)を Storage(非公開バケット)に保存。保存名は ID + 拡張子、元の名前は別に記録する
     const ext = (r.fileName.match(/\.([a-zA-Z0-9]+)$/)?.[1] || "est").toLowerCase();
@@ -1435,21 +1454,27 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
     if (!price || !priceSetId) return null;
     return buildPriceIndex(price.items.filter(i => i.price_set_id === priceSetId), price.aliases);
   }, [price, priceSetId]);
+  // 選んでいる単価セットで見つからない・自動の対象にならない時に、他のセットも探すための全体索引
+  const allIndex = useMemo(() => (price ? buildPriceIndex(price.items, price.aliases) : null), [price]);
+  const setNameById = useMemo(() => new Map((price?.sets || []).map(s => [s.id, s.name])), [price]);
 
-  // 名称の頭の「N月N日」を外してから当てはめる。名称が同じで単価が違う項目が複数あれば、
-  // ファイルの単価と同じ販売単価の項目を優先する(名称だけが一致し、単価が違う項目が複数あるケース)
+  // 名称の頭の「N月N日」を外してから当てはめる。名称+材質寸法が同じで単価が違う項目が複数あれば、
+  // ファイルの単価と同じ販売単価の項目を優先する(matchLineSmartが行う)。選んでいる単価セットを優先し、
+  // 見つからない時だけ他のセットも含めて探す
   const autoMatches = useMemo(() => {
     const out = {};
     if (!index) return out;
     for (const l of lines) {
       const strippedName = l.name.replace(DATE_PREFIX_RE, "");
-      const auto = matchLine(index, strippedName, l.spec);
-      const sameName = index.items.filter(it => normalizeText(it.name) === normalizeText(strippedName));
-      const priceMatch = sameName.length > 1 && l.price != null ? sameName.find(it => Number(it.sale_price) === Number(l.price)) : null;
-      out[l.key] = priceMatch ? { status: "exact", item: priceMatch, candidates: [] } : auto;
+      let res = matchLineSmart(index, strippedName, l.spec, l.price);
+      if (res.status === "none" && allIndex) {
+        const resAll = matchLineSmart(allIndex, strippedName, l.spec, l.price);
+        if (resAll.status !== "none" || resAll.candidates.length) res = resAll;
+      }
+      out[l.key] = res;
     }
     return out;
-  }, [index, lines]);
+  }, [index, allIndex, lines]);
 
   const fileTotal = d.linesTotal; // 100%の合計(ファイルの明細の合計)
   const customRateNum = Number(customRate);
@@ -1462,14 +1487,16 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
   const view = lines.map(l => {
     const auto = autoMatches[l.key] || { status: "none", item: null, candidates: [] };
     const picked = l.pickedItemId !== undefined;
-    const item = picked ? (l.pickedItemId ? index?.byId.get(l.pickedItemId) || null : null) : auto.item;
+    const item = picked ? (l.pickedItemId ? allIndex?.byId.get(l.pickedItemId) || null : null) : auto.item;
     const matchStatus = picked ? (item ? "manual" : "skip") : auto.status;
     const cost = item ? price?.costs[item.id] : null;
     const basePrice = applyRate(l.price, rate);
     const amount = lineAmount(l.qty, basePrice);
     const costPrice = l.costOverride !== undefined ? l.costOverride.price : (cost?.cost_price ?? null);
     const costConfirmed = l.costOverride !== undefined ? l.costOverride.confirmed : (!!cost?.cost_confirmed && costPrice != null);
-    return { ...l, auto, item, matchStatus, basePrice, amount, costPrice, costConfirmed };
+    const itemSetLabel = item && item.price_set_id !== priceSetId ? setNameById.get(item.price_set_id) : null;
+    const matchName = l.name.replace(DATE_PREFIX_RE, "");
+    return { ...l, auto, item, matchStatus, basePrice, amount, costPrice, costConfirmed, score: auto.score, itemSetLabel, matchName };
   });
 
   const total = view.reduce((s, l) => s + l.amount, 0);
@@ -1533,7 +1560,9 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
       cost_price: l.costPrice, cost_confirmed: l.costConfirmed,
     }));
     const subFlagsBySortOrder = view.map((l, i) => [i, !!l.isSubcontracted]).filter(([, flag]) => flag).map(([i]) => i);
-    const pAliases = view.filter(l => l.matchStatus === "manual" && l.item).map(l => ({ alias: aliasKey(l.name, l.spec), price_item_id: l.item.id }));
+    // 別名辞書への保存: 手で選んだ行は必ず保存。自動(類似)で当てはめた行は、類似度0.85以上だけ保存する
+    const pAliases = view.filter(l => l.item && (l.matchStatus === "manual" || (l.matchStatus === "auto" && l.score >= AUTO_MATCH_LEARN_SCORE)))
+      .map(l => ({ alias: aliasKey(l.matchName, l.spec), price_item_id: l.item.id }));
 
     // 1) 元ファイルを Storage(非公開バケット)に保存。保存名は ID + 拡張子、元の名前は別に記録する
     const ext = (r.fileName.match(/\.([a-zA-Z0-9]+)$/)?.[1] || "xlsx").toLowerCase();
