@@ -6,6 +6,7 @@ import { fmt } from "../lib/constants";
 import { buildPriceIndex, matchLine, searchItems, similarity, aliasKey, normalizeText } from "../lib/priceMatch";
 import { toBasePrice, lineAmount, roundYen, MARKUP_BACK_RATE } from "../lib/quoteImport/markup";
 import { buildEstTree, flattenEstTree, reverseSiblingOrder } from "../lib/quoteImport/parseEst";
+import GroupTree, { BundleToolbar } from "../components/GroupTree";
 import { QUOTE_FILE_BUCKET, FILE_TYPES } from "../lib/quoteFiles";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -161,6 +162,13 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
   const [searchText, setSearchText] = useState("");
   const [registering, setRegistering] = useState(false);
   const [result, setResult] = useState(null); // { ok, message, projectId, quoteNo }
+  const [selectedKeys, setSelectedKeys] = useState(new Set());
+
+  // ドラッグ・ボタンでの並べ替え・グループ分け(ステップ2)。group_nameを直接書き換える
+  const handleArrangeConclu = newLines => setLines(prev => {
+    const prevByKey = new Map(prev.map(l => [l.key, l]));
+    return newLines.map(nl => ({ ...prevByKey.get(nl.key), groupName: nl.group_name }));
+  });
 
   // 単価セットの初期値: 工事見積用
   const defaultSetId = price?.sets?.length ? (price.sets.find(s => s.code === "construction") || price.sets[0]).id : "";
@@ -440,11 +448,14 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
             <div style={sectionTitle}>明細({lines.length}行)</div>
             {unmatchedCount > 0 && <div style={{ fontSize: 11, color: "#B45309", fontWeight: 700 }}>単価表に当てはまらない行: {unmatchedCount}行(原価未入力)</div>}
           </div>
+          <div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 6 }}>⠿をドラッグ、または↑↓・📂(このグループに移す)で並べ替え・グループ分けができます</div>
+          <BundleToolbar lines={view.map(l => ({ ...l, group_name: l.groupName }))} onChange={handleArrangeConclu} selectedKeys={selectedKeys} setSelectedKeys={setSelectedKeys} />
           <div style={{ overflowX: "auto", marginBottom: 6 }}>
-            <table style={{ width: "100%", minWidth: 1180, borderCollapse: "collapse" }}>
+            <table style={{ width: "100%", minWidth: 1100, borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "2px solid #F3F4F6" }}>
-                  <th style={th}>グループ</th><th style={th}>名称</th><th style={th}>材質・寸法</th>
+                  <th style={th}></th>
+                  <th style={th}>名称</th><th style={th}>材質・寸法</th>
                   <th style={th}>数量</th><th style={th}>単位</th>
                   <th style={th}>単価(ファイル)</th>
                   {markup === "after" && <th style={th}>単価(載せる前)</th>}
@@ -455,32 +466,40 @@ function ImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegiste
                 </tr>
               </thead>
               <tbody>
-                {view.map(l => (
-                  <tr key={l.key} style={{ borderBottom: "1px solid #F3F4F6", background: l.summaryOnly ? "#FFF7ED" : !l.item ? "#FFFBEB" : "transparent" }}>
-                    <td style={{ ...td, width: 110 }}>
-                      <input value={l.groupName} onChange={e => updateLine(l.key, { groupName: e.target.value })} style={{ ...cellInp, fontSize: 11, color: l.summaryOnly ? "#9A3412" : "#6B7280", fontWeight: l.summaryOnly ? 700 : 400 }} />
-                    </td>
-                    <td style={{ ...td, width: 150 }}><input value={l.name} onChange={e => updateLine(l.key, { name: e.target.value })} style={cellInp} /></td>
-                    <td style={{ ...td, width: 170 }}><input value={l.spec} onChange={e => updateLine(l.key, { spec: e.target.value })} style={{ ...cellInp, fontSize: 11 }} /></td>
-                    <td style={{ ...td, width: 60 }}><input type="number" value={l.qty} onChange={e => updateLine(l.key, { qty: e.target.value })} style={{ ...cellInp, textAlign: "right" }} /></td>
-                    <td style={{ ...td, width: 46 }}><input value={l.unit} onChange={e => updateLine(l.key, { unit: e.target.value })} style={cellInp} /></td>
-                    <td style={{ ...td, width: 90 }}><input type="number" value={l.price} onChange={e => updateLine(l.key, { price: e.target.value })} style={{ ...cellInp, textAlign: "right" }} /></td>
-                    {markup === "after" && <td style={{ ...td, textAlign: "right", width: 80 }}>{num(l.basePrice)}</td>}
-                    <td style={{ ...td, textAlign: "right", fontWeight: 700, color: "#E07B39", width: 80 }}>{num(l.amount)}</td>
-                    <td style={{ ...td, width: 110 }}><input value={l.note} onChange={e => updateLine(l.key, { note: e.target.value })} style={{ ...cellInp, fontSize: 11 }} /></td>
-                    <td style={{ ...td, width: 230 }}>
-                      <MatchCell l={l} index={index} costs={price?.costs || {}}
-                        searching={searchKey === l.key} searchText={searchText}
-                        onSearchOpen={() => { setSearchKey(searchKey === l.key ? null : l.key); setSearchText(""); }}
-                        onSearchText={setSearchText}
-                        onPick={id => { updateLine(l.key, { pickedItemId: id, costOverride: undefined }); setSearchKey(null); }}
-                        onCostChange={v => updateLine(l.key, { costOverride: v === "" ? { price: null, confirmed: false } : { price: Number(v), confirmed: true } })} />
-                    </td>
-                    <td style={{ ...td, width: 30 }}>
-                      <button onClick={() => removeLine(l.key)} title="この行を削除" style={{ border: "none", background: "none", cursor: "pointer", color: "#DC2626", fontSize: 13 }}>🗑</button>
-                    </td>
-                  </tr>
-                ))}
+                <GroupTree
+                  lines={view.map(l => ({ ...l, group_name: l.groupName }))}
+                  onChange={handleArrangeConclu}
+                  amountOf={l => l.amount}
+                  formatAmount={yen}
+                  columnCount={markup === "after" ? 8 : 7}
+                  rowStyle={l => (l.summaryOnly ? "#FFF7ED" : !l.item ? "#FFFBEB" : "transparent")}
+                  selectedKeys={selectedKeys}
+                  onToggleSelect={key => setSelectedKeys(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; })}
+                  onDeleteLeaf={removeLine}
+                  renderLeafCells={l => {
+                    const cells = [
+                      <td key="name" style={{ ...td, width: 150 }}><input value={l.name} onChange={e => updateLine(l.key, { name: e.target.value })} style={cellInp} /></td>,
+                      <td key="spec" style={{ ...td, width: 170 }}><input value={l.spec} onChange={e => updateLine(l.key, { spec: e.target.value })} style={{ ...cellInp, fontSize: 11 }} /></td>,
+                      <td key="qty" style={{ ...td, width: 60 }}><input type="number" value={l.qty} onChange={e => updateLine(l.key, { qty: e.target.value })} style={{ ...cellInp, textAlign: "right" }} /></td>,
+                      <td key="unit" style={{ ...td, width: 46 }}><input value={l.unit} onChange={e => updateLine(l.key, { unit: e.target.value })} style={cellInp} /></td>,
+                      <td key="price" style={{ ...td, width: 90 }}><input type="number" value={l.price} onChange={e => updateLine(l.key, { price: e.target.value })} style={{ ...cellInp, textAlign: "right" }} /></td>,
+                    ];
+                    if (markup === "after") cells.push(<td key="basePrice" style={{ ...td, textAlign: "right", width: 80 }}>{num(l.basePrice)}</td>);
+                    cells.push(
+                      <td key="amount" style={{ ...td, textAlign: "right", fontWeight: 700, color: "#E07B39", width: 80 }}>{num(l.amount)}</td>,
+                      <td key="note" style={{ ...td, width: 110 }}><input value={l.note} onChange={e => updateLine(l.key, { note: e.target.value })} style={{ ...cellInp, fontSize: 11 }} /></td>,
+                      <td key="cost" style={{ ...td, width: 230 }}>
+                        <MatchCell l={l} index={index} costs={price?.costs || {}}
+                          searching={searchKey === l.key} searchText={searchText}
+                          onSearchOpen={() => { setSearchKey(searchKey === l.key ? null : l.key); setSearchText(""); }}
+                          onSearchText={setSearchText}
+                          onPick={id => { updateLine(l.key, { pickedItemId: id, costOverride: undefined }); setSearchKey(null); }}
+                          onCostChange={v => updateLine(l.key, { costOverride: v === "" ? { price: null, confirmed: false } : { price: Number(v), confirmed: true } })} />
+                      </td>,
+                    );
+                    return cells;
+                  }}
+                />
               </tbody>
             </table>
           </div>
@@ -624,6 +643,8 @@ function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegi
   const [searchText, setSearchText] = useState("");
   const [registering, setRegistering] = useState(false);
   const [result, setResult] = useState(null); // { ok, message, projectId, quoteNo }
+  const [arrangedMeta, setArrangedMeta] = useState([]); // [{key, group_name}] 手でドラッグ・移動した並び・グループ(ステップ2)
+  const [selectedKeys, setSelectedKeys] = useState(new Set());
 
   const updateLine = (key, patch) => setLines(prev => prev.map(l => (l.key === key ? { ...l, ...patch } : l)));
   const toggleGroup = key => setLines(prev => prev.map(l => {
@@ -640,6 +661,17 @@ function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegi
   }, [lines]);
   const rows = useMemo(() => flattenForDisplay(tree.top), [tree]);
   const leaves = useMemo(() => flattenEstTree(tree.top), [tree]);
+
+  // 手で動かした並び・グループ(arrangedMeta)を、最新のleaves(小計/明細の切り替えや
+  // 項目の編集で変わる)に重ね合わせる。無くなった明細は外し、新しい明細は末尾に追加する
+  const arrangedLeaves = useMemo(() => {
+    const metaByKey = new Map(arrangedMeta.map(m => [m.key, m]));
+    const keptOrder = arrangedMeta.filter(m => leaves.some(l => l.key === m.key));
+    const newOnes = leaves.filter(l => !metaByKey.has(l.key)).map(l => ({ key: l.key, group_name: l.groupPath || "" }));
+    const leafByKey = new Map(leaves.map(l => [l.key, l]));
+    return [...keptOrder, ...newOnes].map(m => ({ ...leafByKey.get(m.key), group_name: m.group_name }));
+  }, [leaves, arrangedMeta]);
+  const handleArrange = newLines => setArrangedMeta(newLines.map(l => ({ key: l.key, group_name: l.group_name || "" })));
 
   const topSum100 = tree.top.reduce((s, n) => s + (Number(n.amountA) || 0), 0);
   const fileTotal100 = d.cover.totalExTax;
@@ -665,7 +697,7 @@ function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegi
   }, [index, leaves]);
 
   // 原価の当てはめ・粗利の計算は、明細(葉)だけを対象にする(小計行は子の積み上げなので対象外)
-  const view = leaves.map(l => {
+  const view = arrangedLeaves.map(l => {
     const auto = autoMatches[l.key] || { status: "none", item: null, candidates: [] };
     const picked = l.pickedItemId !== undefined;
     const item = picked ? (l.pickedItemId ? index?.byId.get(l.pickedItemId) || null : null) : auto.item;
@@ -720,7 +752,7 @@ function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegi
     const pItems = view.map(l => ({
       price_item_id: l.item?.id ?? null,
       line_type: l.item ? "item" : "adjust",
-      group_name: l.groupPath || "",
+      group_name: l.group_name || "",
       name: l.name, spec: l.spec || "", unit: l.unit || "",
       qty: Number(l.qty) || 0, sale_price: l.basePrice,
       note: l.note || null,
@@ -950,6 +982,54 @@ function EstImportForm({ r, price, pjs, cos, salesReps, defaultProjectId, onRegi
         </table>
       </div>
       <div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 12 }}>オレンジの行 = 小計(グループ)。ピンクの行 = 小計にしたが、子の金額の合計と一致しない(ベストエフォートで組み立て)</div>
+
+      {/* ③ 並び替え・グループ分け(ステップ2)。②までで組み立てた明細を、ドラッグや
+          ボタンで並べ替えたり、別のグループに移したりできる。原価の当てはめもここで行う */}
+      <div style={{ marginBottom: 6 }}>
+        <div style={sectionTitle}>③ 並び替え・グループ分け・原価の当てはめ</div>
+        <div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 6 }}>⠿をドラッグ、または↑↓・📂(このグループに移す)で並べ替え・グループ分けができます</div>
+      </div>
+      <BundleToolbar lines={view} onChange={handleArrange} selectedKeys={selectedKeys} setSelectedKeys={setSelectedKeys} />
+      {unmatchedCount > 0 && <div style={{ fontSize: 11, color: "#B45309", fontWeight: 700, marginBottom: 6 }}>単価表に当てはまらない行: {unmatchedCount}行(原価未入力)</div>}
+      <div style={{ overflowX: "auto", marginBottom: 12 }}>
+        <table style={{ width: "100%", minWidth: 900, borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ borderBottom: "2px solid #F3F4F6" }}>
+              <th style={th}></th>
+              <th style={th}>名称</th><th style={th}>材質・寸法</th>
+              <th style={th}>数量</th>
+              <th style={{ ...th, textAlign: "right" }}>金額</th>
+              <th style={th}>単価表の項目(原価)</th>
+              <th style={th}></th>
+            </tr>
+          </thead>
+          <tbody>
+            <GroupTree
+              lines={view}
+              onChange={handleArrange}
+              amountOf={l => l.amount}
+              formatAmount={yen}
+              columnCount={5}
+              selectedKeys={selectedKeys}
+              onToggleSelect={key => setSelectedKeys(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; })}
+              renderLeafCells={l => [
+                <td key="name" style={{ ...td, width: 150 }}>{l.name}</td>,
+                <td key="spec" style={{ ...td, width: 150, fontSize: 11 }}>{l.spec}</td>,
+                <td key="qty" style={{ ...td, width: 50, textAlign: "right" }}>{num(l.qty)}{l.unit}</td>,
+                <td key="amount" style={{ ...td, textAlign: "right", fontWeight: 700, color: "#E07B39", width: 80 }}>{num(l.amount)}</td>,
+                <td key="cost" style={{ ...td, width: 220 }}>
+                  <MatchCell l={l} index={index} costs={price?.costs || {}}
+                    searching={searchKey === l.key} searchText={searchText}
+                    onSearchOpen={() => { setSearchKey(searchKey === l.key ? null : l.key); setSearchText(""); }}
+                    onSearchText={setSearchText}
+                    onPick={id => { updateLine(l.key, { pickedItemId: id, costOverride: undefined }); setSearchKey(null); }}
+                    onCostChange={val => updateLine(l.key, { costOverride: val === "" ? { price: null, confirmed: false } : { price: Number(val), confirmed: true } })} />
+                </td>,
+              ]}
+            />
+          </tbody>
+        </table>
+      </div>
 
       {/* 合計・粗利 */}
       <div style={{ background: "#F9FAFB", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
