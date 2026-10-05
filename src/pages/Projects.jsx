@@ -10,9 +10,17 @@ import FileDropZone from "../components/FileDropZone";
 import { usePreventWindowFileDrop } from "../lib/useFileDropGuard";
 import { REPORT_FILE_BUCKET, REPORT_FILE_TYPES, REPORT_FILE_MAX_SIZE, reportFileExt, openReportFile } from "../lib/reportFiles";
 
-export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes, setSubmittedQuotes, setPjs, cos, setCos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, setQuoteProjectId, setQuoteImportCtx, branches, setBranches, salesReps, setSalesReps }) {
+export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes, setSubmittedQuotes, setPjs, cos, setCos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, setQuoteProjectId, setQuoteImportCtx, branches, setBranches, salesReps, setSalesReps, openProjectId }) {
   usePreventWindowFileDrop();
   const [selP, setSelP] = useState(null);
+
+  // 他の画面(見積の取り込みなど)から、特定の案件の詳細を開いた状態でこの画面に入る
+  const [handledOpenProjectId, setHandledOpenProjectId] = useState(null);
+  if (openProjectId && openProjectId !== handledOpenProjectId) {
+    setHandledOpenProjectId(openProjectId);
+    const p = pjs.find(x => x.id === openProjectId);
+    if (p) setSelP(p);
+  }
   const [modal, setModal] = useState(null);
   const [fltS, setFltS] = useState("すべて");
   const [fltInCharge, setFltInCharge] = useState("すべて");

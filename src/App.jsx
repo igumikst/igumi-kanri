@@ -50,6 +50,7 @@ export default function App() {
   const [submittedQuotes, setSubmittedQuotes] = useState([]);
   const [quoteProjectId, setQuoteProjectId] = useState(null);
   const [quoteImportCtx, setQuoteImportCtx] = useState(null); // { from: 戻り先のページ, projectId: 追加先の案件 }
+  const [openProjectId, setOpenProjectId] = useState(null); // 他の画面から、この案件の詳細を開いた状態でProjects画面に入るためのid
   const [cust, setCust] = useState(DEFAULT_CUST);
   const [ec, setEc] = useState({ ...DEFAULT_CUST });
   const [tileConf, setTileConf] = useState(DEFAULT_TILE_CONF);
@@ -195,9 +196,9 @@ export default function App() {
     />
   );
   if (page === "dashboard") return <Dashboard {...commonProps} />;
-  if (page === "projects") return <Projects {...commonProps} setPjs={setPjs} setCos={setCos} setQuoteProjectId={setQuoteProjectId} setQuoteImportCtx={setQuoteImportCtx} />;
+  if (page === "projects") return <Projects {...commonProps} setPjs={setPjs} setCos={setCos} setQuoteProjectId={setQuoteProjectId} setQuoteImportCtx={setQuoteImportCtx} openProjectId={openProjectId} />;
   if (page === "quotes") return <Quotes {...quoteProps} />;
-  if (page === "quoteImport") return <QuoteImport {...commonProps} setPjs={setPjs} setCos={setCos} setQuoteProjectId={setQuoteProjectId} quoteImportCtx={quoteImportCtx} />;
+  if (page === "quoteImport") return <QuoteImport {...commonProps} setPjs={setPjs} setCos={setCos} setQuoteProjectId={setQuoteProjectId} quoteImportCtx={quoteImportCtx} setOpenProjectId={setOpenProjectId} />;
   if (page === "priceadmin") return <PriceAdmin {...commonProps} />;
   if (page === "companies") return <Companies {...commonProps} setCos={setCos} />;
   if (page === "tasks") return <Tasks {...commonProps} setTks={setTks} />;

@@ -18,6 +18,14 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ACCEPT_RE = /\.(xls|xlsx|est)$/i;
 const EST_RE = /\.est$/i;
 
+// 案件名・見積タイトルの自動生成(ファイルから読み取った工事名称)の語尾の「費」を外す。
+// 例: 「漏水調査費」→「漏水調査」。「経費」のように2文字以下になる場合は、別の単語の
+// 可能性が高いため外さない(「費用」は語尾が「用」なのでそもそも対象外)
+const stripFeeSuffix = name => {
+  if (typeof name !== "string") return name;
+  return (name.length >= 3 && name.endsWith("費")) ? name.slice(0, -1) : name;
+};
+
 // 見積の状態は、画面上は「発注前」「完工済」の2つだけ(発注前=submitted / 完工済=won)
 const QUOTE_STATUS = [
   { key: "submitted", label: "発注前" },
@@ -59,7 +67,7 @@ async function applySubcontractorFollowUps({ quoteId, subFlagsBySortOrder, subCo
   }
 }
 
-export default function QuoteImport({ pjs, submittedQuotes, wonQuotes, setPjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteImportCtx, setQuoteProjectId }) {
+export default function QuoteImport({ pjs, submittedQuotes, wonQuotes, setPjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteImportCtx, setQuoteProjectId, setOpenProjectId }) {
   usePreventWindowFileDrop();
   const pending = tks.filter(t => !t.done);
   const [results, setResults] = useState([]);
@@ -154,6 +162,7 @@ export default function QuoteImport({ pjs, submittedQuotes, wonQuotes, setPjs, c
             defaultProjectId={quoteImportCtx?.projectId || ""}
             onRegistered={addProjectToState}
             onOpenQuote={projectId => { setQuoteProjectId(projectId); nav("quotes"); }}
+            onOpenProject={projectId => { setOpenProjectId(projectId); nav("projects"); }}
             onRemove={() => setResults(prev => prev.filter(x => x.key !== r.key))} />
         ))}
       </div>
@@ -161,7 +170,7 @@ export default function QuoteImport({ pjs, submittedQuotes, wonQuotes, setPjs, c
   );
 }
 
-function FileCard({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, defaultProjectId, onRegistered, onOpenQuote, onRemove }) {
+function FileCard({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
   if (r.error) {
     return (
       <div style={{ ...card, borderLeft: "4px solid #DC2626" }}>
@@ -170,9 +179,9 @@ function FileCard({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branche
       </div>
     );
   }
-  if (r.kind === "est") return <EstImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onRemove={onRemove} />;
-  if (r.kind === "selfquote") return <SelfQuoteImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onRemove={onRemove} />;
-  return <ImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onRemove={onRemove} />;
+  if (r.kind === "est") return <EstImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onOpenProject={onOpenProject} onRemove={onRemove} />;
+  if (r.kind === "selfquote") return <SelfQuoteImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onOpenProject={onOpenProject} onRemove={onRemove} />;
+  return <ImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onOpenProject={onOpenProject} onRemove={onRemove} />;
 }
 
 const CardHead = ({ fileName, onRemove, locked }) => (
@@ -184,16 +193,17 @@ const CardHead = ({ fileName, onRemove, locked }) => (
 
 let lineSeq = 0;
 
-function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, defaultProjectId, onRegistered, onOpenQuote, onRemove }) {
+function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
   const d = r.data;
-  const [title, setTitle] = useState(d.cover.title || "");
+  const initialTitle = stripFeeSuffix(d.cover.title || "");
+  const [title, setTitle] = useState(initialTitle);
   const [issuedDate, setIssuedDate] = useState(d.cover.issuedDate || "");
   const [status, setStatus] = useState("submitted");
   const [markup, setMarkup] = useState(null); // "before" | "after"(必須)
   const [pickedSetId, setPriceSetId] = useState("");
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
-  const [np, setNp] = useState({ name: d.cover.title || "", clientId: "", branchId: "", salesRepId: "", inCharge: "", respondedAt: todayStr(), constructionType: "自社のみ" });
+  const [np, setNp] = useState({ name: initialTitle, clientId: "", branchId: "", salesRepId: "", inCharge: "", respondedAt: todayStr(), constructionType: "自社のみ" });
   const [lines, setLines] = useState(() => d.lines.map(l => ({
     key: "il" + (++lineSeq), groupName: l.groupName, name: l.name, spec: l.spec, qty: l.qty ?? 0, unit: l.unit,
     price: l.price ?? 0, note: l.note, summaryOnly: l.summaryOnly, nameFromSpec: l.nameFromSpec, fileAmount: l.amount,
@@ -362,7 +372,10 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
           <div style={{ fontSize: 13, color: "#065F46", marginBottom: 4 }}>✅ 元ファイルの保管: 保存しました(案件の見積一覧から開けます)</div>
           <div style={{ fontSize: 13, color: "#065F46", marginBottom: 10 }}>✅ 案件・見積・明細・原価: 登録しました(案件「{result.projectName}」/ 見積 No.{result.quoteNo})</div>
           <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 10 }}>案件の受注金額・粗利は変わっていません。反映するには、見積一覧で「採用にする」を押してください。</div>
-          <button onClick={() => onOpenQuote(result.projectId)} style={{ width: "100%", padding: "10px 0", background: "#EEF2FF", color: "#3730A3", border: "1.5px solid #C7D2FE", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>📝 見積一覧を開く →</button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => onOpenProject(result.projectId)} style={{ flex: 1, padding: "10px 0", background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>🏗️ この案件を開く →</button>
+            <button onClick={() => onOpenQuote(result.projectId)} style={{ flex: 1, padding: "10px 0", background: "#EEF2FF", color: "#3730A3", border: "1.5px solid #C7D2FE", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>📝 見積一覧を開く →</button>
+          </div>
         </div>
       ) : (
         <>
@@ -780,11 +793,12 @@ function resolveDefaultMarkup({ clientId, branchId, cos, branches }) {
 }
 
 // ESTファイル(見積ソフトのバイナリ形式)の確認画面。ステップ3: 登録・原価の当てはめ・粗利の計算まで行う
-function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, defaultProjectId, onRegistered, onOpenQuote, onRemove }) {
+function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
   const d = r.data;
   const [lines, setLines] = useState(() => d.lines.map(l => ({ ...l, pickedItemId: undefined, costOverride: undefined, isSubcontracted: false })));
   // 工事名称。初期値はファイル内で見つかった工事名称(見つからなければファイル名)。確認画面で直せる
-  const [title, setTitle] = useState(d.cover.title || "");
+  const initialTitle = stripFeeSuffix(d.cover.title || "");
+  const [title, setTitle] = useState(initialTitle);
   // rateChoice: "none"(1.0) | "back"(×0.925) | "0.9"(×0.9) | "custom"(入力した掛け率) ※必須。
   // 手で触るまでは、取引先・営業所の「掛け率の初期値」をそのまま使う(manualの状態には入れない)
   const [manualRateChoice, setManualRateChoice] = useState(null);
@@ -797,7 +811,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
   const [pickedSetId, setPriceSetId] = useState("");
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
-  const [np, setNp] = useState({ name: d.cover.title || "", clientId: "", branchId: "", salesRepId: "", inCharge: "", respondedAt: todayStr(), constructionType: "自社のみ" });
+  const [np, setNp] = useState({ name: initialTitle, clientId: "", branchId: "", salesRepId: "", inCharge: "", respondedAt: todayStr(), constructionType: "自社のみ" });
   const [searchKey, setSearchKey] = useState(null);
   const [searchText, setSearchText] = useState("");
   const [registering, setRegistering] = useState(false);
@@ -1025,7 +1039,10 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
           <div style={{ fontSize: 13, color: "#065F46", marginBottom: 4 }}>✅ 元ファイルの保管: 保存しました(案件の見積一覧から開けます)</div>
           <div style={{ fontSize: 13, color: "#065F46", marginBottom: 10 }}>✅ 案件・見積・明細・原価: 登録しました(案件「{result.projectName}」/ 見積 No.{result.quoteNo})</div>
           <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 10 }}>案件の受注金額・粗利は変わっていません。反映するには、見積一覧で「採用にする」を押してください。</div>
-          <button onClick={() => onOpenQuote(result.projectId)} style={{ width: "100%", padding: "10px 0", background: "#EEF2FF", color: "#3730A3", border: "1.5px solid #C7D2FE", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>📝 見積一覧を開く →</button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => onOpenProject(result.projectId)} style={{ flex: 1, padding: "10px 0", background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>🏗️ この案件を開く →</button>
+            <button onClick={() => onOpenQuote(result.projectId)} style={{ flex: 1, padding: "10px 0", background: "#EEF2FF", color: "#3730A3", border: "1.5px solid #C7D2FE", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>📝 見積一覧を開く →</button>
+          </div>
         </div>
       ) : (
       <>
@@ -1404,9 +1421,10 @@ const DATE_PREFIX_RE = /^\d{1,2}月\d{1,2}日/;
 
 // Excel(.xls/.xlsx)で、シート名に「大項目」と「明細」がある形式(コンクル由来の自社見積書)の確認画面。
 // ESTの確認画面と同じ作り(元請が絡むかの4択・単価表への当てはめ・原価の手入力・並び替え・登録)にする
-function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, defaultProjectId, onRegistered, onOpenQuote, onRemove }) {
+function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
   const d = r.data;
-  const [title, setTitle] = useState(d.cover.title || "");
+  const initialTitle = stripFeeSuffix(d.cover.title || "");
+  const [title, setTitle] = useState(initialTitle);
   const [issuedDate, setIssuedDate] = useState(d.cover.issuedDate || "");
   const [status, setStatus] = useState("submitted");
   // rateChoice: "none"(1.0) | "back"(×0.925) | "0.9"(×0.9) | "custom"(入力した掛け率) ※必須。
@@ -1417,7 +1435,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
   const [pickedSetId, setPriceSetId] = useState("");
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
-  const [np, setNp] = useState({ name: d.cover.title || "", clientId: "", branchId: "", salesRepId: "", inCharge: "", respondedAt: todayStr(), constructionType: "自社のみ" });
+  const [np, setNp] = useState({ name: initialTitle, clientId: "", branchId: "", salesRepId: "", inCharge: "", respondedAt: todayStr(), constructionType: "自社のみ" });
   const [lines, setLines] = useState(() => d.lines.map(l => ({
     key: "il" + (++lineSeq), groupName: l.groupName, name: l.name, spec: l.spec, qty: l.qty ?? 0, unit: l.unit,
     price: l.price ?? 0, note: l.note, summaryOnly: false, nameFromSpec: false, fileAmount: l.amount,
@@ -1622,7 +1640,10 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
           <div style={{ fontSize: 13, color: "#065F46", marginBottom: 4 }}>✅ 元ファイルの保管: 保存しました(案件の見積一覧から開けます)</div>
           <div style={{ fontSize: 13, color: "#065F46", marginBottom: 10 }}>✅ 案件・見積・明細・原価: 登録しました(案件「{result.projectName}」/ 見積 No.{result.quoteNo})</div>
           <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 10 }}>案件の受注金額・粗利は変わっていません。反映するには、見積一覧で「採用にする」を押してください。</div>
-          <button onClick={() => onOpenQuote(result.projectId)} style={{ width: "100%", padding: "10px 0", background: "#EEF2FF", color: "#3730A3", border: "1.5px solid #C7D2FE", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>📝 見積一覧を開く →</button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => onOpenProject(result.projectId)} style={{ flex: 1, padding: "10px 0", background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>🏗️ この案件を開く →</button>
+            <button onClick={() => onOpenQuote(result.projectId)} style={{ flex: 1, padding: "10px 0", background: "#EEF2FF", color: "#3730A3", border: "1.5px solid #C7D2FE", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>📝 見積一覧を開く →</button>
+          </div>
         </div>
       ) : (
         <>
