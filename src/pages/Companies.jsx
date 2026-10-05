@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { COMPANY_TYPES, CONTACT_ROLES, fmt } from "../lib/constants";
-import { Badge, Inp, Sel, Modal, Hdr, Confirm } from "../components/UI";
+import { Inp, Sel, Modal, Hdr, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { MARKUP_CHOICE_OPTIONS, CUSTOM_RATE_MIN, CUSTOM_RATE_MAX, resolveMarkupChoice } from "../lib/quoteImport/markup";
 
@@ -44,7 +44,7 @@ function MarkupDefaultEditor({ value, onSave, unsetLabel }) {
   );
 }
 
-export default function Companies({ pjs, wonQuotes, cos, setCos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, branches, setBranches }) {
+export default function Companies({ pjs, submittedQuotes, wonQuotes, cos, setCos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, branches, setBranches }) {
   const [selC, setSelC] = useState(null);
   const [selCt, setSelCt] = useState(null);
   const [modal, setModal] = useState(null);
@@ -59,6 +59,9 @@ export default function Companies({ pjs, wonQuotes, cos, setCos, cust, isPC, pp,
 
   const pending = tks.filter(t => !t.done);
   const getPF = cid => pjs.filter(p => p.clientId === cid || (p.subIds || []).includes(cid));
+  // 発注済み/未発注は見積の状態だけで判断する(案件のstatusは使わない。第8弾テーマ3)
+  const wonProjectIds = new Set((wonQuotes || []).map(q => q.project_id));
+  const submittedProjectIds = new Set((submittedQuotes || []).map(q => q.project_id));
   const filtC = cos.filter(c => { if (fltT !== "すべて" && c.type !== fltT) return false; if (schC && !c.name.includes(schC)) return false; return true; });
 
   const saveCo = async () => {
@@ -113,8 +116,8 @@ export default function Companies({ pjs, wonQuotes, cos, setCos, cust, isPC, pp,
 
   return (
     <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
-      {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="companies" nav={nav} setModal={() => {}} setEc={() => {}} SB_W={SB_W} />}
-      {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} wonQuotes={wonQuotes} />}
+      {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="companies" nav={nav} setModal={() => {}} setEc={() => {}} SB_W={SB_W} submittedQuotes={submittedQuotes} />}
+      {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} wonQuotes={wonQuotes} submittedQuotes={submittedQuotes} />}
       {(cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
 
       <Hdr title={selCt ? selCt.name : selC ? selC.name : "🏢 取引先・協力業者"}
@@ -189,7 +192,11 @@ export default function Companies({ pjs, wonQuotes, cos, setCos, cust, isPC, pp,
             <div style={{ borderTop: "1px solid #F3F4F6", paddingTop: 14 }}>
               <div style={{ fontWeight: 700, fontSize: 13, color: "#1A3A5C", marginBottom: 8 }}>📋 関連案件</div>
               {getPF(selC.id).length === 0 && <div style={{ color: "#9CA3AF", fontSize: 13 }}>案件なし</div>}
-              {getPF(selC.id).map(p => (<div key={p.id} style={{ background: "#F0F4F8", borderRadius: 8, padding: "9px 12px", marginBottom: 6 }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div style={{ fontWeight: 600, fontSize: 13, color: "#1F2937" }}>{p.name}</div><Badge s={p.status} /></div><div style={{ fontSize: 12, color: "#E07B39", fontWeight: 700, marginTop: 2 }}>{fmt(p.amount)}</div></div>))}
+              {getPF(selC.id).map(p => {
+                const won = wonProjectIds.has(p.id);
+                const label = won ? "発注済み" : submittedProjectIds.has(p.id) ? "未発注" : "—";
+                return (<div key={p.id} style={{ background: "#F0F4F8", borderRadius: 8, padding: "9px 12px", marginBottom: 6 }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div style={{ fontWeight: 600, fontSize: 13, color: "#1F2937" }}>{p.name}</div><span style={{ background: won ? "#D1FAE5" : "#E0F0FF", color: won ? "#065F46" : "#0B4F8A", border: `1px solid ${won ? "#34D399" : "#60A5FA"}`, borderRadius: 6, padding: "2px 9px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>{label}</span></div><div style={{ fontSize: 12, color: "#E07B39", fontWeight: 700, marginTop: 2 }}>{fmt(p.amount)}</div></div>);
+              })}
             </div>
           </div>
         </div>

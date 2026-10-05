@@ -59,7 +59,7 @@ async function applySubcontractorFollowUps({ quoteId, subFlagsBySortOrder, subCo
   }
 }
 
-export default function QuoteImport({ pjs, wonQuotes, setPjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteImportCtx, setQuoteProjectId }) {
+export default function QuoteImport({ pjs, submittedQuotes, wonQuotes, setPjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteImportCtx, setQuoteProjectId }) {
   usePreventWindowFileDrop();
   const pending = tks.filter(t => !t.done);
   const [results, setResults] = useState([]);
@@ -128,8 +128,8 @@ export default function QuoteImport({ pjs, wonQuotes, setPjs, cos, setCos, sales
 
   return (
     <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
-      {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="quoteImport" nav={nav} setModal={() => {}} setEc={() => {}} SB_W={SB_W} />}
-      {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} wonQuotes={wonQuotes} />}
+      {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="quoteImport" nav={nav} setModal={() => {}} setEc={() => {}} SB_W={SB_W} submittedQuotes={submittedQuotes} />}
+      {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} wonQuotes={wonQuotes} submittedQuotes={submittedQuotes} />}
       {(cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
 
       <Hdr title="📥 見積ファイルから登録" back={back} />
@@ -455,7 +455,7 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
                 <div style={{ fontSize: 12, fontWeight: 700, color: "#92400E", marginBottom: 4 }}>⚠️ 名前の似た案件があります(二重登録に注意)</div>
                 {similarProjects.map(({ p }) => (
                   <button key={p.id} onClick={() => { setProjectMode("existing"); setProjectId(p.id); }} style={{ display: "block", width: "100%", textAlign: "left", background: projectMode === "existing" && projectId === p.id ? "#FDE68A" : "#fff", border: "1px solid #FCD34D", borderRadius: 6, padding: "4px 8px", marginBottom: 3, fontSize: 12, cursor: "pointer", color: "#1F2937" }}>
-                    {p.name}<span style={{ color: "#9CA3AF", marginLeft: 6 }}>{p.status}</span><span style={{ float: "right", color: "#92400E" }}>この案件に追加 →</span>
+                    {p.name}<span style={{ float: "right", color: "#92400E" }}>この案件に追加 →</span>
                   </button>
                 ))}
               </div>
@@ -1125,7 +1125,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
             <div style={{ fontSize: 12, fontWeight: 700, color: "#92400E", marginBottom: 4 }}>⚠️ 名前の似た案件があります(二重登録に注意)</div>
             {similarProjects.map(({ p }) => (
               <button key={p.id} onClick={() => { setProjectMode("existing"); setProjectId(p.id); }} style={{ display: "block", width: "100%", textAlign: "left", background: projectMode === "existing" && projectId === p.id ? "#FDE68A" : "#fff", border: "1px solid #FCD34D", borderRadius: 6, padding: "4px 8px", marginBottom: 3, fontSize: 12, cursor: "pointer", color: "#1F2937" }}>
-                {p.name}<span style={{ color: "#9CA3AF", marginLeft: 6 }}>{p.status}</span><span style={{ float: "right", color: "#92400E" }}>この案件に追加 →</span>
+                {p.name}<span style={{ float: "right", color: "#92400E" }}>この案件に追加 →</span>
               </button>
             ))}
           </div>
@@ -1717,7 +1717,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
                 <div style={{ fontSize: 12, fontWeight: 700, color: "#92400E", marginBottom: 4 }}>⚠️ 名前の似た案件があります(二重登録に注意)</div>
                 {similarProjects.map(({ p }) => (
                   <button key={p.id} onClick={() => { setProjectMode("existing"); setProjectId(p.id); }} style={{ display: "block", width: "100%", textAlign: "left", background: projectMode === "existing" && projectId === p.id ? "#FDE68A" : "#fff", border: "1px solid #FCD34D", borderRadius: 6, padding: "4px 8px", marginBottom: 3, fontSize: 12, cursor: "pointer", color: "#1F2937" }}>
-                    {p.name}<span style={{ color: "#9CA3AF", marginLeft: 6 }}>{p.status}</span><span style={{ float: "right", color: "#92400E" }}>この案件に追加 →</span>
+                    {p.name}<span style={{ float: "right", color: "#92400E" }}>この案件に追加 →</span>
                   </button>
                 ))}
               </div>

@@ -1,15 +1,27 @@
 import { Hdr } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
-import { STATUSES, STATUS_STYLE, fmt, STORAGE_LIMIT_MB } from "../lib/constants";
+import { fmt, STORAGE_LIMIT_MB } from "../lib/constants";
 
-export default function Analytics({ pjs, wonQuotes, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, tileConf, SB_W, RP_W }) {
+// 発注済み/未発注の2区分の色(Quotes.jsxの完工済み=緑・発注前=青と合わせる)
+const TWO_STATE_STYLE = {
+  "発注済み": { text: "#065F46", border: "#34D399" },
+  "未発注": { text: "#0B4F8A", border: "#60A5FA" },
+};
+
+export default function Analytics({ pjs, submittedQuotes, wonQuotes, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, tileConf, SB_W, RP_W }) {
   const pending = tks.filter(t => !t.done);
-  const active = pjs.filter(p => p.status !== "完了" && p.status !== "中断");
-  const done = pjs.filter(p => p.status === "完了");
+  // 発注済み/未発注は見積の状態だけで判断する(第8弾テーマ3)。案件のstatusは使わない
+  const submittedProjectIds = new Set((submittedQuotes || []).map(q => q.project_id));
+  const wonProjectIds = new Set((wonQuotes || []).map(q => q.project_id));
+  const active = pjs.filter(p => submittedProjectIds.has(p.id));
+  const done = pjs.filter(p => wonProjectIds.has(p.id));
   const totalAmt = pjs.reduce((s, p) => s + (p.amount || 0), 0);
   const totalGp = pjs.reduce((s, p) => s + (p.gp || 0), 0);
   const avgGpRate = totalAmt ? (totalGp / totalAmt * 100).toFixed(1) : 0;
-  const statusCount = STATUSES.map(s => ({ s, n: pjs.filter(p => p.status === s).length }));
+  const statusCount = [
+    { s: "未発注", n: active.length },
+    { s: "発注済み", n: done.length },
+  ];
   const maxSC = Math.max(...statusCount.map(x => x.n), 1);
   const top5 = pjs.filter(p => p.amount > 0).sort((a, b) => (b.gp / b.amount) - (a.gp / a.amount)).slice(0, 5);
   const byCharge = {};
@@ -19,15 +31,15 @@ export default function Analytics({ pjs, wonQuotes, cos, tks, links, cust, isPC,
 
   return (
     <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
-      {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="analytics" nav={nav} setModal={() => {}} setEc={() => {}} SB_W={SB_W} />}
-      {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} wonQuotes={wonQuotes} />}
+      {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="analytics" nav={nav} setModal={() => {}} setEc={() => {}} SB_W={SB_W} submittedQuotes={submittedQuotes} />}
+      {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} wonQuotes={wonQuotes} submittedQuotes={submittedQuotes} />}
       {(cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
       <Hdr title="📊 分析ダッシュボード" back={() => nav("home")} />
       <div style={{ padding: isPC ? "14px 0" : 14 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
           {[
-            { label: "総案件数", value: `${pjs.length}件`, sub: `進行中 ${active.length}件`, color: "#1A3A5C", icon: "📋" },
-            { label: "完了案件", value: `${done.length}件`, sub: `完了率 ${pjs.length ? (done.length / pjs.length * 100).toFixed(0) : 0}%`, color: "#059669", icon: "✅" },
+            { label: "総案件数", value: `${pjs.length}件`, sub: `進行中(未発注) ${active.length}件`, color: "#1A3A5C", icon: "📋" },
+            { label: "発注済み案件", value: `${done.length}件`, sub: `発注済み率 ${pjs.length ? (done.length / pjs.length * 100).toFixed(0) : 0}%`, color: "#059669", icon: "✅" },
             { label: "受注合計", value: `¥${(totalAmt / 10000).toFixed(0)}万`, sub: pjs.length ? `平均 ¥${(totalAmt / pjs.length / 10000).toFixed(0)}万` : "", color: "#E07B39", icon: "💰" },
             { label: "平均粗利率", value: `${avgGpRate}%`, sub: `粗利計 ¥${(totalGp / 10000).toFixed(0)}万`, color: "#7C3AED", icon: "📈" },
           ].map(k => (
@@ -41,9 +53,9 @@ export default function Analytics({ pjs, wonQuotes, cos, tks, links, cust, isPC,
         </div>
 
         <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
-          <div style={{ fontWeight: 800, fontSize: 14, color: "#1A3A5C", marginBottom: 14 }}>📋 ステータス別件数</div>
+          <div style={{ fontWeight: 800, fontSize: 14, color: "#1A3A5C", marginBottom: 14 }}>📋 未発注・発注済み件数</div>
           {statusCount.map(({ s, n }) => {
-            const st = STATUS_STYLE[s];
+            const st = TWO_STATE_STYLE[s];
             return (
               <div key={s} style={{ marginBottom: 10 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>

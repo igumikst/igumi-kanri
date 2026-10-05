@@ -47,6 +47,7 @@ export default function App() {
   const [salesReps, setSalesReps] = useState([]);
   const [branches, setBranches] = useState([]);
   const [wonQuotes, setWonQuotes] = useState([]);
+  const [submittedQuotes, setSubmittedQuotes] = useState([]);
   const [quoteProjectId, setQuoteProjectId] = useState(null);
   const [quoteImportCtx, setQuoteImportCtx] = useState(null); // { from: 戻り先のページ, projectId: 追加先の案件 }
   const [cust, setCust] = useState(DEFAULT_CUST);
@@ -115,7 +116,7 @@ export default function App() {
 
   const loadAll = async () => {
     setLoading(true);
-    const [pjRes, coRes, tkRes, ffRes, foldRes, hsRes, linksRes, tmplRes, bpRes, bcRes, callsRes, srRes, brRes, wqRes] = await Promise.all([
+    const [pjRes, coRes, tkRes, ffRes, foldRes, hsRes, linksRes, tmplRes, bpRes, bcRes, callsRes, srRes, brRes, wqRes, sqRes] = await Promise.all([
       supabase.from("projects").select("*").order("created_at", { ascending: false }),
       supabase.from("companies").select("*").order("created_at", { ascending: true }),
       supabase.from("tasks").select("*").order("created_at", { ascending: false }),
@@ -131,6 +132,8 @@ export default function App() {
       supabase.from("company_branches").select("*").then(r => r, e => ({ data: null, error: e })),
       // 完工済みの見積は全件、件数が少ないので軽く読む(ダッシュボード・右パネルの完工日基準の集計に使う)
       supabase.from("quotes").select("id,project_id,title,total_amount,gross_profit,completed_on").eq("status", "won"),
+      // 発注前(完工済みでない)見積も軽く読む(案件管理の「未発注」ソート・進行中の判定に使う。第8弾テーマ3)
+      supabase.from("quotes").select("id,project_id").neq("status", "won"),
     ]);
     if (pjRes.data) setPjs(pjRes.data.map(p => ({ ...p, subIds: p.subcontractorIds || [], gp: p.grossProfit || 0, qDate: p.quoteDate || "" })));
     if (coRes.data) setCos(coRes.data.map(c => ({ ...c, contacts: c.contacts || [] })));
@@ -159,6 +162,7 @@ export default function App() {
     if (srRes.data) setSalesReps(srRes.data);
     if (brRes.data) setBranches(brRes.data);
     if (wqRes.data) setWonQuotes(wqRes.data);
+    if (sqRes.data) setSubmittedQuotes(sqRes.data);
     setLoading(false);
   };
 
@@ -171,7 +175,7 @@ export default function App() {
 
   const nav = p => { setPage(p); setModal(null); };
   const pp = isPC ? { marginLeft: SB_W, marginRight: rpOpen ? RP_W : 32 } : {};
-  const commonProps = { pjs, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, tileConf, SB_W, RP_W, salesReps, setSalesReps, branches, setBranches, wonQuotes, setWonQuotes };
+  const commonProps = { pjs, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, tileConf, SB_W, RP_W, salesReps, setSalesReps, branches, setBranches, wonQuotes, setWonQuotes, submittedQuotes, setSubmittedQuotes };
   const quoteProps = { ...commonProps, quoteProjectId, setPjs, setQuoteImportCtx };
 
   if (loading) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", fontFamily: "'Hiragino Sans',sans-serif", background: "#F0F4F8" }}><div style={{ textAlign: "center" }}><div style={{ fontSize: 32, marginBottom: 12 }}>⚡</div><div style={{ color: "#1A3A5C", fontWeight: 700 }}>読み込み中...</div></div></div>;

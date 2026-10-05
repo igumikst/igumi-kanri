@@ -45,7 +45,7 @@ const Pill = ({ children, onClick }) => (
   </button>
 );
 
-export default function Home({ pjs, wonQuotes, cos, tks, links, cust, tileConf, tileEdit, setTileEdit, saveTileConf, saveCustomize, weather, weekWeather, fishWeather, isPC, pp, nav, setModal, setEc, ec, rpOpen, setRpOpen, finFiles, tmplFiles, SB_W, RP_W, boardPosts, calls, setCalls }) {
+export default function Home({ pjs, submittedQuotes, wonQuotes, cos, tks, links, cust, tileConf, tileEdit, setTileEdit, saveTileConf, saveCustomize, weather, weekWeather, fishWeather, isPC, pp, nav, setModal, setEc, ec, rpOpen, setRpOpen, finFiles, tmplFiles, SB_W, RP_W, boardPosts, calls, setCalls }) {
   const [editTile, setEditTile] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [pwModal, setPwModal] = useState(false);
@@ -85,8 +85,10 @@ export default function Home({ pjs, wonQuotes, cos, tks, links, cust, tileConf, 
   }, []);
 
   const pending = tks.filter(t => !t.done);
-  // 進行中案件の期間の基準は「対応日」(無ければ登録日)
-  const active = pjs.filter(p => (p.respondedAt || p.created_at || "") >= PROJECT_STATS_SINCE && p.status !== "完了" && p.status !== "中断");
+  // 進行中案件の期間の基準は「対応日」(無ければ登録日)。
+  // 進行中 = 未発注(発注前の見積がある案件)。案件のstatusは使わない(第8弾テーマ3)
+  const submittedProjectIds = new Set((submittedQuotes || []).map(q => q.project_id));
+  const active = pjs.filter(p => (p.respondedAt || p.created_at || "") >= PROJECT_STATS_SINCE && submittedProjectIds.has(p.id));
   const pendingCalls = (calls || []).filter(c => c.status === "未対応");
   const pendingCallsCount = pendingCalls.length;
   const todayLabel = new Date().toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "short" });
@@ -865,8 +867,8 @@ export default function Home({ pjs, wonQuotes, cos, tks, links, cust, tileConf, 
 
   return (
     <div translate="no" className="notranslate" style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: currentPage === HOME_PAGE_INDEX ? BG : "#F0F4F8", minHeight: "100vh", ...pp }}>
-      {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="home" nav={nav} setModal={setModal} setEc={setEc} SB_W={SB_W} />}
-      {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} wonQuotes={wonQuotes} />}
+      {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="home" nav={nav} setModal={setModal} setEc={setEc} SB_W={SB_W} submittedQuotes={submittedQuotes} />}
+      {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} wonQuotes={wonQuotes} submittedQuotes={submittedQuotes} />}
       {(cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
 
       {!isPC && <IgumiHeader />}

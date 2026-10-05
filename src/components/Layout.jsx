@@ -51,10 +51,12 @@ export const FloatLauncher = ({ links, isPC, nav }) => {
   );
 };
 
-export const PCSidebar = ({ cust, tileConf, pjs, cos, pending, page, nav, setModal, setEc, SB_W }) => {
-  // 進行中案件の期間の基準は「対応日」(無ければ登録日)
+export const PCSidebar = ({ cust, tileConf, pjs, cos, pending, page, nav, setModal, setEc, SB_W, submittedQuotes = [] }) => {
+  // 進行中案件の期間の基準は「対応日」(無ければ登録日)。
+  // 進行中 = 未発注(発注前の見積がある案件)。案件のstatusは使わない(第8弾テーマ3)
+  const submittedProjectIds = new Set(submittedQuotes.map(q => q.project_id));
   const statsPjs = pjs.filter(p => (p.respondedAt || p.created_at || "") >= PROJECT_STATS_SINCE);
-  const active = statsPjs.filter(p => p.status !== "完了" && p.status !== "中断");
+  const active = statsPjs.filter(p => submittedProjectIds.has(p.id));
 
   // 🔒 財務パスワード関連のstate
   const [pwModal, setPwModal] = useState(null); // "unlock" | "set" | null
@@ -290,14 +292,16 @@ export const PCSidebar = ({ cust, tileConf, pjs, cos, pending, page, nav, setMod
   );
 };
 
-export const PCRightPanel = ({ rpOpen, setRpOpen, pjs, tks, finFiles, tmplFiles, fishWeather, nav, setAiInput, RP_W, wonQuotes = [] }) => {
+export const PCRightPanel = ({ rpOpen, setRpOpen, pjs, tks, finFiles, tmplFiles, fishWeather, nav, setAiInput, RP_W, wonQuotes = [], submittedQuotes = [] }) => {
   const [qi, setQi] = useState("");
   const [open, setOpen] = useState({ kpi: true, tasks: true, fishing: true, ai: true });
   const tog = k => setOpen(p => ({ ...p, [k]: !p[k] }));
   const pending = tks.filter(t => !t.done);
-  // 進行中案件の期間の基準は「対応日」(無ければ登録日)
+  // 進行中案件の期間の基準は「対応日」(無ければ登録日)。
+  // 進行中 = 未発注(発注前の見積がある案件)。案件のstatusは使わない(第8弾テーマ3)
+  const submittedProjectIds = new Set(submittedQuotes.map(q => q.project_id));
   const statsPjs = pjs.filter(p => (p.respondedAt || p.created_at || "") >= PROJECT_STATS_SINCE);
-  const active = statsPjs.filter(p => p.status !== "完了" && p.status !== "中断");
+  const active = statsPjs.filter(p => submittedProjectIds.has(p.id));
   // 受注合計・粗利率は「今月・完工日基準」(完工済みの見積のうち、completed_onが今月のものだけ。見積ごと)
   const nowD = new Date();
   const thisMonthCompleted = wonQuotes.filter(q => {

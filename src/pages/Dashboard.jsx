@@ -1,14 +1,14 @@
 import { Hdr } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import DashboardPC from "../components/DashboardPC";
-import { STATUSES } from "../lib/constants";
 
-const WON_STATUSES = ["着工", "完了"];
-
-export default function Dashboard({ pjs, wonQuotes, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, tileConf, SB_W, RP_W, branches, salesReps, embedded }) {
+export default function Dashboard({ pjs, wonQuotes, submittedQuotes, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, tileConf, SB_W, RP_W, branches, salesReps, embedded }) {
   const pending = (tks || []).filter(t => !t.done);
   const coMap = Object.fromEntries((cos || []).map(c => [c.id, c]));
   const branchMap = Object.fromEntries((branches || []).map(b => [b.id, b]));
+  // 発注済み/未発注は見積の状態だけで判断する(第8弾テーマ3)。案件のstatusは使わない
+  const wonProjectIds = new Set((wonQuotes || []).map(q => q.project_id));
+  const submittedProjectIds = new Set((submittedQuotes || []).map(q => q.project_id));
   // registeredAt: 進行中・発注待ち・受注率などの期間の基準は「対応日」(無ければ登録日)。
   // 2026-09-01以降の条件(PROJECT_STATS_SINCE)は、DashboardPC側で適用する
   const jobs = (pjs || []).map(p => {
@@ -20,7 +20,8 @@ export default function Dashboard({ pjs, wonQuotes, cos, tks, links, cust, isPC,
       kind: p.kind || p.workType || p.category || "未設定",
       owner: p.salesRep || "未設定",
       ownerKey: p.salesRepId || p.salesRep || "unknown",
-      status: p.status || "未設定",
+      hasWon: wonProjectIds.has(p.id),
+      hasSubmitted: submittedProjectIds.has(p.id),
       sell,
       cost: gp > 0 ? sell - gp : null,
       registeredAt: p.respondedAt || p.created_at,
@@ -38,6 +39,7 @@ export default function Dashboard({ pjs, wonQuotes, cos, tks, links, cust, isPC,
     const p = pjMap[q.project_id];
     return {
       id: q.id,
+      projectId: q.project_id,
       sell: Number(q.total_amount) || 0,
       gp: Number(q.gross_profit) || 0,
       completedOn: q.completed_on || null,
@@ -50,11 +52,11 @@ export default function Dashboard({ pjs, wonQuotes, cos, tks, links, cust, isPC,
 
   return (
     <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: embedded ? "100%" : "100vh", ...(embedded ? {} : pp) }}>
-      {!embedded && isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="dashboard" nav={nav} setModal={() => {}} setEc={() => {}} SB_W={SB_W} />}
-      {!embedded && isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} wonQuotes={wonQuotes} />}
+      {!embedded && isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="dashboard" nav={nav} setModal={() => {}} setEc={() => {}} SB_W={SB_W} submittedQuotes={submittedQuotes} />}
+      {!embedded && isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} wonQuotes={wonQuotes} submittedQuotes={submittedQuotes} />}
       {!embedded && (cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
       {!embedded && <Hdr title="🧭 ダッシュボード" back={() => nav("home")} />}
-      <DashboardPC jobs={jobs} completedQuotes={completedQuotes} statuses={STATUSES} wonStatuses={WON_STATUSES} showTitle={!!embedded} branches={branches} salesReps={salesReps} />
+      <DashboardPC jobs={jobs} completedQuotes={completedQuotes} showTitle={!!embedded} branches={branches} salesReps={salesReps} />
     </div>
   );
 }

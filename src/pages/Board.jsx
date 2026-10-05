@@ -11,7 +11,7 @@ const BOARD_CAT_STYLE = {
   "その他": { bg: "#F9FAFB", text: "#374151", border: "#E5E7EB" },
 };
 
-export default function Board({ pjs, wonQuotes, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, tileConf, boardPosts, setBoardPosts, boardComments, setBoardComments, SB_W, RP_W }) {
+export default function Board({ pjs, submittedQuotes, wonQuotes, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, tileConf, boardPosts, setBoardPosts, boardComments, setBoardComments, SB_W, RP_W }) {
   const [boardCat, setBoardCat] = useState("すべて");
   const [boardNew, setBoardNew] = useState({ category: "業務連絡", content: "", author: "" });
   const [boardComment, setBoardComment] = useState({ postId: null, content: "", author: "" });
@@ -88,8 +88,8 @@ export default function Board({ pjs, wonQuotes, cos, tks, links, cust, isPC, pp,
 
   return (
     <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
-      {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="board" nav={nav} setModal={() => {}} setEc={() => {}} SB_W={SB_W} />}
-      {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} wonQuotes={wonQuotes} />}
+      {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="board" nav={nav} setModal={() => {}} setEc={() => {}} SB_W={SB_W} submittedQuotes={submittedQuotes} />}
+      {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} wonQuotes={wonQuotes} submittedQuotes={submittedQuotes} />}
       {(cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
       <Hdr title="📣 社内掲示板" back={() => nav("home")}
         right={<button onClick={() => setModal("addPost")} style={{ background: "#E07B39", border: "none", color: "#fff", borderRadius: 8, padding: "5px 12px", fontSize: 12, cursor: "pointer", fontWeight: 800 }}>＋ 投稿</button>} />

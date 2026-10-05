@@ -26,7 +26,7 @@ const newKey = () => "l" + Date.now() + Math.random().toString(36).slice(2);
 // quote_no は text 型のため、数字だけを取り出して数として扱う(DB関数 import_quote と同じ考え方)
 const quoteNoNum = q => parseInt(String(q.quote_no ?? "").replace(/[^0-9]/g, ""), 10) || 0;
 
-export default function Quotes({ pjs, wonQuotes, setWonQuotes, setPjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteProjectId, setQuoteImportCtx }) {
+export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, setSubmittedQuotes, setPjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteProjectId, setQuoteImportCtx }) {
   usePreventWindowFileDrop();
   const project = pjs.find(p => p.id === quoteProjectId);
   const pending = tks.filter(t => !t.done);
@@ -164,16 +164,23 @@ export default function Quotes({ pjs, wonQuotes, setWonQuotes, setPjs, cos, cust
   const delQuote = async id => {
     await supabase.from("quotes").delete().eq("id", id);
     setQuotes(quotes.filter(q => q.id !== id));
+    removeWonQuote(id);
+    removeSubmittedQuote(id);
   };
 
   const computeQuoteTotals = quote => computeAdoptTotals(supabase, { quote, constructionType: project?.constructionType || "自社のみ" });
 
-  // ダッシュボード・右パネルの完工日基準の集計(wonQuotes)を、画面を再読み込みしなくても
-  // 最新にするための更新(App.jsxのloadAll()は起動時の1回だけなので、ここで補う)
+  // ダッシュボード・右パネルの完工日基準の集計(wonQuotes)・案件管理の未発注/発注済み
+  // ソート(submittedQuotes)を、画面を再読み込みしなくても最新にするための更新
+  // (App.jsxのloadAll()は起動時の1回だけなので、ここで補う)
   const upsertWonQuote = (quoteId, patch) => setWonQuotes(prev => prev.some(q => q.id === quoteId)
     ? prev.map(q => q.id === quoteId ? { ...q, ...patch } : q)
     : [...prev, { id: quoteId, ...patch }]);
   const removeWonQuote = quoteId => setWonQuotes(prev => prev.filter(q => q.id !== quoteId));
+  const upsertSubmittedQuote = (quoteId, patch) => setSubmittedQuotes(prev => prev.some(q => q.id === quoteId)
+    ? prev.map(q => q.id === quoteId ? { ...q, ...patch } : q)
+    : [...prev, { id: quoteId, ...patch }]);
+  const removeSubmittedQuote = quoteId => setSubmittedQuotes(prev => prev.filter(q => q.id !== quoteId));
 
   // 完工日の入力欄(確認ダイアログの中に出す)。defaultValue制御で、ダイアログの再描画なしに最新値をrefで読む
   const completedOnRef = useRef(todayStr());
@@ -199,6 +206,7 @@ export default function Quotes({ pjs, wonQuotes, setWonQuotes, setPjs, cos, cust
         const projectPatch = await adoptQuoteInDb(supabase, { quoteId: quote.id, projectId: quoteProjectId, gp, completedOn });
         setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch } : p));
         upsertWonQuote(quote.id, { project_id: quoteProjectId, total_amount: quote.total_amount || 0, gross_profit: Math.round(gp), completed_on: completedOn });
+        removeSubmittedQuote(quote.id);
       } catch (e) { alert(e.message); }
       await loadQuotes();
     } });
@@ -211,6 +219,7 @@ export default function Quotes({ pjs, wonQuotes, setWonQuotes, setPjs, cos, cust
         const projectPatch = await unadoptQuoteInDb(supabase, { quoteId: quote.id, projectId: quoteProjectId });
         setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch } : p));
         removeWonQuote(quote.id);
+        upsertSubmittedQuote(quote.id, { project_id: quoteProjectId });
       } catch (e) { alert(e.message); }
       await loadQuotes();
     } });
@@ -330,6 +339,10 @@ export default function Quotes({ pjs, wonQuotes, setWonQuotes, setPjs, cos, cust
         setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch } : p));
         removeWonQuote(quoteId);
       }
+      // 見積の最終的な状態(ed.status)にあわせて、未発注(submittedQuotes)側も同期する。
+      // 新規作成・編集での保存(adopt/unadoptを経ない場合)もここで一括して反映される
+      if (ed.status === "won") removeSubmittedQuote(quoteId);
+      else upsertSubmittedQuote(quoteId, { project_id: quoteProjectId });
     } catch (e) { alert(e.message); }
     await loadQuotes();
     setSaving(false);
@@ -357,8 +370,8 @@ export default function Quotes({ pjs, wonQuotes, setWonQuotes, setPjs, cos, cust
 
   return (
     <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
-      {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="quotes" nav={nav} setModal={() => {}} setEc={() => {}} SB_W={SB_W} />}
-      {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} wonQuotes={wonQuotes} />}
+      {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="quotes" nav={nav} setModal={() => {}} setEc={() => {}} SB_W={SB_W} submittedQuotes={submittedQuotes} />}
+      {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} wonQuotes={wonQuotes} submittedQuotes={submittedQuotes} />}
       {(cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
 
       {view === "list" ? (

@@ -8,7 +8,7 @@ const HEADER_COLOR = "#1a56a0";
 const TYPE_LABELS = { normal: "通常", tama: "多摩", union: "ユニオン", manual: "手動登録", "": "未分類" };
 const TYPE_FILTERS = ["すべて", "normal", "tama", "union", "manual"];
 
-export default function Reports({ pjs, wonQuotes, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, tileConf, SB_W, RP_W }) {
+export default function Reports({ pjs, submittedQuotes, wonQuotes, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, tileConf, SB_W, RP_W }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [keyword, setKeyword] = useState("");
@@ -107,10 +107,10 @@ export default function Reports({ pjs, wonQuotes, cos, tks, links, cust, isPC, p
   return (
     <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#f0f4f8", minHeight: "100vh", ...pp }}>
       {isPC && (cust.showSidebar !== false) && (
-        <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="reports" nav={nav} setModal={() => {}} setEc={() => {}} SB_W={SB_W} />
+        <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="reports" nav={nav} setModal={() => {}} setEc={() => {}} SB_W={SB_W} submittedQuotes={submittedQuotes} />
       )}
       {isPC && (cust.showRightPanel !== false) && (
-        <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} wonQuotes={wonQuotes} />
+        <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} wonQuotes={wonQuotes} submittedQuotes={submittedQuotes} />
       )}
       {(cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
 

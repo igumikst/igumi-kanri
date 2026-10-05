@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { STATUS_STYLE, fmt, PROJECT_STATS_SINCE } from "../lib/constants";
+import { fmt, PROJECT_STATS_SINCE } from "../lib/constants";
 import "./DashboardPC.css";
+
+// 発注済み/未発注の2区分の色(Quotes.jsxの完工済み=緑・発注前=青と合わせる)
+const TWO_STATE_STYLE = {
+  "発注済み": { text: "#065F46", border: "#34D399", bg: "#D1FAE5" },
+  "未発注": { text: "#0B4F8A", border: "#60A5FA", bg: "#E0F0FF" },
+  "未設定": { text: "#374151", border: "#94a3b8", bg: "#F3F4F6" },
+};
 
 const PERIODS = [
   { key: "all", label: "全期間" },
@@ -162,16 +169,14 @@ function Donut({ slices }) {
 }
 
 /**
- * jobs: { id, name, kind, owner, ownerKey, status, sell, cost, registeredAt, clientId, clientName }
+ * jobs: { id, name, kind, owner, ownerKey, hasWon, hasSubmitted, sell, cost, registeredAt, clientId, clientName }
+ * hasWon/hasSubmittedは見積の状態から判断する発注済み/未発注のフラグ(第8弾テーマ3。案件のstatusは使わない)
  * cost が null の案件は粗利未確定（粗利合計・粗利率から除外）
  * bigJobs を渡すとそのまま大型工事欄に出す。未指定なら売上500万円以上を表示する。
  */
 export default function DashboardPC({
   jobs = [],
   completedQuotes = [],
-  statuses = ["発注待ち", "失注", "見積中", "着工", "進行中", "完了", "中断"],
-  wonStatuses = ["着工", "完了"],
-  lostStatus = "失注",
   kindColors,
   bigJobs,
   showTitle = false,
@@ -243,9 +248,14 @@ export default function DashboardPC({
   const totalGp = completedFilteredQuotes.reduce((s, q) => s + (q.gp || 0), 0);
   const gpRate = totalAmt ? (totalGp / totalAmt) * 100 : null;
   const completedCount = completedFilteredQuotes.length;
-  const wonCount = filtered.filter(j => wonStatuses.includes(j.status)).length;
-  const lostCount = filtered.filter(j => j.status === lostStatus).length;
-  const winRate = (wonCount + lostCount) ? (wonCount / (wonCount + lostCount)) * 100 : null;
+
+  // 受注率(第8弾テーマ3): 発注済み(完工日基準・期間内に完工済みの見積がある案件、重複なし)
+  // ÷ (発注済み + 未発注だけの案件(対応日基準・完工済みの見積が1つも無い))
+  const wonProjectIdsInPeriod = useMemo(() => new Set(completedFilteredQuotes.map(q => q.projectId)), [completedFilteredQuotes]);
+  const unorderedOnly = filtered.filter(j => j.hasSubmitted && !j.hasWon);
+  const winRate = (wonProjectIdsInPeriod.size + unorderedOnly.length)
+    ? (wonProjectIdsInPeriod.size / (wonProjectIdsInPeriod.size + unorderedOnly.length)) * 100
+    : null;
 
   const months = useMemo(() => {
     const dates = filtered.map(j => new Date(j.registeredAt)).filter(d => !isNaN(d));
@@ -294,22 +304,16 @@ export default function DashboardPC({
     }));
   }, [filtered, kindColors]);
 
+  // 状態別(第8弾テーマ3): 案件のstatusではなく、見積の状態(未発注/発注済み)の2区分に作り直す。
+  // 同じ案件が両方に出ることがある(決定事項3)
   const statusRows = useMemo(() => {
-    const known = new Set(statuses);
-    const rows = statuses.map(status => {
-      const list = filtered.filter(j => j.status === status);
-      return { status, count: list.length, amt: list.reduce((s, j) => s + (j.sell || 0), 0) };
-    });
-    const extras = new Map();
-    filtered.forEach(j => {
-      if (known.has(j.status)) return;
-      const cur = extras.get(j.status) || { status: j.status, count: 0, amt: 0 };
-      cur.count += 1;
-      cur.amt += j.sell || 0;
-      extras.set(j.status, cur);
-    });
-    return [...rows, ...extras.values()];
-  }, [filtered, statuses]);
+    const subRows = filtered.filter(j => j.hasSubmitted);
+    const wonRows = filtered.filter(j => j.hasWon);
+    return [
+      { status: "未発注", count: subRows.length, amt: subRows.reduce((s, j) => s + (j.sell || 0), 0) },
+      { status: "発注済み", count: wonRows.length, amt: wonRows.reduce((s, j) => s + (j.sell || 0), 0) },
+    ];
+  }, [filtered]);
   const maxStatus = Math.max(...statusRows.map(r => r.count), 1);
 
   const bands = useMemo(() => {
@@ -332,7 +336,9 @@ export default function DashboardPC({
       const g = groups.get(k);
       const sell = j.sell || 0;
       g.amt += sell;
-      g.parts.set(j.status, (g.parts.get(j.status) || 0) + sell);
+      // 積み上げは重複なしの2区分(+見積が1つも無い案件は未設定)にする(第8弾テーマ3)
+      const bucket = j.hasWon ? "発注済み" : j.hasSubmitted ? "未発注" : "未設定";
+      g.parts.set(bucket, (g.parts.get(bucket) || 0) + sell);
     });
     return [...groups.values()].sort((a, b) => b.amt - a.amt).slice(0, 8);
   }, [filtered]);
@@ -354,12 +360,13 @@ export default function DashboardPC({
       const confirmedAmtG = confirmedList.reduce((s, j) => s + (j.sell || 0), 0);
       const gp = confirmedList.reduce((s, j) => s + ((j.sell || 0) - j.cost), 0);
       const gpRateG = confirmedAmtG ? (gp / confirmedAmtG) * 100 : null;
-      const wonN = list.filter(j => wonStatuses.includes(j.status)).length;
-      const lostN = list.filter(j => j.status === lostStatus).length;
+      // 受注率は全体のKPIと同じ考え方(発注済みは完工日基準、未発注のみは対応日基準)
+      const wonN = list.filter(j => wonProjectIdsInPeriod.has(j.id)).length;
+      const lostN = list.filter(j => j.hasSubmitted && !j.hasWon).length;
       const orderRate = (wonN + lostN) ? (wonN / (wonN + lostN)) * 100 : null;
       return { key, name, clientName, count: list.length, amt, gp, gpRate: gpRateG, orderRate };
     });
-  }, [filtered, wonStatuses, lostStatus]);
+  }, [filtered, wonProjectIdsInPeriod]);
 
   const sortedReps = useMemo(
     () => [...repGroups].sort((a, b) => cmpVal(a[sort.key], b[sort.key], sort.dir)),
@@ -436,7 +443,7 @@ export default function DashboardPC({
         <div className="panel">
           <h3>状態別</h3>
           {statusRows.map(row => {
-            const st = STATUS_STYLE[row.status] || { text: "#374151", border: "#94a3b8" };
+            const st = TWO_STATE_STYLE[row.status] || { text: "#374151", border: "#94a3b8" };
             return (
               <div className="sb" key={row.status}>
                 <div className="sbh">
@@ -447,7 +454,7 @@ export default function DashboardPC({
               </div>
             );
           })}
-          <div className="note">受注率: {pctLabel(winRate)}（{wonStatuses.join("+")} ÷ {wonStatuses.join("+")}+{lostStatus}。それ以外は未決着のため対象外）</div>
+          <div className="note">受注率: {pctLabel(winRate)}（発注済み ÷ 発注済み+未発注のみ。発注済みは完工日基準、未発注のみは対応日基準）</div>
         </div>
         <div className="panel">
           <h3>価格帯</h3>
@@ -473,7 +480,7 @@ export default function DashboardPC({
               <div className="track">
                 <div className="stack" style={{ width: `${Math.max((o.amt / maxOwner) * 100, 8)}%` }}>
                   {[...o.parts.entries()].map(([status, amt]) => (
-                    <span key={status} style={{ flex: `0 0 ${o.amt ? (amt / o.amt) * 100 : 0}%`, background: STATUS_STYLE[status]?.border || "#94a3b8" }} />
+                    <span key={status} style={{ flex: `0 0 ${o.amt ? (amt / o.amt) * 100 : 0}%`, background: TWO_STATE_STYLE[status]?.border || "#94a3b8" }} />
                   ))}
                 </div>
               </div>
@@ -485,11 +492,12 @@ export default function DashboardPC({
           <h3>大型工事</h3>
           {largeJobs.length === 0 && <div className="empty">500万円以上の案件はありません</div>}
           {largeJobs.map((j, i) => {
-            const st = STATUS_STYLE[j.status] || { bg: "#f3f4f6", text: "#374151" };
+            const label = j.hasWon ? "発注済み" : "未発注";
+            const st = TWO_STATE_STYLE[label];
             return (
               <div className="wrow" key={j.id || `${j.name}-${i}`}>
                 <span>{j.name}</span>
-                <em style={{ background: st.bg, color: st.text }}>{j.status}</em>
+                <em style={{ background: st.bg, color: st.text }}>{label}</em>
               </div>
             );
           })}
