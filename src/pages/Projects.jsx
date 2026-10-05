@@ -4,7 +4,8 @@ import { STATUSES, STATUS_STYLE, fmt, pct, todayStr, dateJp } from "../lib/const
 import { Badge, Inp, Sel, Modal, Hdr, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import ClientBranchRepPicker from "../components/ClientBranchRepPicker";
-import { CONSTRUCTION_TYPES, computeQuoteFinancials } from "../lib/quoteFinancials";
+import { CONSTRUCTION_TYPES } from "../lib/quoteFinancials";
+import { computeAdoptTotals, buildAdoptMessage, adoptQuote as adoptQuoteInDb } from "../lib/quoteAdopt";
 import FileDropZone from "../components/FileDropZone";
 import { usePreventWindowFileDrop } from "../lib/useFileDropGuard";
 import { REPORT_FILE_BUCKET, REPORT_FILE_TYPES, REPORT_FILE_MAX_SIZE, reportFileExt, openReportFile } from "../lib/reportFiles";
@@ -43,38 +44,14 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
 
   // 「完工済」の処理(Quotes.jsxのadoptQuoteと同じ考え方): 見積の原価・下請け原価から
   // 受注金額・粗利を計算し、確認ダイアログのあと、見積をwon・案件を完了にする
-  const computeQuoteTotalsForAdopt = async quote => {
-    const [{ data: itemsData }, { data: subData }] = await Promise.all([
-      supabase.from("quote_items").select("*").eq("quote_id", quote.id),
-      supabase.from("quote_subcontractor_costs").select("amount").eq("quote_id", quote.id),
-    ]);
-    const ids = (itemsData || []).map(r => r.id);
-    const { data: costsData } = ids.length ? await supabase.from("quote_item_costs").select("*").in("quote_item_id", ids) : { data: [] };
-    const costsByItem = Object.fromEntries((costsData || []).map(c => [c.quote_item_id, c]));
-    const total = quote.total_amount || 0;
-    const lines = (itemsData || []).map(r => ({ qty: r.qty, costPrice: costsByItem[r.id]?.cost_price ?? null, costConfirmed: !!costsByItem[r.id]?.cost_confirmed, isSubcontracted: !!r.is_subcontracted }));
-    const subAmountTotal = (subData || []).reduce((s, c) => s + (Number(c.amount) || 0), 0);
-    const { gp, subMissing, ownUnconfirmed } = computeQuoteFinancials({ constructionType: selP.constructionType || "自社のみ", saleTotal: total, lines, subAmountTotal, subCount: (subData || []).length });
-    return { total, gp, subMissing, ownUnconfirmed };
-  };
+  const computeQuoteTotalsForAdopt = quote => computeAdoptTotals(supabase, { quote, constructionType: selP.constructionType || "自社のみ" });
 
   const adoptCompletedOnRef = useRef(todayStr());
   const adoptQuoteFromReports = async quote => {
     const { total, gp, subMissing, ownUnconfirmed } = await computeQuoteTotalsForAdopt(quote);
     const prevAdopted = quotes.find(q => q.is_adopted && q.id !== quote.id);
     adoptCompletedOnRef.current = todayStr();
-    const msg = [
-      `「${quote.title}」を完工済(採用)にします`,
-      prevAdopted ? `(現在「${prevAdopted.title}」が採用中です。切り替えます)` : "",
-      "",
-      `受注金額: ${fmt(selP.amount)} → ${fmt(total)}`,
-      `粗利: ${fmt(selP.gp)} → ${fmt(gp)}`,
-      ownUnconfirmed ? "⚠️ 原価が未確認の明細があります。粗利は暫定です" : "",
-      subMissing ? "⚠️ 下請けの原価が1件も登録されていません。粗利は暫定です" : "",
-      "",
-      "案件の状態も「完了」にし、案件の受注金額・粗利を上書きします。元に戻せません。",
-      "よろしいですか？",
-    ].filter(Boolean).join("\n");
+    const msg = buildAdoptMessage({ fmt, quoteTitle: quote.title, prevAdoptedTitle: prevAdopted?.title, beforeAmount: selP.amount, beforeGp: selP.gp, afterAmount: total, afterGp: gp, ownUnconfirmed, subMissing });
     setConf({ msg, okLabel: "完工済にする", okColor: "#059669",
       extra: (
         <div style={{ marginBottom: 14, textAlign: "left" }}>
@@ -85,10 +62,8 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
       onOk: async () => {
       if (!adoptCompletedOnRef.current) { alert("完工日を入力してください"); return; }
       const completedOn = adoptCompletedOnRef.current;
-      if (prevAdopted) await supabase.from("quotes").update({ is_adopted: false }).eq("id", prevAdopted.id);
-      await supabase.from("quotes").update({ is_adopted: true, status: "won" }).eq("id", quote.id);
-      await supabase.from("projects").update({ amount: Math.round(total), grossProfit: Math.round(gp), status: "完了", completedOn }).eq("id", selP.id);
-      const updated = { ...selP, amount: Math.round(total), gp: Math.round(gp), status: "完了", completedOn };
+      const projectPatch = await adoptQuoteInDb(supabase, { quoteId: quote.id, prevAdoptedId: prevAdopted?.id, projectId: selP.id, amount: total, gp, completedOn });
+      const updated = { ...selP, ...projectPatch };
       setPjs(prev => prev.map(p => p.id === selP.id ? updated : p));
       setSelP(updated);
       setQuotes(prev => prev.map(q => q.id === quote.id ? { ...q, is_adopted: true, status: "won" } : (prevAdopted && q.id === prevAdopted.id) ? { ...q, is_adopted: false } : q));
