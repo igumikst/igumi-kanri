@@ -168,6 +168,7 @@ function Donut({ slices }) {
  */
 export default function DashboardPC({
   jobs = [],
+  completedQuotes = [],
   statuses = ["発注待ち", "失注", "見積中", "着工", "進行中", "完了", "中断"],
   wonStatuses = ["着工", "完了"],
   lostStatus = "失注",
@@ -227,23 +228,21 @@ export default function DashboardPC({
     return true;
   }), [baseFiltered, owner]);
 
-  // 売上合計・粗利合計・粗利率・完工件数は「完工日」基準で別集計する（対応日基準の filtered とは独立）
-  const completedFiltered = useMemo(() => jobs.filter(j => {
-    if (!j.completedOn || j.completedOn < PROJECT_STATS_SINCE) return false;
-    if (!inPeriod(j.completedOn, period)) return false;
-    if (client && j.clientId !== client) return false;
-    if (branch && j.branchId !== branch) return false;
-    if (owner && (j.ownerKey || j.owner || "unknown") !== owner) return false;
+  // 売上合計・粗利合計・粗利率・完工件数は、見積ごとのcompleted_on基準で別集計する
+  // （対応日基準の filtered とは独立。第8弾ステップ2: 案件単位ではなく見積単位)
+  const completedFilteredQuotes = useMemo(() => completedQuotes.filter(q => {
+    if (!q.completedOn || q.completedOn < PROJECT_STATS_SINCE) return false;
+    if (!inPeriod(q.completedOn, period)) return false;
+    if (client && q.clientId !== client) return false;
+    if (branch && q.branchId !== branch) return false;
+    if (owner && (q.ownerKey || q.owner || "unknown") !== owner) return false;
     return true;
-  }), [jobs, period, client, branch, owner]);
+  }), [completedQuotes, period, client, branch, owner]);
 
-  const totalAmt = completedFiltered.reduce((s, j) => s + (j.sell || 0), 0);
-  const confirmed = completedFiltered.filter(j => j.cost != null);
-  const unconfirmedCount = completedFiltered.length - confirmed.length;
-  const confirmedAmt = confirmed.reduce((s, j) => s + (j.sell || 0), 0);
-  const totalGp = confirmed.reduce((s, j) => s + ((j.sell || 0) - j.cost), 0);
-  const gpRate = confirmedAmt ? (totalGp / confirmedAmt) * 100 : null;
-  const completedCount = completedFiltered.length;
+  const totalAmt = completedFilteredQuotes.reduce((s, q) => s + (q.sell || 0), 0);
+  const totalGp = completedFilteredQuotes.reduce((s, q) => s + (q.gp || 0), 0);
+  const gpRate = totalAmt ? (totalGp / totalAmt) * 100 : null;
+  const completedCount = completedFilteredQuotes.length;
   const wonCount = filtered.filter(j => wonStatuses.includes(j.status)).length;
   const lostCount = filtered.filter(j => j.status === lostStatus).length;
   const winRate = (wonCount + lostCount) ? (wonCount / (wonCount + lostCount)) * 100 : null;
@@ -420,10 +419,6 @@ export default function DashboardPC({
         <div className="pckpi"><span>📊</span><small>粗利率</small><b style={{ color: "#7c3aed" }}>{pctLabel(gpRate)}</b><div style={{ fontSize: 9, color: "#9ca3af", marginTop: 2 }}>完工日基準</div></div>
         <div className="pckpi"><span>🏁</span><small>完工件数</small><b style={{ color: "#0891b2" }}>{completedCount}件</b><div style={{ fontSize: 9, color: "#9ca3af", marginTop: 2 }}>完工日基準</div></div>
       </div>
-
-      {unconfirmedCount > 0 && (
-        <div className="warn">粗利未確定: {unconfirmedCount}件（粗利が0または未入力）— 粗利合計・粗利率の計算からは除外しています</div>
-      )}
 
       <div className="pcrow r2">
         <div className="panel col">

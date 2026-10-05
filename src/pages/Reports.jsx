@@ -8,7 +8,7 @@ const HEADER_COLOR = "#1a56a0";
 const TYPE_LABELS = { normal: "通常", tama: "多摩", union: "ユニオン", manual: "手動登録", "": "未分類" };
 const TYPE_FILTERS = ["すべて", "normal", "tama", "union", "manual"];
 
-export default function Reports({ pjs, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, tileConf, SB_W, RP_W }) {
+export default function Reports({ pjs, wonQuotes, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, tileConf, SB_W, RP_W }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [keyword, setKeyword] = useState("");
@@ -110,7 +110,7 @@ export default function Reports({ pjs, cos, tks, links, cust, isPC, pp, nav, rpO
         <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="reports" nav={nav} setModal={() => {}} setEc={() => {}} SB_W={SB_W} />
       )}
       {isPC && (cust.showRightPanel !== false) && (
-        <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} />
+        <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} wonQuotes={wonQuotes} />
       )}
       {(cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
 

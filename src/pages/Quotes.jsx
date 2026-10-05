@@ -6,7 +6,7 @@ import GroupTree, { BundleToolbar } from "../components/GroupTree";
 import { fmt, todayStr } from "../lib/constants";
 import { openQuoteFile, QUOTE_FILE_BUCKET, FILE_TYPES } from "../lib/quoteFiles";
 import { computeQuoteFinancials } from "../lib/quoteFinancials";
-import { computeAdoptTotals, buildAdoptMessage, provisionalWarningLines, adoptQuote as adoptQuoteInDb, unadoptQuote as unadoptQuoteInDb } from "../lib/quoteAdopt";
+import { computeAdoptTotals, buildAdoptMessage, buildUnadoptMessage, provisionalWarningLines, adoptQuote as adoptQuoteInDb, unadoptQuote as unadoptQuoteInDb } from "../lib/quoteAdopt";
 import SubQuoteFileReader from "../components/SubQuoteFileReader";
 import FileDropZone from "../components/FileDropZone";
 import { usePreventWindowFileDrop } from "../lib/useFileDropGuard";
@@ -26,7 +26,7 @@ const newKey = () => "l" + Date.now() + Math.random().toString(36).slice(2);
 // quote_no は text 型のため、数字だけを取り出して数として扱う(DB関数 import_quote と同じ考え方)
 const quoteNoNum = q => parseInt(String(q.quote_no ?? "").replace(/[^0-9]/g, ""), 10) || 0;
 
-export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteProjectId, setQuoteImportCtx }) {
+export default function Quotes({ pjs, wonQuotes, setWonQuotes, setPjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteProjectId, setQuoteImportCtx }) {
   usePreventWindowFileDrop();
   const project = pjs.find(p => p.id === quoteProjectId);
   const pending = tks.filter(t => !t.done);
@@ -168,6 +168,13 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
 
   const computeQuoteTotals = quote => computeAdoptTotals(supabase, { quote, constructionType: project?.constructionType || "自社のみ" });
 
+  // ダッシュボード・右パネルの完工日基準の集計(wonQuotes)を、画面を再読み込みしなくても
+  // 最新にするための更新(App.jsxのloadAll()は起動時の1回だけなので、ここで補う)
+  const upsertWonQuote = (quoteId, patch) => setWonQuotes(prev => prev.some(q => q.id === quoteId)
+    ? prev.map(q => q.id === quoteId ? { ...q, ...patch } : q)
+    : [...prev, { id: quoteId, ...patch }]);
+  const removeWonQuote = quoteId => setWonQuotes(prev => prev.filter(q => q.id !== quoteId));
+
   // 完工日の入力欄(確認ダイアログの中に出す)。defaultValue制御で、ダイアログの再描画なしに最新値をrefで読む
   const completedOnRef = useRef(todayStr());
   const completedOnField = () => {
@@ -180,25 +187,31 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
     );
   };
 
-  // 「採用にする」= 完工済にする、と同じ処理(見積の状態もwonにし、案件のstatusも完了にする)
+  // 「採用にする」= 完工済にする(見積の状態をwonにし、案件の受注金額・粗利にこの見積の分を加える)
   const adoptQuote = async quote => {
     const { total, gp, subMissing, ownUnconfirmed } = await computeQuoteTotals(quote);
-    const prevAdopted = quotes.find(q => q.is_adopted && q.id !== quote.id);
-    const msg = buildAdoptMessage({ fmt, quoteTitle: quote.title, prevAdoptedTitle: prevAdopted?.title, beforeAmount: project.amount, beforeGp: project.gp, afterAmount: total, afterGp: gp, ownUnconfirmed, subMissing });
+    const msg = buildAdoptMessage({ fmt, quoteTitle: quote.title, beforeAmount: project.amount, beforeGp: project.gp, quoteAmount: total, quoteGp: gp, ownUnconfirmed, subMissing });
     setConf({ msg, okLabel: "完工済にする", okColor: "#059669", extra: completedOnField(), onOk: async () => {
       if (!completedOnRef.current) { alert("完工日を入力してください"); return; }
       const completedOn = completedOnRef.current;
       setConf(null);
-      const projectPatch = await adoptQuoteInDb(supabase, { quoteId: quote.id, prevAdoptedId: prevAdopted?.id, projectId: quoteProjectId, amount: total, gp, completedOn });
-      setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch } : p));
+      try {
+        const projectPatch = await adoptQuoteInDb(supabase, { quoteId: quote.id, projectId: quoteProjectId, gp, completedOn });
+        setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch } : p));
+        upsertWonQuote(quote.id, { project_id: quoteProjectId, total_amount: quote.total_amount || 0, gross_profit: Math.round(gp), completed_on: completedOn });
+      } catch (e) { alert(e.message); }
       await loadQuotes();
     } });
   };
 
   const unadoptQuote = quote => {
-    setConf({ msg: `「${quote.title}」を発注前に戻します(採用を解除)\n\n案件の受注金額・粗利はそのまま残ります(自動では戻りません)\n\nよろしいですか？`, okLabel: "発注前に戻す", okColor: "#9A3412", onOk: async () => {
+    setConf({ msg: buildUnadoptMessage(quote.title), okLabel: "発注前に戻す", okColor: "#9A3412", onOk: async () => {
       setConf(null);
-      await unadoptQuoteInDb(supabase, { quoteId: quote.id, alsoRevertStatus: true });
+      try {
+        const projectPatch = await unadoptQuoteInDb(supabase, { quoteId: quote.id, projectId: quoteProjectId });
+        setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch } : p));
+        removeWonQuote(quote.id);
+      } catch (e) { alert(e.message); }
       await loadQuotes();
     } });
   };
@@ -264,22 +277,21 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
     const becomingDone = ed.status === "won";
     const leavingDone = !!prevQuote?.is_adopted && !becomingDone;
     if (becomingDone) {
-      const prevAdopted = quotes.find(q => q.is_adopted && q.id !== ed.id);
-      const msg = buildAdoptMessage({ fmt, quoteTitle: ed.title.trim(), prevAdoptedTitle: prevAdopted?.title, beforeAmount: project.amount, beforeGp: project.gp, afterAmount: total, afterGp: gp, ownUnconfirmed, subMissing });
+      const msg = buildAdoptMessage({ fmt, quoteTitle: ed.title.trim(), beforeAmount: project.amount, beforeGp: project.gp, quoteAmount: total, quoteGp: gp, ownUnconfirmed, subMissing });
       setConf({ msg, okLabel: "完工済にする", okColor: "#059669", extra: completedOnField(), onOk: () => {
         if (!completedOnRef.current) { alert("完工日を入力してください"); return; }
-        setConf(null); persistQuote({ adopt: true, prevAdopted, completedOn: completedOnRef.current });
+        setConf(null); persistQuote({ adopt: true, completedOn: completedOnRef.current });
       } });
       return;
     }
     if (leavingDone) {
-      setConf({ msg: `「${ed.title.trim()}」を発注前に戻します(採用を解除)\n\n案件の受注金額・粗利はそのまま残ります(自動では戻りません)\n\nよろしいですか？`, okLabel: "発注前に戻す", okColor: "#9A3412", onOk: () => { setConf(null); persistQuote({ unadopt: true }); } });
+      setConf({ msg: buildUnadoptMessage(ed.title.trim()), okLabel: "発注前に戻す", okColor: "#9A3412", onOk: () => { setConf(null); persistQuote({ unadopt: true }); } });
       return;
     }
     persistQuote({});
   };
 
-  const persistQuote = async ({ adopt, unadopt, prevAdopted, completedOn }) => {
+  const persistQuote = async ({ adopt, unadopt, completedOn }) => {
     setSaving(true);
     let quoteId = ed.id;
     const payload = { project_id: quoteProjectId, title: ed.title.trim(), price_set_id: ed.price_set_id, status: ed.status, total_amount: Math.round(total) };
@@ -308,12 +320,17 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
       const { error: costsErr } = await supabase.from("quote_item_costs").insert(costsPayload);
       if (costsErr) { alert("原価の保存に失敗しました: " + costsErr.message); setSaving(false); return; }
     }
-    if (adopt) {
-      const projectPatch = await adoptQuoteInDb(supabase, { quoteId, prevAdoptedId: prevAdopted?.id, projectId: quoteProjectId, amount: total, gp, completedOn });
-      setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch } : p));
-    } else if (unadopt) {
-      await unadoptQuoteInDb(supabase, { quoteId });
-    }
+    try {
+      if (adopt) {
+        const projectPatch = await adoptQuoteInDb(supabase, { quoteId, projectId: quoteProjectId, gp, completedOn });
+        setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch } : p));
+        upsertWonQuote(quoteId, { project_id: quoteProjectId, total_amount: Math.round(total), gross_profit: Math.round(gp), completed_on: completedOn });
+      } else if (unadopt) {
+        const projectPatch = await unadoptQuoteInDb(supabase, { quoteId, projectId: quoteProjectId });
+        setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch } : p));
+        removeWonQuote(quoteId);
+      }
+    } catch (e) { alert(e.message); }
     await loadQuotes();
     setSaving(false);
     setView("list");
@@ -341,7 +358,7 @@ export default function Quotes({ pjs, setPjs, cos, cust, isPC, pp, nav, rpOpen, 
   return (
     <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
       {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="quotes" nav={nav} setModal={() => {}} setEc={() => {}} SB_W={SB_W} />}
-      {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} />}
+      {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} wonQuotes={wonQuotes} />}
       {(cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
 
       {view === "list" ? (

@@ -290,7 +290,7 @@ export const PCSidebar = ({ cust, tileConf, pjs, cos, pending, page, nav, setMod
   );
 };
 
-export const PCRightPanel = ({ rpOpen, setRpOpen, pjs, tks, finFiles, tmplFiles, fishWeather, nav, setAiInput, RP_W }) => {
+export const PCRightPanel = ({ rpOpen, setRpOpen, pjs, tks, finFiles, tmplFiles, fishWeather, nav, setAiInput, RP_W, wonQuotes = [] }) => {
   const [qi, setQi] = useState("");
   const [open, setOpen] = useState({ kpi: true, tasks: true, fishing: true, ai: true });
   const tog = k => setOpen(p => ({ ...p, [k]: !p[k] }));
@@ -298,15 +298,15 @@ export const PCRightPanel = ({ rpOpen, setRpOpen, pjs, tks, finFiles, tmplFiles,
   // 進行中案件の期間の基準は「対応日」(無ければ登録日)
   const statsPjs = pjs.filter(p => (p.respondedAt || p.created_at || "") >= PROJECT_STATS_SINCE);
   const active = statsPjs.filter(p => p.status !== "完了" && p.status !== "中断");
-  // 受注合計・粗利率は「今月・完工日基準」(完工日がある案件のうち、完工日が今月のものだけ)
+  // 受注合計・粗利率は「今月・完工日基準」(完工済みの見積のうち、completed_onが今月のものだけ。見積ごと)
   const nowD = new Date();
-  const thisMonthCompleted = pjs.filter(p => {
-    if (!p.completedOn || p.completedOn < PROJECT_STATS_SINCE) return false;
-    const d = new Date(p.completedOn);
+  const thisMonthCompleted = wonQuotes.filter(q => {
+    if (!q.completed_on || q.completed_on < PROJECT_STATS_SINCE) return false;
+    const d = new Date(q.completed_on);
     return d.getFullYear() === nowD.getFullYear() && d.getMonth() === nowD.getMonth();
   });
-  const totalAmt = thisMonthCompleted.reduce((s, p) => s + (p.amount || 0), 0);
-  const totalGp = thisMonthCompleted.reduce((s, p) => s + (p.gp || 0), 0);
+  const totalAmt = thisMonthCompleted.reduce((s, q) => s + (q.total_amount || 0), 0);
+  const totalGp = thisMonthCompleted.reduce((s, q) => s + (q.gross_profit || 0), 0);
   const SectionHdr = ({ id, label }) => (
     <button onClick={() => tog(id)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "none", border: "none", cursor: "pointer", padding: "10px 0 8px" }}>
       <div style={{ fontWeight: 800, fontSize: 13, color: "#1A3A5C" }}>{label}</div>

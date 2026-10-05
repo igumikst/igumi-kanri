@@ -1,6 +1,11 @@
-// 見積を「完工済み(採用)にする/発注前に戻す」処理の共通化(第8弾 ステップ1)。
+// 見積を「完工済み(採用)にする/発注前に戻す」処理の共通化(第8弾)。
 // Quotes.jsx(一覧の採用ボタン・編集画面の保存)、Projects.jsx(報告書からの提案)の
 // 3箇所で同じ処理をしていたのを、ここに集約する。
+//
+// 第8弾ステップ2: 完工日・粗利は「見積ごと」(quotes.completed_on / quotes.gross_profit)。
+// 完工済みの見積は、すべて案件の受注金額・粗利に入る(採用の切り替えで、他の完工済み見積の
+// is_adopted / status は変更しない)。案件の amount / grossProfit は、常に
+// 「その案件の全完工済み(won)見積の合計」として、書き込み直す(上書きではなく合算)。
 import { computeQuoteFinancials } from "./quoteFinancials";
 
 // 見積の原価・下請け原価から、完工済みにするときの受注金額・粗利を計算する
@@ -27,33 +32,52 @@ export const provisionalWarningLines = ({ ownUnconfirmed, subMissing }) => [
   subMissing ? "⚠️ 下請けの原価が1件も登録されていません。粗利は暫定です" : "",
 ].filter(Boolean);
 
-// 完工済み(採用)にする確認ダイアログの本文
-export function buildAdoptMessage({ fmt, quoteTitle, prevAdoptedTitle, beforeAmount, beforeGp, afterAmount, afterGp, ownUnconfirmed, subMissing }) {
+// 完工済みにする確認ダイアログの本文。受注金額・粗利は「この見積の分を加える」加算として示す
+export function buildAdoptMessage({ fmt, quoteTitle, beforeAmount, beforeGp, quoteAmount, quoteGp, ownUnconfirmed, subMissing }) {
+  const afterAmount = (Number(beforeAmount) || 0) + (Number(quoteAmount) || 0);
+  const afterGp = (Number(beforeGp) || 0) + (Number(quoteGp) || 0);
   return [
-    `「${quoteTitle}」を完工済(採用)にします`,
-    prevAdoptedTitle ? `(現在「${prevAdoptedTitle}」が採用中です。切り替えます)` : "",
+    `「${quoteTitle}」を完工済みにします`,
     "",
     `受注金額: ${fmt(beforeAmount)} → ${fmt(afterAmount)}`,
     `粗利: ${fmt(beforeGp)} → ${fmt(afterGp)}`,
     ...provisionalWarningLines({ ownUnconfirmed, subMissing }),
     "",
-    "案件の状態も「完了」にし、案件の受注金額・粗利を上書きします。元に戻せません。",
+    "案件の受注金額・粗利に、この見積の分を加えます(他に完工済みの見積があれば、そのまま残ります)。",
     "よろしいですか？",
   ].filter(Boolean).join("\n");
 }
 
-// 見積を完工済み(採用)にする。他に採用中の見積があれば、その採用を外す
-// (段階1では挙動を変えない: 他の見積の status は変更しない/案件の amount・grossProfit は上書き)
-export async function adoptQuote(supabase, { quoteId, prevAdoptedId, projectId, amount, gp, completedOn }) {
-  if (prevAdoptedId) await supabase.from("quotes").update({ is_adopted: false }).eq("id", prevAdoptedId);
-  await supabase.from("quotes").update({ is_adopted: true, status: "won" }).eq("id", quoteId);
-  const projectPatch = { amount: Math.round(amount), grossProfit: Math.round(gp), status: "完了", completedOn };
-  await supabase.from("projects").update(projectPatch).eq("id", projectId);
-  return projectPatch;
+// 発注前に戻す確認ダイアログの本文
+export function buildUnadoptMessage(quoteTitle) {
+  return `「${quoteTitle}」を発注前に戻します(採用を解除)\n\n案件の受注金額・粗利は、残りの完工済み見積の合計に更新されます\n\nよろしいですか？`;
 }
 
-// 見積の採用を解除する(発注前に戻す)。alsoRevertStatus=true のときは、見積の status も submitted に戻す
-export async function unadoptQuote(supabase, { quoteId, alsoRevertStatus }) {
-  const patch = alsoRevertStatus ? { is_adopted: false, status: "submitted" } : { is_adopted: false };
-  await supabase.from("quotes").update(patch).eq("id", quoteId);
+// 案件の amount / grossProfit を、その案件の全完工済み(won)見積の合計に書き直す
+async function recalcProjectTotals(supabase, projectId) {
+  const { data } = await supabase.from("quotes").select("total_amount, gross_profit").eq("project_id", projectId).eq("status", "won");
+  const amount = Math.round((data || []).reduce((s, q) => s + (Number(q.total_amount) || 0), 0));
+  const gp = Math.round((data || []).reduce((s, q) => s + (Number(q.gross_profit) || 0), 0));
+  const { error } = await supabase.from("projects").update({ amount, grossProfit: gp }).eq("id", projectId);
+  if (error) throw new Error("案件の受注金額・粗利の更新に失敗しました: " + error.message);
+  return { amount, gp };
+}
+
+// 見積を完工済み(採用)にする。他の完工済み見積の is_adopted / status は変更しない。
+// 案件の amount / grossProfit は、全完工済み見積の合計に書き直す
+export async function adoptQuote(supabase, { quoteId, projectId, gp, completedOn }) {
+  const { error } = await supabase.from("quotes").update({ is_adopted: true, status: "won", completed_on: completedOn, gross_profit: Math.round(gp) }).eq("id", quoteId);
+  if (error) throw new Error("見積の完工済み更新に失敗しました: " + error.message);
+  const totals = await recalcProjectTotals(supabase, projectId);
+  const { error: pErr } = await supabase.from("projects").update({ status: "完了" }).eq("id", projectId);
+  if (pErr) throw new Error("案件のステータス更新に失敗しました: " + pErr.message);
+  return { ...totals, status: "完了" };
+}
+
+// 見積の採用を解除する(発注前に戻す)。見積の completed_on / gross_profit は消さない。
+// 案件の amount / grossProfit は、残りの完工済み見積の合計に書き直す
+export async function unadoptQuote(supabase, { quoteId, projectId }) {
+  const { error } = await supabase.from("quotes").update({ is_adopted: false, status: "submitted" }).eq("id", quoteId);
+  if (error) throw new Error("見積を発注前に戻す更新に失敗しました: " + error.message);
+  return recalcProjectTotals(supabase, projectId);
 }

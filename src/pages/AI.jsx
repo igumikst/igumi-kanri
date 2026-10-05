@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Hdr } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 
-export default function AI({ pjs, cos, tks, links, cust, tileConf, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, SB_W, RP_W }) {
+export default function AI({ pjs, wonQuotes, cos, tks, links, cust, tileConf, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, SB_W, RP_W }) {
   const [selected, setSelected] = useState(null);
   const pending = tks.filter(t => !t.done);
 
@@ -57,7 +57,7 @@ export default function AI({ pjs, cos, tks, links, cust, tileConf, isPC, pp, nav
   return (
     <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
       {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="ai" nav={nav} setModal={() => {}} setEc={() => {}} SB_W={SB_W} />}
-      {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} />}
+      {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} wonQuotes={wonQuotes} />}
       {(cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
 
       <Hdr title="✨ AI補助" back={() => nav("home")} />

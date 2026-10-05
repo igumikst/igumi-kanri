@@ -10,7 +10,7 @@ import FileDropZone from "../components/FileDropZone";
 import { usePreventWindowFileDrop } from "../lib/useFileDropGuard";
 import { REPORT_FILE_BUCKET, REPORT_FILE_TYPES, REPORT_FILE_MAX_SIZE, reportFileExt, openReportFile } from "../lib/reportFiles";
 
-export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, setQuoteProjectId, setQuoteImportCtx, branches, setBranches, salesReps, setSalesReps }) {
+export default function Projects({ pjs, wonQuotes, setWonQuotes, setPjs, cos, setCos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, setQuoteProjectId, setQuoteImportCtx, branches, setBranches, salesReps, setSalesReps }) {
   usePreventWindowFileDrop();
   const [selP, setSelP] = useState(null);
   const [modal, setModal] = useState(null);
@@ -20,7 +20,7 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
   const [quickStatus, setQuickStatus] = useState(null);
   const [conf, setConf] = useState(null);
   const [editP, setEditP] = useState(null);
-  const blankP = { name: "", status: "発注待ち", clientId: "", branchId: "", salesRepId: "", salesRep: "", inCharge: "崎岡", subIds: [], amount: "", gp: "", qDate: "", respondedAt: todayStr(), completedOn: "", constructionType: "自社のみ" };
+  const blankP = { name: "", status: "発注待ち", clientId: "", branchId: "", salesRepId: "", salesRep: "", inCharge: "崎岡", subIds: [], amount: "", gp: "", qDate: "", respondedAt: todayStr(), constructionType: "自社のみ" };
   const [nP, setNP] = useState(blankP);
 
   // 案件の詳細を開いている時だけ、その案件の見積・報告書ファイルを読み込む
@@ -49,9 +49,8 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
   const adoptCompletedOnRef = useRef(todayStr());
   const adoptQuoteFromReports = async quote => {
     const { total, gp, subMissing, ownUnconfirmed } = await computeQuoteTotalsForAdopt(quote);
-    const prevAdopted = quotes.find(q => q.is_adopted && q.id !== quote.id);
     adoptCompletedOnRef.current = todayStr();
-    const msg = buildAdoptMessage({ fmt, quoteTitle: quote.title, prevAdoptedTitle: prevAdopted?.title, beforeAmount: selP.amount, beforeGp: selP.gp, afterAmount: total, afterGp: gp, ownUnconfirmed, subMissing });
+    const msg = buildAdoptMessage({ fmt, quoteTitle: quote.title, beforeAmount: selP.amount, beforeGp: selP.gp, quoteAmount: total, quoteGp: gp, ownUnconfirmed, subMissing });
     setConf({ msg, okLabel: "完工済にする", okColor: "#059669",
       extra: (
         <div style={{ marginBottom: 14, textAlign: "left" }}>
@@ -62,11 +61,16 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
       onOk: async () => {
       if (!adoptCompletedOnRef.current) { alert("完工日を入力してください"); return; }
       const completedOn = adoptCompletedOnRef.current;
-      const projectPatch = await adoptQuoteInDb(supabase, { quoteId: quote.id, prevAdoptedId: prevAdopted?.id, projectId: selP.id, amount: total, gp, completedOn });
-      const updated = { ...selP, ...projectPatch };
-      setPjs(prev => prev.map(p => p.id === selP.id ? updated : p));
-      setSelP(updated);
-      setQuotes(prev => prev.map(q => q.id === quote.id ? { ...q, is_adopted: true, status: "won" } : (prevAdopted && q.id === prevAdopted.id) ? { ...q, is_adopted: false } : q));
+      try {
+        const projectPatch = await adoptQuoteInDb(supabase, { quoteId: quote.id, projectId: selP.id, gp, completedOn });
+        const updated = { ...selP, ...projectPatch };
+        setPjs(prev => prev.map(p => p.id === selP.id ? updated : p));
+        setSelP(updated);
+        setQuotes(prev => prev.map(q => q.id === quote.id ? { ...q, is_adopted: true, status: "won" } : q));
+        setWonQuotes(prev => prev.some(q => q.id === quote.id)
+          ? prev.map(q => q.id === quote.id ? { ...q, project_id: selP.id, total_amount: quote.total_amount || 0, gross_profit: Math.round(gp), completed_on: completedOn } : q)
+          : [...prev, { id: quote.id, project_id: selP.id, total_amount: quote.total_amount || 0, gross_profit: Math.round(gp), completed_on: completedOn }]);
+      } catch (e) { alert(e.message); }
       setConf(null);
     } });
   };
@@ -120,18 +124,16 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
 
   const savePj = async () => {
     if (!nP.name) return;
-    if (nP.status === "完了" && !nP.completedOn) { alert("完工日を入力してください"); return; }
-    const { data } = await supabase.from("projects").insert([{ name: nP.name, status: nP.status, clientId: nP.clientId || null, branchId: nP.branchId || null, salesRepId: nP.salesRepId || null, salesRep: nP.salesRep, inCharge: nP.inCharge, subcontractorIds: nP.subIds || [], amount: Number(nP.amount) || 0, grossProfit: Number(nP.gp) || 0, quoteDate: nP.qDate, respondedAt: nP.respondedAt || null, completedOn: nP.completedOn || null, constructionType: nP.constructionType || "自社のみ" }]).select();
+    const { data } = await supabase.from("projects").insert([{ name: nP.name, status: nP.status, clientId: nP.clientId || null, branchId: nP.branchId || null, salesRepId: nP.salesRepId || null, salesRep: nP.salesRep, inCharge: nP.inCharge, subcontractorIds: nP.subIds || [], amount: Number(nP.amount) || 0, grossProfit: Number(nP.gp) || 0, quoteDate: nP.qDate, respondedAt: nP.respondedAt || null, constructionType: nP.constructionType || "自社のみ" }]).select();
     if (data) setPjs([{ ...data[0], subIds: data[0].subcontractorIds || [], gp: data[0].grossProfit || 0, qDate: data[0].quoteDate || "" }, ...pjs]);
     setNP(blankP); setModal(null);
   };
 
   const updatePj = async () => {
     if (!editP || !editP.name) return;
-    if (editP.status === "完了" && !editP.completedOn) { alert("完工日を入力してください"); return; }
     const salesRep = editP.salesRep;
-    await supabase.from("projects").update({ name: editP.name, status: editP.status, clientId: editP.clientId || null, branchId: editP.branchId || null, salesRepId: editP.salesRepId || null, salesRep, inCharge: editP.inCharge, subcontractorIds: editP.subIds || [], amount: Number(editP.amount) || 0, grossProfit: Number(editP.gp) || 0, quoteDate: editP.qDate, respondedAt: editP.respondedAt || null, completedOn: editP.completedOn || null, constructionType: editP.constructionType || "自社のみ" }).eq("id", editP.id);
-    const updated = { ...editP, salesRep, gp: Number(editP.gp) || 0, amount: Number(editP.amount) || 0, respondedAt: editP.respondedAt || null, completedOn: editP.completedOn || null };
+    await supabase.from("projects").update({ name: editP.name, status: editP.status, clientId: editP.clientId || null, branchId: editP.branchId || null, salesRepId: editP.salesRepId || null, salesRep, inCharge: editP.inCharge, subcontractorIds: editP.subIds || [], amount: Number(editP.amount) || 0, grossProfit: Number(editP.gp) || 0, quoteDate: editP.qDate, respondedAt: editP.respondedAt || null, constructionType: editP.constructionType || "自社のみ" }).eq("id", editP.id);
+    const updated = { ...editP, salesRep, gp: Number(editP.gp) || 0, amount: Number(editP.amount) || 0, respondedAt: editP.respondedAt || null };
     setPjs(pjs.map(p => p.id === editP.id ? updated : p));
     setSelP(updated); setEditP(null);
   };
@@ -146,7 +148,7 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
   return (
     <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
       {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="projects" nav={nav} setModal={setModal} setEc={() => {}} SB_W={SB_W} />}
-      {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} />}
+      {isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} wonQuotes={wonQuotes} />}
       {(cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
 
       <Hdr title={selP ? selP.name : "📋 案件管理"} back={selP ? () => setSelP(null) : () => nav("home")}
@@ -158,7 +160,7 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
             <div style={{ background: "#fff", borderRadius: 14, padding: 18, boxShadow: "0 2px 10px rgba(0,0,0,0.08)" }}>
               <div style={{ fontWeight: 800, fontSize: 15, color: "#1A3A5C", marginBottom: 14 }}>✏️ 案件を編集</div>
               <Inp label="案件名 *" value={editP.name} onChange={e => setEditP({ ...editP, name: e.target.value })} />
-              <Sel label="ステータス" opts={STATUSES} value={editP.status} onChange={e => { const v = e.target.value; setEditP(prev => ({ ...prev, status: v, completedOn: v === "完了" && !prev.completedOn ? todayStr() : prev.completedOn })); }} />
+              <Sel label="ステータス" opts={STATUSES} value={editP.status} onChange={e => setEditP(prev => ({ ...prev, status: e.target.value }))} />
               {editP.status === "完了" && !quotes.some(q => q.status === "won") && (
                 <div style={{ background: "#FFFBEB", color: "#92400E", borderRadius: 8, padding: "8px 10px", fontSize: 12, marginBottom: 10 }}>
                   ⚠️ 売上・粗利が空のままです。見積を完工済みにしますか?
@@ -175,7 +177,6 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
               <Inp label="粗利" type="number" value={editP.gp || ""} onChange={e => setEditP({ ...editP, gp: e.target.value })} />
               <Inp label="見積提出日" type="date" value={editP.qDate || ""} onChange={e => setEditP({ ...editP, qDate: e.target.value })} />
               <Inp label="対応日" type="date" value={editP.respondedAt || ""} onChange={e => setEditP({ ...editP, respondedAt: e.target.value })} />
-              <Inp label={editP.status === "完了" ? "完工日 *" : "完工日"} type="date" value={editP.completedOn || ""} onChange={e => setEditP({ ...editP, completedOn: e.target.value })} />
               <Sel label="施工形態" opts={CONSTRUCTION_TYPES} value={editP.constructionType || "自社のみ"} onChange={e => setEditP({ ...editP, constructionType: e.target.value })} />
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={() => setEditP(null)} style={{ flex: 1, padding: "12px 0", background: "#F3F4F6", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer", color: "#374151" }}>キャンセル</button>
@@ -197,7 +198,7 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
                 <div style={{ flex: 1, background: "#F0FDF4", borderRadius: 10, padding: "10px 12px" }}><div style={{ fontSize: 10, color: "#9CA3AF" }}>粗利 / 粗利率</div><div style={{ fontSize: 14, fontWeight: 800, color: "#059669" }}>{fmt(selP.gp)}</div><div style={{ fontSize: 11, color: "#059669" }}>{pct(selP.gp, selP.amount)}</div></div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginBottom: 12 }}>
-                {[["ステータス", selP.status], ["社内担当", selP.inCharge], ["営業所", branches.find(b => b.id === selP.branchId)?.name], ["営業担当", selP.salesRep], ["見積提出日", selP.qDate], ["対応日", dateJp(selP.respondedAt)], ["完工日", dateJp(selP.completedOn)], ["施工形態", selP.constructionType || "自社のみ"]].map(([l, v]) => (
+                {[["ステータス", selP.status], ["社内担当", selP.inCharge], ["営業所", branches.find(b => b.id === selP.branchId)?.name], ["営業担当", selP.salesRep], ["見積提出日", selP.qDate], ["対応日", dateJp(selP.respondedAt)], ["施工形態", selP.constructionType || "自社のみ"]].map(([l, v]) => (
                   <div key={l} style={{ marginBottom: 8 }}><div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 2 }}>{l}</div><div style={{ fontSize: 13, fontWeight: 600, color: "#1F2937" }}>{v || "—"}</div></div>
                 ))}
               </div>
@@ -275,17 +276,10 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
                     </div>
                     {quickStatus === p.id && <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 6 }}>{STATUSES.map(s => <button key={s} onClick={e => {
                       e.stopPropagation();
-                      if (s === "完了" && !p.completedOn) {
-                        setSelP(p);
-                        setEditP({ ...p, status: "完了", completedOn: todayStr(), respondedAt: p.respondedAt || todayStr() });
-                        setQuickStatus(null);
-                        return;
-                      }
                       supabase.from("projects").update({ status: s }).eq("id", p.id).then(() => { setPjs(prev => prev.map(x => x.id === p.id ? { ...x, status: s } : x)); setQuickStatus(null); });
                     }} style={{ padding: "3px 8px", borderRadius: 10, border: "1px solid", fontSize: 10, fontWeight: 700, cursor: "pointer", borderColor: STATUS_STYLE[s]?.border || "#ccc", background: p.status === s ? STATUS_STYLE[s]?.bg : "#fff", color: STATUS_STYLE[s]?.text || "#374151" }}>{s}</button>)}</div>}
                     <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 4 }}>{cl ? `🏢 ${cl.name}${cl.branch ? " " + cl.branch : ""}` : "取引先未設定"}{p.inCharge && <span style={{ marginLeft: 8, color: "#9CA3AF" }}>👤 {p.inCharge}</span>}</div>
                     <div style={{ display: "flex", justifyContent: "space-between" }}><div style={{ fontSize: 14, fontWeight: 800, color: "#E07B39" }}>{fmt(p.amount)}</div>{gp && <div style={{ fontSize: 11, color: "#059669", fontWeight: 700 }}>粗利率 {gp}%</div>}</div>
-                    {p.completedOn && <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 2 }}>完工日 {dateJp(p.completedOn)}</div>}
                   </div>
                   <div style={{ display: "flex", borderTop: "1px solid #F3F4F6" }}>
                     <button onClick={() => setSelP(p)} style={{ flex: 1, padding: "8px 0", background: "none", border: "none", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#1A3A5C", fontWeight: 700, cursor: "pointer" }}>詳細 →</button>
@@ -299,7 +293,7 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
       )}
       {modal === "addP" && (<Modal title="新規案件を追加" onClose={() => setModal(null)} onSave={savePj}>
         <Inp label="案件名 *" value={nP.name} onChange={e => setNP({ ...nP, name: e.target.value })} placeholder="例: ○○マンション改修工事" />
-        <Sel label="ステータス" opts={STATUSES} value={nP.status} onChange={e => { const v = e.target.value; setNP(prev => ({ ...prev, status: v, completedOn: v === "完了" && !prev.completedOn ? todayStr() : prev.completedOn })); }} />
+        <Sel label="ステータス" opts={STATUSES} value={nP.status} onChange={e => setNP(prev => ({ ...prev, status: e.target.value }))} />
         <Inp label="社内担当" value={nP.inCharge} onChange={e => setNP({ ...nP, inCharge: e.target.value })} />
         <ClientBranchRepPicker
           clientId={nP.clientId} branchId={nP.branchId} salesRepId={nP.salesRepId}
@@ -308,7 +302,6 @@ export default function Projects({ pjs, setPjs, cos, setCos, cust, isPC, pp, nav
         />
         <Inp label="見積提出日" type="date" value={nP.qDate} onChange={e => setNP({ ...nP, qDate: e.target.value })} />
         <Inp label="対応日" type="date" value={nP.respondedAt} onChange={e => setNP({ ...nP, respondedAt: e.target.value })} />
-        {nP.status === "完了" && <Inp label="完工日 *" type="date" value={nP.completedOn || ""} onChange={e => setNP({ ...nP, completedOn: e.target.value })} />}
         <Sel label="施工形態" opts={CONSTRUCTION_TYPES} value={nP.constructionType} onChange={e => setNP({ ...nP, constructionType: e.target.value })} />
         <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: -4, marginBottom: 10 }}>受注金額・粗利は、見積を作成して「採用」すると自動で入ります</div>
       </Modal>)}

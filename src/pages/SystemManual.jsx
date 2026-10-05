@@ -2,7 +2,7 @@ import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 
-export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_W, cust, pjs, cos, tks, finFiles, tmplFiles, tileConf }) {
+export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_W, cust, pjs, wonQuotes, cos, tks, finFiles, tmplFiles, tileConf }) {
   const [tab, setTab] = useState("overview");
   const [unlocked, setUnlocked] = useState(false);
   const [pwInput, setPwInput] = useState("");
@@ -45,7 +45,7 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
   if (!unlocked) return (
     <div style={s.wrap}>
       {isPC && <PCSidebar nav={nav} page="systemmanual" cust={cust} SB_W={SB_W} pjs={pjs || []} cos={cos || []} pending={pending} tileConf={tileConf || []} setModal={() => {}} setEc={() => {}} />}
-      {isPC && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} RP_W={RP_W} nav={nav} cust={cust} pjs={pjs || []} tks={tks || []} finFiles={finFiles || []} tmplFiles={tmplFiles || []} fishWeather={null} setAiInput={() => {}} />}
+      {isPC && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} RP_W={RP_W} nav={nav} cust={cust} pjs={pjs || []} tks={tks || []} finFiles={finFiles || []} tmplFiles={tmplFiles || []} fishWeather={null} setAiInput={() => {}} wonQuotes={wonQuotes || []} />}
       {!isPC && <FloatLauncher nav={nav} cust={cust} links={[]} />}
       <div style={{ ...s.inner, display: "flex", alignItems: "center", justifyContent: "center", minHeight: "80vh" }}>
         <div style={{ background: "#fff", borderRadius: 16, padding: 32, width: 320, boxSizing: "border-box", boxShadow: "0 4px 16px rgba(0,0,0,0.1)" }}>
@@ -73,7 +73,7 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
   return (
     <div style={s.wrap}>
       {isPC && <PCSidebar nav={nav} page="systemmanual" cust={cust} SB_W={SB_W} pjs={pjs || []} cos={cos || []} pending={pending} tileConf={tileConf || []} setModal={() => {}} setEc={() => {}} />}
-      {isPC && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} RP_W={RP_W} nav={nav} cust={cust} pjs={pjs || []} tks={tks || []} finFiles={finFiles || []} tmplFiles={tmplFiles || []} fishWeather={null} setAiInput={() => {}} />}
+      {isPC && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} RP_W={RP_W} nav={nav} cust={cust} pjs={pjs || []} tks={tks || []} finFiles={finFiles || []} tmplFiles={tmplFiles || []} fishWeather={null} setAiInput={() => {}} wonQuotes={wonQuotes || []} />}
       {!isPC && <FloatLauncher nav={nav} cust={cust} links={[]} />}
 
       <div style={s.inner}>
