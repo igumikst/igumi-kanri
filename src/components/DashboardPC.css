@@ -65,7 +65,7 @@
 
 @media (max-width: 899px){
   .igdash{padding:12px}
-  .igdash .pcgrid4{grid-template-columns:1fr 1fr}
+  .igdash .pcgrid4,.igdash .pcgrid4.five{grid-template-columns:1fr 1fr}
   .igdash .pckpi{padding:12px}
   .igdash .pckpi b{font-size:19px}
   .igdash .pcrow.r2{grid-template-columns:1fr}
@@ -73,4 +73,12 @@
   .igdash .donut svg{width:130px;height:130px}
   .igdash .legend.col span{font-size:13px;padding:7px 2px}
   .igdash .legend.col em{font-size:14px;width:44px}
+}
+
+@media (max-width: 480px){
+  .igdash .pcgrid4,.igdash .pcgrid4.five{gap:8px}
+  .igdash .pckpi{padding:9px 10px}
+  .igdash .pckpi span{font-size:16px}
+  .igdash .pckpi small{margin-top:3px;font-size:11px}
+  .igdash .pckpi b{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 }

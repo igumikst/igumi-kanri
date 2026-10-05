@@ -183,7 +183,7 @@ export default function DashboardPC({
   branches = [],
   salesReps = [],
 }) {
-  const [period, setPeriod] = useState("all");
+  const [period, setPeriod] = useState("thisMonth");
   const [owner, setOwner] = useState("");
   const [client, setClient] = useState("");
   const [branch, setBranch] = useState("");

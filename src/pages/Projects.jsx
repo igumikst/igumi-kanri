@@ -263,26 +263,39 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
             {["すべて", "未発注", "発注済み"].map(s => (<button key={s} onClick={() => setFltS(s)} style={{ padding: "4px 12px", borderRadius: 16, border: "1.5px solid", whiteSpace: "nowrap", borderColor: fltS === s ? "#1A3A5C" : "#D1D5DB", background: fltS === s ? "#1A3A5C" : "#fff", color: fltS === s ? "#fff" : "#374151", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{s}</button>))}
           </div>
           {inChargeList.length > 2 && <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 8 }}>{inChargeList.map(n => (<button key={n} onClick={() => setFltInCharge(n)} style={{ padding: "4px 12px", borderRadius: 16, border: "1.5px solid", whiteSpace: "nowrap", borderColor: fltInCharge === n ? "#E07B39" : "#D1D5DB", background: fltInCharge === n ? "#E07B39" : "#fff", color: fltInCharge === n ? "#fff" : "#374151", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{n === "すべて" ? "👤 全員" : "👤 " + n}</button>))}</div>}
-          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-            {[["件数", `${filtP.length}件`], ["受注合計", fmt(tA)], ["粗利合計", fmt(tG)]].map(([l, v]) => (<div key={l} style={{ flex: 1, background: "#fff", borderRadius: 10, padding: "8px 10px", textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}><div style={{ fontSize: 10, color: "#9CA3AF" }}>{l}</div><div style={{ fontSize: 12, fontWeight: 800, color: "#1A3A5C", marginTop: 1 }}>{v}</div></div>))}
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            {[["件数", `${filtP.length}件`], ["受注合計", fmt(tA)], ["粗利合計", fmt(tG)]].map(([l, v]) => (<div key={l} style={{ flex: 1, background: "#fff", borderRadius: 10, padding: "6px 8px", textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}><div style={{ fontSize: 10, color: "#9CA3AF" }}>{l}</div><div style={{ fontSize: 12, fontWeight: 800, color: "#1A3A5C", marginTop: 1 }}>{v}</div></div>))}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
             {filtP.map(p => {
               const cl = getC(p.clientId);
               const gp = p.amount ? ((p.gp / p.amount) * 100).toFixed(1) : null;
+              const clientLabel = cl ? `🏢 ${cl.name}${cl.branch ? " " + cl.branch : ""}` : "取引先未設定";
               return (
-                <div key={p.id} style={{ background: "#fff", borderRadius: 12, boxShadow: "0 1px 6px rgba(0,0,0,0.07)", borderLeft: "4px solid #1A3A5C", overflow: "hidden" }}>
-                  <div onClick={() => setSelP(p)} style={{ padding: "13px 14px", cursor: "pointer" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 5 }}>
-                      <div style={{ fontWeight: 700, fontSize: 14, flex: 1, marginRight: 8, color: "#1F2937" }}>{p.name}</div>
+                <div key={p.id} style={{ display: "flex", alignItems: "stretch", background: "#fff", borderRadius: 8, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", borderLeft: "3px solid #1A3A5C", overflow: "hidden" }}>
+                  {isPC ? (
+                    <div onClick={() => setSelP(p)} style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 12, padding: "7px 12px", cursor: "pointer" }}>
+                      <div style={{ flex: 2, minWidth: 0, fontWeight: 700, fontSize: 13, color: "#1F2937", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+                      <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: "#6B7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{clientLabel}</div>
+                      <div style={{ width: 110, flex: "none", textAlign: "right", fontSize: 13, fontWeight: 800, color: "#E07B39" }}>{fmt(p.amount)}</div>
+                      <div style={{ width: 72, flex: "none", textAlign: "right", fontSize: 12, fontWeight: 700, color: "#059669" }}>{gp ? `粗利率 ${gp}%` : "—"}</div>
                     </div>
-                    <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 4 }}>{cl ? `🏢 ${cl.name}${cl.branch ? " " + cl.branch : ""}` : "取引先未設定"}{p.inCharge && <span style={{ marginLeft: 8, color: "#9CA3AF" }}>👤 {p.inCharge}</span>}</div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}><div style={{ fontSize: 14, fontWeight: 800, color: "#E07B39" }}>{fmt(p.amount)}</div>{gp && <div style={{ fontSize: 11, color: "#059669", fontWeight: 700 }}>粗利率 {gp}%</div>}</div>
-                  </div>
-                  <div style={{ display: "flex", borderTop: "1px solid #F3F4F6" }}>
-                    <button onClick={() => setSelP(p)} style={{ flex: 1, padding: "8px 0", background: "none", border: "none", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#1A3A5C", fontWeight: 700, cursor: "pointer" }}>詳細 →</button>
-                    <button onClick={() => setConf({ msg: `「${p.name}」\n\nこの操作は元に戻せません。\n削除しますか？`, onOk: () => { delPj(p.id); setConf(null); } })} style={{ padding: "8px 16px", background: "none", border: "none", fontSize: 12, color: "#DC2626", fontWeight: 700, cursor: "pointer" }}>🗑</button>
-                  </div>
+                  ) : (
+                    <div onClick={() => setSelP(p)} style={{ flex: 1, minWidth: 0, padding: "8px 12px", cursor: "pointer" }}>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: "#1F2937", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 2 }}>
+                        <div style={{ flex: 1, minWidth: 0, fontSize: 11, color: "#6B7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{clientLabel}</div>
+                        <div style={{ flex: "none", display: "flex", gap: 8, alignItems: "baseline" }}>
+                          <span style={{ fontSize: 12, fontWeight: 800, color: "#E07B39" }}>{fmt(p.amount)}</span>
+                          {gp && <span style={{ fontSize: 11, color: "#059669", fontWeight: 700 }}>粗利率 {gp}%</span>}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <button
+                    onClick={e => { e.stopPropagation(); setConf({ msg: `「${p.name}」\n\nこの操作は元に戻せません。\n削除しますか？`, onOk: () => { delPj(p.id); setConf(null); } }); }}
+                    style={{ flex: "none", padding: "0 12px", background: "none", border: "none", borderLeft: "1px solid #F3F4F6", fontSize: 13, color: "#DC2626", cursor: "pointer" }}
+                  >🗑</button>
                 </div>
               );
             })}
