@@ -25,6 +25,11 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
   const [fltS, setFltS] = useState("すべて");
   const [fltInCharge, setFltInCharge] = useState("すべて");
   const [schP, setSchP] = useState("");
+  // 取引先→営業所→営業担当の絞り込み(第8弾テーマ7)。営業担当の候補はsales_repsから作る(contactsは使わない)
+  const [fltClient, setFltClient] = useState("");
+  const [fltBranch, setFltBranch] = useState("");
+  const [fltRep, setFltRep] = useState("");
+  const [fltOpen, setFltOpen] = useState(false);
   const [conf, setConf] = useState(null);
   const [editP, setEditP] = useState(null);
   const blankP = { name: "", status: "発注待ち", clientId: "", branchId: "", salesRepId: "", salesRep: "", inCharge: "崎岡", subIds: [], amount: "", gp: "", qDate: "", respondedAt: todayStr(), constructionType: "自社のみ" };
@@ -120,6 +125,25 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
   const getC = id => cos.find(c => c.id === id);
   const inChargeList = ["すべて", ...new Set(pjs.map(p => p.inCharge).filter(Boolean))];
 
+  // 取引先→営業所→営業担当の絞り込みの候補(ダッシュボードの絞り込みと同じ考え方)
+  const clientOptions = (() => {
+    const map = new Map();
+    pjs.forEach(p => { if (p.clientId && !map.has(p.clientId)) map.set(p.clientId, getC(p.clientId)?.name || "不明"); });
+    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], "ja"));
+  })();
+  const branchOptions = branches
+    .filter(b => !fltClient || b.company_id === fltClient)
+    .map(b => [b.id, b.name || "(名称未設定)"])
+    .sort((a, b) => a[1].localeCompare(b[1], "ja"));
+  const repOptions = (salesReps || [])
+    .filter(s => (!fltClient || s.company_id === fltClient) && (!fltBranch || s.branch_id === fltBranch))
+    .map(s => [s.id, s.name || "(名前未設定)"])
+    .sort((a, b) => a[1].localeCompare(b[1], "ja"));
+  const onFltClientChange = v => { setFltClient(v); setFltBranch(""); setFltRep(""); };
+  const onFltBranchChange = v => { setFltBranch(v); setFltRep(""); };
+  const clearFlt = () => { setFltClient(""); setFltBranch(""); setFltRep(""); };
+  const fltActive = !!(fltClient || fltBranch || fltRep);
+
   // 発注済み/未発注は見積の状態だけで判断する(第8弾テーマ3)。案件のstatusは使わない
   const wonProjectIds = new Set((wonQuotes || []).map(q => q.project_id));
   const submittedProjectIds = new Set((submittedQuotes || []).map(q => q.project_id));
@@ -128,6 +152,9 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
     if (fltS === "未発注" && !submittedProjectIds.has(p.id)) return false;
     if (fltS === "発注済み" && !wonProjectIds.has(p.id)) return false;
     if (fltInCharge !== "すべて" && p.inCharge !== fltInCharge) return false;
+    if (fltClient && p.clientId !== fltClient) return false;
+    if (fltBranch && p.branchId !== fltBranch) return false;
+    if (fltRep && p.salesRepId !== fltRep) return false;
     if (schP && !p.name.includes(schP) && !(getC(p.clientId)?.name || "").includes(schP) && !(p.inCharge || "").includes(schP)) return false;
     return true;
   });
@@ -155,6 +182,9 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
     await supabase.from("projects").delete().eq("id", id);
     setPjs(pjs.filter(p => p.id !== id)); setSelP(null);
   };
+
+  const fltSel = { padding: "6px 10px", borderRadius: 10, border: "1.5px solid #E5E7EB", fontSize: 12, background: "#fff", color: "#1F2937" };
+  const clearBtn = { padding: "6px 12px", borderRadius: 10, border: "1.5px solid #D1D5DB", background: "#fff", color: "#374151", fontSize: 12, fontWeight: 700, cursor: "pointer" };
 
   const pending = tks.filter(t => !t.done);
 
@@ -261,7 +291,49 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
           <input value={schP} onChange={e => setSchP(e.target.value)} placeholder="🔍 案件名・取引先・担当者で検索" style={{ width: "100%", padding: "9px 14px", borderRadius: 10, border: "1.5px solid #E5E7EB", fontSize: 13, background: "#fff", boxSizing: "border-box", marginBottom: 10, color: "#1F2937" }} />
           <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 6, marginBottom: 6 }}>
             {["すべて", "未発注", "発注済み"].map(s => (<button key={s} onClick={() => setFltS(s)} style={{ padding: "4px 12px", borderRadius: 16, border: "1.5px solid", whiteSpace: "nowrap", borderColor: fltS === s ? "#1A3A5C" : "#D1D5DB", background: fltS === s ? "#1A3A5C" : "#fff", color: fltS === s ? "#fff" : "#374151", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{s}</button>))}
+            {isPC && (
+              <>
+                <select value={fltClient} onChange={e => onFltClientChange(e.target.value)} style={fltSel}>
+                  <option value="">取引先: すべて</option>
+                  {clientOptions.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                </select>
+                <select value={fltBranch} onChange={e => onFltBranchChange(e.target.value)} style={fltSel} disabled={!branchOptions.length}>
+                  <option value="">営業所: すべて</option>
+                  {branchOptions.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                </select>
+                <select value={fltRep} onChange={e => setFltRep(e.target.value)} style={fltSel} disabled={!repOptions.length}>
+                  <option value="">営業担当: すべて</option>
+                  {repOptions.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                </select>
+                {fltActive && <button onClick={clearFlt} style={clearBtn}>クリア</button>}
+              </>
+            )}
           </div>
+          {!isPC && (
+            <div style={{ marginBottom: 8 }}>
+              <button onClick={() => setFltOpen(o => !o)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 16, border: "1.5px solid #D1D5DB", background: "#fff", color: "#374151", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                🔍 絞り込み {fltOpen ? "▲" : "▼"}
+                {fltActive && <span style={{ background: "#E07B39", color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 10, fontWeight: 700 }}>絞り込み中</span>}
+              </button>
+              {fltOpen && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6, background: "#fff", borderRadius: 10, padding: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+                  <select value={fltClient} onChange={e => onFltClientChange(e.target.value)} style={fltSel}>
+                    <option value="">取引先: すべて</option>
+                    {clientOptions.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                  </select>
+                  <select value={fltBranch} onChange={e => onFltBranchChange(e.target.value)} style={fltSel} disabled={!branchOptions.length}>
+                    <option value="">営業所: すべて</option>
+                    {branchOptions.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                  </select>
+                  <select value={fltRep} onChange={e => setFltRep(e.target.value)} style={fltSel} disabled={!repOptions.length}>
+                    <option value="">営業担当: すべて</option>
+                    {repOptions.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                  </select>
+                  {fltActive && <button onClick={clearFlt} style={{ ...clearBtn, alignSelf: "flex-start" }}>クリア</button>}
+                </div>
+              )}
+            </div>
+          )}
           {inChargeList.length > 2 && <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 8 }}>{inChargeList.map(n => (<button key={n} onClick={() => setFltInCharge(n)} style={{ padding: "4px 12px", borderRadius: 16, border: "1.5px solid", whiteSpace: "nowrap", borderColor: fltInCharge === n ? "#E07B39" : "#D1D5DB", background: fltInCharge === n ? "#E07B39" : "#fff", color: fltInCharge === n ? "#fff" : "#374151", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{n === "すべて" ? "👤 全員" : "👤 " + n}</button>))}</div>}
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
             {[["件数", `${filtP.length}件`], ["受注合計", fmt(tA)], ["粗利合計", fmt(tG)]].map(([l, v]) => (<div key={l} style={{ flex: 1, background: "#fff", borderRadius: 10, padding: "6px 8px", textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}><div style={{ fontSize: 10, color: "#9CA3AF" }}>{l}</div><div style={{ fontSize: 12, fontWeight: 800, color: "#1A3A5C", marginTop: 1 }}>{v}</div></div>))}
