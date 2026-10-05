@@ -119,7 +119,7 @@ export default function PriceAdmin({ pjs, submittedQuotes, wonQuotes, cos, cust,
     const { data, error } = await supabase.from("price_items").insert([{
       price_set_id: activeSetId, price_group_id: addForm.groupId, name: addForm.name.trim(), spec: addForm.spec.trim(),
       unit: addForm.unit.trim(), note: addForm.note.trim(), sale_price: Number(addForm.salePrice) || 0,
-      item_type: "item", is_active: true, sort_order: sortOrder,
+      item_type: "fixed", is_active: true, sort_order: sortOrder,
     }]).select();
     if (error) { alert("追加に失敗しました: " + error.message); setAdding(false); return; }
     const newItem = data[0];
@@ -215,7 +215,7 @@ export default function PriceAdmin({ pjs, submittedQuotes, wonQuotes, cos, cust,
                               )}
                             </td>
                             <td style={{ padding: "6px 8px" }}>
-                              <input type="number" value={getVal(item, "cost_price")} onChange={e => updateEdit(item.id, { cost_price: e.target.value })} placeholder="未入力" style={{ width: 90, padding: "4px 6px", borderRadius: 6, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
+                              <input type="number" value={getVal(item, "cost_price")} onChange={e => updateEdit(item.id, e.target.value === "" ? { cost_price: "", cost_confirmed: false } : { cost_price: e.target.value, cost_confirmed: true })} placeholder="未入力" style={{ width: 90, padding: "4px 6px", borderRadius: 6, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
                             </td>
                             <td style={{ padding: "6px 8px" }}>
                               <input type="checkbox" checked={!!confirmed} onChange={e => updateEdit(item.id, { cost_confirmed: e.target.checked })} />
