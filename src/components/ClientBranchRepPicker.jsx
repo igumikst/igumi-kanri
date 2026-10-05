@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
+import { addContact, findDuplicateContact } from "../lib/contacts";
 
 const sel = { width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, background: "#FAFAFA", boxSizing: "border-box", color: "#1F2937" };
 const label = { fontSize: 11, color: "#6B7280", marginBottom: 3 };
@@ -36,20 +37,18 @@ export default function ClientBranchRepPicker({ clientId, branchId, salesRepId, 
   };
 
   const addRep = async () => {
-    if (!newRepName.trim() || !clientId) return;
-    const { data, error } = await supabase.from("sales_reps").insert([{ company_id: clientId, branch_id: branchId || null, name: newRepName.trim() }]).select();
-    if (error) { alert("担当者の追加に失敗しました: " + error.message); return; }
-    setSalesReps(prev => [...prev, data[0]]);
+    const name = newRepName.trim();
+    if (!name || !clientId) return;
     const co = cos.find(c => c.id === clientId);
-    if (co && setCos) {
-      const branchObj = branches.find(b => b.id === branchId);
-      const newContact = { id: "ct" + Date.now(), name: newRepName.trim(), role: "営業", tel: "", email: "", memo: "", ...(branchObj ? { branch: branchObj.name } : {}) };
-      const newContacts = [...(co.contacts || []), newContact];
-      await supabase.from("companies").update({ contacts: newContacts }).eq("id", clientId);
-      setCos(prev => prev.map(c => c.id === clientId ? { ...c, contacts: newContacts } : c));
-    }
-    setNewRepName(""); setAddingRep(false);
-    pickRep(data[0].id);
+    if (findDuplicateContact(co?.contacts, { name, branchId: branchId || null }, branches.filter(b => b.company_id === clientId))
+      && !confirm(`同じ名前の担当者がいます(${name})。追加しますか？`)) return;
+    try {
+      const { contacts, salesRepRow } = await addContact(supabase, { companyId: clientId, contacts: co?.contacts, name, role: "営業", branchId: branchId || null });
+      if (salesRepRow) setSalesReps(prev => [...prev, salesRepRow]);
+      if (co && setCos) setCos(prev => prev.map(c => c.id === clientId ? { ...c, contacts } : c));
+      setNewRepName(""); setAddingRep(false);
+      pickRep(salesRepRow.id);
+    } catch (e) { alert(e.message); }
   };
 
   return (
