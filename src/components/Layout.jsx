@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
-import { PRIO, PROJECT_STATS_SINCE } from "../lib/constants";
+import { PRIO, PROJECT_STATS_SINCE, STORAGE_LIMIT_MB } from "../lib/constants";
 
 const SB_W = 180, RP_W = 220;
 
@@ -341,17 +341,18 @@ export const PCRightPanel = ({ rpOpen, setRpOpen, pjs, tks, finFiles, tmplFiles,
           const finMB = finFiles.reduce((s, f) => s + (f.size || 0), 0) / 1024 / 1024;
           const tmplMB = tmplFiles.reduce((s, f) => s + (f.size || 0), 0) / 1024 / 1024;
           const totalMB = finMB + tmplMB;
-          const limitMB = 1024;
+          const limitMB = STORAGE_LIMIT_MB;
           const p = Math.min((totalMB / limitMB) * 100, 100);
+          const barP = p > 0 ? Math.max(p, 1.5) : 0;
           const col = p > 80 ? "#EF4444" : p > 50 ? "#F59E0B" : "#059669";
           return (
             <div style={{ background: "#F9FAFB", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#374151" }}>📦 Storage</div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: col }}>{totalMB < 1 ? `${(totalMB * 1024).toFixed(0)}KB` : `${totalMB.toFixed(0)}MB`} / 1GB</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: col }}>{totalMB < 1 ? `${(totalMB * 1024).toFixed(0)}KB` : `${totalMB.toFixed(0)}MB`} / 100GB</div>
               </div>
               <div style={{ background: "#E5E7EB", borderRadius: 4, height: 6, overflow: "hidden" }}>
-                <div style={{ width: `${p}%`, height: "100%", background: col, borderRadius: 4, transition: "width 0.5s" }} />
+                <div style={{ width: `${barP}%`, height: "100%", background: col, borderRadius: 4, transition: "width 0.5s" }} />
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5, fontSize: 10, color: "#9CA3AF" }}>
                 <span>財務 {finMB < 1 ? `${(finMB * 1024).toFixed(0)}KB` : `${finMB.toFixed(0)}MB`}</span>

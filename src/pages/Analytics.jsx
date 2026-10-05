@@ -1,6 +1,6 @@
 import { Hdr } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
-import { STATUSES, STATUS_STYLE, fmt } from "../lib/constants";
+import { STATUSES, STATUS_STYLE, fmt, STORAGE_LIMIT_MB } from "../lib/constants";
 
 export default function Analytics({ pjs, wonQuotes, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, tileConf, SB_W, RP_W }) {
   const pending = tks.filter(t => !t.done);
@@ -114,8 +114,9 @@ export default function Analytics({ pjs, wonQuotes, cos, tks, links, cust, isPC,
           const finMB = finFiles.reduce((s, f) => s + (f.size || 0), 0) / 1024 / 1024;
           const tmplMB = tmplFiles.reduce((s, f) => s + (f.size || 0), 0) / 1024 / 1024;
           const totalMB = finMB + tmplMB;
-          const limitMB = 1024;
+          const limitMB = STORAGE_LIMIT_MB;
           const usedPct = Math.min((totalMB / limitMB) * 100, 100);
+          const usedBarPct = usedPct > 0 ? Math.max(usedPct, 1.5) : 0;
           const barColor = usedPct > 80 ? "#EF4444" : usedPct > 50 ? "#F59E0B" : "#059669";
           const fmtSize = mb => mb < 1 ? `${(mb * 1024).toFixed(0)}KB` : `${mb.toFixed(1)}MB`;
           return (
@@ -124,24 +125,28 @@ export default function Analytics({ pjs, wonQuotes, cos, tks, links, cust, isPC,
               <div style={{ marginBottom: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>合計使用量</div>
-                  <div style={{ fontSize: 13, fontWeight: 900, color: barColor }}>{fmtSize(totalMB)} <span style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 400 }}>/ 1GB（無料枠）</span></div>
+                  <div style={{ fontSize: 13, fontWeight: 900, color: barColor }}>{fmtSize(totalMB)} <span style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 400 }}>/ 100GB</span></div>
                 </div>
                 <div style={{ background: "#E5E7EB", borderRadius: 6, height: 12, overflow: "hidden" }}>
-                  <div style={{ width: `${usedPct}%`, height: "100%", background: barColor, borderRadius: 6, transition: "width 0.5s" }} />
+                  <div style={{ width: `${usedBarPct}%`, height: "100%", background: barColor, borderRadius: 6, transition: "width 0.5s" }} />
                 </div>
                 <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 4, textAlign: "right" }}>{usedPct.toFixed(1)}% 使用中</div>
               </div>
-              {[{ label: "財務・書類", mb: finMB, count: finFiles.length, color: "#0891B2" }, { label: "お知らせ・雛形", mb: tmplMB, count: tmplFiles.length, color: "#D97706" }].map(c => (
+              {[{ label: "財務・書類", mb: finMB, count: finFiles.length, color: "#0891B2" }, { label: "お知らせ・雛形", mb: tmplMB, count: tmplFiles.length, color: "#D97706" }].map(c => {
+                const cPct = Math.min((c.mb / limitMB) * 100, 100);
+                const cBarPct = cPct > 0 ? Math.max(cPct, 1.5) : 0;
+                return (
                 <div key={c.label} style={{ marginBottom: 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                     <span style={{ fontSize: 12, color: "#374151", fontWeight: 600 }}>{c.label}</span>
                     <span style={{ fontSize: 12, color: "#6B7280" }}>{fmtSize(c.mb)}　{c.count}件</span>
                   </div>
                   <div style={{ background: "#F3F4F6", borderRadius: 4, height: 7, overflow: "hidden" }}>
-                    <div style={{ width: `${Math.min((c.mb / limitMB) * 100, 100)}%`, height: "100%", background: c.color, borderRadius: 4 }} />
+                    <div style={{ width: `${cBarPct}%`, height: "100%", background: c.color, borderRadius: 4 }} />
                   </div>
                 </div>
-              ))}
+                );
+              })}
               {usedPct > 80 && <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "10px 12px", marginTop: 8, fontSize: 12, color: "#DC2626", fontWeight: 700 }}>⚠️ 残り{fmtSize(limitMB - totalMB)}です。</div>}
               {usedPct <= 80 && <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 10, padding: "10px 12px", marginTop: 8, fontSize: 12, color: "#059669", fontWeight: 600 }}>✅ 残り{fmtSize(limitMB - totalMB)}あります</div>}
             </div>

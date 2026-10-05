@@ -1,3 +1,6 @@
+// Storageメーター(財務・雛形ファイルの合計)の上限。Supabase Proのプラン容量(MB単位)
+export const STORAGE_LIMIT_MB = 100 * 1024;
+
 export const STATUSES = ["発注待ち","失注","見積中","着工","進行中","完了","中断"];
 export const COMPANY_TYPES = ["取引先","協力業者","その他"];
 export const CONTACT_ROLES = ["営業","現場監督","職人","事務","その他"];

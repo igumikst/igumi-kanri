@@ -3,7 +3,7 @@ import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { Modal, Inp } from "../components/UI";
 import AiAssistModal from "../components/AiAssistModal";
 import { supabase } from "../lib/supabase";
-import { HOMEPAGE_URL, BLOG_LIST_URL, PROJECT_STATS_SINCE } from "../lib/constants";
+import { HOMEPAGE_URL, BLOG_LIST_URL, PROJECT_STATS_SINCE, STORAGE_LIMIT_MB } from "../lib/constants";
 
 const NAVY = "#122a4a";
 const SCHEDULE_BLUE = "#1a56a0";
@@ -99,7 +99,8 @@ export default function Home({ pjs, wonQuotes, cos, tks, links, cust, tileConf, 
   const finMB = finFiles.reduce((s, f) => s + (f.size || 0), 0) / 1024 / 1024;
   const tmplMB = tmplFiles.reduce((s, f) => s + (f.size || 0), 0) / 1024 / 1024;
   const totalMB = finMB + tmplMB;
-  const storageP = Math.min((totalMB / 1024) * 100, 100);
+  const storageP = Math.min((totalMB / STORAGE_LIMIT_MB) * 100, 100);
+  const storageBarP = storageP > 0 ? Math.max(storageP, 1.5) : 0;
   const storageCol = storageP > 80 ? "#EF4444" : storageP > 50 ? "#F59E0B" : "#059669";
   const fmtMB = mb => mb < 1 ? `${(mb * 1024).toFixed(0)}KB` : `${mb.toFixed(1)}MB`;
 
@@ -839,7 +840,7 @@ export default function Home({ pjs, wonQuotes, cos, tks, links, cust, tileConf, 
 
       <div style={{ marginTop: 24 }}>
         <button onClick={() => setShowStorage(p => !p)} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 0" }}>
-          <span style={{ fontSize: 11, color: "#C4C4C4" }}>📦 Storage {fmtMB(totalMB)} / 1GB</span>
+          <span style={{ fontSize: 11, color: "#C4C4C4" }}>📦 Storage {fmtMB(totalMB)} / 100GB</span>
           <span style={{ fontSize: 10, color: "#C4C4C4" }}>{showStorage ? "▲" : "▼"}</span>
         </button>
         {showStorage && (
@@ -849,13 +850,13 @@ export default function Home({ pjs, wonQuotes, cos, tks, links, cust, tileConf, 
               <span style={{ fontSize: 12, fontWeight: 700, color: storageCol }}>{storageP.toFixed(1)}%</span>
             </div>
             <div style={{ background: "#E5E7EB", borderRadius: 4, height: 8, overflow: "hidden", marginBottom: 10 }}>
-              <div style={{ width: `${storageP}%`, height: "100%", background: storageCol, borderRadius: 4, transition: "width 0.5s" }} />
+              <div style={{ width: `${storageBarP}%`, height: "100%", background: storageCol, borderRadius: 4, transition: "width 0.5s" }} />
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#6B7280" }}>
               <span>📂 財務　{fmtMB(finMB)}</span>
               <span>📋 雛形　{fmtMB(tmplMB)}</span>
             </div>
-            <div style={{ textAlign: "center", marginTop: 8, fontSize: 11, color: "#9CA3AF" }}>合計 {fmtMB(totalMB)} / 1GB</div>
+            <div style={{ textAlign: "center", marginTop: 8, fontSize: 11, color: "#9CA3AF" }}>合計 {fmtMB(totalMB)} / 100GB</div>
           </div>
         )}
       </div>
