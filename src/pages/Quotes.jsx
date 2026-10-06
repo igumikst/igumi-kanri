@@ -56,6 +56,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
   const [subCosts, setSubCosts] = useState([]); // 下請けの原価(quote_subcontractor_costs)
   const [subForm, setSubForm] = useState({ subcontractor_id: "", amount: "", note: "", file: null });
   const [savingSub, setSavingSub] = useState(false);
+  const [showHiddenQuoteFiles, setShowHiddenQuoteFiles] = useState(false); // 第8弾テーマ12①: 非表示のファイルを表示するトグル
   const constructionType = project?.constructionType || "自社のみ";
 
   const loadQuotes = async () => {
@@ -166,6 +167,18 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
     setQuotes(quotes.filter(q => q.id !== id));
     removeWonQuote(id);
     removeSubmittedQuote(id);
+  };
+
+  // 見積の元ファイルの非表示・表示に戻す(第8弾テーマ12①)。ファイル本体(Storage)は消さない
+  const setQuoteFileHidden = async (id, hidden) => {
+    const hidden_at = hidden ? new Date().toISOString() : null;
+    const { error } = await supabase.from("quote_files").update({ hidden_at }).eq("id", id);
+    if (error) { alert(`${hidden ? "非表示" : "表示に戻す"}処理に失敗しました: ` + error.message); return; }
+    setQuoteFiles(prev => prev.map(f => f.id === id ? { ...f, hidden_at } : f));
+  };
+
+  const askHideQuoteFile = f => {
+    setConf({ msg: `「${f.original_name}」\n\n非表示にしますか？(ファイルは残ります。あとで表示に戻せます)`, okLabel: "非表示にする", onOk: () => { setQuoteFileHidden(f.id, true); setConf(null); } });
   };
 
   const computeQuoteTotals = quote => computeAdoptTotals(supabase, { quote, constructionType: project?.constructionType || "自社のみ" });
@@ -368,6 +381,10 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
   const showCostCol = !isSubOnly;
   const leafColumnCount = 4 + (showSubCheckCol ? 1 : 0) + (showCostCol ? 1 : 0);
 
+  // 非表示(hidden_at)のファイルは、一覧・「元ファイル」ボタンの対象から外す(第8弾テーマ12①)
+  const visibleQuoteFiles = quoteFiles.filter(f => !f.hidden_at);
+  const hiddenQuoteFiles = quoteFiles.filter(f => f.hidden_at);
+
   return (
     <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
       {isPC && (cust.showSidebar !== false) && <PCSidebar cust={cust} tileConf={tileConf} pjs={pjs} cos={cos} pending={pending} page="quotes" nav={nav} setModal={() => {}} setEc={() => {}} SB_W={SB_W} submittedQuotes={submittedQuotes} />}
@@ -428,8 +445,11 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
                                 ? { flex: 1, padding: "8px 0", background: "#059669", border: "none", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#fff", fontWeight: 800, cursor: "pointer" }
                                 : { flex: 1, padding: "8px 0", background: "none", border: "none", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#059669", fontWeight: 700, cursor: "pointer" }}>✅ 採用にする</button>
                             )}
-                            {quoteFiles.filter(f => f.quote_id === q.id).map(f => (
-                              <button key={f.id} onClick={() => openQuoteFile(f)} title={f.original_name} style={{ padding: "8px 12px", background: "none", border: "none", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#2563EB", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>📎 元ファイル</button>
+                            {visibleQuoteFiles.filter(f => f.quote_id === q.id).map(f => (
+                              <div key={f.id} style={{ display: "flex", alignItems: "center", borderRight: "1px solid #F3F4F6" }}>
+                                <button onClick={() => openQuoteFile(f)} title={f.original_name} style={{ padding: "8px 10px", background: "none", border: "none", fontSize: 12, color: "#2563EB", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>📎 元ファイル</button>
+                                <button onClick={() => askHideQuoteFile(f)} title="非表示にする" style={{ padding: "8px 8px", background: "none", border: "none", fontSize: 13, color: "#9CA3AF", cursor: "pointer" }}>🙈</button>
+                              </div>
                             ))}
                             <button onClick={() => setConf({ msg: `「${q.title}」\n\nこの操作は元に戻せません。\n削除しますか？`, onOk: () => { delQuote(q.id); setConf(null); } })} style={{ padding: "8px 16px", background: "none", border: "none", fontSize: 12, color: "#DC2626", fontWeight: 700, cursor: "pointer" }}>🗑</button>
                           </div>
@@ -442,7 +462,8 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
                 {quoteFiles.length > 0 && (
                   <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginTop: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
                     <div style={{ fontWeight: 800, fontSize: 14, color: "#1A3A5C", marginBottom: 8 }}>📎 見積の元ファイル</div>
-                    {quoteFiles.map(f => {
+                    {visibleQuoteFiles.length === 0 && <div style={{ fontSize: 12, color: "#9CA3AF", padding: "7px 0" }}>表示中のファイルはありません</div>}
+                    {visibleQuoteFiles.map(f => {
                       const q = quotes.find(x => x.id === f.quote_id);
                       return (
                         <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderTop: "1px solid #F3F4F6" }}>
@@ -451,6 +472,24 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
                             <div style={{ fontSize: 11, color: "#9CA3AF" }}>{q ? `見積 No.${q.quote_no}` : "見積は削除済み"} ・ {String(f.created_at || "").slice(0, 10)}{f.size ? ` ・ ${Math.ceil(f.size / 1024)}KB` : ""}</div>
                           </div>
                           <button onClick={() => openQuoteFile(f)} style={{ background: "#EFF6FF", color: "#2563EB", border: "1.5px solid #BFDBFE", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>開く</button>
+                          <button onClick={() => askHideQuoteFile(f)} style={{ background: "#fff", color: "#6B7280", border: "1.5px solid #E5E7EB", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>非表示にする</button>
+                        </div>
+                      );
+                    })}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, paddingTop: 8, borderTop: "1px solid #F3F4F6" }}>
+                      <input type="checkbox" id="showHiddenQuoteFiles" checked={showHiddenQuoteFiles} onChange={e => setShowHiddenQuoteFiles(e.target.checked)} />
+                      <label htmlFor="showHiddenQuoteFiles" style={{ fontSize: 11, color: "#6B7280", cursor: "pointer" }}>非表示のファイルを表示({hiddenQuoteFiles.length}件)</label>
+                    </div>
+                    {showHiddenQuoteFiles && hiddenQuoteFiles.map(f => {
+                      const q = quotes.find(x => x.id === f.quote_id);
+                      return (
+                        <div key={f.id} style={{ background: "#F3F4F6", borderRadius: 8, padding: "8px 10px", marginTop: 6, display: "flex", alignItems: "center", gap: 8, opacity: 0.6 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "#1F2937", wordBreak: "break-all" }}>📗 {f.original_name}</div>
+                            <div style={{ fontSize: 11, color: "#9CA3AF" }}>{q ? `見積 No.${q.quote_no}` : "見積は削除済み"} ・ {String(f.created_at || "").slice(0, 10)}{f.size ? ` ・ ${Math.ceil(f.size / 1024)}KB` : ""} ・ 非表示</div>
+                          </div>
+                          <button onClick={() => openQuoteFile(f)} style={{ background: "#EFF6FF", color: "#2563EB", border: "1.5px solid #BFDBFE", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>開く</button>
+                          <button onClick={() => setQuoteFileHidden(f.id, false)} style={{ background: "#EFF6FF", color: "#1A3A5C", border: "1.5px solid #BFDBFE", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>表示に戻す</button>
                         </div>
                       );
                     })}
