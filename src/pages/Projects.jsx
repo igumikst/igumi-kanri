@@ -42,6 +42,17 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
   const [reportUploading, setReportUploading] = useState(false);
   const [showHiddenReports, setShowHiddenReports] = useState(false); // 第8弾テーマ9: 非表示のファイルを表示するトグル
 
+  // 一覧の📎件数バッジ用(第8弾テーマ11)。project_idとhidden_atだけをまとめて1回取得し、案件ごとに集計する
+  const [reportCounts, setReportCounts] = useState({});
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from("report_files").select("project_id,hidden_at");
+      const counts = {};
+      (data || []).forEach(rf => { if (!rf.hidden_at) counts[rf.project_id] = (counts[rf.project_id] || 0) + 1; });
+      setReportCounts(counts);
+    })();
+  }, []);
+
   useEffect(() => {
     (async () => {
       if (!selP) { setQuotes([]); setReportFiles([]); setReportQuoteChoice(""); setShowHiddenReports(false); return; }
@@ -113,7 +124,10 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
       if (insErr) { rejected.push(`「${file.name}」: 記録に失敗しました(${insErr.message})`); continue; }
       added.push(data[0]);
     }
-    if (added.length) setReportFiles(prev => [...added, ...prev]);
+    if (added.length) {
+      setReportFiles(prev => [...added, ...prev]);
+      setReportCounts(prev => ({ ...prev, [selP.id]: (prev[selP.id] || 0) + added.length }));
+    }
     setReportUploading(false);
     if (rejected.length) alert(rejected.join("\n"));
     // 見積に紐づけて追加した時、その見積がまだ完工済みでなければ、完工済みにするか提案する(ブロックはしない)
@@ -129,6 +143,7 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
     const { error } = await supabase.from("report_files").update({ hidden_at }).eq("id", id);
     if (error) { alert(`${hidden ? "非表示" : "表示に戻す"}処理に失敗しました: ` + error.message); return; }
     setReportFiles(prev => prev.map(rf => rf.id === id ? { ...rf, hidden_at } : rf));
+    setReportCounts(prev => ({ ...prev, [selP.id]: Math.max(0, (prev[selP.id] || 0) + (hidden ? -1 : 1)) }));
   };
 
   const askHideReportFile = rf => {
@@ -377,23 +392,26 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
               const cl = getC(p.clientId);
               const gp = p.amount ? ((p.gp / p.amount) * 100).toFixed(1) : null;
               const clientLabel = cl ? `🏢 ${cl.name}${cl.branch ? " " + cl.branch : ""}` : "取引先未設定";
+              const rc = reportCounts[p.id] || 0;
               return (
                 <div key={p.id} style={{ display: "flex", alignItems: "stretch", background: "#fff", borderRadius: 8, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", borderLeft: "3px solid #1A3A5C", overflow: "hidden" }}>
                   {isPC ? (
                     <div onClick={() => setSelP(p)} style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 12, padding: "7px 12px", cursor: "pointer" }}>
                       <div style={{ flex: 2, minWidth: 0, fontWeight: 700, fontSize: 13, color: "#1F2937", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
                       <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: "#6B7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{clientLabel}</div>
+                      <div style={{ width: 34, flex: "none", textAlign: "right", fontSize: 11, color: rc ? "#6B7280" : "#D1D5DB", whiteSpace: "nowrap" }}>📎 {rc}</div>
                       <div style={{ width: 110, flex: "none", textAlign: "right", fontSize: 13, fontWeight: 800, color: "#E07B39" }}>{fmt(p.amount)}</div>
-                      <div style={{ width: 72, flex: "none", textAlign: "right", fontSize: 12, fontWeight: 700, color: "#059669" }}>{gp ? `粗利率 ${gp}%` : "—"}</div>
+                      <div style={{ width: 86, flex: "none", textAlign: "right", fontSize: 12, fontWeight: 700, color: "#059669", whiteSpace: "nowrap" }}>{gp ? `粗利率 ${gp}%` : "—"}</div>
                     </div>
                   ) : (
                     <div onClick={() => setSelP(p)} style={{ flex: 1, minWidth: 0, padding: "8px 12px", cursor: "pointer" }}>
                       <div style={{ fontWeight: 700, fontSize: 13, color: "#1F2937", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 2 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, marginTop: 2 }}>
                         <div style={{ flex: 1, minWidth: 0, fontSize: 11, color: "#6B7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{clientLabel}</div>
-                        <div style={{ flex: "none", display: "flex", gap: 8, alignItems: "baseline" }}>
+                        <div style={{ flex: "none", display: "flex", gap: 6, alignItems: "baseline", whiteSpace: "nowrap" }}>
+                          <span style={{ fontSize: 10, color: rc ? "#6B7280" : "#D1D5DB" }}>📎{rc}</span>
                           <span style={{ fontSize: 12, fontWeight: 800, color: "#E07B39" }}>{fmt(p.amount)}</span>
-                          {gp && <span style={{ fontSize: 11, color: "#059669", fontWeight: 700 }}>粗利率 {gp}%</span>}
+                          {gp && <span style={{ fontSize: 11, color: "#059669", fontWeight: 700, whiteSpace: "nowrap" }}>粗利率 {gp}%</span>}
                         </div>
                       </div>
                     </div>
