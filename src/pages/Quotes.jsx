@@ -401,8 +401,11 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
                   <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
                     {quotes.map(q => {
                       const st = statusStyle(q.status);
+                      // 第8弾テーマ10: 取り込みの古い不具合で、status=won なのにis_adopted=falseの見積が残っていることがある。
+                      // 自動では直さず、気づけるように注意バッジ+ボタンの強調だけ行う
+                      const isUnadoptedWon = q.status === "won" && !q.is_adopted;
                       return (
-                        <div key={q.id} style={{ background: "#fff", borderRadius: 12, boxShadow: "0 1px 6px rgba(0,0,0,0.07)", borderLeft: "4px solid #1A3A5C", overflow: "hidden" }}>
+                        <div key={q.id} style={{ background: "#fff", borderRadius: 12, boxShadow: "0 1px 6px rgba(0,0,0,0.07)", borderLeft: `4px solid ${isUnadoptedWon ? "#DC2626" : "#1A3A5C"}`, overflow: "hidden" }}>
                           <div onClick={() => openQuote(q)} style={{ padding: "13px 14px", cursor: "pointer" }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 5 }}>
                               <div style={{ fontWeight: 700, fontSize: 14, flex: 1, marginRight: 8, color: "#1F2937" }}>No.{q.quote_no} {q.title}</div>
@@ -411,6 +414,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
                                 <span style={{ background: st.bg, color: st.text, border: `1px solid ${st.border}`, borderRadius: 6, padding: "2px 9px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>{st.label}</span>
                               </div>
                             </div>
+                            {isUnadoptedWon && <div style={{ background: "#FEF2F2", color: "#991B1B", border: "1px solid #FECACA", borderRadius: 6, padding: "3px 8px", fontSize: 11, fontWeight: 700, marginBottom: 5, display: "inline-block" }}>⚠️ 未採用(売上に未反映)</div>}
                             <div style={{ fontSize: 15, fontWeight: 800, color: "#E07B39" }}>{fmt(q.total_amount)}</div>
                             {q.applied_rates?.rate != null && <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 2 }}>掛け率 ×{Number.isInteger(q.applied_rates.rate) ? q.applied_rates.rate.toFixed(1) : q.applied_rates.rate}</div>}
                             {(() => { const n = reportFiles.filter(f => f.quote_id === q.id && !f.hidden_at).length; return <div style={{ fontSize: 10, color: n ? "#059669" : "#9CA3AF", marginTop: 2 }}>{n ? `📎 報告書あり(${n}件)` : "報告書なし"}</div>; })()}
@@ -420,7 +424,9 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
                             {q.is_adopted ? (
                               <button onClick={() => unadoptQuote(q)} style={{ flex: 1, padding: "8px 0", background: "none", border: "none", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#9A3412", fontWeight: 700, cursor: "pointer" }}>採用を解除</button>
                             ) : (
-                              <button onClick={() => adoptQuote(q)} style={{ flex: 1, padding: "8px 0", background: "none", border: "none", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#059669", fontWeight: 700, cursor: "pointer" }}>✅ 採用にする</button>
+                              <button onClick={() => adoptQuote(q)} style={isUnadoptedWon
+                                ? { flex: 1, padding: "8px 0", background: "#059669", border: "none", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#fff", fontWeight: 800, cursor: "pointer" }
+                                : { flex: 1, padding: "8px 0", background: "none", border: "none", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#059669", fontWeight: 700, cursor: "pointer" }}>✅ 採用にする</button>
                             )}
                             {quoteFiles.filter(f => f.quote_id === q.id).map(f => (
                               <button key={f.id} onClick={() => openQuoteFile(f)} title={f.original_name} style={{ padding: "8px 12px", background: "none", border: "none", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#2563EB", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>📎 元ファイル</button>

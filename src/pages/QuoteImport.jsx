@@ -26,12 +26,6 @@ const stripFeeSuffix = name => {
   return (name.length >= 3 && name.endsWith("費")) ? name.slice(0, -1) : name;
 };
 
-// 見積の状態は、画面上は「発注前」「完工済」の2つだけ(発注前=submitted / 完工済=won)
-const QUOTE_STATUS = [
-  { key: "submitted", label: "発注前" },
-  { key: "won", label: "完工済" },
-];
-
 const card = { background: "#fff", borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" };
 const th = { padding: "6px 6px", fontSize: 11, color: "#6B7280", textAlign: "left", whiteSpace: "nowrap" };
 const td = { padding: "4px 6px", fontSize: 12, color: "#1F2937", verticalAlign: "top" };
@@ -198,7 +192,6 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
   const initialTitle = stripFeeSuffix(d.cover.title || "");
   const [title, setTitle] = useState(initialTitle);
   const [issuedDate, setIssuedDate] = useState(d.cover.issuedDate || "");
-  const [status, setStatus] = useState("submitted");
   const [markup, setMarkup] = useState(null); // "before" | "after"(必須)
   const [pickedSetId, setPriceSetId] = useState("");
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
@@ -314,7 +307,7 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
       subcontractorIds: [], quoteDate: issuedDate || "",
     };
     const memo = `見積ファイル「${r.fileName}」から取り込み。${markup === "after" ? `ファイルの金額は載せた後 → 単価×${MARKUP_BACK_RATE}で載せる前に戻して登録` : "ファイルの金額は載せる前(そのまま登録)"}。ファイルの税抜合計 ${fileTotal?.toLocaleString()}円`;
-    const pQuote = { title: title.trim(), price_set_id: priceSetId, status, total_amount: Math.round(total), issued_at: issuedDate || null, memo };
+    const pQuote = { title: title.trim(), price_set_id: priceSetId, status: "submitted", total_amount: Math.round(total), issued_at: issuedDate || null, memo };
     const pItems = view.map(l => ({
       price_item_id: l.item?.id ?? null,
       line_type: l.item ? "item" : "adjust",
@@ -514,12 +507,6 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
             )}
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <div style={{ flex: 1, minWidth: 160 }}>
-                <div style={label}>見積の状態</div>
-                <select value={status} onChange={e => setStatus(e.target.value)} style={inp}>
-                  {QUOTE_STATUS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
-                </select>
-              </div>
               <div style={{ flex: 1, minWidth: 160 }}>
                 <div style={label}>単価セット(原価の当てはめに使う)</div>
                 <select value={priceSetId} onChange={e => setPriceSetId(e.target.value)} style={inp}>
@@ -807,7 +794,6 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
   const [outputRateChoice, setOutputRateChoice] = useState(d.cover.detectedRate === 100 ? "100" : "file");
   // ファイルの合計が見つからない場合、自分で明細の合計を確認したことのチェック(必須)
   const [totalMissingAck, setTotalMissingAck] = useState(false);
-  const [status, setStatus] = useState("submitted");
   const [pickedSetId, setPriceSetId] = useState("");
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
@@ -977,7 +963,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
     };
     const memo = `見積ファイル「${r.fileName}」(ESTファイル)から取り込み。${rateChoice === "none" ? "掛け率1.0のまま登録" : `掛け率×${rate}でIGUMIの販売金額を計算して登録`}。ファイルの税抜合計(100%) ${fileTotal100?.toLocaleString()}円`;
     const appliedRates = { rate, choice: rateChoice, est_output_rate: d.cover.detectedRate ?? null };
-    const pQuote = { title: title.trim(), price_set_id: priceSetId, status, total_amount: Math.round(adjustedTotal), issued_at: null, memo };
+    const pQuote = { title: title.trim(), price_set_id: priceSetId, status: "submitted", total_amount: Math.round(adjustedTotal), issued_at: null, memo };
     const pItems = view.map(l => ({
       price_item_id: l.item?.id ?? null,
       line_type: l.item ? "item" : "adjust",
@@ -1188,12 +1174,6 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
         )}
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <div style={{ flex: 1, minWidth: 160 }}>
-            <div style={label}>見積の状態</div>
-            <select value={status} onChange={e => setStatus(e.target.value)} style={inp}>
-              {QUOTE_STATUS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
-            </select>
-          </div>
           <div style={{ flex: 1, minWidth: 160 }}>
             <div style={label}>単価セット(原価の当てはめに使う)</div>
             <select value={priceSetId} onChange={e => setPriceSetId(e.target.value)} style={inp}>
@@ -1426,7 +1406,6 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
   const initialTitle = stripFeeSuffix(d.cover.title || "");
   const [title, setTitle] = useState(initialTitle);
   const [issuedDate, setIssuedDate] = useState(d.cover.issuedDate || "");
-  const [status, setStatus] = useState("submitted");
   // rateChoice: "none"(1.0) | "back"(×0.925) | "0.9"(×0.9) | "custom"(入力した掛け率) ※必須。
   // 手で触るまでは、取引先・営業所の「掛け率の初期値」をそのまま使う(manualの状態には入れない)
   const [manualRateChoice, setManualRateChoice] = useState(null);
@@ -1578,7 +1557,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
     };
     const memo = `見積ファイル「${r.fileName}」(自社見積書Excel)から取り込み。見積番号 ${d.cover.quoteNo || "不明"}。${rateChoice === "none" ? "掛け率1.0のまま登録" : `掛け率×${rate}でIGUMIの販売金額を計算して登録`}。ファイルの税抜合計(100%) ${fileTotal?.toLocaleString()}円`;
     const appliedRates = { rate, choice: rateChoice, quote_no: d.cover.quoteNo || null };
-    const pQuote = { title: title.trim(), price_set_id: priceSetId, status, total_amount: Math.round(total), issued_at: issuedDate || null, memo };
+    const pQuote = { title: title.trim(), price_set_id: priceSetId, status: "submitted", total_amount: Math.round(total), issued_at: issuedDate || null, memo };
     const pItems = view.map(l => ({
       price_item_id: l.item?.id ?? null,
       line_type: l.item ? "item" : "adjust",
@@ -1784,12 +1763,6 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
             )}
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <div style={{ flex: 1, minWidth: 160 }}>
-                <div style={label}>見積の状態</div>
-                <select value={status} onChange={e => setStatus(e.target.value)} style={inp}>
-                  {QUOTE_STATUS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
-                </select>
-              </div>
               <div style={{ flex: 1, minWidth: 160 }}>
                 <div style={label}>単価セット(原価の当てはめに使う)</div>
                 <select value={priceSetId} onChange={e => setPriceSetId(e.target.value)} style={inp}>

@@ -304,10 +304,10 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
                   </div>
                 ))}
                 <div style={{ marginTop: 8 }}>
-                  <div style={{ fontSize: 10, color: "#6B7280", marginBottom: 4 }}>どの見積の報告書か(任意)</div>
-                  <select value={reportQuoteChoice} onChange={e => setReportQuoteChoice(e.target.value)} style={{ width: "100%", padding: "7px 8px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937", marginBottom: 8 }}>
-                    <option value="">見積に紐づけない</option>
-                    {quotes.map(q => <option key={q.id} value={q.id}>{q.title}{q.status === "won" ? "(完工済)" : ""}</option>)}
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#1A3A5C", marginBottom: 5 }}>📎 どの見積の報告書か(任意)</div>
+                  <select value={reportQuoteChoice} onChange={e => setReportQuoteChoice(e.target.value)} style={{ width: "100%", padding: "9px 10px", borderRadius: 8, border: "1.5px solid #93C5FD", fontSize: 13, fontWeight: 600, color: "#1F2937", background: "#F0F7FF", marginBottom: 8 }}>
+                    <option value="">紐づけなし</option>
+                    {quotes.map(q => <option key={q.id} value={q.id}>No.{q.quote_no} {q.title} ・ {fmt(q.total_amount)} ・ {q.status === "won" ? "完工済" : "発注前"}</option>)}
                   </select>
                   <FileDropZone onFiles={files => uploadReportFiles(files)} disabled={reportUploading} activeLabel="ここに落とす">
                     <label style={{ display: "block", border: "2px dashed #93C5FD", borderRadius: 10, padding: "14px 10px", textAlign: "center", cursor: reportUploading ? "default" : "pointer", background: "#F0F7FF", opacity: reportUploading ? 0.6 : 1 }}>
