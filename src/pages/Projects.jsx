@@ -42,7 +42,7 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
   const [reportUploading, setReportUploading] = useState(false);
   const [showHiddenReports, setShowHiddenReports] = useState(false); // 第8弾テーマ9: 非表示のファイルを表示するトグル
 
-  // 一覧の📎件数バッジ用(第8弾テーマ11)。project_idとhidden_atだけをまとめて1回取得し、案件ごとに集計する
+  // 一覧の📝件数バッジ用(第8弾テーマ11)。project_idとhidden_atだけをまとめて1回取得し、案件ごとに集計する
   const [reportCounts, setReportCounts] = useState({});
   useEffect(() => {
     (async () => {
@@ -280,7 +280,7 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
               </div>
               <div style={{ borderTop: "1px solid #F3F4F6", paddingTop: 14 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: "#1A3A5C" }}>📎 報告書</div>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: "#1A3A5C" }}>📝 報告書</div>
                   <button onClick={() => window.open("/report.html", "_blank")} style={{ border: "none", background: "none", color: "#2563EB", fontSize: 11, fontWeight: 700, cursor: "pointer", padding: 0 }}>報告書ツールを開く →</button>
                 </div>
                 {quotes.filter(q => q.status === "won" && !visibleReportFiles.some(rf => rf.quote_id === q.id)).length > 0 && (
@@ -298,7 +298,7 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
                           {rf.quote_id ? (quotes.find(q => q.id === rf.quote_id)?.title || "見積") : "紐づけなし"} ・ {(rf.size_bytes / 1024 / 1024).toFixed(1)}MB ・ {new Date(rf.created_at).toLocaleDateString("ja-JP")}
                         </div>
                       </div>
-                      <button onClick={() => openReportFile(rf)} style={{ border: "1px solid #E5E7EB", background: "#fff", borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 700, color: "#1A3A5C", cursor: "pointer", whiteSpace: "nowrap" }}>📎 開く</button>
+                      <button onClick={() => openReportFile(rf)} style={{ border: "1px solid #E5E7EB", background: "#fff", borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 700, color: "#1A3A5C", cursor: "pointer", whiteSpace: "nowrap" }}>📝 開く</button>
                       <button onClick={() => askHideReportFile(rf)} style={{ border: "1px solid #E5E7EB", background: "#fff", borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 700, color: "#6B7280", cursor: "pointer", whiteSpace: "nowrap" }}>非表示にする</button>
                     </div>
                   ))}
@@ -314,12 +314,12 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
                         {rf.quote_id ? (quotes.find(q => q.id === rf.quote_id)?.title || "見積") : "紐づけなし"} ・ {(rf.size_bytes / 1024 / 1024).toFixed(1)}MB ・ {new Date(rf.created_at).toLocaleDateString("ja-JP")} ・ 非表示
                       </div>
                     </div>
-                    <button onClick={() => openReportFile(rf)} style={{ border: "1px solid #E5E7EB", background: "#fff", borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 700, color: "#1A3A5C", cursor: "pointer", whiteSpace: "nowrap" }}>📎 開く</button>
+                    <button onClick={() => openReportFile(rf)} style={{ border: "1px solid #E5E7EB", background: "#fff", borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 700, color: "#1A3A5C", cursor: "pointer", whiteSpace: "nowrap" }}>📝 開く</button>
                     <button onClick={() => setReportFileHidden(rf.id, false)} style={{ border: "1px solid #BFDBFE", background: "#EFF6FF", borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 700, color: "#1A3A5C", cursor: "pointer", whiteSpace: "nowrap" }}>表示に戻す</button>
                   </div>
                 ))}
                 <div style={{ marginTop: 8 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#1A3A5C", marginBottom: 5 }}>📎 どの見積の報告書か(任意)</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#1A3A5C", marginBottom: 5 }}>📝 どの見積の報告書か(任意)</div>
                   <select value={reportQuoteChoice} onChange={e => setReportQuoteChoice(e.target.value)} style={{ width: "100%", padding: "9px 10px", borderRadius: 8, border: "1.5px solid #93C5FD", fontSize: 13, fontWeight: 600, color: "#1F2937", background: "#F0F7FF", marginBottom: 8 }}>
                     <option value="">紐づけなし</option>
                     {quotes.map(q => <option key={q.id} value={q.id}>No.{q.quote_no} {q.title} ・ {fmt(q.total_amount)} ・ {q.status === "won" ? "完工済" : "発注前"}</option>)}
@@ -399,7 +399,7 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
                     <div onClick={() => setSelP(p)} style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 12, padding: "7px 12px", cursor: "pointer" }}>
                       <div style={{ flex: 2, minWidth: 0, fontWeight: 700, fontSize: 13, color: "#1F2937", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
                       <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: "#6B7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{clientLabel}</div>
-                      <div style={{ width: 34, flex: "none", textAlign: "right", fontSize: 11, color: rc ? "#6B7280" : "#D1D5DB", whiteSpace: "nowrap" }}>📎 {rc}</div>
+                      <div style={{ width: 34, flex: "none", textAlign: "right", fontSize: 11, color: rc ? "#6B7280" : "#D1D5DB", whiteSpace: "nowrap" }}>📝 {rc}</div>
                       <div style={{ width: 110, flex: "none", textAlign: "right", fontSize: 13, fontWeight: 800, color: "#E07B39" }}>{fmt(p.amount)}</div>
                       <div style={{ width: 86, flex: "none", textAlign: "right", fontSize: 12, fontWeight: 700, color: "#059669", whiteSpace: "nowrap" }}>{gp ? `粗利率 ${gp}%` : "—"}</div>
                     </div>
@@ -409,7 +409,7 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, marginTop: 2 }}>
                         <div style={{ flex: 1, minWidth: 0, fontSize: 11, color: "#6B7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{clientLabel}</div>
                         <div style={{ flex: "none", display: "flex", gap: 6, alignItems: "baseline", whiteSpace: "nowrap" }}>
-                          <span style={{ fontSize: 10, color: rc ? "#6B7280" : "#D1D5DB" }}>📎{rc}</span>
+                          <span style={{ fontSize: 10, color: rc ? "#6B7280" : "#D1D5DB" }}>📝{rc}</span>
                           <span style={{ fontSize: 12, fontWeight: 800, color: "#E07B39" }}>{fmt(p.amount)}</span>
                           {gp && <span style={{ fontSize: 11, color: "#059669", fontWeight: 700, whiteSpace: "nowrap" }}>粗利率 {gp}%</span>}
                         </div>
