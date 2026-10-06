@@ -10,6 +10,9 @@ import FileDropZone from "../components/FileDropZone";
 import { usePreventWindowFileDrop } from "../lib/useFileDropGuard";
 import { REPORT_FILE_BUCKET, REPORT_FILE_TYPES, REPORT_FILE_MAX_SIZE, reportFileExt, openReportFile } from "../lib/reportFiles";
 
+// 営業所・営業担当の絞り込みで「未設定」(branchId/salesRepIdが無い案件)を選べるようにする値(第8弾テーマ15)
+const FLT_UNSET = "__unset__";
+
 export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes, setSubmittedQuotes, setPjs, cos, setCos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, setQuoteProjectId, setQuoteImportCtx, branches, setBranches, salesReps, setSalesReps, openProjectId }) {
   usePreventWindowFileDrop();
   const [selP, setSelP] = useState(null);
@@ -164,7 +167,8 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
     .map(b => [b.id, b.name || "(名称未設定)"])
     .sort((a, b) => a[1].localeCompare(b[1], "ja"));
   const repOptions = (salesReps || [])
-    .filter(s => (!fltClient || s.company_id === fltClient) && (!fltBranch || s.branch_id === fltBranch))
+    .filter(s => !fltClient || s.company_id === fltClient)
+    .filter(s => fltBranch === FLT_UNSET ? !s.branch_id : (!fltBranch || s.branch_id === fltBranch))
     .map(s => [s.id, s.name || "(名前未設定)"])
     .sort((a, b) => a[1].localeCompare(b[1], "ja"));
   const onFltClientChange = v => { setFltClient(v); setFltBranch(""); setFltRep(""); };
@@ -181,8 +185,8 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
     if (fltS === "発注済み" && !wonProjectIds.has(p.id)) return false;
     if (fltInCharge !== "すべて" && p.inCharge !== fltInCharge) return false;
     if (fltClient && p.clientId !== fltClient) return false;
-    if (fltBranch && p.branchId !== fltBranch) return false;
-    if (fltRep && p.salesRepId !== fltRep) return false;
+    if (fltBranch === FLT_UNSET ? !!p.branchId : (fltBranch && p.branchId !== fltBranch)) return false;
+    if (fltRep === FLT_UNSET ? !!p.salesRepId : (fltRep && p.salesRepId !== fltRep)) return false;
     if (schP && !p.name.includes(schP) && !(getC(p.clientId)?.name || "").includes(schP) && !(p.inCharge || "").includes(schP)) return false;
     return true;
   });
@@ -346,12 +350,14 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
                   <option value="">取引先: すべて</option>
                   {clientOptions.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
                 </select>
-                <select value={fltBranch} onChange={e => onFltBranchChange(e.target.value)} style={fltSel} disabled={!branchOptions.length}>
+                <select value={fltBranch} onChange={e => onFltBranchChange(e.target.value)} style={fltSel}>
                   <option value="">営業所: すべて</option>
+                  <option value={FLT_UNSET}>未設定</option>
                   {branchOptions.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
                 </select>
-                <select value={fltRep} onChange={e => setFltRep(e.target.value)} style={fltSel} disabled={!repOptions.length}>
+                <select value={fltRep} onChange={e => setFltRep(e.target.value)} style={fltSel}>
                   <option value="">営業担当: すべて</option>
+                  <option value={FLT_UNSET}>未設定</option>
                   {repOptions.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
                 </select>
                 {fltActive && <button onClick={clearFlt} style={clearBtn}>クリア</button>}
@@ -370,12 +376,14 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
                     <option value="">取引先: すべて</option>
                     {clientOptions.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
                   </select>
-                  <select value={fltBranch} onChange={e => onFltBranchChange(e.target.value)} style={fltSel} disabled={!branchOptions.length}>
+                  <select value={fltBranch} onChange={e => onFltBranchChange(e.target.value)} style={fltSel}>
                     <option value="">営業所: すべて</option>
+                    <option value={FLT_UNSET}>未設定</option>
                     {branchOptions.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
                   </select>
-                  <select value={fltRep} onChange={e => setFltRep(e.target.value)} style={fltSel} disabled={!repOptions.length}>
+                  <select value={fltRep} onChange={e => setFltRep(e.target.value)} style={fltSel}>
                     <option value="">営業担当: すべて</option>
+                    <option value={FLT_UNSET}>未設定</option>
                     {repOptions.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
                   </select>
                   {fltActive && <button onClick={clearFlt} style={{ ...clearBtn, alignSelf: "flex-start" }}>クリア</button>}
