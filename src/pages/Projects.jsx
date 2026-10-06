@@ -40,10 +40,11 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
   const [reportFiles, setReportFiles] = useState([]);
   const [reportQuoteChoice, setReportQuoteChoice] = useState("");
   const [reportUploading, setReportUploading] = useState(false);
+  const [showHiddenReports, setShowHiddenReports] = useState(false); // 第8弾テーマ9: 非表示のファイルを表示するトグル
 
   useEffect(() => {
     (async () => {
-      if (!selP) { setQuotes([]); setReportFiles([]); setReportQuoteChoice(""); return; }
+      if (!selP) { setQuotes([]); setReportFiles([]); setReportQuoteChoice(""); setShowHiddenReports(false); return; }
       const [{ data: qs }, { data: rf }] = await Promise.all([
         supabase.from("quotes").select("*").eq("project_id", selP.id),
         supabase.from("report_files").select("*").eq("project_id", selP.id).order("created_at", { ascending: false }),
@@ -122,6 +123,18 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
     }
   };
 
+  // 報告書ファイルの非表示・表示に戻す(第8弾テーマ9)。ファイル本体(Storage)は消さない
+  const setReportFileHidden = async (id, hidden) => {
+    const hidden_at = hidden ? new Date().toISOString() : null;
+    const { error } = await supabase.from("report_files").update({ hidden_at }).eq("id", id);
+    if (error) { alert(`${hidden ? "非表示" : "表示に戻す"}処理に失敗しました: ` + error.message); return; }
+    setReportFiles(prev => prev.map(rf => rf.id === id ? { ...rf, hidden_at } : rf));
+  };
+
+  const askHideReportFile = rf => {
+    setConf({ msg: `「${rf.original_name}」\n\n非表示にしますか？(ファイルは残ります。あとで表示に戻せます)`, okLabel: "非表示にする", onOk: () => { setReportFileHidden(rf.id, true); setConf(null); } });
+  };
+
   const getC = id => cos.find(c => c.id === id);
   const inChargeList = ["すべて", ...new Set(pjs.map(p => p.inCharge).filter(Boolean))];
 
@@ -185,6 +198,10 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
 
   const fltSel = { padding: "6px 10px", borderRadius: 10, border: "1.5px solid #E5E7EB", fontSize: 12, background: "#fff", color: "#1F2937" };
   const clearBtn = { padding: "6px 12px", borderRadius: 10, border: "1.5px solid #D1D5DB", background: "#fff", color: "#374151", fontSize: 12, fontWeight: 700, cursor: "pointer" };
+
+  // 非表示(hidden_at)のファイルは、一覧・「報告書が未登録です」の対象から外す(第8弾テーマ9)
+  const visibleReportFiles = reportFiles.filter(rf => !rf.hidden_at);
+  const hiddenReportFiles = reportFiles.filter(rf => rf.hidden_at);
 
   const pending = tks.filter(t => !t.done);
 
@@ -251,14 +268,14 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
                   <div style={{ fontWeight: 700, fontSize: 13, color: "#1A3A5C" }}>📎 報告書</div>
                   <button onClick={() => window.open("/report.html", "_blank")} style={{ border: "none", background: "none", color: "#2563EB", fontSize: 11, fontWeight: 700, cursor: "pointer", padding: 0 }}>報告書ツールを開く →</button>
                 </div>
-                {quotes.filter(q => q.status === "won" && !reportFiles.some(rf => rf.quote_id === q.id)).length > 0 && (
+                {quotes.filter(q => q.status === "won" && !visibleReportFiles.some(rf => rf.quote_id === q.id)).length > 0 && (
                   <div style={{ background: "#FFFBEB", color: "#92400E", borderRadius: 8, padding: "6px 10px", fontSize: 11, marginBottom: 8 }}>
-                    ⚠️ 報告書が未登録です: {quotes.filter(q => q.status === "won" && !reportFiles.some(rf => rf.quote_id === q.id)).map(q => q.title).join("、")}
+                    ⚠️ 報告書が未登録です: {quotes.filter(q => q.status === "won" && !visibleReportFiles.some(rf => rf.quote_id === q.id)).map(q => q.title).join("、")}
                   </div>
                 )}
-                {reportFiles.length === 0
+                {visibleReportFiles.length === 0
                   ? <div style={{ color: "#9CA3AF", fontSize: 13, marginBottom: 10 }}>報告書が未登録です</div>
-                  : reportFiles.map(rf => (
+                  : visibleReportFiles.map(rf => (
                     <div key={rf.id} style={{ background: "#F9FAFB", borderRadius: 8, padding: "8px 10px", marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: 600, fontSize: 12, color: "#1F2937", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{rf.original_name}</div>
@@ -267,8 +284,25 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
                         </div>
                       </div>
                       <button onClick={() => openReportFile(rf)} style={{ border: "1px solid #E5E7EB", background: "#fff", borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 700, color: "#1A3A5C", cursor: "pointer", whiteSpace: "nowrap" }}>📎 開く</button>
+                      <button onClick={() => askHideReportFile(rf)} style={{ border: "1px solid #E5E7EB", background: "#fff", borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 700, color: "#6B7280", cursor: "pointer", whiteSpace: "nowrap" }}>非表示にする</button>
                     </div>
                   ))}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, marginBottom: 8 }}>
+                  <input type="checkbox" id="showHiddenReports" checked={showHiddenReports} onChange={e => setShowHiddenReports(e.target.checked)} />
+                  <label htmlFor="showHiddenReports" style={{ fontSize: 11, color: "#6B7280", cursor: "pointer" }}>非表示のファイルを表示({hiddenReportFiles.length}件)</label>
+                </div>
+                {showHiddenReports && hiddenReportFiles.map(rf => (
+                  <div key={rf.id} style={{ background: "#F3F4F6", borderRadius: 8, padding: "8px 10px", marginBottom: 6, display: "flex", alignItems: "center", gap: 8, opacity: 0.6 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 12, color: "#1F2937", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{rf.original_name}</div>
+                      <div style={{ fontSize: 10, color: "#9CA3AF" }}>
+                        {rf.quote_id ? (quotes.find(q => q.id === rf.quote_id)?.title || "見積") : "紐づけなし"} ・ {(rf.size_bytes / 1024 / 1024).toFixed(1)}MB ・ {new Date(rf.created_at).toLocaleDateString("ja-JP")} ・ 非表示
+                      </div>
+                    </div>
+                    <button onClick={() => openReportFile(rf)} style={{ border: "1px solid #E5E7EB", background: "#fff", borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 700, color: "#1A3A5C", cursor: "pointer", whiteSpace: "nowrap" }}>📎 開く</button>
+                    <button onClick={() => setReportFileHidden(rf.id, false)} style={{ border: "1px solid #BFDBFE", background: "#EFF6FF", borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 700, color: "#1A3A5C", cursor: "pointer", whiteSpace: "nowrap" }}>表示に戻す</button>
+                  </div>
+                ))}
                 <div style={{ marginTop: 8 }}>
                   <div style={{ fontSize: 10, color: "#6B7280", marginBottom: 4 }}>どの見積の報告書か(任意)</div>
                   <select value={reportQuoteChoice} onChange={e => setReportQuoteChoice(e.target.value)} style={{ width: "100%", padding: "7px 8px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937", marginBottom: 8 }}>
