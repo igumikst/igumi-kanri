@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase";
 import { TEMPLATE_CATS } from "../lib/constants";
 import { Hdr, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
+import { describeError } from "../lib/errorMessage";
 
 export default function Templates({ pjs, submittedQuotes, wonQuotes, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, setTmplFiles, fishWeather, tileConf, SB_W, RP_W }) {
   const [tmplCat, setTmplCat] = useState(null);
@@ -18,7 +19,7 @@ export default function Templates({ pjs, submittedQuotes, wonQuotes, cos, tks, l
     const safeName = file.name.replace(/[^\w.\-]/g, '_');
     const path = `templates/${catId}/${Date.now()}_${safeName}`;
     const { error } = await supabase.storage.from("files").upload(path, file);
-    if (error) { alert(`アップロードエラー: ${error.message}`); return; }
+    if (error) { alert(describeError(error, "ファイルのアップロード")); return; }
     const { data: urlData } = supabase.storage.from("files").getPublicUrl(path);
     const { data } = await supabase.from("template_files").insert([{ cat_id: catId, name: file.name, type: file.type, size: file.size, url: urlData.publicUrl, path }]).select("id,cat_id,name,type,size,url,path,created_at");
     if (data) setTmplFiles(prev => [...prev, data[0]]);

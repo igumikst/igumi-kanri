@@ -2,6 +2,7 @@ import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { Sel, Inp, Modal, Hdr, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
+import { describeError } from "../lib/errorMessage";
 
 const BOARD_CATS = ["業務連絡", "スケジュール", "緊急連絡", "その他"];
 const BOARD_CAT_STYLE = {
@@ -43,7 +44,7 @@ export default function Board({ pjs, submittedQuotes, wonQuotes, cos, tks, links
       .select();
     setPosting(false);
     if (error) {
-      alert("投稿エラー：" + error.message); // ★エラーを表示
+      alert(describeError(error, "投稿")); // ★エラーを表示
       return;
     }
     if (data) {
@@ -74,7 +75,7 @@ export default function Board({ pjs, submittedQuotes, wonQuotes, cos, tks, links
       .from("board_comments")
       .insert([{ post_id: postId, content: boardComment.content.trim(), author: boardComment.author.trim() }])
       .select();
-    if (error) { alert("コメントエラー：" + error.message); return; }
+    if (error) { alert(describeError(error, "コメントの投稿")); return; }
     if (data) {
       setBoardComments(prev => [...prev, data[0]]);
       setBoardComment({ postId: null, content: "", author: "" });

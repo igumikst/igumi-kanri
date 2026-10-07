@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { Modal, Inp, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
+import { describeError } from "../lib/errorMessage";
 
 const DEFAULT_FINANCE_ITEMS = [
   { id: "invoice",    label: "請求書PDF",   icon: "🧾" },
@@ -292,7 +293,7 @@ export default function Finance({ pjs, submittedQuotes, wonQuotes, cos, tks, lin
 
   const uploadFinFile = async (file, itemId, year, month) => {
     const { error } = await persistFinFile(file, itemId, year, month);
-    if (error) { alert(`アップロードエラー: ${error.message}`); return; }
+    if (error) { alert(describeError(error, "ファイルのアップロード")); return; }
   };
 
   const uploadDirectFile = async (file, itemId) => {
@@ -356,7 +357,7 @@ export default function Finance({ pjs, submittedQuotes, wonQuotes, cos, tks, lin
     if (monthCtx) {
       for (const node of flattenDropFiles(nodes)) {
         const { error } = await persistFinFile(node.file, monthCtx.rootId, monthCtx.year, monthCtx.month);
-        if (error) failed.push({ name: node.name, reason: error.message || "アップロード失敗" });
+        if (error) failed.push({ name: node.name, reason: describeError(error, "アップロード") });
         doneFiles += 1;
         setBulkProgress({ current: doneFiles, total: totalFiles });
       }
@@ -413,7 +414,7 @@ export default function Finance({ pjs, submittedQuotes, wonQuotes, cos, tks, lin
               targetId = await createFolderRow(pid, node.name);
             }
           } catch (err) {
-            failed.push({ name: node.name, reason: err.message || "フォルダ作成に失敗" });
+            failed.push({ name: node.name, reason: describeError(err, "フォルダの作成") });
             continue;
           }
           await walk(node.children || [], targetId);
@@ -425,7 +426,7 @@ export default function Finance({ pjs, submittedQuotes, wonQuotes, cos, tks, lin
             continue;
           }
           const { error } = await persistFinFile(node.file, pid, null, null);
-          if (error) failed.push({ name: node.name, reason: error.message || "アップロード失敗" });
+          if (error) failed.push({ name: node.name, reason: describeError(error, "アップロード") });
           doneFiles += 1;
           setBulkProgress({ current: doneFiles, total: totalFiles });
         }
@@ -462,7 +463,7 @@ export default function Finance({ pjs, submittedQuotes, wonQuotes, cos, tks, lin
     try {
       nodes = await collectDropNodesFromEvent(e);
     } catch (err) {
-      alert(`ドロップ内容の読み取りに失敗しました: ${err.message || err}`);
+      alert(describeError(err, "ドロップ内容の読み取り"));
       return;
     }
     if (!nodes.length) return;
@@ -571,7 +572,7 @@ export default function Finance({ pjs, submittedQuotes, wonQuotes, cos, tks, lin
         sort_order: siblings.length, is_default: false, parent_id: addParentId,
       }])
       .select();
-    if (error) { alert(`フォルダ追加エラー: ${error.message}`); return; }
+    if (error) { alert(describeError(error, "フォルダの追加")); return; }
     if (data) setFinFolders(prev => [...prev, data[0]]);
     setFolderForm({ label: "", icon: "📁" });
     setFinModal(null);
@@ -589,7 +590,7 @@ export default function Finance({ pjs, submittedQuotes, wonQuotes, cos, tks, lin
       parent_id: finItem.id, label: `${m}月`, icon: `M:${m}`,
       sort_order: siblings.length, is_default: false,
     }]).select();
-    if (error) { alert(`月フォルダ追加エラー: ${error.message}`); return; }
+    if (error) { alert(describeError(error, "月フォルダの追加")); return; }
     if (data) setFinFolders(prev => [...prev, data[0]]);
     setMonthForm({ month: "" });
     setFinModal(null);

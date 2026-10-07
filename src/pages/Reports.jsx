@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { Confirm } from "../components/UI";
 import { normalizeText, similarity } from "../lib/priceMatch";
+import { describeError } from "../lib/errorMessage";
 
 const HEADER_COLOR = "#1a56a0";
 const TYPE_LABELS = { normal: "通常", tama: "多摩", union: "ユニオン", manual: "手動登録", "": "未分類" };
@@ -40,7 +41,7 @@ export default function Reports({ pjs, submittedQuotes, wonQuotes, cos, tks, lin
 
   const deleteItem = async (id) => {
     const { error } = await supabase.from("reports").delete().eq("id", id);
-    if (error) { alert("削除エラー：" + error.message); return; }
+    if (error) { alert(describeError(error, "削除")); return; }
     setItems((prev) => prev.filter((i) => i.id !== id));
     setDeleteTarget(null);
     if (selected?.id === id) setSelected(null);
@@ -49,7 +50,7 @@ export default function Reports({ pjs, submittedQuotes, wonQuotes, cos, tks, lin
   // 案件とのつなぎ(自動では紐づけない。物件名から候補を出すだけ)
   const linkReportToProject = async (reportId, projectId) => {
     const { error } = await supabase.from("reports").update({ project_id: projectId }).eq("id", reportId);
-    if (error) { alert("紐づけに失敗しました：" + error.message); return; }
+    if (error) { alert(describeError(error, "紐づけ")); return; }
     setItems((prev) => prev.map((i) => (i.id === reportId ? { ...i, project_id: projectId } : i)));
     if (selected?.id === reportId) setSelected((s) => ({ ...s, project_id: projectId }));
   };
@@ -84,7 +85,7 @@ export default function Reports({ pjs, submittedQuotes, wonQuotes, cos, tks, lin
       created_by: manualForm.created_by.trim(),
     }]).select().single();
     setSaving(false);
-    if (error) { alert("保存エラー：" + error.message); return; }
+    if (error) { alert(describeError(error, "保存")); return; }
     setItems((prev) => [data, ...prev]);
     setManualForm({ title: "", property_name: "", content: "", created_by: "" });
     setShowManual(false);

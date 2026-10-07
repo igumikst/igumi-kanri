@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { supabase } from "../lib/supabase";
 import { Hdr, Modal, Inp } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
+import { describeError } from "../lib/errorMessage";
 
 export default function PriceAdmin({ pjs, submittedQuotes, wonQuotes, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W }) {
   const pending = tks.filter(t => !t.done);
@@ -88,7 +89,7 @@ export default function PriceAdmin({ pjs, submittedQuotes, wonQuotes, cos, cust,
       supabase.from("price_item_costs").upsert({ price_item_id: item.id, cost_price: costPrice, cost_confirmed: costConfirmed }, { onConflict: "price_item_id" }),
     ]);
     if (r1.error || r2.error) {
-      alert("保存に失敗しました: " + (r1.error?.message || r2.error?.message));
+      alert(describeError(r1.error || r2.error, "単価表の保存"));
       setSavingId(null);
       return;
     }
@@ -102,7 +103,7 @@ export default function PriceAdmin({ pjs, submittedQuotes, wonQuotes, cos, cust,
   const setActive = async (item, isActive) => {
     setHidingId(item.id);
     const { error } = await supabase.from("price_items").update({ is_active: isActive }).eq("id", item.id);
-    if (error) { alert("更新に失敗しました: " + error.message); setHidingId(null); return; }
+    if (error) { alert(describeError(error, "単価表の更新")); setHidingId(null); return; }
     setPriceItems(prev => prev.map(i => i.id === item.id ? { ...i, is_active: isActive } : i));
     setHidingId(null);
   };
@@ -121,7 +122,7 @@ export default function PriceAdmin({ pjs, submittedQuotes, wonQuotes, cos, cust,
       unit: addForm.unit.trim(), note: addForm.note.trim(), sale_price: Number(addForm.salePrice) || 0,
       item_type: "fixed", is_active: true, sort_order: sortOrder,
     }]).select();
-    if (error) { alert("追加に失敗しました: " + error.message); setAdding(false); return; }
+    if (error) { alert(describeError(error, "単価表への追加")); setAdding(false); return; }
     const newItem = data[0];
     const costPrice = addForm.costPrice === "" ? null : Number(addForm.costPrice);
     if (costPrice != null) {

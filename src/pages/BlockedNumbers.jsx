@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
+import { describeError } from "../lib/errorMessage";
 
 const LABEL_OPTIONS = ["営業電話", "いたずら・無言", "間違い電話", "その他"];
 
@@ -43,7 +44,7 @@ export default function BlockedNumbers({ cust, isPC, pp, nav }) {
     if (!error) {
       setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
     } else {
-      alert("更新に失敗しました: " + error.message);
+      alert(describeError(error, "更新"));
     }
   };
 
@@ -53,7 +54,7 @@ export default function BlockedNumbers({ cust, isPC, pp, nav }) {
     if (!error) {
       setRows(prev => prev.filter(r => r.id !== row.id));
     } else {
-      alert("削除に失敗しました: " + error.message);
+      alert(describeError(error, "削除"));
     }
   };
 
@@ -72,10 +73,8 @@ export default function BlockedNumbers({ cust, isPC, pp, nav }) {
       setNewPhone("");
       setNewLabel("営業電話");
       setNewMemo("");
-    } else if (error?.code === "23505") {
-      alert("この番号はすでに登録されています");
     } else {
-      alert("登録に失敗しました: " + (error?.message || ""));
+      alert(describeError(error, "登録"));
     }
     setSaving(false);
   };

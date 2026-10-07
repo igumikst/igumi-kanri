@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { Confirm } from "../components/UI";
+import { describeError } from "../lib/errorMessage";
 
 const HEADER_COLOR = "#1a56a0";
 const CATEGORIES = ["人格設定", "理念", "現場知識", "会社ルール", "その他"];
@@ -65,12 +66,12 @@ export default function AiKnowledge({ pjs, submittedQuotes, wonQuotes, cos, tks,
     if (editId) {
       const { data, error } = await supabase.from("ai_knowledge").update(payload).eq("id", editId).select().single();
       setSaving(false);
-      if (error) { alert("更新エラー：" + error.message); return; }
+      if (error) { alert(describeError(error, "更新")); return; }
       setItems((prev) => prev.map((i) => (i.id === editId ? data : i)));
     } else {
       const { data, error } = await supabase.from("ai_knowledge").insert([payload]).select().single();
       setSaving(false);
-      if (error) { alert("追加エラー：" + error.message); return; }
+      if (error) { alert(describeError(error, "追加")); return; }
       setItems((prev) => [data, ...prev]);
     }
     setShowForm(false);
@@ -86,13 +87,13 @@ export default function AiKnowledge({ pjs, submittedQuotes, wonQuotes, cos, tks,
       .eq("id", item.id)
       .select()
       .single();
-    if (error) { alert("更新エラー：" + error.message); return; }
+    if (error) { alert(describeError(error, "更新")); return; }
     setItems((prev) => prev.map((i) => (i.id === item.id ? data : i)));
   };
 
   const deleteItem = async (id) => {
     const { error } = await supabase.from("ai_knowledge").delete().eq("id", id);
-    if (error) { alert("削除エラー：" + error.message); return; }
+    if (error) { alert(describeError(error, "削除")); return; }
     setItems((prev) => prev.filter((i) => i.id !== id));
     setDeleteTarget(null);
     if (editId === id) {
