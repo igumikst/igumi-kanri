@@ -444,7 +444,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
                             {isUnadoptedWon && <div style={{ background: "#FEF2F2", color: "#991B1B", border: "1px solid #FECACA", borderRadius: 6, padding: "3px 8px", fontSize: 11, fontWeight: 700, marginBottom: 5, display: "inline-block" }}>⚠️ 未採用(売上に未反映)</div>}
                             <div style={{ fontSize: 15, fontWeight: 800, color: "#E07B39" }}>{fmt(q.total_amount)}</div>
                             {q.applied_rates?.rate != null && <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 2 }}>掛け率 ×{Number.isInteger(q.applied_rates.rate) ? q.applied_rates.rate.toFixed(1) : q.applied_rates.rate}</div>}
-                            {(() => { const n = reportFiles.filter(f => f.quote_id === q.id && !f.hidden_at).length; return <div style={{ fontSize: 10, color: n ? "#059669" : "#9CA3AF", marginTop: 2 }}>{n ? `📎 報告書あり(${n}件)` : "報告書なし"}</div>; })()}
+                            {(() => { const n = reportFiles.filter(f => f.quote_id === q.id && !f.hidden_at).length; return <div style={{ fontSize: 10, color: n ? "#059669" : "#9CA3AF", marginTop: 2 }}>{n ? `📸 報告書あり(${n}件)` : "報告書なし"}</div>; })()}
                           </div>
                           <div style={{ display: "flex", borderTop: "1px solid #F3F4F6" }}>
                             <button onClick={() => openQuote(q)} style={{ flex: 1, padding: "8px 0", background: "none", border: "none", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#1A3A5C", fontWeight: 700, cursor: "pointer" }}>開く →</button>
