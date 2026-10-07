@@ -13,17 +13,24 @@ import { REPORT_FILE_BUCKET, REPORT_FILE_TYPES, REPORT_FILE_MAX_SIZE, reportFile
 // 営業所・営業担当の絞り込みで「未設定」(branchId/salesRepIdが無い案件)を選べるようにする値(第8弾テーマ15)
 const FLT_UNSET = "__unset__";
 
-export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes, setSubmittedQuotes, setPjs, cos, setCos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, setQuoteProjectId, setQuoteImportCtx, branches, setBranches, salesReps, setSalesReps, openProjectId }) {
+export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes, setSubmittedQuotes, setPjs, cos, setCos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, setQuoteProjectId, setQuoteImportCtx, branches, setBranches, salesReps, setSalesReps, openProjectId, setOpenProjectId }) {
   usePreventWindowFileDrop();
   const [selP, setSelP] = useState(null);
 
-  // 他の画面(見積の取り込みなど)から、特定の案件の詳細を開いた状態でこの画面に入る
+  // 他の画面(見積の取り込みなど)から、特定の案件の詳細を開いた状態でこの画面に入る。
   const [handledOpenProjectId, setHandledOpenProjectId] = useState(null);
   if (openProjectId && openProjectId !== handledOpenProjectId) {
     setHandledOpenProjectId(openProjectId);
     const p = pjs.find(x => x.id === openProjectId);
     if (p) setSelP(p);
   }
+  // 消費したら親(App.jsx)側のopenProjectIdも即座にnullへ戻す(第8弾テーマ17)。そうしないと、
+  // 消費後に別の画面から案件一覧へ普通に入ったときも、残ったidで同じ案件詳細が開いてしまう。
+  // 親のstateをここで直接更新すると「レンダー中に別コンポーネントを更新した」エラーになるため、
+  // useEffectで行う
+  useEffect(() => {
+    if (handledOpenProjectId && handledOpenProjectId === openProjectId) setOpenProjectId(null);
+  }, [handledOpenProjectId, openProjectId, setOpenProjectId]);
   const [modal, setModal] = useState(null);
   const [fltS, setFltS] = useState("すべて");
   const [fltInCharge, setFltInCharge] = useState("すべて");

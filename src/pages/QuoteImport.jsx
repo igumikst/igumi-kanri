@@ -119,7 +119,11 @@ export default function QuoteImport({ pjs, submittedQuotes, wonQuotes, setPjs, c
     setReading(false);
   };
 
-  const back = () => nav(quoteImportCtx?.from || "projects");
+  const back = () => {
+    const dest = quoteImportCtx?.from || "projects";
+    if (dest === "projects" && quoteImportCtx?.projectId) setOpenProjectId(quoteImportCtx.projectId);
+    nav(dest);
+  };
   const targetProject = pjs.find(p => p.id === quoteImportCtx?.projectId);
 
   const addProjectToState = async projectId => {

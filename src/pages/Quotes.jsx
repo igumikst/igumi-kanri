@@ -26,7 +26,7 @@ const newKey = () => "l" + Date.now() + Math.random().toString(36).slice(2);
 // quote_no は text 型のため、数字だけを取り出して数として扱う(DB関数 import_quote と同じ考え方)
 const quoteNoNum = q => parseInt(String(q.quote_no ?? "").replace(/[^0-9]/g, ""), 10) || 0;
 
-export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, setSubmittedQuotes, setPjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteProjectId, setQuoteImportCtx }) {
+export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, setSubmittedQuotes, setPjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteProjectId, setQuoteImportCtx, setOpenProjectId }) {
   usePreventWindowFileDrop();
   const project = pjs.find(p => p.id === quoteProjectId);
   const pending = tks.filter(t => !t.done);
@@ -403,7 +403,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
 
       {view === "list" ? (
         <>
-          <Hdr title={`📝 見積 — ${project?.name || ""}`} back={() => nav("projects")} />
+          <Hdr title={`📝 見積 — ${project?.name || ""}`} back={() => { if (quoteProjectId) setOpenProjectId(quoteProjectId); nav("projects"); }} />
           <div style={{ padding: isPC ? "14px 0" : 14 }}>
             {!project ? (
               <div style={{ background: "#fff", borderRadius: 14, padding: 20, textAlign: "center", color: "#9CA3AF" }}>案件が選択されていません。案件詳細から開いてください。</div>
