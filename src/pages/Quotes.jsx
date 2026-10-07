@@ -6,7 +6,7 @@ import GroupTree, { BundleToolbar } from "../components/GroupTree";
 import { fmt, todayStr } from "../lib/constants";
 import { openQuoteFile, QUOTE_FILE_BUCKET, FILE_TYPES } from "../lib/quoteFiles";
 import { computeQuoteFinancials } from "../lib/quoteFinancials";
-import { computeAdoptTotals, buildAdoptMessage, buildUnadoptMessage, provisionalWarningLines, adoptQuote as adoptQuoteInDb, unadoptQuote as unadoptQuoteInDb } from "../lib/quoteAdopt";
+import { computeAdoptTotals, buildAdoptMessage, buildUnadoptMessage, provisionalWarningLines, adoptQuote as adoptQuoteInDb, unadoptQuote as unadoptQuoteInDb, recalcProjectTotals } from "../lib/quoteAdopt";
 import SubQuoteFileReader from "../components/SubQuoteFileReader";
 import FileDropZone from "../components/FileDropZone";
 import { usePreventWindowFileDrop } from "../lib/useFileDropGuard";
@@ -162,11 +162,21 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
     setSubCosts(prev => prev.filter(c => c.id !== id));
   };
 
+  // 完工済み(status==="won")の見積を削除したときは、案件のamount/grossProfitを
+  // 「残りの完工済み見積の合計」に再計算する(第8弾テーマ16)。発注前の見積は、
+  // 案件の金額に入っていないので再計算しない
   const delQuote = async id => {
+    const target = quotes.find(q => q.id === id);
     await supabase.from("quotes").delete().eq("id", id);
     setQuotes(quotes.filter(q => q.id !== id));
     removeWonQuote(id);
     removeSubmittedQuote(id);
+    if (target?.status === "won") {
+      try {
+        const projectPatch = await recalcProjectTotals(supabase, quoteProjectId);
+        setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch } : p));
+      } catch (e) { alert(e.message); }
+    }
   };
 
   // 見積の元ファイルの非表示・表示に戻す(第8弾テーマ12①)。ファイル本体(Storage)は消さない
@@ -451,7 +461,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
                                 <button onClick={() => askHideQuoteFile(f)} title="非表示にする" style={{ padding: "8px 8px", background: "none", border: "none", fontSize: 13, color: "#9CA3AF", cursor: "pointer" }}>🙈</button>
                               </div>
                             ))}
-                            <button onClick={() => setConf({ msg: `「${q.title}」\n\nこの操作は元に戻せません。\n削除しますか？`, onOk: () => { delQuote(q.id); setConf(null); } })} style={{ padding: "8px 16px", background: "none", border: "none", fontSize: 12, color: "#DC2626", fontWeight: 700, cursor: "pointer" }}>🗑</button>
+                            <button onClick={() => setConf({ msg: q.status === "won" ? `「${q.title}」\n\n完工済みの見積です。削除すると、案件の売上・粗利から外れます。\n\nこの操作は元に戻せません。\n削除しますか？` : `「${q.title}」\n\nこの操作は元に戻せません。\n削除しますか？`, onOk: () => { delQuote(q.id); setConf(null); } })} style={{ padding: "8px 16px", background: "none", border: "none", fontSize: 12, color: "#DC2626", fontWeight: 700, cursor: "pointer" }}>🗑</button>
                           </div>
                         </div>
                       );

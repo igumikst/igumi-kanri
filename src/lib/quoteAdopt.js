@@ -54,7 +54,7 @@ export function buildUnadoptMessage(quoteTitle) {
 }
 
 // 案件の amount / grossProfit を、その案件の全完工済み(won)見積の合計に書き直す
-async function recalcProjectTotals(supabase, projectId) {
+export async function recalcProjectTotals(supabase, projectId) {
   const { data } = await supabase.from("quotes").select("total_amount, gross_profit").eq("project_id", projectId).eq("status", "won");
   const amount = Math.round((data || []).reduce((s, q) => s + (Number(q.total_amount) || 0), 0));
   const gp = Math.round((data || []).reduce((s, q) => s + (Number(q.gross_profit) || 0), 0));
