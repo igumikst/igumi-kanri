@@ -7,6 +7,7 @@
 // is_adopted / status は変更しない)。案件の amount / grossProfit は、常に
 // 「その案件の全完工済み(won)見積の合計」として、書き込み直す(上書きではなく合算)。
 import { computeQuoteFinancials } from "./quoteFinancials";
+import { describeError } from "./errorMessage";
 
 // 見積の原価・下請け原価から、完工済みにするときの受注金額・粗利を計算する
 export async function computeAdoptTotals(supabase, { quote, constructionType }) {
@@ -59,7 +60,7 @@ export async function recalcProjectTotals(supabase, projectId) {
   const amount = Math.round((data || []).reduce((s, q) => s + (Number(q.total_amount) || 0), 0));
   const gp = Math.round((data || []).reduce((s, q) => s + (Number(q.gross_profit) || 0), 0));
   const { error } = await supabase.from("projects").update({ amount, grossProfit: gp }).eq("id", projectId);
-  if (error) throw new Error("案件の受注金額・粗利の更新に失敗しました: " + error.message);
+  if (error) throw new Error(describeError(error, "案件の受注金額・粗利の更新"));
   return { amount, gp };
 }
 
@@ -67,10 +68,10 @@ export async function recalcProjectTotals(supabase, projectId) {
 // 案件の amount / grossProfit は、全完工済み見積の合計に書き直す
 export async function adoptQuote(supabase, { quoteId, projectId, gp, completedOn }) {
   const { error } = await supabase.from("quotes").update({ is_adopted: true, status: "won", completed_on: completedOn, gross_profit: Math.round(gp) }).eq("id", quoteId);
-  if (error) throw new Error("見積の完工済み更新に失敗しました: " + error.message);
+  if (error) throw new Error(describeError(error, "見積の完工済み更新"));
   const totals = await recalcProjectTotals(supabase, projectId);
   const { error: pErr } = await supabase.from("projects").update({ status: "完了" }).eq("id", projectId);
-  if (pErr) throw new Error("案件のステータス更新に失敗しました: " + pErr.message);
+  if (pErr) throw new Error(describeError(pErr, "案件のステータス更新"));
   return { ...totals, status: "完了" };
 }
 
@@ -78,6 +79,6 @@ export async function adoptQuote(supabase, { quoteId, projectId, gp, completedOn
 // 案件の amount / grossProfit は、残りの完工済み見積の合計に書き直す
 export async function unadoptQuote(supabase, { quoteId, projectId }) {
   const { error } = await supabase.from("quotes").update({ is_adopted: false, status: "submitted" }).eq("id", quoteId);
-  if (error) throw new Error("見積を発注前に戻す更新に失敗しました: " + error.message);
+  if (error) throw new Error(describeError(error, "見積を発注前に戻す更新"));
   return recalcProjectTotals(supabase, projectId);
 }

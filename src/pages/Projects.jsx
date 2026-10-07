@@ -9,6 +9,7 @@ import { computeAdoptTotals, buildAdoptMessage, adoptQuote as adoptQuoteInDb } f
 import FileDropZone from "../components/FileDropZone";
 import { usePreventWindowFileDrop } from "../lib/useFileDropGuard";
 import { REPORT_FILE_BUCKET, REPORT_FILE_TYPES, REPORT_FILE_MAX_SIZE, reportFileExt, openReportFile } from "../lib/reportFiles";
+import { describeError } from "../lib/errorMessage";
 
 // 営業所・営業担当の絞り込みで「未設定」(branchId/salesRepIdが無い案件)を選べるようにする値(第8弾テーマ15)
 const FLT_UNSET = "__unset__";
@@ -127,11 +128,11 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
       if (file.size > REPORT_FILE_MAX_SIZE) { rejected.push(`「${file.name}」: 30MBを超えています(${(file.size / 1024 / 1024).toFixed(1)}MB)。ファイルを小さくしてから追加してください`); continue; }
       const storagePath = `${crypto.randomUUID()}.${ext}`;
       const { error: upErr } = await supabase.storage.from(REPORT_FILE_BUCKET).upload(storagePath, file, { contentType: REPORT_FILE_TYPES[ext], upsert: false });
-      if (upErr) { rejected.push(`「${file.name}」: 保存に失敗しました(${upErr.message})`); continue; }
+      if (upErr) { rejected.push(`「${file.name}」: ${describeError(upErr, "保存")}`); continue; }
       const { data, error: insErr } = await supabase.from("report_files").insert([{
         project_id: selP.id, quote_id: reportQuoteChoice || null, storage_path: storagePath, original_name: file.name, size_bytes: file.size,
       }]).select();
-      if (insErr) { rejected.push(`「${file.name}」: 記録に失敗しました(${insErr.message})`); continue; }
+      if (insErr) { rejected.push(`「${file.name}」: ${describeError(insErr, "記録")}`); continue; }
       added.push(data[0]);
     }
     if (added.length) {
@@ -139,7 +140,7 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
       setReportCounts(prev => ({ ...prev, [selP.id]: (prev[selP.id] || 0) + added.length }));
     }
     setReportUploading(false);
-    if (rejected.length) alert(rejected.join("\n"));
+    if (rejected.length) alert(rejected.join("\n\n"));
     // 見積に紐づけて追加した時、その見積がまだ完工済みでなければ、完工済みにするか提案する(ブロックはしない)
     if (added.length && reportQuoteChoice) {
       const q = quotes.find(x => x.id === reportQuoteChoice);
@@ -151,7 +152,7 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
   const setReportFileHidden = async (id, hidden) => {
     const hidden_at = hidden ? new Date().toISOString() : null;
     const { error } = await supabase.from("report_files").update({ hidden_at }).eq("id", id);
-    if (error) { alert(`${hidden ? "非表示" : "表示に戻す"}処理に失敗しました: ` + error.message); return; }
+    if (error) { alert(describeError(error, hidden ? "非表示処理" : "表示に戻す処理")); return; }
     setReportFiles(prev => prev.map(rf => rf.id === id ? { ...rf, hidden_at } : rf));
     setReportCounts(prev => ({ ...prev, [selP.id]: Math.max(0, (prev[selP.id] || 0) + (hidden ? -1 : 1)) }));
   };

@@ -10,6 +10,7 @@ import { computeAdoptTotals, buildAdoptMessage, buildUnadoptMessage, provisional
 import SubQuoteFileReader from "../components/SubQuoteFileReader";
 import FileDropZone from "../components/FileDropZone";
 import { usePreventWindowFileDrop } from "../lib/useFileDropGuard";
+import { describeError } from "../lib/errorMessage";
 
 // 見積の状態は、画面上は「発注前」「完工済」の2つだけ。DBの値は既存の制約に合わせる
 // (発注前=submitted / 完工済=won)。既存の下書き(draft)・失注(lost)は、画面では発注前と表示する
@@ -144,7 +145,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
       const ext = (subForm.file.name.match(/\.([a-zA-Z0-9]+)$/)?.[1] || "").toLowerCase();
       const storagePath = `${crypto.randomUUID()}.${ext}`;
       const { error: upErr } = await supabase.storage.from(QUOTE_FILE_BUCKET).upload(storagePath, subForm.file, { contentType: FILE_TYPES[ext], upsert: false });
-      if (upErr) { alert("ファイルの保存に失敗しました: " + upErr.message); setSavingSub(false); return; }
+      if (upErr) { alert(describeError(upErr, "ファイルの保存")); setSavingSub(false); return; }
       file_storage_path = storagePath; file_original_name = subForm.file.name;
     }
     const { data, error } = await supabase.from("quote_subcontractor_costs").insert([{
@@ -152,7 +153,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
       note: subForm.note || null, file_storage_path, file_original_name,
     }]).select();
     setSavingSub(false);
-    if (error) { alert("下請けの原価の保存に失敗しました: " + error.message); return; }
+    if (error) { alert(describeError(error, "下請けの原価の保存")); return; }
     setSubCosts(prev => [...prev, data[0]]);
     setSubForm({ subcontractor_id: "", amount: "", note: "", file: null });
   };
@@ -183,7 +184,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
   const setQuoteFileHidden = async (id, hidden) => {
     const hidden_at = hidden ? new Date().toISOString() : null;
     const { error } = await supabase.from("quote_files").update({ hidden_at }).eq("id", id);
-    if (error) { alert(`${hidden ? "非表示" : "表示に戻す"}処理に失敗しました: ` + error.message); return; }
+    if (error) { alert(describeError(error, hidden ? "非表示処理" : "表示に戻す処理")); return; }
     setQuoteFiles(prev => prev.map(f => f.id === id ? { ...f, hidden_at } : f));
   };
 
@@ -329,11 +330,11 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
     const payload = { project_id: quoteProjectId, title: ed.title.trim(), price_set_id: ed.price_set_id, status: ed.status, total_amount: Math.round(total) };
     if (!quoteId) {
       const { data, error } = await supabase.from("quotes").insert([{ ...payload, quote_no: String(Math.max(0, ...quotes.map(quoteNoNum)) + 1) }]).select();
-      if (error) { alert("保存に失敗しました: " + error.message); setSaving(false); return; }
+      if (error) { alert(describeError(error, "保存")); setSaving(false); return; }
       quoteId = data[0].id;
     } else {
       const { error } = await supabase.from("quotes").update(payload).eq("id", quoteId);
-      if (error) { alert("保存に失敗しました: " + error.message); setSaving(false); return; }
+      if (error) { alert(describeError(error, "保存")); setSaving(false); return; }
       await supabase.from("quote_items").delete().eq("quote_id", quoteId);
     }
     if (ed.lines.length) {
@@ -344,13 +345,13 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
         ...(l.note ? { note: l.note } : {}), // 備考(見積ファイルから取り込んだ行)。ない行は送らない
       }));
       const { data: insertedItems, error: itemsErr } = await supabase.from("quote_items").insert(itemsPayload).select();
-      if (itemsErr) { alert("明細の保存に失敗しました: " + itemsErr.message); setSaving(false); return; }
+      if (itemsErr) { alert(describeError(itemsErr, "明細の保存")); setSaving(false); return; }
       const idBySortOrder = Object.fromEntries(insertedItems.map(r => [r.sort_order, r.id]));
       const costsPayload = ed.lines.map((l, i) => ({
         quote_item_id: idBySortOrder[i], cost_price: l.cost_price == null || l.cost_price === "" ? null : Number(l.cost_price), cost_qty: Number(l.qty) || 0, cost_confirmed: !!l.cost_confirmed,
       }));
       const { error: costsErr } = await supabase.from("quote_item_costs").insert(costsPayload);
-      if (costsErr) { alert("原価の保存に失敗しました: " + costsErr.message); setSaving(false); return; }
+      if (costsErr) { alert(describeError(costsErr, "原価の保存")); setSaving(false); return; }
     }
     try {
       if (adopt) {

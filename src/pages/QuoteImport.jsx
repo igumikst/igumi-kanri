@@ -13,6 +13,7 @@ import FileDropZone from "../components/FileDropZone";
 import { usePreventWindowFileDrop } from "../lib/useFileDropGuard";
 import { QUOTE_FILE_BUCKET, FILE_TYPES } from "../lib/quoteFiles";
 import { computeQuoteFinancials, CONSTRUCTION_TYPES } from "../lib/quoteFinancials";
+import { describeError } from "../lib/errorMessage";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ACCEPT_RE = /\.(xls|xlsx|est|pdf)$/i;
@@ -336,7 +337,7 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
     const contentType = FILE_TYPES[ext];
     const { error: upErr } = await supabase.storage.from(QUOTE_FILE_BUCKET).upload(storagePath, r.file, { contentType, upsert: false });
     if (upErr) {
-      setResult({ ok: false, message: `元ファイルの保存に失敗しました。何も登録されていません。(${upErr.message})` });
+      setResult({ ok: false, message: `${describeError(upErr, "元ファイルの保存")}\n\n(何も登録されていません)` });
       setRegistering(false);
       return;
     }
@@ -346,7 +347,7 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
     const { data, error } = await supabase.rpc("import_quote", { p_project: pProject, p_quote: pQuote, p_items: pItems, p_aliases: pAliases, p_file: pFile });
     if (error) {
       const missing = /import_quote|function|schema cache/i.test(error.message || "");
-      setResult({ ok: false, message: `登録できませんでした。案件・見積は登録されていません。(${error.message})${missing ? " ※ 取り込み用のSQLが未実行の可能性があります" : ""}`, orphanPath: storagePath });
+      setResult({ ok: false, message: `${describeError(error, "登録")}\n\n(案件・見積は登録されていません)${missing ? "\n※ 取り込み用のSQLが未実行の可能性があります" : ""}`, orphanPath: storagePath });
       setRegistering(false);
       return;
     }
@@ -658,7 +659,7 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
 
           {result && !result.ok && (
             <div style={{ background: "#FEF2F2", color: "#991B1B", borderRadius: 10, padding: "10px 12px", fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
-              <div>❌ {result.message}</div>
+              <div style={{ whiteSpace: "pre-line" }}>❌ {result.message}</div>
               {result.orphanPath && <div style={{ fontSize: 11, fontWeight: 400, marginTop: 4 }}>※ 元ファイルだけが Storage に残っています(quote-files / {result.orphanPath})。もう一度登録すると、新しい名前で保存し直します。</div>}
             </div>
           )}
@@ -994,7 +995,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
     const contentType = FILE_TYPES[ext] || "application/octet-stream";
     const { error: upErr } = await supabase.storage.from(QUOTE_FILE_BUCKET).upload(storagePath, r.file, { contentType, upsert: false });
     if (upErr) {
-      setResult({ ok: false, message: `元ファイルの保存に失敗しました。何も登録されていません。(${upErr.message})` });
+      setResult({ ok: false, message: `${describeError(upErr, "元ファイルの保存")}\n\n(何も登録されていません)` });
       setRegistering(false);
       return;
     }
@@ -1004,7 +1005,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
     const { data, error } = await supabase.rpc("import_quote", { p_project: pProject, p_quote: pQuote, p_items: pItems, p_aliases: pAliases, p_file: pFile });
     if (error) {
       const missing = /import_quote|function|schema cache/i.test(error.message || "");
-      setResult({ ok: false, message: `登録できませんでした。案件・見積は登録されていません。(${error.message})${missing ? " ※ 取り込み用のSQLが未実行の可能性があります" : ""}`, orphanPath: storagePath });
+      setResult({ ok: false, message: `${describeError(error, "登録")}\n\n(案件・見積は登録されていません)${missing ? "\n※ 取り込み用のSQLが未実行の可能性があります" : ""}`, orphanPath: storagePath });
       setRegistering(false);
       return;
     }
@@ -1387,7 +1388,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
 
       {result && !result.ok && (
         <div style={{ background: "#FEF2F2", color: "#991B1B", borderRadius: 10, padding: "10px 12px", fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
-          <div>❌ {result.message}</div>
+          <div style={{ whiteSpace: "pre-line" }}>❌ {result.message}</div>
           {result.orphanPath && <div style={{ fontSize: 11, fontWeight: 400, marginTop: 4 }}>※ 元ファイルだけが Storage に残っています(quote-files / {result.orphanPath})。もう一度登録すると、新しい名前で保存し直します。</div>}
         </div>
       )}
@@ -1588,7 +1589,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
     const contentType = FILE_TYPES[ext];
     const { error: upErr } = await supabase.storage.from(QUOTE_FILE_BUCKET).upload(storagePath, r.file, { contentType, upsert: false });
     if (upErr) {
-      setResult({ ok: false, message: `元ファイルの保存に失敗しました。何も登録されていません。(${upErr.message})` });
+      setResult({ ok: false, message: `${describeError(upErr, "元ファイルの保存")}\n\n(何も登録されていません)` });
       setRegistering(false);
       return;
     }
@@ -1598,7 +1599,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
     const { data, error } = await supabase.rpc("import_quote", { p_project: pProject, p_quote: pQuote, p_items: pItems, p_aliases: pAliases, p_file: pFile });
     if (error) {
       const missing = /import_quote|function|schema cache/i.test(error.message || "");
-      setResult({ ok: false, message: `登録できませんでした。案件・見積は登録されていません。(${error.message})${missing ? " ※ 取り込み用のSQLが未実行の可能性があります" : ""}`, orphanPath: storagePath });
+      setResult({ ok: false, message: `${describeError(error, "登録")}\n\n(案件・見積は登録されていません)${missing ? "\n※ 取り込み用のSQLが未実行の可能性があります" : ""}`, orphanPath: storagePath });
       setRegistering(false);
       return;
     }
@@ -1914,7 +1915,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
 
           {result && !result.ok && (
             <div style={{ background: "#FEF2F2", color: "#991B1B", borderRadius: 10, padding: "10px 12px", fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
-              <div>❌ {result.message}</div>
+              <div style={{ whiteSpace: "pre-line" }}>❌ {result.message}</div>
               {result.orphanPath && <div style={{ fontSize: 11, fontWeight: 400, marginTop: 4 }}>※ 元ファイルだけが Storage に残っています(quote-files / {result.orphanPath})。もう一度登録すると、新しい名前で保存し直します。</div>}
             </div>
           )}
@@ -2100,7 +2101,7 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
     const contentType = FILE_TYPES[ext];
     const { error: upErr } = await supabase.storage.from(QUOTE_FILE_BUCKET).upload(storagePath, r.file, { contentType, upsert: false });
     if (upErr) {
-      setResult({ ok: false, message: `元ファイルの保存に失敗しました。何も登録されていません。(${upErr.message})` });
+      setResult({ ok: false, message: `${describeError(upErr, "元ファイルの保存")}\n\n(何も登録されていません)` });
       setRegistering(false);
       return;
     }
@@ -2110,7 +2111,7 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
     const { data, error } = await supabase.rpc("import_quote", { p_project: pProject, p_quote: pQuote, p_items: pItems, p_aliases: pAliases, p_file: pFile });
     if (error) {
       const missing = /import_quote|function|schema cache/i.test(error.message || "");
-      setResult({ ok: false, message: `登録できませんでした。案件・見積は登録されていません。(${error.message})${missing ? " ※ 取り込み用のSQLが未実行の可能性があります" : ""}`, orphanPath: storagePath });
+      setResult({ ok: false, message: `${describeError(error, "登録")}\n\n(案件・見積は登録されていません)${missing ? "\n※ 取り込み用のSQLが未実行の可能性があります" : ""}`, orphanPath: storagePath });
       setRegistering(false);
       return;
     }
@@ -2399,7 +2400,7 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
 
           {result && !result.ok && (
             <div style={{ background: "#FEF2F2", color: "#991B1B", borderRadius: 10, padding: "10px 12px", fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
-              <div>❌ {result.message}</div>
+              <div style={{ whiteSpace: "pre-line" }}>❌ {result.message}</div>
               {result.orphanPath && <div style={{ fontSize: 11, fontWeight: 400, marginTop: 4 }}>※ 元ファイルだけが Storage に残っています(quote-files / {result.orphanPath})。もう一度登録すると、新しい名前で保存し直します。</div>}
             </div>
           )}
