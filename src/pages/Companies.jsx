@@ -4,7 +4,7 @@ import { COMPANY_TYPES, CONTACT_ROLES, fmt } from "../lib/constants";
 import { Inp, Sel, Modal, Hdr, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { MARKUP_CHOICE_OPTIONS, CUSTOM_RATE_MIN, CUSTOM_RATE_MAX, resolveMarkupChoice } from "../lib/quoteImport/markup";
-import { addContact, updateContact, deleteContact, findDuplicateContact, resolveContactBranchId, contactBranchName } from "../lib/contacts";
+import { addContact, updateContact, deleteContact, findDuplicateContact, findDuplicateSalesRep, resolveContactBranchId, contactBranchName } from "../lib/contacts";
 
 const markupSelStyle = { padding: "5px 8px", borderRadius: 6, border: "1.5px solid #E5E7EB", fontSize: 12, background: "#fff", color: "#1F2937" };
 const markupInputStyle = { width: 90, padding: "5px 8px", borderRadius: 6, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" };
@@ -45,7 +45,7 @@ function MarkupDefaultEditor({ value, onSave, unsetLabel }) {
   );
 }
 
-export default function Companies({ pjs, submittedQuotes, wonQuotes, cos, setCos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, branches, setBranches, setSalesReps }) {
+export default function Companies({ pjs, submittedQuotes, wonQuotes, cos, setCos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, branches, setBranches, salesReps, setSalesReps }) {
   const [selC, setSelC] = useState(null);
   const [selCt, setSelCt] = useState(null);
   const [modal, setModal] = useState(null);
@@ -111,6 +111,14 @@ export default function Companies({ pjs, submittedQuotes, wonQuotes, cos, setCos
   const saveCt = async () => {
     if (!nCt.name || !selC) return;
     const branchId = nCt.branchId || null;
+    if (nCt.role === "営業") {
+      const existing = findDuplicateSalesRep(salesReps, { companyId: selC.id, name: nCt.name });
+      if (existing) {
+        const branchName = branches.find(b => b.id === existing.branch_id)?.name || "未設定";
+        alert(`すでに登録されています(${branchName})。営業所を変えたい場合は、その人の編集から変更してください`);
+        return;
+      }
+    }
     if (findDuplicateContact(selC.contacts, { name: nCt.name, branchId }, branches.filter(b => b.company_id === selC.id))) {
       setConf({
         msg: `同じ名前の担当者がいます(${nCt.name})。\n\n追加しますか？`, okLabel: "追加する", okColor: "#E07B39",

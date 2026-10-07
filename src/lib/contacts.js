@@ -6,6 +6,7 @@
 // 担当者(ct)の形: { id, name, role, tel, email, memo, branchId, salesRepId? }
 // branchId は company_branches.id。古いデータ(branchId が無いもの)は、
 // branch(営業所名の文字列)を今の営業所一覧と名前で照合して表示する(データの書き換えはしない)。
+import { describeError } from "./errorMessage";
 
 // 担当者の営業所idを解決する(branchIdがあればそれを使う。無ければ古いbranch名から探す)
 export function resolveContactBranchId(ct, branchesForCompany) {
@@ -27,6 +28,12 @@ export function findDuplicateContact(contacts, { name, branchId, excludeId }, br
   return (contacts || []).find(ct => ct.id !== excludeId && ct.name === name && (resolveContactBranchId(ct, branchesForCompany) || null) === (branchId || null));
 }
 
+// 同じ取引先(company_id)内に、同じ名前のsales_repsがすでにあるか。
+// DBの一意制約(sales_reps_company_id_name_key)に合わせ、営業所は条件にしない(第8弾テーマ14・段階2)
+export function findDuplicateSalesRep(salesReps, { companyId, name, excludeId }) {
+  return (salesReps || []).find(s => s.id !== excludeId && s.company_id === companyId && s.name === name);
+}
+
 // その担当者(sales_repsのid)が割り当てられている案件を探す
 function findLinkedProjects(projects, salesRepId) {
   return (projects || []).filter(p => p.salesRepId === salesRepId);
@@ -41,7 +48,7 @@ export async function addContact(supabase, { companyId, contacts, name, role, te
   let salesRepRow = null;
   if (role === "営業") {
     const { data, error } = await supabase.from("sales_reps").insert([{ company_id: companyId, branch_id: branchId || null, name }]).select();
-    if (error) throw new Error("営業担当(sales_reps)の追加に失敗しました: " + error.message);
+    if (error) throw new Error(describeError(error, "営業担当(sales_reps)の追加"));
     salesRepRow = data[0];
   }
   const ct = {
@@ -50,7 +57,7 @@ export async function addContact(supabase, { companyId, contacts, name, role, te
   };
   const newContacts = [...(contacts || []), ct];
   const { error } = await supabase.from("companies").update({ contacts: newContacts }).eq("id", companyId);
-  if (error) throw new Error("担当者の追加に失敗しました(sales_repsには追加されています): " + error.message);
+  if (error) throw new Error(`${describeError(error, "担当者の追加")}\n\n(sales_repsには追加されています)`);
   return { contact: ct, contacts: newContacts, salesRepRow };
 }
 
@@ -69,11 +76,11 @@ export async function updateContact(supabase, { companyId, contacts, projects, c
   if (willBeSales) {
     if (salesRepId) {
       const { error } = await supabase.from("sales_reps").update({ name: next.name, branch_id: next.branchId || null }).eq("id", salesRepId);
-      if (error) throw new Error("営業担当(sales_reps)の更新に失敗しました: " + error.message);
+      if (error) throw new Error(describeError(error, "営業担当(sales_reps)の更新"));
       salesRepRow = { id: salesRepId, company_id: companyId, name: next.name, branch_id: next.branchId || null };
     } else {
       const { data, error } = await supabase.from("sales_reps").insert([{ company_id: companyId, branch_id: next.branchId || null, name: next.name }]).select();
-      if (error) throw new Error("営業担当(sales_reps)の追加に失敗しました: " + error.message);
+      if (error) throw new Error(describeError(error, "営業担当(sales_reps)の追加"));
       salesRepRow = data[0];
       salesRepId = salesRepRow.id;
     }
@@ -81,7 +88,7 @@ export async function updateContact(supabase, { companyId, contacts, projects, c
     const linked = findLinkedProjects(projects, salesRepId);
     if (linked.length) throw new Error(linkedProjectsMessage(linked));
     const { error } = await supabase.from("sales_reps").delete().eq("id", salesRepId);
-    if (error) throw new Error("営業担当(sales_reps)の削除に失敗しました: " + error.message);
+    if (error) throw new Error(describeError(error, "営業担当(sales_reps)の削除"));
     salesRepId = null;
     deletedSalesRep = true;
   }
@@ -90,7 +97,7 @@ export async function updateContact(supabase, { companyId, contacts, projects, c
   if (salesRepId) finalCt.salesRepId = salesRepId; else delete finalCt.salesRepId;
   const newContacts = contacts.map(c => c.id === ctId ? finalCt : c);
   const { error } = await supabase.from("companies").update({ contacts: newContacts }).eq("id", companyId);
-  if (error) throw new Error("担当者の更新に失敗しました: " + error.message);
+  if (error) throw new Error(describeError(error, "担当者の更新"));
   return { contact: finalCt, contacts: newContacts, salesRepRow, deletedSalesRepId: deletedSalesRep ? ct.salesRepId : null };
 }
 
@@ -102,10 +109,10 @@ export async function deleteContact(supabase, { companyId, contacts, projects, c
     const linked = findLinkedProjects(projects, ct.salesRepId);
     if (linked.length) throw new Error(linkedProjectsMessage(linked));
     const { error } = await supabase.from("sales_reps").delete().eq("id", ct.salesRepId);
-    if (error) throw new Error("営業担当(sales_reps)の削除に失敗しました: " + error.message);
+    if (error) throw new Error(describeError(error, "営業担当(sales_reps)の削除"));
   }
   const newContacts = (contacts || []).filter(c => c.id !== ctId);
   const { error } = await supabase.from("companies").update({ contacts: newContacts }).eq("id", companyId);
-  if (error) throw new Error("担当者の削除に失敗しました: " + error.message);
+  if (error) throw new Error(describeError(error, "担当者の削除"));
   return { contacts: newContacts, deletedSalesRepId: ct.salesRepId || null };
 }
