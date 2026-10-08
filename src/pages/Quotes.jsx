@@ -356,8 +356,12 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
     if (!ed.title.trim()) { alert("タイトルを入力してください"); return; }
     if (!ed.price_set_id) { alert("単価セットを選んでください"); return; }
     const prevQuote = ed.id ? quotes.find(q => q.id === ed.id) : null;
-    const becomingDone = ed.status === "won";
-    const leavingDone = !!prevQuote?.is_adopted && !becomingDone;
+    // 「すでに完工済み(採用済み)だったか」は is_adopted で判定する(第8弾テーマ10の不具合で、
+    // status=won なのにis_adopted=falseの見積が残っていることがあるため。その場合は従来通り、
+    // 明示的な採用の確認を通す=becomingDoneになる)
+    const wasWon = !!prevQuote?.is_adopted;
+    const becomingDone = ed.status === "won" && !wasWon; // 発注前→完工済のときだけ
+    const leavingDone = wasWon && ed.status !== "won"; // 完工済→発注前のときだけ
     if (becomingDone) {
       const msg = buildAdoptMessage({ fmt, quoteTitle: ed.title.trim(), beforeAmount: project.amount, beforeGp: project.gp, quoteAmount: total, quoteGp: gp, ownUnconfirmed, subMissing, crewUnset: !ed.crew_id });
       setConf({ msg, okLabel: "完工済にする", okColor: "#059669", extra: completedOnField(), onOk: () => {
@@ -370,10 +374,13 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
       setConf({ msg: buildUnadoptMessage(ed.title.trim()), okLabel: "発注前に戻す", okColor: "#9A3412", onOk: () => { setConf(null); persistQuote({ unadopt: true }); } });
       return;
     }
-    persistQuote({});
+    // 完工済みのまま編集して保存(班・施工形態・明細・金額など)。採用の確認は出さず、
+    // 金額・粗利の再計算だけ行う(第8弾テーマ21-A 不具合修正)。
+    // completed_on・is_adopted・案件のstatusは触らない
+    persistQuote({ recalcOnly: wasWon && ed.status === "won" });
   };
 
-  const persistQuote = async ({ adopt, unadopt, completedOn }) => {
+  const persistQuote = async ({ adopt, unadopt, recalcOnly, completedOn }) => {
     setSaving(true);
     let quoteId = ed.id;
     // construction_type・crew_id・profit_confirmedは保存のたびに今のed(編集状態)の値を書き込むが、
@@ -414,6 +421,14 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
         const projectPatch = await unadoptQuoteInDb(supabase, { quoteId, projectId: quoteProjectId });
         setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch, updated_at: new Date().toISOString() } : p));
         removeWonQuote(quoteId);
+      } else if (recalcOnly) {
+        // 完工済みのまま編集したときは、採用時と同じ計算でgross_profitを書き直してから、
+        // 案件の受注金額・粗利だけを再計算する。completed_on・is_adopted・案件のstatusは触らない
+        const { error: gpErr } = await supabase.from("quotes").update({ gross_profit: Math.round(gp) }).eq("id", quoteId);
+        if (gpErr) throw new Error(describeError(gpErr, "粗利の更新"));
+        const projectPatch = await recalcProjectTotals(supabase, quoteProjectId);
+        setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch, updated_at: new Date().toISOString() } : p));
+        upsertWonQuote(quoteId, { total_amount: Math.round(total), gross_profit: Math.round(gp), profit_confirmed: !!ed.profit_confirmed, crew_id: ed.crew_id || null });
       }
       // 見積の最終的な状態(ed.status)にあわせて、未発注(submittedQuotes)側も同期する。
       // 新規作成・編集での保存(adopt/unadoptを経ない場合)もここで一括して反映される
