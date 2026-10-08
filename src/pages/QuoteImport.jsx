@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { Hdr } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
@@ -15,6 +15,7 @@ import { usePreventWindowFileDrop } from "../lib/useFileDropGuard";
 import { QUOTE_FILE_BUCKET, FILE_TYPES } from "../lib/quoteFiles";
 import { computeQuoteFinancials, CONSTRUCTION_TYPES } from "../lib/quoteFinancials";
 import { describeError } from "../lib/errorMessage";
+import { defaultOwnCrewId } from "../lib/crews";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ACCEPT_RE = /\.(xls|xlsx|est|pdf)$/i;
@@ -209,7 +210,15 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
   const [np, setNp] = useState({ name: initialTitle, clientId: "", branchId: "", salesRepId: "", inCharge: "", respondedAt: todayStr(), constructionType: "自社のみ" });
-  const [crewId, setCrewId] = useState(""); // 班(誰が施工したか)。見積ごとに持つ(第8弾テーマ21)
+  // 班(誰が施工したか)。見積ごとに持つ(第8弾テーマ21)。初期値は「自社」(第8弾テーマ21-A追加)
+  const [crewId, setCrewId] = useState(() => defaultOwnCrewId(crews));
+  const crewTouchedRef = useRef(false);
+  const onCrewIdChange = v => { crewTouchedRef.current = true; setCrewId(v); };
+  // crews の読み込みが遅れた場合の後追い。ユーザーが何か選んでいたら(未設定を含む)上書きしない
+  useEffect(() => {
+    if (crewTouchedRef.current) return;
+    setCrewId(prev => prev || defaultOwnCrewId(crews) || prev);
+  }, [crews]);
   const [lines, setLines] = useState(() => d.lines.map(l => ({
     key: "il" + (++lineSeq), groupName: l.groupName, name: l.name, spec: l.spec, qty: l.qty ?? 0, unit: l.unit,
     price: l.price ?? 0, note: l.note, summaryOnly: l.summaryOnly, nameFromSpec: l.nameFromSpec, fileAmount: l.amount,
@@ -495,7 +504,7 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
                 </div>
                 <div style={{ marginTop: 8 }}>
                   <div style={label}>班(誰が施工したか)</div>
-                  <CrewPicker crewId={crewId} crews={crews} setCrews={setCrews} onChange={setCrewId} />
+                  <CrewPicker crewId={crewId} crews={crews} setCrews={setCrews} onChange={onCrewIdChange} />
                 </div>
               </div>
             ) : (
@@ -527,7 +536,7 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
                 </div>
                 <div style={{ flex: 1, minWidth: 160 }}>
                   <div style={label}>班(誰が施工したか)</div>
-                  <CrewPicker crewId={crewId} crews={crews} setCrews={setCrews} onChange={setCrewId} />
+                  <CrewPicker crewId={crewId} crews={crews} setCrews={setCrews} onChange={onCrewIdChange} />
                 </div>
               </div>
             )}
@@ -824,7 +833,15 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
   const [np, setNp] = useState({ name: initialTitle, clientId: "", branchId: "", salesRepId: "", inCharge: "", respondedAt: todayStr(), constructionType: "自社のみ" });
-  const [crewId, setCrewId] = useState(""); // 班(誰が施工したか)。見積ごとに持つ(第8弾テーマ21)
+  // 班(誰が施工したか)。見積ごとに持つ(第8弾テーマ21)。初期値は「自社」(第8弾テーマ21-A追加)
+  const [crewId, setCrewId] = useState(() => defaultOwnCrewId(crews));
+  const crewTouchedRef = useRef(false);
+  const onCrewIdChange = v => { crewTouchedRef.current = true; setCrewId(v); };
+  // crews の読み込みが遅れた場合の後追い。ユーザーが何か選んでいたら(未設定を含む)上書きしない
+  useEffect(() => {
+    if (crewTouchedRef.current) return;
+    setCrewId(prev => prev || defaultOwnCrewId(crews) || prev);
+  }, [crews]);
   const [searchKey, setSearchKey] = useState(null);
   const [searchText, setSearchText] = useState("");
   const [registering, setRegistering] = useState(false);
@@ -1177,7 +1194,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
             </div>
             <div style={{ marginTop: 8 }}>
               <div style={label}>班(誰が施工したか)</div>
-              <CrewPicker crewId={crewId} crews={crews} setCrews={setCrews} onChange={setCrewId} />
+              <CrewPicker crewId={crewId} crews={crews} setCrews={setCrews} onChange={onCrewIdChange} />
             </div>
           </div>
         ) : (
@@ -1209,7 +1226,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
             </div>
             <div style={{ flex: 1, minWidth: 160 }}>
               <div style={label}>班(誰が施工したか)</div>
-              <CrewPicker crewId={crewId} crews={crews} setCrews={setCrews} onChange={setCrewId} />
+              <CrewPicker crewId={crewId} crews={crews} setCrews={setCrews} onChange={onCrewIdChange} />
             </div>
           </div>
         )}
@@ -1456,7 +1473,15 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
   const [np, setNp] = useState({ name: initialTitle, clientId: "", branchId: "", salesRepId: "", inCharge: "", respondedAt: todayStr(), constructionType: "自社のみ" });
-  const [crewId, setCrewId] = useState(""); // 班(誰が施工したか)。見積ごとに持つ(第8弾テーマ21)
+  // 班(誰が施工したか)。見積ごとに持つ(第8弾テーマ21)。初期値は「自社」(第8弾テーマ21-A追加)
+  const [crewId, setCrewId] = useState(() => defaultOwnCrewId(crews));
+  const crewTouchedRef = useRef(false);
+  const onCrewIdChange = v => { crewTouchedRef.current = true; setCrewId(v); };
+  // crews の読み込みが遅れた場合の後追い。ユーザーが何か選んでいたら(未設定を含む)上書きしない
+  useEffect(() => {
+    if (crewTouchedRef.current) return;
+    setCrewId(prev => prev || defaultOwnCrewId(crews) || prev);
+  }, [crews]);
   const [lines, setLines] = useState(() => d.lines.map(l => ({
     key: "il" + (++lineSeq), groupName: l.groupName, name: l.name, spec: l.spec, qty: l.qty ?? 0, unit: l.unit,
     price: l.price ?? 0, note: l.note, summaryOnly: false, nameFromSpec: false, fileAmount: l.amount,
@@ -1781,7 +1806,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
                 </div>
                 <div style={{ marginTop: 8 }}>
                   <div style={label}>班(誰が施工したか)</div>
-                  <CrewPicker crewId={crewId} crews={crews} setCrews={setCrews} onChange={setCrewId} />
+                  <CrewPicker crewId={crewId} crews={crews} setCrews={setCrews} onChange={onCrewIdChange} />
                 </div>
               </div>
             ) : (
@@ -1813,7 +1838,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
                 </div>
                 <div style={{ flex: 1, minWidth: 160 }}>
                   <div style={label}>班(誰が施工したか)</div>
-                  <CrewPicker crewId={crewId} crews={crews} setCrews={setCrews} onChange={setCrewId} />
+                  <CrewPicker crewId={crewId} crews={crews} setCrews={setCrews} onChange={onCrewIdChange} />
                 </div>
               </div>
             )}
@@ -1991,7 +2016,15 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
   const [np, setNp] = useState({ name: initialTitle, clientId: "", branchId: "", salesRepId: "", inCharge: d.cover.inCharge || "", respondedAt: todayStr(), constructionType: "自社のみ" });
-  const [crewId, setCrewId] = useState(""); // 班(誰が施工したか)。見積ごとに持つ(第8弾テーマ21)
+  // 班(誰が施工したか)。見積ごとに持つ(第8弾テーマ21)。初期値は「自社」(第8弾テーマ21-A追加)
+  const [crewId, setCrewId] = useState(() => defaultOwnCrewId(crews));
+  const crewTouchedRef = useRef(false);
+  const onCrewIdChange = v => { crewTouchedRef.current = true; setCrewId(v); };
+  // crews の読み込みが遅れた場合の後追い。ユーザーが何か選んでいたら(未設定を含む)上書きしない
+  useEffect(() => {
+    if (crewTouchedRef.current) return;
+    setCrewId(prev => prev || defaultOwnCrewId(crews) || prev);
+  }, [crews]);
   const [lines, setLines] = useState(() => d.lines.map(l => ({
     key: "il" + (++lineSeq), groupName: l.groupName, name: l.name, spec: l.spec, qty: l.qty ?? 0, unit: l.unit,
     price: l.price ?? 0, note: l.note, summaryOnly: false, isOverhead: !!l.isOverhead, overheadKind: l.overheadKind,
@@ -2283,7 +2316,7 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
                 </div>
                 <div style={{ marginTop: 8 }}>
                   <div style={label}>班(誰が施工したか)</div>
-                  <CrewPicker crewId={crewId} crews={crews} setCrews={setCrews} onChange={setCrewId} />
+                  <CrewPicker crewId={crewId} crews={crews} setCrews={setCrews} onChange={onCrewIdChange} />
                 </div>
               </div>
             ) : (
@@ -2315,7 +2348,7 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
                 </div>
                 <div style={{ flex: 1, minWidth: 160 }}>
                   <div style={label}>班(誰が施工したか)</div>
-                  <CrewPicker crewId={crewId} crews={crews} setCrews={setCrews} onChange={setCrewId} />
+                  <CrewPicker crewId={crewId} crews={crews} setCrews={setCrews} onChange={onCrewIdChange} />
                 </div>
               </div>
             )}

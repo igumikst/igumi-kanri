@@ -13,6 +13,7 @@ import FileDropZone from "../components/FileDropZone";
 import { usePreventWindowFileDrop } from "../lib/useFileDropGuard";
 import { describeError } from "../lib/errorMessage";
 import { CONSTRUCTION_TYPES } from "../lib/quoteFinancials";
+import { defaultOwnCrewId } from "../lib/crews";
 
 // 見積の状態は、画面上は「発注前」「完工済」の2つだけ。DBの値は既存の制約に合わせる
 // (発注前=submitted / 完工済=won)。既存の下書き(draft)・失注(lost)は、画面では発注前と表示する
@@ -50,6 +51,8 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
   const [laborUnitPrice, setLaborUnitPrice] = useState(26000);
 
   const [ed, setEd] = useState(blankEd);
+  // 班の初期値を「自社」にする処理(第8弾テーマ21-A追加)で、ユーザーが班を手で選んだかどうかを覚えておく
+  const crewTouchedRef = useRef(false);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [groupFilter, setGroupFilter] = useState("");
@@ -77,6 +80,15 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
     setLoadingQuotes(false);
   };
   useEffect(() => { loadQuotes(); }, [quoteProjectId]);
+  // crews の読み込みがまだで班の初期値を入れられなかった新規見積に、読み込み完了後に「自社」を入れる。
+  // ユーザーが何か選んでいたら(未設定を含む)上書きしない(第8弾テーマ21-A追加)
+  useEffect(() => {
+    setEd(prev => {
+      if (prev.id !== null || crewTouchedRef.current || prev.crew_id) return prev;
+      const defaultCrewId = defaultOwnCrewId(crews);
+      return defaultCrewId ? { ...prev, crew_id: defaultCrewId, profit_confirmed: true } : prev;
+    });
+  }, [crews]);
 
   const ensurePriceData = async () => {
     if (priceLoaded) return;
@@ -104,7 +116,10 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
 
   const openNewQuote = async () => {
     await ensurePriceData();
-    setEd({ ...blankEd, construction_type: project?.constructionType || "自社のみ" });
+    crewTouchedRef.current = false;
+    // 班の初期値は「自社」(第8弾テーマ21-A追加)。自社の見積として作るので、粗利も最初から確定扱い
+    const defaultCrewId = defaultOwnCrewId(crews);
+    setEd({ ...blankEd, construction_type: project?.constructionType || "自社のみ", crew_id: defaultCrewId, profit_confirmed: !!defaultCrewId });
     setSubCosts([]); setSubForm({ subcontractor_id: "", amount: "", note: "", file: null });
     setSearch(""); setCategoryFilter(""); setGroupFilter("");
     setView("edit");
@@ -307,6 +322,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
   // 班を変えたとき、is_own(自社かどうか)が実際に変わった場合だけprofit_confirmedを自動で変える。
   // 自社以外→別の自社以外(is_ownはfalseのまま)は、今の値を維持する(第8弾テーマ21)
   const onCrewChange = newCrewId => {
+    crewTouchedRef.current = true;
     const oldIsOwn = !!crews.find(c => c.id === ed.crew_id)?.is_own;
     const newIsOwn = !!crews.find(c => c.id === newCrewId)?.is_own;
     setEd(prev => ({ ...prev, crew_id: newCrewId, profit_confirmed: oldIsOwn !== newIsOwn ? newIsOwn : prev.profit_confirmed }));
