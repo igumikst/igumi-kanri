@@ -310,7 +310,10 @@ export const PCRightPanel = ({ rpOpen, setRpOpen, pjs, tks, finFiles, tmplFiles,
     return d.getFullYear() === nowD.getFullYear() && d.getMonth() === nowD.getMonth();
   });
   const totalAmt = thisMonthCompleted.reduce((s, q) => s + (q.total_amount || 0), 0);
-  const totalGp = thisMonthCompleted.reduce((s, q) => s + (q.gross_profit || 0), 0);
+  // 粗利・粗利率は粗利が確定済み(profit_confirmed)の見積だけで計算する(第8弾テーマ21)
+  const confirmedCompleted = thisMonthCompleted.filter(q => q.profit_confirmed);
+  const confirmedAmt = confirmedCompleted.reduce((s, q) => s + (q.total_amount || 0), 0);
+  const totalGp = confirmedCompleted.reduce((s, q) => s + (q.gross_profit || 0), 0);
   const SectionHdr = ({ id, label }) => (
     <button onClick={() => tog(id)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "none", border: "none", cursor: "pointer", padding: "10px 0 8px" }}>
       <div style={{ fontWeight: 800, fontSize: 13, color: "#1A3A5C" }}>{label}</div>
@@ -333,7 +336,7 @@ export const PCRightPanel = ({ rpOpen, setRpOpen, pjs, tks, finFiles, tmplFiles,
         </div>
         <SectionHdr id="kpi" label="📊 今日の状況" />
         {open.kpi && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 4 }}>
-          {[{ l: "進行中案件", v: `${active.length}件`, c: "#1A3A5C", bg: "#EFF6FF" }, { l: "未完了タスク", v: `${pending.length}件`, c: "#EF4444", bg: "#FEF2F2" }, { l: "受注合計", v: `¥${(totalAmt / 10000).toFixed(0)}万`, c: "#E07B39", bg: "#FFF7ED", note: true }, { l: "粗利率", v: totalAmt ? `${(totalGp / totalAmt * 100).toFixed(1)}%` : "—", c: "#059669", bg: "#F0FDF4", note: true }].map(x => (
+          {[{ l: "進行中案件", v: `${active.length}件`, c: "#1A3A5C", bg: "#EFF6FF" }, { l: "未完了タスク", v: `${pending.length}件`, c: "#EF4444", bg: "#FEF2F2" }, { l: "受注合計", v: `¥${(totalAmt / 10000).toFixed(0)}万`, c: "#E07B39", bg: "#FFF7ED", note: true }, { l: "粗利率(確定分)", v: confirmedAmt ? `${(totalGp / confirmedAmt * 100).toFixed(1)}%` : "—", c: "#059669", bg: "#F0FDF4", note: true }].map(x => (
             <div key={x.l} style={{ background: x.bg, borderRadius: 10, padding: "10px" }}>
               <div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 3 }}>{x.l}</div>
               <div style={{ fontSize: 15, fontWeight: 900, color: x.c }}>{x.v}</div>

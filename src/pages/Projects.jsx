@@ -40,6 +40,7 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
   const [fltClient, setFltClient] = useState("");
   const [fltBranch, setFltBranch] = useState("");
   const [fltRep, setFltRep] = useState("");
+  const [fltUnconfirmed, setFltUnconfirmed] = useState(false);
   const [fltOpen, setFltOpen] = useState(false);
   const [conf, setConf] = useState(null);
   const [editP, setEditP] = useState(null);
@@ -79,13 +80,13 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
 
   // 「完工済」の処理(Quotes.jsxのadoptQuoteと同じ考え方): 見積の原価・下請け原価から
   // 受注金額・粗利を計算し、確認ダイアログのあと、見積をwon・案件を完了にする
-  const computeQuoteTotalsForAdopt = quote => computeAdoptTotals(supabase, { quote, constructionType: selP.constructionType || "自社のみ" });
+  const computeQuoteTotalsForAdopt = quote => computeAdoptTotals(supabase, { quote, constructionType: quote.construction_type || "自社のみ" });
 
   const adoptCompletedOnRef = useRef(todayStr());
   const adoptQuoteFromReports = async quote => {
     const { total, gp, subMissing, ownUnconfirmed } = await computeQuoteTotalsForAdopt(quote);
     adoptCompletedOnRef.current = todayStr();
-    const msg = buildAdoptMessage({ fmt, quoteTitle: quote.title, beforeAmount: selP.amount, beforeGp: selP.gp, quoteAmount: total, quoteGp: gp, ownUnconfirmed, subMissing });
+    const msg = buildAdoptMessage({ fmt, quoteTitle: quote.title, beforeAmount: selP.amount, beforeGp: selP.gp, quoteAmount: total, quoteGp: gp, ownUnconfirmed, subMissing, crewUnset: !quote.crew_id });
     setConf({ msg, okLabel: "完工済にする", okColor: "#059669",
       extra: (
         <div style={{ marginBottom: 14, textAlign: "left" }}>
@@ -103,8 +104,8 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
         setSelP(updated);
         setQuotes(prev => prev.map(q => q.id === quote.id ? { ...q, is_adopted: true, status: "won" } : q));
         setWonQuotes(prev => prev.some(q => q.id === quote.id)
-          ? prev.map(q => q.id === quote.id ? { ...q, project_id: selP.id, total_amount: quote.total_amount || 0, gross_profit: Math.round(gp), completed_on: completedOn } : q)
-          : [...prev, { id: quote.id, project_id: selP.id, total_amount: quote.total_amount || 0, gross_profit: Math.round(gp), completed_on: completedOn }]);
+          ? prev.map(q => q.id === quote.id ? { ...q, project_id: selP.id, total_amount: quote.total_amount || 0, gross_profit: Math.round(gp), completed_on: completedOn, profit_confirmed: !!quote.profit_confirmed, crew_id: quote.crew_id || null } : q)
+          : [...prev, { id: quote.id, project_id: selP.id, total_amount: quote.total_amount || 0, gross_profit: Math.round(gp), completed_on: completedOn, profit_confirmed: !!quote.profit_confirmed, crew_id: quote.crew_id || null }]);
         setSubmittedQuotes(prev => prev.filter(q => q.id !== quote.id));
       } catch (e) { alert(e.message); }
       setConf(null);
@@ -198,6 +199,12 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
   const wonCounts = countByProject(wonQuotes);
   const submittedCounts = countByProject(submittedQuotes);
 
+  // 完工済み見積の粗利確定状況(第8弾テーマ21)。案件ごとに「全部未確定」「一部未確定」を判定する
+  const wonByProjectForProfit = {};
+  (wonQuotes || []).forEach(q => { (wonByProjectForProfit[q.project_id] ||= []).push(q); });
+  const profitAllUnconfirmed = id => { const l = wonByProjectForProfit[id]; return !!l?.length && l.every(q => !q.profit_confirmed); };
+  const profitHasUnconfirmed = id => { const l = wonByProjectForProfit[id]; return !!l?.length && l.some(q => !q.profit_confirmed); };
+
   const filtP = pjs.filter(p => {
     if (fltS === "未発注" && !submittedProjectIds.has(p.id)) return false;
     if (fltS === "発注済み" && !wonProjectIds.has(p.id)) return false;
@@ -205,6 +212,7 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
     if (fltClient && p.clientId !== fltClient) return false;
     if (fltBranch === FLT_UNSET ? !!p.branchId : (fltBranch && p.branchId !== fltBranch)) return false;
     if (fltRep === FLT_UNSET ? !!p.salesRepId : (fltRep && p.salesRepId !== fltRep)) return false;
+    if (fltUnconfirmed && !profitHasUnconfirmed(p.id)) return false;
     if (schP && !p.name.includes(schP) && !(getC(p.clientId)?.name || "").includes(schP) && !(p.inCharge || "").includes(schP)) return false;
     return true;
   });
@@ -288,7 +296,7 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
               </div>
               <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
                 <div style={{ flex: 1, background: "#FFF7ED", borderRadius: 10, padding: "10px 12px" }}><div style={{ fontSize: 10, color: "#9CA3AF" }}>受注金額</div><div style={{ fontSize: 16, fontWeight: 800, color: "#E07B39" }}>{fmt(selP.amount)}</div></div>
-                <div style={{ flex: 1, background: "#F0FDF4", borderRadius: 10, padding: "10px 12px" }}><div style={{ fontSize: 10, color: "#9CA3AF" }}>粗利 / 粗利率</div><div style={{ fontSize: 14, fontWeight: 800, color: "#059669" }}>{fmt(selP.gp)}</div><div style={{ fontSize: 11, color: "#059669" }}>{pct(selP.gp, selP.amount)}</div></div>
+                <div style={{ flex: 1, background: profitAllUnconfirmed(selP.id) ? "#FEF2F2" : "#F0FDF4", borderRadius: 10, padding: "10px 12px" }}><div style={{ fontSize: 10, color: "#9CA3AF" }}>粗利 / 粗利率</div>{profitAllUnconfirmed(selP.id) ? <div style={{ fontSize: 13, fontWeight: 800, color: "#DC2626" }}>粗利未確定</div> : (<><div style={{ fontSize: 14, fontWeight: 800, color: "#059669" }}>{fmt(selP.gp)}</div><div style={{ fontSize: 11, color: "#059669" }}>{pct(selP.gp, selP.amount)}{profitHasUnconfirmed(selP.id) ? " ⚠️未確定あり" : ""}</div></>)}</div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginBottom: 12 }}>
                 {[["社内担当", selP.inCharge], ["営業所", branches.find(b => b.id === selP.branchId)?.name], ["営業担当", selP.salesRep], ["見積提出日", selP.qDate], ["対応日", dateJp(selP.respondedAt)], ["施工形態", selP.constructionType || "自社のみ"]].map(([l, v]) => (
@@ -366,6 +374,7 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
           <input value={schP} onChange={e => setSchP(e.target.value)} placeholder="🔍 案件名・取引先・担当者で検索" style={{ width: "100%", padding: "9px 14px", borderRadius: 10, border: "1.5px solid #E5E7EB", fontSize: 13, background: "#fff", boxSizing: "border-box", marginBottom: 10, color: "#1F2937" }} />
           <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 6, marginBottom: 6 }}>
             {["すべて", "未発注", "発注済み"].map(s => (<button key={s} onClick={() => setFltS(s)} style={{ padding: "4px 12px", borderRadius: 16, border: "1.5px solid", whiteSpace: "nowrap", borderColor: fltS === s ? "#1A3A5C" : "#D1D5DB", background: fltS === s ? "#1A3A5C" : "#fff", color: fltS === s ? "#fff" : "#374151", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{s}</button>))}
+            <button onClick={() => setFltUnconfirmed(v => !v)} style={{ padding: "4px 12px", borderRadius: 16, border: "1.5px solid", whiteSpace: "nowrap", borderColor: fltUnconfirmed ? "#DC2626" : "#D1D5DB", background: fltUnconfirmed ? "#DC2626" : "#fff", color: fltUnconfirmed ? "#fff" : "#374151", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>⚠️ 粗利未確定</button>
             {isPC && (
               <>
                 <select value={fltClient} onChange={e => onFltClientChange(e.target.value)} style={fltSel}>
@@ -428,23 +437,29 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
               const touchedAt = lastTouched(p);
               const touchedLabel = relativeTimeJp(touchedAt);
               const touchedTitle = touchedAt ? `最終更新: ${fullTimeJp(touchedAt)}` : undefined;
+              // 粗利の確定状況の表示(第8弾テーマ21)。完工済み見積が全部未確定なら「粗利未確定」、
+              // 一部だけ未確定なら確定分の粗利率に⚠️を添える
+              const allUnconfirmed = profitAllUnconfirmed(p.id);
+              const hasUnconfirmed = profitHasUnconfirmed(p.id);
+              const gpLabel = allUnconfirmed ? "粗利未確定" : gp ? `粗利率 ${gp}%${hasUnconfirmed ? " ⚠️" : ""}` : "—";
+              const gpColor = allUnconfirmed ? "#DC2626" : "#059669";
               return (
                 <div key={p.id} style={{ display: "flex", alignItems: "stretch", background: "#fff", borderRadius: 8, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", borderLeft: "3px solid #1A3A5C", overflow: "hidden" }}>
                   {isPC ? (
                     <div onClick={() => setSelP(p)} style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 12, padding: "7px 12px", cursor: "pointer" }}>
-                      <div style={{ flex: 2, minWidth: 0, fontWeight: 700, fontSize: 13, color: "#1F2937", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+                      <div style={{ flex: 2, minWidth: 0, fontWeight: 700, fontSize: 13, color: "#1F2937", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}{hasUnconfirmed && <span title="粗利未確定の見積があります"> ⚠️</span>}</div>
                       <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: "#6B7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{clientLabel}</div>
                       <div style={{ width: 28, flex: "none", textAlign: "right", fontSize: 11, color: wc ? "#059669" : "#D1D5DB", whiteSpace: "nowrap" }}>✅ {wc}</div>
                       <div style={{ width: 28, flex: "none", textAlign: "right", fontSize: 11, color: sc ? "#E07B39" : "#D1D5DB", whiteSpace: "nowrap" }}>⏳ {sc}</div>
                       <div style={{ width: 34, flex: "none", textAlign: "right", fontSize: 11, color: rc ? "#6B7280" : "#D1D5DB", whiteSpace: "nowrap" }}>📸 {rc}</div>
                       <div style={{ width: 110, flex: "none", textAlign: "right", fontSize: 13, fontWeight: 800, color: "#E07B39" }}>{fmt(p.amount)}</div>
-                      <div style={{ width: 86, flex: "none", textAlign: "right", fontSize: 12, fontWeight: 700, color: "#059669", whiteSpace: "nowrap" }}>{gp ? `粗利率 ${gp}%` : "—"}</div>
+                      <div style={{ width: 86, flex: "none", textAlign: "right", fontSize: 12, fontWeight: 700, color: gpColor, whiteSpace: "nowrap" }}>{gpLabel}</div>
                       <div title={touchedTitle} style={{ width: 54, flex: "none", textAlign: "right", fontSize: 10, color: "#9CA3AF", whiteSpace: "nowrap" }}>{touchedLabel}</div>
                     </div>
                   ) : (
                     <div onClick={() => setSelP(p)} style={{ flex: 1, minWidth: 0, padding: "8px 12px", cursor: "pointer" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6 }}>
-                        <div style={{ flex: 1, minWidth: 0, fontWeight: 700, fontSize: 13, color: "#1F2937", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+                        <div style={{ flex: 1, minWidth: 0, fontWeight: 700, fontSize: 13, color: "#1F2937", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}{hasUnconfirmed && <span title="粗利未確定の見積があります"> ⚠️</span>}</div>
                         <div title={touchedTitle} style={{ flex: "none", fontSize: 10, color: "#9CA3AF", whiteSpace: "nowrap" }}>{touchedLabel}</div>
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, marginTop: 2 }}>
@@ -454,7 +469,7 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
                           <span style={{ fontSize: 10, color: sc ? "#E07B39" : "#D1D5DB" }}>⏳{sc}</span>
                           <span style={{ fontSize: 10, color: rc ? "#6B7280" : "#D1D5DB" }}>📸{rc}</span>
                           <span style={{ fontSize: 12, fontWeight: 800, color: "#E07B39" }}>{fmt(p.amount)}</span>
-                          {gp && <span style={{ fontSize: 11, color: "#059669", fontWeight: 700, whiteSpace: "nowrap" }}>粗利率 {gp}%</span>}
+                          {(allUnconfirmed || gp) && <span style={{ fontSize: 11, color: gpColor, fontWeight: 700, whiteSpace: "nowrap" }}>{gpLabel}</span>}
                         </div>
                       </div>
                     </div>

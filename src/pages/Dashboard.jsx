@@ -2,7 +2,7 @@ import { Hdr } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import DashboardPC from "../components/DashboardPC";
 
-export default function Dashboard({ pjs, wonQuotes, submittedQuotes, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, tileConf, SB_W, RP_W, branches, salesReps, embedded }) {
+export default function Dashboard({ pjs, wonQuotes, submittedQuotes, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, tileConf, SB_W, RP_W, branches, salesReps, crews, embedded }) {
   const pending = (tks || []).filter(t => !t.done);
   const coMap = Object.fromEntries((cos || []).map(c => [c.id, c]));
   const branchMap = Object.fromEntries((branches || []).map(b => [b.id, b]));
@@ -35,6 +35,7 @@ export default function Dashboard({ pjs, wonQuotes, submittedQuotes, cos, tks, l
   // 売上合計・粗利合計・粗利率・完工件数は、見積ごとのcompleted_on基準で振り分ける(第8弾ステップ2)。
   // 担当者・取引先・営業所は、見積の所属する案件から引く
   const pjMap = Object.fromEntries((pjs || []).map(p => [p.id, p]));
+  const crewMap = Object.fromEntries((crews || []).map(c => [c.id, c]));
   const completedQuotes = (wonQuotes || []).map(q => {
     const p = pjMap[q.project_id];
     return {
@@ -47,6 +48,10 @@ export default function Dashboard({ pjs, wonQuotes, submittedQuotes, cos, tks, l
       owner: p?.salesRep || "未設定",
       clientId: p?.clientId || "",
       branchId: p?.branchId || "",
+      // 粗利の確定・班(第8弾テーマ21)。粗利率は確定分のみで計算するため、確定済みかどうかを運ぶ
+      profitConfirmed: !!q.profit_confirmed,
+      crewId: q.crew_id || "",
+      crewName: (q.crew_id && crewMap[q.crew_id]?.name) || "",
     };
   }).filter(q => q.completedOn);
 
@@ -56,7 +61,7 @@ export default function Dashboard({ pjs, wonQuotes, submittedQuotes, cos, tks, l
       {!embedded && isPC && (cust.showRightPanel !== false) && <PCRightPanel rpOpen={rpOpen} setRpOpen={setRpOpen} pjs={pjs} tks={tks} finFiles={finFiles} tmplFiles={tmplFiles} fishWeather={fishWeather} nav={nav} setAiInput={() => {}} RP_W={RP_W} wonQuotes={wonQuotes} submittedQuotes={submittedQuotes} />}
       {!embedded && (cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
       {!embedded && <Hdr title="🧭 ダッシュボード" back={() => nav("home")} />}
-      <DashboardPC jobs={jobs} completedQuotes={completedQuotes} showTitle={!!embedded} branches={branches} salesReps={salesReps} />
+      <DashboardPC jobs={jobs} completedQuotes={completedQuotes} showTitle={!!embedded} branches={branches} salesReps={salesReps} crews={crews} />
     </div>
   );
 }

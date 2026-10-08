@@ -6,11 +6,13 @@ import GroupTree, { BundleToolbar } from "../components/GroupTree";
 import { fmt, todayStr } from "../lib/constants";
 import { openQuoteFile, QUOTE_FILE_BUCKET, FILE_TYPES } from "../lib/quoteFiles";
 import { computeQuoteFinancials } from "../lib/quoteFinancials";
-import { computeAdoptTotals, buildAdoptMessage, buildUnadoptMessage, provisionalWarningLines, adoptQuote as adoptQuoteInDb, unadoptQuote as unadoptQuoteInDb, recalcProjectTotals } from "../lib/quoteAdopt";
+import { computeAdoptTotals, buildAdoptMessage, buildUnadoptMessage, provisionalWarningLines, adoptQuote as adoptQuoteInDb, unadoptQuote as unadoptQuoteInDb, recalcProjectTotals, confirmQuoteProfit, unconfirmQuoteProfit } from "../lib/quoteAdopt";
 import SubQuoteFileReader from "../components/SubQuoteFileReader";
+import CrewPicker from "../components/CrewPicker";
 import FileDropZone from "../components/FileDropZone";
 import { usePreventWindowFileDrop } from "../lib/useFileDropGuard";
 import { describeError } from "../lib/errorMessage";
+import { CONSTRUCTION_TYPES } from "../lib/quoteFinancials";
 
 // 見積の状態は、画面上は「発注前」「完工済」の2つだけ。DBの値は既存の制約に合わせる
 // (発注前=submitted / 完工済=won)。既存の下書き(draft)・失注(lost)は、画面では発注前と表示する
@@ -22,12 +24,12 @@ const STATUS_STYLE_DEFAULT = { label: "発注前", bg: "#E0F0FF", text: "#0B4F8A
 const STATUS_STYLE_WON = { label: "完工済", bg: "#D1FAE5", text: "#065F46", border: "#34D399" };
 const statusStyle = key => (key === "won" ? STATUS_STYLE_WON : STATUS_STYLE_DEFAULT);
 
-const blankEd = { id: null, quote_no: null, title: "", price_set_id: "", status: "submitted", lines: [] };
+const blankEd = { id: null, quote_no: null, title: "", price_set_id: "", status: "submitted", construction_type: "自社のみ", crew_id: "", profit_confirmed: false, lines: [] };
 const newKey = () => "l" + Date.now() + Math.random().toString(36).slice(2);
 // quote_no は text 型のため、数字だけを取り出して数として扱う(DB関数 import_quote と同じ考え方)
 const quoteNoNum = q => parseInt(String(q.quote_no ?? "").replace(/[^0-9]/g, ""), 10) || 0;
 
-export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, setSubmittedQuotes, setPjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteProjectId, setQuoteImportCtx, setOpenProjectId }) {
+export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, setSubmittedQuotes, setPjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteProjectId, setQuoteImportCtx, setOpenProjectId, crews, setCrews }) {
   usePreventWindowFileDrop();
   const project = pjs.find(p => p.id === quoteProjectId);
   const pending = tks.filter(t => !t.done);
@@ -58,7 +60,8 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
   const [subForm, setSubForm] = useState({ subcontractor_id: "", amount: "", note: "", file: null });
   const [savingSub, setSavingSub] = useState(false);
   const [showHiddenQuoteFiles, setShowHiddenQuoteFiles] = useState(false); // 第8弾テーマ12①: 非表示のファイルを表示するトグル
-  const constructionType = project?.constructionType || "自社のみ";
+  // 施工形態は見積ごとに持つ(第8弾テーマ21)。案件の値は新規見積の初期値としてだけ使う
+  const constructionType = ed.construction_type || "自社のみ";
 
   const loadQuotes = async () => {
     if (!quoteProjectId) return;
@@ -101,7 +104,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
 
   const openNewQuote = async () => {
     await ensurePriceData();
-    setEd({ ...blankEd });
+    setEd({ ...blankEd, construction_type: project?.constructionType || "自社のみ" });
     setSubCosts([]); setSubForm({ subcontractor_id: "", amount: "", note: "", file: null });
     setSearch(""); setCategoryFilter(""); setGroupFilter("");
     setView("edit");
@@ -129,7 +132,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
       labor_count: r.line_type === "labor" ? (parseFloat(r.spec) || "") : undefined,
       note: r.note || "",
     }));
-    setEd({ id: q.id, quote_no: q.quote_no, title: q.title, price_set_id: q.price_set_id || "", status: q.status === "won" ? "won" : "submitted", lines });
+    setEd({ id: q.id, quote_no: q.quote_no, title: q.title, price_set_id: q.price_set_id || "", status: q.status === "won" ? "won" : "submitted", construction_type: q.construction_type || "自社のみ", crew_id: q.crew_id || "", profit_confirmed: !!q.profit_confirmed, lines });
     setSubForm({ subcontractor_id: "", amount: "", note: "", file: null });
     await loadSubCosts(q.id);
     setSearch(""); setCategoryFilter(""); setGroupFilter("");
@@ -192,7 +195,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
     setConf({ msg: `「${f.original_name}」\n\n非表示にしますか？(ファイルは残ります。あとで表示に戻せます)`, okLabel: "非表示にする", onOk: () => { setQuoteFileHidden(f.id, true); setConf(null); } });
   };
 
-  const computeQuoteTotals = quote => computeAdoptTotals(supabase, { quote, constructionType: project?.constructionType || "自社のみ" });
+  const computeQuoteTotals = quote => computeAdoptTotals(supabase, { quote, constructionType: quote.construction_type || "自社のみ" });
 
   // ダッシュボード・右パネルの完工日基準の集計(wonQuotes)・案件管理の未発注/発注済み
   // ソート(submittedQuotes)を、画面を再読み込みしなくても最新にするための更新
@@ -221,7 +224,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
   // 「採用にする」= 完工済にする(見積の状態をwonにし、案件の受注金額・粗利にこの見積の分を加える)
   const adoptQuote = async quote => {
     const { total, gp, subMissing, ownUnconfirmed } = await computeQuoteTotals(quote);
-    const msg = buildAdoptMessage({ fmt, quoteTitle: quote.title, beforeAmount: project.amount, beforeGp: project.gp, quoteAmount: total, quoteGp: gp, ownUnconfirmed, subMissing });
+    const msg = buildAdoptMessage({ fmt, quoteTitle: quote.title, beforeAmount: project.amount, beforeGp: project.gp, quoteAmount: total, quoteGp: gp, ownUnconfirmed, subMissing, crewUnset: !quote.crew_id });
     setConf({ msg, okLabel: "完工済にする", okColor: "#059669", extra: completedOnField(), onOk: async () => {
       if (!completedOnRef.current) { alert("完工日を入力してください"); return; }
       const completedOn = completedOnRef.current;
@@ -229,7 +232,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
       try {
         const projectPatch = await adoptQuoteInDb(supabase, { quoteId: quote.id, projectId: quoteProjectId, gp, completedOn });
         setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch, updated_at: new Date().toISOString() } : p));
-        upsertWonQuote(quote.id, { project_id: quoteProjectId, total_amount: quote.total_amount || 0, gross_profit: Math.round(gp), completed_on: completedOn });
+        upsertWonQuote(quote.id, { project_id: quoteProjectId, total_amount: quote.total_amount || 0, gross_profit: Math.round(gp), completed_on: completedOn, profit_confirmed: !!quote.profit_confirmed, crew_id: quote.crew_id || null });
         removeSubmittedQuote(quote.id);
       } catch (e) { alert(e.message); }
       await loadQuotes();
@@ -301,6 +304,36 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
   });
   const { costTotal, gp, gpRate, provisional: hasUnconfirmed, subMissing, ownUnconfirmed } = financials;
 
+  // 班を変えたとき、is_own(自社かどうか)が実際に変わった場合だけprofit_confirmedを自動で変える。
+  // 自社以外→別の自社以外(is_ownはfalseのまま)は、今の値を維持する(第8弾テーマ21)
+  const onCrewChange = newCrewId => {
+    const oldIsOwn = !!crews.find(c => c.id === ed.crew_id)?.is_own;
+    const newIsOwn = !!crews.find(c => c.id === newCrewId)?.is_own;
+    setEd(prev => ({ ...prev, crew_id: newCrewId, profit_confirmed: oldIsOwn !== newIsOwn ? newIsOwn : prev.profit_confirmed }));
+  };
+
+  // 粗利を手で確定にする/未確定に戻す(第8弾テーマ21)。保存とは別に、その場でDBへ反映する
+  const doConfirmProfit = async () => {
+    try {
+      const projectPatch = await confirmQuoteProfit(supabase, { quoteId: ed.id, projectId: quoteProjectId });
+      setEd(prev => ({ ...prev, profit_confirmed: true }));
+      setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch, updated_at: new Date().toISOString() } : p));
+      upsertWonQuote(ed.id, { profit_confirmed: true });
+    } catch (e) { alert(e.message); }
+  };
+  const confirmProfit = () => {
+    if (hasUnconfirmed) { setConf({ msg: "原価が未確認です。それでも確定しますか？", okLabel: "確定する", okColor: "#059669", onOk: () => { setConf(null); doConfirmProfit(); } }); return; }
+    doConfirmProfit();
+  };
+  const unconfirmProfit = async () => {
+    try {
+      const projectPatch = await unconfirmQuoteProfit(supabase, { quoteId: ed.id, projectId: quoteProjectId });
+      setEd(prev => ({ ...prev, profit_confirmed: false }));
+      setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch, updated_at: new Date().toISOString() } : p));
+      upsertWonQuote(ed.id, { profit_confirmed: false });
+    } catch (e) { alert(e.message); }
+  };
+
   // 状態を「完工済」にして保存する場合は、採用(案件のamount/grossProfit・statusへの反映)も
   // あわせて行う。「発注前」に戻す場合は、採用を解除する。どちらも確認ダイアログを先に出す
   const saveQuote = () => {
@@ -310,7 +343,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
     const becomingDone = ed.status === "won";
     const leavingDone = !!prevQuote?.is_adopted && !becomingDone;
     if (becomingDone) {
-      const msg = buildAdoptMessage({ fmt, quoteTitle: ed.title.trim(), beforeAmount: project.amount, beforeGp: project.gp, quoteAmount: total, quoteGp: gp, ownUnconfirmed, subMissing });
+      const msg = buildAdoptMessage({ fmt, quoteTitle: ed.title.trim(), beforeAmount: project.amount, beforeGp: project.gp, quoteAmount: total, quoteGp: gp, ownUnconfirmed, subMissing, crewUnset: !ed.crew_id });
       setConf({ msg, okLabel: "完工済にする", okColor: "#059669", extra: completedOnField(), onOk: () => {
         if (!completedOnRef.current) { alert("完工日を入力してください"); return; }
         setConf(null); persistQuote({ adopt: true, completedOn: completedOnRef.current });
@@ -327,7 +360,10 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
   const persistQuote = async ({ adopt, unadopt, completedOn }) => {
     setSaving(true);
     let quoteId = ed.id;
-    const payload = { project_id: quoteProjectId, title: ed.title.trim(), price_set_id: ed.price_set_id, status: ed.status, total_amount: Math.round(total) };
+    // construction_type・crew_id・profit_confirmedは保存のたびに今のed(編集状態)の値を書き込むが、
+    // profit_confirmed自体は「班を変更してis_ownが変わったとき」だけ変わる値なので、
+    // 明細・金額だけの編集では実質触らないことになる(第8弾テーマ21)
+    const payload = { project_id: quoteProjectId, title: ed.title.trim(), price_set_id: ed.price_set_id, status: ed.status, total_amount: Math.round(total), construction_type: ed.construction_type || "自社のみ", crew_id: ed.crew_id || null, profit_confirmed: !!ed.profit_confirmed };
     if (!quoteId) {
       const { data, error } = await supabase.from("quotes").insert([{ ...payload, quote_no: String(Math.max(0, ...quotes.map(quoteNoNum)) + 1) }]).select();
       if (error) { alert(describeError(error, "保存")); setSaving(false); return; }
@@ -357,7 +393,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
       if (adopt) {
         const projectPatch = await adoptQuoteInDb(supabase, { quoteId, projectId: quoteProjectId, gp, completedOn });
         setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch, updated_at: new Date().toISOString() } : p));
-        upsertWonQuote(quoteId, { project_id: quoteProjectId, total_amount: Math.round(total), gross_profit: Math.round(gp), completed_on: completedOn });
+        upsertWonQuote(quoteId, { project_id: quoteProjectId, total_amount: Math.round(total), gross_profit: Math.round(gp), completed_on: completedOn, profit_confirmed: !!ed.profit_confirmed, crew_id: ed.crew_id || null });
       } else if (unadopt) {
         const projectPatch = await unadoptQuoteInDb(supabase, { quoteId, projectId: quoteProjectId });
         setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch, updated_at: new Date().toISOString() } : p));
@@ -533,6 +569,18 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
                   <select value={ed.status} onChange={e => setEd({ ...ed, status: e.target.value })} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, background: "#FAFAFA", boxSizing: "border-box", color: "#1F2937" }}>
                     {QUOTE_STATUS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
                   </select>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 3 }}>施工形態</div>
+                  <select value={ed.construction_type || "自社のみ"} onChange={e => setEd({ ...ed, construction_type: e.target.value })} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, background: "#FAFAFA", boxSizing: "border-box", color: "#1F2937" }}>
+                    {CONSTRUCTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 3 }}>班(誰が施工したか)</div>
+                  <CrewPicker crewId={ed.crew_id} crews={crews} setCrews={setCrews} onChange={onCrewChange} />
                 </div>
               </div>
             </div>
@@ -739,6 +787,16 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
                 {hasUnconfirmed && provisionalWarningLines({ ownUnconfirmed, subMissing }).map(line => (
                   <div key={line} style={{ marginTop: 8, fontSize: 11, color: "#DC2626", fontWeight: 700 }}>{line}</div>
                 ))}
+                {ed.id && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #E5E7EB", display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: ed.profit_confirmed ? "#059669" : "#DC2626" }}>{ed.profit_confirmed ? "✅ 粗利は確定済みです" : "⚠️ 粗利は未確定です"}</span>
+                    {ed.profit_confirmed ? (
+                      <button type="button" onClick={unconfirmProfit} style={{ background: "#fff", color: "#9A3412", border: "1.5px solid #FDBA74", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>未確定に戻す</button>
+                    ) : (
+                      <button type="button" onClick={confirmProfit} style={{ background: "#059669", color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>粗利を確定にする</button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 

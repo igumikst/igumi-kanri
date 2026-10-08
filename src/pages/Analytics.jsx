@@ -23,7 +23,11 @@ export default function Analytics({ pjs, submittedQuotes, wonQuotes, cos, tks, l
     { s: "発注済み", n: done.length },
   ];
   const maxSC = Math.max(...statusCount.map(x => x.n), 1);
-  const top5 = pjs.filter(p => p.amount > 0).sort((a, b) => (b.gp / b.amount) - (a.gp / a.amount)).slice(0, 5);
+  // 完工済みの見積が全部未確定の案件は、粗利率が意味を持たないためTOP5から除外する(第8弾テーマ21)
+  const wonByProject = {};
+  (wonQuotes || []).forEach(q => { (wonByProject[q.project_id] ||= []).push(q); });
+  const allUnconfirmed = pid => { const list = wonByProject[pid]; return !!list?.length && list.every(q => !q.profit_confirmed); };
+  const top5 = pjs.filter(p => p.amount > 0 && !allUnconfirmed(p.id)).sort((a, b) => (b.gp / b.amount) - (a.gp / a.amount)).slice(0, 5);
   const byCharge = {};
   pjs.forEach(p => { const k = p.inCharge || "未設定"; byCharge[k] = (byCharge[k] || 0) + (p.amount || 0); });
   const chargeList = Object.entries(byCharge).sort((a, b) => b[1] - a[1]);

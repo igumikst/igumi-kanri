@@ -8,6 +8,7 @@ import { toBasePrice, lineAmount, roundYen, applyRate, MARKUP_BACK_RATE, CUSTOM_
 import { buildEstTree, flattenEstTree, reverseSiblingOrder } from "../lib/quoteImport/parseEst";
 import GroupTree, { BundleToolbar } from "../components/GroupTree";
 import ClientBranchRepPicker from "../components/ClientBranchRepPicker";
+import CrewPicker from "../components/CrewPicker";
 import SubQuoteFileReader from "../components/SubQuoteFileReader";
 import FileDropZone from "../components/FileDropZone";
 import { usePreventWindowFileDrop } from "../lib/useFileDropGuard";
@@ -63,7 +64,7 @@ async function applySubcontractorFollowUps({ quoteId, subFlagsBySortOrder, subCo
   }
 }
 
-export default function QuoteImport({ pjs, submittedQuotes, wonQuotes, setPjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteImportCtx, setQuoteProjectId, setOpenProjectId }) {
+export default function QuoteImport({ pjs, submittedQuotes, wonQuotes, setPjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, crews, setCrews, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteImportCtx, setQuoteProjectId, setOpenProjectId }) {
   usePreventWindowFileDrop();
   const pending = tks.filter(t => !t.done);
   const [results, setResults] = useState([]);
@@ -162,7 +163,7 @@ export default function QuoteImport({ pjs, submittedQuotes, wonQuotes, setPjs, c
         </div>
 
         {results.map(r => (
-          <FileCard key={r.key} r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps || []} setSalesReps={setSalesReps} branches={branches || []} setBranches={setBranches}
+          <FileCard key={r.key} r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps || []} setSalesReps={setSalesReps} branches={branches || []} setBranches={setBranches} crews={crews || []} setCrews={setCrews}
             defaultProjectId={quoteImportCtx?.projectId || ""}
             onRegistered={addProjectToState}
             onOpenQuote={projectId => { setQuoteProjectId(projectId); nav("quotes"); }}
@@ -174,7 +175,7 @@ export default function QuoteImport({ pjs, submittedQuotes, wonQuotes, setPjs, c
   );
 }
 
-function FileCard({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
+function FileCard({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, crews, setCrews, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
   if (r.error) {
     return (
       <div style={{ ...card, borderLeft: "4px solid #DC2626" }}>
@@ -183,10 +184,10 @@ function FileCard({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branche
       </div>
     );
   }
-  if (r.kind === "est") return <EstImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onOpenProject={onOpenProject} onRemove={onRemove} />;
-  if (r.kind === "selfquote") return <SelfQuoteImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onOpenProject={onOpenProject} onRemove={onRemove} />;
-  if (r.kind === "selfquote-pdf") return <SelfQuotePdfImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onOpenProject={onOpenProject} onRemove={onRemove} />;
-  return <ImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onOpenProject={onOpenProject} onRemove={onRemove} />;
+  if (r.kind === "est") return <EstImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} crews={crews} setCrews={setCrews} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onOpenProject={onOpenProject} onRemove={onRemove} />;
+  if (r.kind === "selfquote") return <SelfQuoteImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} crews={crews} setCrews={setCrews} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onOpenProject={onOpenProject} onRemove={onRemove} />;
+  if (r.kind === "selfquote-pdf") return <SelfQuotePdfImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} crews={crews} setCrews={setCrews} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onOpenProject={onOpenProject} onRemove={onRemove} />;
+  return <ImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} crews={crews} setCrews={setCrews} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onOpenProject={onOpenProject} onRemove={onRemove} />;
 }
 
 const CardHead = ({ fileName, onRemove, locked }) => (
@@ -198,7 +199,7 @@ const CardHead = ({ fileName, onRemove, locked }) => (
 
 let lineSeq = 0;
 
-function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
+function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, crews, setCrews, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
   const d = r.data;
   const initialTitle = stripFeeSuffix(d.cover.title || "");
   const [title, setTitle] = useState(initialTitle);
@@ -208,6 +209,7 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
   const [np, setNp] = useState({ name: initialTitle, clientId: "", branchId: "", salesRepId: "", inCharge: "", respondedAt: todayStr(), constructionType: "自社のみ" });
+  const [crewId, setCrewId] = useState(""); // 班(誰が施工したか)。見積ごとに持つ(第8弾テーマ21)
   const [lines, setLines] = useState(() => d.lines.map(l => ({
     key: "il" + (++lineSeq), groupName: l.groupName, name: l.name, spec: l.spec, qty: l.qty ?? 0, unit: l.unit,
     price: l.price ?? 0, note: l.note, summaryOnly: l.summaryOnly, nameFromSpec: l.nameFromSpec, fileAmount: l.amount,
@@ -269,8 +271,8 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
   const total = view.reduce((s, l) => s + l.amount, 0);
   const fileTotal = d.grandTotal ?? d.linesTotal;
   const expectedAfter = roundYen(fileTotal * MARKUP_BACK_RATE);
-  const selectedProject = projectMode === "existing" ? pjs.find(p => p.id === projectId) : null;
-  const constructionType = projectMode === "existing" ? (selectedProject?.constructionType || "自社のみ") : (np.constructionType || "自社のみ");
+  // 施工形態は見積ごとに持つ(第8弾テーマ21)。既存案件を選んだときの初期値は、案件選択時にnpへコピーしてある
+  const constructionType = np.constructionType || "自社のみ";
   const isMixed = constructionType === "自社+下請け";
   const isSubOnly = constructionType === "下請けのみ";
   const showSubCheckCol = isMixed;
@@ -318,7 +320,7 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
       subcontractorIds: [], quoteDate: issuedDate || "",
     };
     const memo = `見積ファイル「${r.fileName}」から取り込み。${markup === "after" ? `ファイルの金額は載せた後 → 単価×${MARKUP_BACK_RATE}で載せる前に戻して登録` : "ファイルの金額は載せる前(そのまま登録)"}。ファイルの税抜合計 ${fileTotal?.toLocaleString()}円`;
-    const pQuote = { title: title.trim(), price_set_id: priceSetId, status: "submitted", total_amount: Math.round(total), issued_at: issuedDate || null, memo };
+    const pQuote = { title: title.trim(), price_set_id: priceSetId, status: "submitted", total_amount: Math.round(total), issued_at: issuedDate || null, memo, construction_type: constructionType, crew_id: crewId || null };
     const pItems = view.map(l => ({
       price_item_id: l.item?.id ?? null,
       line_type: l.item ? "item" : "adjust",
@@ -481,11 +483,20 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
             {projectMode === "existing" ? (
               <div style={{ marginBottom: 8 }}>
                 <div style={label}>追加先の案件 *</div>
-                <select value={projectId} onChange={e => setProjectId(e.target.value)} style={inp}>
+                <select value={projectId} onChange={e => { const pid = e.target.value; setProjectId(pid); const proj = pjs.find(p => p.id === pid); setNp(prev => ({ ...prev, constructionType: proj?.constructionType || "自社のみ" })); }} style={inp}>
                   <option value="">選択してください</option>
                   {pjs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
-                {selectedProject && <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>施工形態: {constructionType}(案件の設定。変更は案件の編集画面で行います)</div>}
+                <div style={{ marginTop: 8 }}>
+                  <div style={label}>施工形態</div>
+                  <select value={np.constructionType} onChange={e => setNp({ ...np, constructionType: e.target.value })} style={inp}>
+                    {CONSTRUCTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div style={{ marginTop: 8 }}>
+                  <div style={label}>班(誰が施工したか)</div>
+                  <CrewPicker crewId={crewId} crews={crews} setCrews={setCrews} onChange={setCrewId} />
+                </div>
               </div>
             ) : (
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
@@ -513,6 +524,10 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
                   <select value={np.constructionType} onChange={e => setNp({ ...np, constructionType: e.target.value })} style={inp}>
                     {CONSTRUCTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
+                </div>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <div style={label}>班(誰が施工したか)</div>
+                  <CrewPicker crewId={crewId} crews={crews} setCrews={setCrews} onChange={setCrewId} />
                 </div>
               </div>
             )}
@@ -791,7 +806,7 @@ function resolveDefaultMarkup({ clientId, branchId, cos, branches }) {
 }
 
 // ESTファイル(見積ソフトのバイナリ形式)の確認画面。ステップ3: 登録・原価の当てはめ・粗利の計算まで行う
-function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
+function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, crews, setCrews, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
   const d = r.data;
   const [lines, setLines] = useState(() => d.lines.map(l => ({ ...l, pickedItemId: undefined, costOverride: undefined, isSubcontracted: false })));
   // 工事名称。初期値はファイル内で見つかった工事名称(見つからなければファイル名)。確認画面で直せる
@@ -809,6 +824,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
   const [np, setNp] = useState({ name: initialTitle, clientId: "", branchId: "", salesRepId: "", inCharge: "", respondedAt: todayStr(), constructionType: "自社のみ" });
+  const [crewId, setCrewId] = useState(""); // 班(誰が施工したか)。見積ごとに持つ(第8弾テーマ21)
   const [searchKey, setSearchKey] = useState(null);
   const [searchText, setSearchText] = useState("");
   const [registering, setRegistering] = useState(false);
@@ -926,7 +942,8 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
   });
   const viewByKey = useMemo(() => Object.fromEntries(view.map(v => [v.key, v])), [view]);
 
-  const constructionType = projectMode === "existing" ? (selectedProject?.constructionType || "自社のみ") : (np.constructionType || "自社のみ");
+  // 施工形態は見積ごとに持つ(第8弾テーマ21)。既存案件を選んだときの初期値は、案件選択時にnpへコピーしてある
+  const constructionType = np.constructionType || "自社のみ";
   const isMixed = constructionType === "自社+下請け";
   const isSubOnly = constructionType === "下請けのみ";
   const showSubCheckCol = isMixed;
@@ -974,7 +991,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
     };
     const memo = `見積ファイル「${r.fileName}」(ESTファイル)から取り込み。${rateChoice === "none" ? "掛け率1.0のまま登録" : `掛け率×${rate}でIGUMIの販売金額を計算して登録`}。ファイルの税抜合計(100%) ${fileTotal100?.toLocaleString()}円`;
     const appliedRates = { rate, choice: rateChoice, est_output_rate: d.cover.detectedRate ?? null };
-    const pQuote = { title: title.trim(), price_set_id: priceSetId, status: "submitted", total_amount: Math.round(adjustedTotal), issued_at: null, memo };
+    const pQuote = { title: title.trim(), price_set_id: priceSetId, status: "submitted", total_amount: Math.round(adjustedTotal), issued_at: null, memo, construction_type: constructionType, crew_id: crewId || null };
     const pItems = view.map(l => ({
       price_item_id: l.item?.id ?? null,
       line_type: l.item ? "item" : "adjust",
@@ -1148,11 +1165,20 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
         {projectMode === "existing" ? (
           <div style={{ marginBottom: 8 }}>
             <div style={label}>追加先の案件 *</div>
-            <select value={projectId} onChange={e => setProjectId(e.target.value)} style={inp}>
+            <select value={projectId} onChange={e => { const pid = e.target.value; setProjectId(pid); const proj = pjs.find(p => p.id === pid); setNp(prev => ({ ...prev, constructionType: proj?.constructionType || "自社のみ" })); }} style={inp}>
               <option value="">選択してください</option>
               {pjs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
-            {selectedProject && <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>施工形態: {constructionType}(案件の設定。変更は案件の編集画面で行います)</div>}
+            <div style={{ marginTop: 8 }}>
+              <div style={label}>施工形態</div>
+              <select value={np.constructionType} onChange={e => setNp({ ...np, constructionType: e.target.value })} style={inp}>
+                {CONSTRUCTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div style={{ marginTop: 8 }}>
+              <div style={label}>班(誰が施工したか)</div>
+              <CrewPicker crewId={crewId} crews={crews} setCrews={setCrews} onChange={setCrewId} />
+            </div>
           </div>
         ) : (
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
@@ -1180,6 +1206,10 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
               <select value={np.constructionType} onChange={e => setNp({ ...np, constructionType: e.target.value })} style={inp}>
                 {CONSTRUCTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
+            </div>
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <div style={label}>班(誰が施工したか)</div>
+              <CrewPicker crewId={crewId} crews={crews} setCrews={setCrews} onChange={setCrewId} />
             </div>
           </div>
         )}
@@ -1412,7 +1442,7 @@ const DATE_PREFIX_RE = /^\d{1,2}月\d{1,2}日/;
 
 // Excel(.xls/.xlsx)で、シート名に「大項目」と「明細」がある形式(コンクル由来の自社見積書)の確認画面。
 // ESTの確認画面と同じ作り(元請が絡むかの4択・単価表への当てはめ・原価の手入力・並び替え・登録)にする
-function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
+function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, crews, setCrews, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
   const d = r.data;
   const initialTitle = stripFeeSuffix(d.cover.title || "");
   const [title, setTitle] = useState(initialTitle);
@@ -1426,6 +1456,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
   const [np, setNp] = useState({ name: initialTitle, clientId: "", branchId: "", salesRepId: "", inCharge: "", respondedAt: todayStr(), constructionType: "自社のみ" });
+  const [crewId, setCrewId] = useState(""); // 班(誰が施工したか)。見積ごとに持つ(第8弾テーマ21)
   const [lines, setLines] = useState(() => d.lines.map(l => ({
     key: "il" + (++lineSeq), groupName: l.groupName, name: l.name, spec: l.spec, qty: l.qty ?? 0, unit: l.unit,
     price: l.price ?? 0, note: l.note, summaryOnly: false, nameFromSpec: false, fileAmount: l.amount,
@@ -1518,7 +1549,8 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
   });
 
   const total = view.reduce((s, l) => s + l.amount, 0);
-  const constructionType = projectMode === "existing" ? (selectedProject?.constructionType || "自社のみ") : (np.constructionType || "自社のみ");
+  // 施工形態は見積ごとに持つ(第8弾テーマ21)。既存案件を選んだときの初期値は、案件選択時にnpへコピーしてある
+  const constructionType = np.constructionType || "自社のみ";
   const isMixed = constructionType === "自社+下請け";
   const isSubOnly = constructionType === "下請けのみ";
   const showSubCheckCol = isMixed;
@@ -1568,7 +1600,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
     };
     const memo = `見積ファイル「${r.fileName}」(自社見積書Excel)から取り込み。見積番号 ${d.cover.quoteNo || "不明"}。${rateChoice === "none" ? "掛け率1.0のまま登録" : `掛け率×${rate}でIGUMIの販売金額を計算して登録`}。ファイルの税抜合計(100%) ${fileTotal?.toLocaleString()}円`;
     const appliedRates = { rate, choice: rateChoice, quote_no: d.cover.quoteNo || null };
-    const pQuote = { title: title.trim(), price_set_id: priceSetId, status: "submitted", total_amount: Math.round(total), issued_at: issuedDate || null, memo };
+    const pQuote = { title: title.trim(), price_set_id: priceSetId, status: "submitted", total_amount: Math.round(total), issued_at: issuedDate || null, memo, construction_type: constructionType, crew_id: crewId || null };
     const pItems = view.map(l => ({
       price_item_id: l.item?.id ?? null,
       line_type: l.item ? "item" : "adjust",
@@ -1737,11 +1769,20 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
             {projectMode === "existing" ? (
               <div style={{ marginBottom: 8 }}>
                 <div style={label}>追加先の案件 *</div>
-                <select value={projectId} onChange={e => setProjectId(e.target.value)} style={inp}>
+                <select value={projectId} onChange={e => { const pid = e.target.value; setProjectId(pid); const proj = pjs.find(p => p.id === pid); setNp(prev => ({ ...prev, constructionType: proj?.constructionType || "自社のみ" })); }} style={inp}>
                   <option value="">選択してください</option>
                   {pjs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
-                {selectedProject && <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>施工形態: {constructionType}(案件の設定。変更は案件の編集画面で行います)</div>}
+                <div style={{ marginTop: 8 }}>
+                  <div style={label}>施工形態</div>
+                  <select value={np.constructionType} onChange={e => setNp({ ...np, constructionType: e.target.value })} style={inp}>
+                    {CONSTRUCTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div style={{ marginTop: 8 }}>
+                  <div style={label}>班(誰が施工したか)</div>
+                  <CrewPicker crewId={crewId} crews={crews} setCrews={setCrews} onChange={setCrewId} />
+                </div>
               </div>
             ) : (
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
@@ -1769,6 +1810,10 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
                   <select value={np.constructionType} onChange={e => setNp({ ...np, constructionType: e.target.value })} style={inp}>
                     {CONSTRUCTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
+                </div>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <div style={label}>班(誰が施工したか)</div>
+                  <CrewPicker crewId={crewId} crews={crews} setCrews={setCrews} onChange={setCrewId} />
                 </div>
               </div>
             )}
@@ -1937,7 +1982,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
 // 自社見積書PDF(IGUMIが出力した表紙+見積内訳書)の確認画面(第8弾テーマ18)。
 // SelfQuoteImportForm(自社見積書Excel)とほぼ同じ作りだが、「IGUMI原価ベース(7.5%を載せない)保管用」
 // のため掛け率は常に1.0固定(選択UIを出さない)。諸経費・値引きは単価表への当てはめをしない
-function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
+function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, crews, setCrews, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
   const d = r.data;
   const initialTitle = stripFeeSuffix(d.cover.title || "");
   const [title, setTitle] = useState(initialTitle);
@@ -1946,6 +1991,7 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
   const [np, setNp] = useState({ name: initialTitle, clientId: "", branchId: "", salesRepId: "", inCharge: d.cover.inCharge || "", respondedAt: todayStr(), constructionType: "自社のみ" });
+  const [crewId, setCrewId] = useState(""); // 班(誰が施工したか)。見積ごとに持つ(第8弾テーマ21)
   const [lines, setLines] = useState(() => d.lines.map(l => ({
     key: "il" + (++lineSeq), groupName: l.groupName, name: l.name, spec: l.spec, qty: l.qty ?? 0, unit: l.unit,
     price: l.price ?? 0, note: l.note, summaryOnly: false, isOverhead: !!l.isOverhead, overheadKind: l.overheadKind,
@@ -1966,8 +2012,6 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
     setSubForm({ subcontractor_id: "", amount: "", note: "", file: null });
   };
   const removeSubCostDraft = key => setSubCosts(prev => prev.filter(c => c.key !== key));
-
-  const selectedProject = projectMode === "existing" ? pjs.find(p => p.id === projectId) : null;
 
   // ドラッグ・ボタンでの並べ替え・グループ分け。group_nameを直接書き換える
   const handleArrangeSelfPdf = newLines => setLines(prev => {
@@ -2032,7 +2076,8 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
   });
 
   const total = view.reduce((s, l) => s + l.amount, 0);
-  const constructionType = projectMode === "existing" ? (selectedProject?.constructionType || "自社のみ") : (np.constructionType || "自社のみ");
+  // 施工形態は見積ごとに持つ(第8弾テーマ21)。既存案件を選んだときの初期値は、案件選択時にnpへコピーしてある
+  const constructionType = np.constructionType || "自社のみ";
   const isMixed = constructionType === "自社+下請け";
   const isSubOnly = constructionType === "下請けのみ";
   const showSubCheckCol = isMixed;
@@ -2080,7 +2125,7 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
     };
     const memo = `見積ファイル「${r.fileName}」(自社見積書PDF)から取り込み。掛け率1.0(IGUMI原価ベース保管用)のまま登録。ファイルの税抜合計 ${fileTotal?.toLocaleString()}円`;
     const appliedRates = { rate: 1, choice: "none", quote_no: null };
-    const pQuote = { title: title.trim(), price_set_id: priceSetId, status: "submitted", total_amount: Math.round(total), issued_at: issuedDate || null, memo };
+    const pQuote = { title: title.trim(), price_set_id: priceSetId, status: "submitted", total_amount: Math.round(total), issued_at: issuedDate || null, memo, construction_type: constructionType, crew_id: crewId || null };
     const pItems = view.map(l => ({
       price_item_id: l.item?.id ?? null,
       line_type: l.item ? "item" : "adjust",
@@ -2226,11 +2271,20 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
             {projectMode === "existing" ? (
               <div style={{ marginBottom: 8 }}>
                 <div style={label}>追加先の案件 *</div>
-                <select value={projectId} onChange={e => setProjectId(e.target.value)} style={inp}>
+                <select value={projectId} onChange={e => { const pid = e.target.value; setProjectId(pid); const proj = pjs.find(p => p.id === pid); setNp(prev => ({ ...prev, constructionType: proj?.constructionType || "自社のみ" })); }} style={inp}>
                   <option value="">選択してください</option>
                   {pjs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
-                {selectedProject && <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>施工形態: {constructionType}(案件の設定。変更は案件の編集画面で行います)</div>}
+                <div style={{ marginTop: 8 }}>
+                  <div style={label}>施工形態</div>
+                  <select value={np.constructionType} onChange={e => setNp({ ...np, constructionType: e.target.value })} style={inp}>
+                    {CONSTRUCTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div style={{ marginTop: 8 }}>
+                  <div style={label}>班(誰が施工したか)</div>
+                  <CrewPicker crewId={crewId} crews={crews} setCrews={setCrews} onChange={setCrewId} />
+                </div>
               </div>
             ) : (
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
@@ -2258,6 +2312,10 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
                   <select value={np.constructionType} onChange={e => setNp({ ...np, constructionType: e.target.value })} style={inp}>
                     {CONSTRUCTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
+                </div>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <div style={label}>班(誰が施工したか)</div>
+                  <CrewPicker crewId={crewId} crews={crews} setCrews={setCrews} onChange={setCrewId} />
                 </div>
               </div>
             )}

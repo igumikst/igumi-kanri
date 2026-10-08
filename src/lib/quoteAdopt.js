@@ -33,8 +33,9 @@ export const provisionalWarningLines = ({ ownUnconfirmed, subMissing }) => [
   subMissing ? "⚠️ 下請けの原価が1件も登録されていません。粗利は暫定です" : "",
 ].filter(Boolean);
 
-// 完工済みにする確認ダイアログの本文。受注金額・粗利は「この見積の分を加える」加算として示す
-export function buildAdoptMessage({ fmt, quoteTitle, beforeAmount, beforeGp, quoteAmount, quoteGp, ownUnconfirmed, subMissing }) {
+// 完工済みにする確認ダイアログの本文。受注金額・粗利は「この見積の分を加える」加算として示す。
+// 班が未設定(crewUnset)なら、粗利が未確定になる旨の警告を加える(第8弾テーマ21)
+export function buildAdoptMessage({ fmt, quoteTitle, beforeAmount, beforeGp, quoteAmount, quoteGp, ownUnconfirmed, subMissing, crewUnset }) {
   const afterAmount = (Number(beforeAmount) || 0) + (Number(quoteAmount) || 0);
   const afterGp = (Number(beforeGp) || 0) + (Number(quoteGp) || 0);
   return [
@@ -43,9 +44,10 @@ export function buildAdoptMessage({ fmt, quoteTitle, beforeAmount, beforeGp, quo
     `受注金額: ${fmt(beforeAmount)} → ${fmt(afterAmount)}`,
     `粗利: ${fmt(beforeGp)} → ${fmt(afterGp)}`,
     ...provisionalWarningLines({ ownUnconfirmed, subMissing }),
+    crewUnset ? "⚠️ 班が未設定です。粗利は未確定になります" : "",
     "",
     "案件の受注金額・粗利に、この見積の分を加えます(他に完工済みの見積があれば、そのまま残ります)。",
-    "よろしいですか？",
+    crewUnset ? "このまま採用しますか？" : "よろしいですか？",
   ].filter(Boolean).join("\n");
 }
 
@@ -54,14 +56,30 @@ export function buildUnadoptMessage(quoteTitle) {
   return `「${quoteTitle}」を発注前に戻します(採用を解除)\n\n案件の受注金額・粗利は、残りの完工済み見積の合計に更新されます\n\nよろしいですか？`;
 }
 
-// 案件の amount / grossProfit を、その案件の全完工済み(won)見積の合計に書き直す
+// 案件の amount / grossProfit を、その案件の全完工済み(won)見積の合計に書き直す。
+// 売上(amount)は完工済み見積の全件合計、粗利(grossProfit)は粗利が確定済み(profit_confirmed)の
+// 見積だけの合計にする(第8弾テーマ21。未確定の見積の粗利は集計から除外する)
 export async function recalcProjectTotals(supabase, projectId) {
-  const { data } = await supabase.from("quotes").select("total_amount, gross_profit").eq("project_id", projectId).eq("status", "won");
+  const { data } = await supabase.from("quotes").select("total_amount, gross_profit, profit_confirmed").eq("project_id", projectId).eq("status", "won");
   const amount = Math.round((data || []).reduce((s, q) => s + (Number(q.total_amount) || 0), 0));
-  const gp = Math.round((data || []).reduce((s, q) => s + (Number(q.gross_profit) || 0), 0));
+  const gp = Math.round((data || []).filter(q => q.profit_confirmed).reduce((s, q) => s + (Number(q.gross_profit) || 0), 0));
   const { error } = await supabase.from("projects").update({ amount, grossProfit: gp }).eq("id", projectId);
   if (error) throw new Error(describeError(error, "案件の受注金額・粗利の更新"));
   return { amount, gp };
+}
+
+// 粗利を手動で「確定」にする/「未確定」に戻す(第8弾テーマ21)。呼んだあと、案件の
+// 受注金額・粗利を再計算する(確定にすれば加わり、未確定に戻せば外れる)
+export async function confirmQuoteProfit(supabase, { quoteId, projectId }) {
+  const { error } = await supabase.from("quotes").update({ profit_confirmed: true, profit_confirmed_at: new Date().toISOString() }).eq("id", quoteId);
+  if (error) throw new Error(describeError(error, "粗利の確定"));
+  return recalcProjectTotals(supabase, projectId);
+}
+
+export async function unconfirmQuoteProfit(supabase, { quoteId, projectId }) {
+  const { error } = await supabase.from("quotes").update({ profit_confirmed: false, profit_confirmed_at: null }).eq("id", quoteId);
+  if (error) throw new Error(describeError(error, "粗利を未確定に戻す処理"));
+  return recalcProjectTotals(supabase, projectId);
 }
 
 // 見積を完工済み(採用)にする。他の完工済み見積の is_adopted / status は変更しない。

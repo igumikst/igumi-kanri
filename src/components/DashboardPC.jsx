@@ -244,9 +244,13 @@ export default function DashboardPC({
     return true;
   }), [completedQuotes, period, client, branch, owner]);
 
+  // 売上は完工済みの全件、粗利・粗利率は粗利が確定済み(profitConfirmed)の分だけで計算する
+  // (第8弾テーマ21。未確定の粗利は集計から除外し、粗利率の分母の売上も確定分だけにする)
   const totalAmt = completedFilteredQuotes.reduce((s, q) => s + (q.sell || 0), 0);
-  const totalGp = completedFilteredQuotes.reduce((s, q) => s + (q.gp || 0), 0);
-  const gpRate = totalAmt ? (totalGp / totalAmt) * 100 : null;
+  const confirmedQuotes = completedFilteredQuotes.filter(q => q.profitConfirmed);
+  const confirmedAmt = confirmedQuotes.reduce((s, q) => s + (q.sell || 0), 0);
+  const totalGp = confirmedQuotes.reduce((s, q) => s + (q.gp || 0), 0);
+  const gpRate = confirmedAmt ? (totalGp / confirmedAmt) * 100 : null;
   const completedCount = completedFilteredQuotes.length;
 
   // 受注率(第8弾テーマ3): 発注済み(完工日基準・期間内に完工済みの見積がある案件、重複なし)
@@ -373,6 +377,25 @@ export default function DashboardPC({
     [repGroups, sort],
   );
 
+  // 班別集計(第8弾テーマ21)。completedFilteredQuotes(見積ベース・完工日基準)を使うので、
+  // 既存の期間・取引先・営業所・担当者の絞り込みがそのまま効く。班未設定は最後に別行で出す
+  const crewGroups = useMemo(() => {
+    const groups = new Map();
+    completedFilteredQuotes.forEach(q => {
+      const key = q.crewId || "__unset__";
+      if (!groups.has(key)) groups.set(key, { key, name: q.crewName || "班未設定", count: 0, sell: 0, confirmedSell: 0, gp: 0, unconfirmedCount: 0, unconfirmedSell: 0 });
+      const g = groups.get(key);
+      g.count += 1;
+      g.sell += q.sell || 0;
+      if (q.profitConfirmed) { g.confirmedSell += q.sell || 0; g.gp += q.gp || 0; }
+      else { g.unconfirmedCount += 1; g.unconfirmedSell += q.sell || 0; }
+    });
+    const list = [...groups.values()].map(g => ({ ...g, gpRate: g.confirmedSell ? (g.gp / g.confirmedSell) * 100 : null }));
+    const unset = list.filter(g => g.key === "__unset__");
+    const named = list.filter(g => g.key !== "__unset__").sort((a, b) => b.sell - a.sell);
+    return [...named, ...unset];
+  }, [completedFilteredQuotes]);
+
   const toggleSort = key => {
     setSort(prev => prev.key === key
       ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
@@ -422,8 +445,8 @@ export default function DashboardPC({
       <div className="pcgrid4 five">
         <div className="pckpi"><span>📋</span><small>案件数</small><b style={{ color: "#1a3a5c" }}>{filtered.length}件</b></div>
         <div className="pckpi"><span>💰</span><small>売上合計</small><b style={{ color: "#e07b39" }}>{fmt(totalAmt)}</b><div style={{ fontSize: 9, color: "#9ca3af", marginTop: 2 }}>完工日基準</div></div>
-        <div className="pckpi"><span>📈</span><small>粗利合計</small><b style={{ color: "#059669" }}>{fmt(totalGp)}</b><div style={{ fontSize: 9, color: "#9ca3af", marginTop: 2 }}>完工日基準</div></div>
-        <div className="pckpi"><span>📊</span><small>粗利率</small><b style={{ color: "#7c3aed" }}>{pctLabel(gpRate)}</b><div style={{ fontSize: 9, color: "#9ca3af", marginTop: 2 }}>完工日基準</div></div>
+        <div className="pckpi"><span>📈</span><small>粗利合計(確定分)</small><b style={{ color: "#059669" }}>{fmt(totalGp)}</b><div style={{ fontSize: 9, color: "#9ca3af", marginTop: 2 }}>完工日基準</div></div>
+        <div className="pckpi"><span>📊</span><small>粗利率(確定分)</small><b style={{ color: "#7c3aed" }}>{pctLabel(gpRate)}</b><div style={{ fontSize: 9, color: "#9ca3af", marginTop: 2 }}>完工日基準</div></div>
         <div className="pckpi"><span>🏁</span><small>完工件数</small><b style={{ color: "#0891b2" }}>{completedCount}件</b><div style={{ fontSize: 9, color: "#9ca3af", marginTop: 2 }}>完工日基準</div></div>
       </div>
 
@@ -533,6 +556,41 @@ export default function DashboardPC({
                 </tr>
               ))}
               {sortedReps.length === 0 && (
+                <tr><td className="tl" colSpan={7}>該当する案件がありません</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="pcrow panel">
+        <h3>班別集計</h3>
+        <div className="scroll">
+          <table className="pt">
+            <thead>
+              <tr>
+                <th className="tl">班</th>
+                <th>件数</th>
+                <th>売上合計</th>
+                <th>確定済み粗利</th>
+                <th>粗利率(確定分)</th>
+                <th>未確定件数</th>
+                <th>未確定売上</th>
+              </tr>
+            </thead>
+            <tbody>
+              {crewGroups.map(g => (
+                <tr key={g.key}>
+                  <td className="tl">{g.name}</td>
+                  <td>{g.count}件</td>
+                  <td style={{ color: "#e07b39", fontWeight: 700 }}>{fmt(g.sell)}</td>
+                  <td style={{ color: "#059669", fontWeight: 700 }}>{fmt(g.gp)}</td>
+                  <td>{pctLabel(g.gpRate)}</td>
+                  <td>{g.unconfirmedCount}件</td>
+                  <td>{fmt(g.unconfirmedSell)}</td>
+                </tr>
+              ))}
+              {crewGroups.length === 0 && (
                 <tr><td className="tl" colSpan={7}>該当する案件がありません</td></tr>
               )}
             </tbody>
