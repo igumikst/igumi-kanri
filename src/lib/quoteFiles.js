@@ -10,6 +10,9 @@ export const FILE_TYPES = {
   est: "application/octet-stream",
 };
 
+// 添付ファイルの一覧表示用のアイコン。ExcelとPDFを見分けられるように(第8弾テーマ21-B)
+export const fileIcon = name => (/\.(xlsx|xls)$/i.test(name || "") ? "📗" : "📎");
+
 // 署名付きURL(60秒だけ有効)を作って開く。ダウンロード時の名前は元のファイル名
 export async function openQuoteFile(file) {
   // ポップアップブロックを避けるため、クリック直後に先にタブを開いておく

@@ -1,27 +1,36 @@
 import { useState } from "react";
 import { extractPdfText, detectSubcontractorAmount, suggestSubcontractorCompany } from "../lib/subQuoteFileParse";
+import { detectSubcontractorAmountFromExcel } from "../lib/subQuoteExcelParse";
 
 const yen = v => (v == null ? "—" : `¥${Math.round(Number(v)).toLocaleString()}`);
+const EXCEL_RE = /\.(xlsx|xls)$/i;
+const READABLE_RE = /\.(pdf|xlsx|xls)$/i;
 
-// 下請け見積ファイル(PDF)から、税抜小計・消費税・税込合計の候補を読み取るボタンと結果表示。
+// 下請け見積ファイル(PDF・Excel)から、税抜小計・消費税・税込合計の候補を読み取るボタンと結果表示。
 // AIなし・サーバーなし(ブラウザの中だけで読む)。読み取った金額・会社は、ボタンを押したときだけ
-// 反映する(自動では入れない)。PDF以外(.xls/.xlsxの添付など)では、何も表示しない
+// 反映する(自動では入れない)。読み取れる形式以外では、何も表示しない(第8弾テーマ21-B)
 export default function SubQuoteFileReader({ file, subcontractors, hasCompanySelected, onPickAmount, onPickCompany }) {
   const [reading, setReading] = useState(false);
   const [result, setResult] = useState(null);
 
-  if (!file || !/\.pdf$/i.test(file.name)) return null;
+  if (!file || !READABLE_RE.test(file.name)) return null;
+  const isExcel = EXCEL_RE.test(file.name);
 
   const read = async () => {
     setReading(true);
     setResult(null);
     try {
-      const text = await extractPdfText(file);
-      const detected = detectSubcontractorAmount(text);
-      const company = suggestSubcontractorCompany(text, subcontractors);
-      setResult({ ...detected, company });
+      if (isExcel) {
+        const detected = await detectSubcontractorAmountFromExcel(file);
+        setResult({ ...detected, fileKind: "excel" });
+      } else {
+        const text = await extractPdfText(file);
+        const detected = detectSubcontractorAmount(text);
+        const company = suggestSubcontractorCompany(text, subcontractors);
+        setResult({ ...detected, company, fileKind: "pdf" });
+      }
     } catch (e) {
-      setResult({ kind: "error", message: e.message });
+      setResult({ kind: "error", message: e.message, fileKind: isExcel ? "excel" : "pdf" });
     }
     setReading(false);
   };
@@ -33,8 +42,17 @@ export default function SubQuoteFileReader({ file, subcontractors, hasCompanySel
       </button>
       {result && (
         <div style={{ marginTop: 6, background: "#F9FAFB", border: "1px solid #E5E7EB", borderRadius: 8, padding: "8px 10px", fontSize: 11 }}>
-          {result.kind === "error" && <div style={{ color: "#DC2626" }}>読み取れませんでした({result.message})。手入力してください</div>}
-          {result.kind === "none" && <div style={{ color: "#9CA3AF" }}>読み取れませんでした。手入力してください</div>}
+          {result.kind === "error" && (
+            <div style={{ color: "#DC2626" }}>
+              {result.fileKind === "excel" ? `Excelから金額を読み取れませんでした(${result.message})。金額を手で入力してください` : `読み取れませんでした(${result.message})。手入力してください`}
+            </div>
+          )}
+          {result.kind === "none" && (
+            <div style={{ color: "#9CA3AF" }}>
+              {result.fileKind === "excel" ? "Excelから金額を読み取れませんでした。金額を手で入力してください" : "読み取れませんでした。手入力してください"}
+            </div>
+          )}
+          {result.checkWarning && <div style={{ color: "#B45309", fontWeight: 700, marginBottom: 4 }}>⚠️ {result.checkWarning}</div>}
           {result.kind === "totalOnly" && (
             <div>
               <div style={{ color: "#9A3412", fontWeight: 700, marginBottom: 3 }}>税込のみ検出。税抜は{yen(result.best.subtotal)}(÷1.1で計算・要確認)</div>
