@@ -72,3 +72,31 @@ export const todayStr = () => { const d = new Date(); return new Date(d.getTime(
 // "YYYY-MM-DD" を、タイムゾーンのズレなしで "YYYY/MM/DD" 表示にする(Dateに変換しない)
 export const dateJp = s => (s ? String(s).slice(0, 10).replace(/-/g, "/") : "");
 export const pct = (g,a) => a?((g/a)*100).toFixed(1)+"%":"—";
+
+// タイムスタンプ(ISO文字列)を日本時間(Asia/Tokyo)固定で整形する(第8弾テーマ22)。
+// isoStringが空・不正なら空文字を返す
+const TOKYO_TZ = "Asia/Tokyo";
+const tokyoYmd = d => new Intl.DateTimeFormat("en-CA", { timeZone: TOKYO_TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+
+// 案件一覧の「最終更新」表示用: 当日=HH:mm、今年の昨日以前=M/D、去年以前=yyyy/M/D
+export const relativeTimeJp = isoString => {
+  if (!isoString) return "";
+  const d = new Date(isoString);
+  if (isNaN(d)) return "";
+  const now = new Date();
+  const dYmd = tokyoYmd(d);
+  const nowYmd = tokyoYmd(now);
+  if (dYmd === nowYmd) return new Intl.DateTimeFormat("ja-JP", { timeZone: TOKYO_TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(d);
+  if (dYmd.slice(0, 4) === nowYmd.slice(0, 4)) return new Intl.DateTimeFormat("ja-JP", { timeZone: TOKYO_TZ, month: "numeric", day: "numeric" }).format(d);
+  return new Intl.DateTimeFormat("ja-JP", { timeZone: TOKYO_TZ, year: "numeric", month: "numeric", day: "numeric" }).format(d);
+};
+
+// title属性などの「最終更新: yyyy/M/D HH:mm」表示用(常にフル表示、日本時間固定)
+export const fullTimeJp = isoString => {
+  if (!isoString) return "";
+  const d = new Date(isoString);
+  if (isNaN(d)) return "";
+  const date = new Intl.DateTimeFormat("ja-JP", { timeZone: TOKYO_TZ, year: "numeric", month: "numeric", day: "numeric" }).format(d);
+  const time = new Intl.DateTimeFormat("ja-JP", { timeZone: TOKYO_TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(d);
+  return `${date} ${time}`;
+};

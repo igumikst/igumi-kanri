@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
-import { fmt, pct, todayStr, dateJp } from "../lib/constants";
+import { fmt, pct, todayStr, dateJp, relativeTimeJp, fullTimeJp } from "../lib/constants";
 import { Inp, Sel, Modal, Hdr, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import ClientBranchRepPicker from "../components/ClientBranchRepPicker";
@@ -43,7 +43,7 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
   const [fltOpen, setFltOpen] = useState(false);
   const [conf, setConf] = useState(null);
   const [editP, setEditP] = useState(null);
-  const blankP = { name: "", status: "発注待ち", clientId: "", branchId: "", salesRepId: "", salesRep: "", inCharge: "崎岡", subIds: [], amount: "", gp: "", qDate: "", respondedAt: todayStr(), constructionType: "自社のみ" };
+  const blankP = { name: "", status: "発注待ち", clientId: "", branchId: "", salesRepId: "", salesRep: "", inCharge: "", subIds: [], amount: "", gp: "", qDate: "", respondedAt: todayStr(), constructionType: "自社のみ" };
   const [nP, setNP] = useState(blankP);
 
   // 案件の詳細を開いている時だけ、その案件の見積・報告書ファイルを読み込む
@@ -98,7 +98,7 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
       const completedOn = adoptCompletedOnRef.current;
       try {
         const projectPatch = await adoptQuoteInDb(supabase, { quoteId: quote.id, projectId: selP.id, gp, completedOn });
-        const updated = { ...selP, ...projectPatch };
+        const updated = { ...selP, ...projectPatch, updated_at: new Date().toISOString() };
         setPjs(prev => prev.map(p => p.id === selP.id ? updated : p));
         setSelP(updated);
         setQuotes(prev => prev.map(q => q.id === quote.id ? { ...q, is_adopted: true, status: "won" } : q));
@@ -208,6 +208,9 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
     if (schP && !p.name.includes(schP) && !(getC(p.clientId)?.name || "").includes(schP) && !(p.inCharge || "").includes(schP)) return false;
     return true;
   });
+  // 更新日時(無ければ作成日時で代用)が新しい順に並べる(第8弾テーマ22)
+  const lastTouched = p => p.updated_at || p.created_at || "";
+  filtP.sort((a, b) => (lastTouched(a) < lastTouched(b) ? 1 : lastTouched(a) > lastTouched(b) ? -1 : 0));
 
   const tA = filtP.reduce((s, p) => s + (p.amount || 0), 0);
   const tG = filtP.reduce((s, p) => s + (p.gp || 0), 0);
@@ -223,7 +226,8 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
     if (!editP || !editP.name) return;
     const salesRep = editP.salesRep;
     await supabase.from("projects").update({ name: editP.name, status: editP.status, clientId: editP.clientId || null, branchId: editP.branchId || null, salesRepId: editP.salesRepId || null, salesRep, inCharge: editP.inCharge, subcontractorIds: editP.subIds || [], amount: Number(editP.amount) || 0, grossProfit: Number(editP.gp) || 0, quoteDate: editP.qDate, respondedAt: editP.respondedAt || null, constructionType: editP.constructionType || "自社のみ" }).eq("id", editP.id);
-    const updated = { ...editP, salesRep, gp: Number(editP.gp) || 0, amount: Number(editP.amount) || 0, respondedAt: editP.respondedAt || null };
+    // updated_atはDBのトリガーが正しい値を書く。ここではその場で一覧の並びに反映するための近似値(第8弾テーマ22)
+    const updated = { ...editP, salesRep, gp: Number(editP.gp) || 0, amount: Number(editP.amount) || 0, respondedAt: editP.respondedAt || null, updated_at: new Date().toISOString() };
     setPjs(pjs.map(p => p.id === editP.id ? updated : p));
     setSelP(updated); setEditP(null);
   };
@@ -421,6 +425,9 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
               const rc = reportCounts[p.id] || 0;
               const wc = wonCounts[p.id] || 0;
               const sc = submittedCounts[p.id] || 0;
+              const touchedAt = lastTouched(p);
+              const touchedLabel = relativeTimeJp(touchedAt);
+              const touchedTitle = touchedAt ? `最終更新: ${fullTimeJp(touchedAt)}` : undefined;
               return (
                 <div key={p.id} style={{ display: "flex", alignItems: "stretch", background: "#fff", borderRadius: 8, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", borderLeft: "3px solid #1A3A5C", overflow: "hidden" }}>
                   {isPC ? (
@@ -432,10 +439,14 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
                       <div style={{ width: 34, flex: "none", textAlign: "right", fontSize: 11, color: rc ? "#6B7280" : "#D1D5DB", whiteSpace: "nowrap" }}>📸 {rc}</div>
                       <div style={{ width: 110, flex: "none", textAlign: "right", fontSize: 13, fontWeight: 800, color: "#E07B39" }}>{fmt(p.amount)}</div>
                       <div style={{ width: 86, flex: "none", textAlign: "right", fontSize: 12, fontWeight: 700, color: "#059669", whiteSpace: "nowrap" }}>{gp ? `粗利率 ${gp}%` : "—"}</div>
+                      <div title={touchedTitle} style={{ width: 54, flex: "none", textAlign: "right", fontSize: 10, color: "#9CA3AF", whiteSpace: "nowrap" }}>{touchedLabel}</div>
                     </div>
                   ) : (
                     <div onClick={() => setSelP(p)} style={{ flex: 1, minWidth: 0, padding: "8px 12px", cursor: "pointer" }}>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: "#1F2937", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6 }}>
+                        <div style={{ flex: 1, minWidth: 0, fontWeight: 700, fontSize: 13, color: "#1F2937", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+                        <div title={touchedTitle} style={{ flex: "none", fontSize: 10, color: "#9CA3AF", whiteSpace: "nowrap" }}>{touchedLabel}</div>
+                      </div>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, marginTop: 2 }}>
                         <div style={{ flex: 1, minWidth: 0, fontSize: 11, color: "#6B7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{clientLabel}</div>
                         <div style={{ flex: "none", display: "flex", gap: 5, alignItems: "baseline", whiteSpace: "nowrap" }}>

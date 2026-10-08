@@ -118,7 +118,7 @@ export default function App() {
   const loadAll = async () => {
     setLoading(true);
     const [pjRes, coRes, tkRes, ffRes, foldRes, hsRes, linksRes, tmplRes, bpRes, bcRes, callsRes, srRes, brRes, wqRes, sqRes] = await Promise.all([
-      supabase.from("projects").select("*").order("created_at", { ascending: false }),
+      supabase.from("projects").select("*").order("updated_at", { ascending: false, nullsFirst: false }),
       supabase.from("companies").select("*").order("created_at", { ascending: true }),
       supabase.from("tasks").select("*").order("created_at", { ascending: false }),
      supabase.from("finance_files").select("id,item_id,year,month,name,type,size,url,path,created_at").order("created_at", { ascending: false }),

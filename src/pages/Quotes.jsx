@@ -175,7 +175,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
     if (target?.status === "won") {
       try {
         const projectPatch = await recalcProjectTotals(supabase, quoteProjectId);
-        setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch } : p));
+        setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch, updated_at: new Date().toISOString() } : p));
       } catch (e) { alert(e.message); }
     }
   };
@@ -228,7 +228,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
       setConf(null);
       try {
         const projectPatch = await adoptQuoteInDb(supabase, { quoteId: quote.id, projectId: quoteProjectId, gp, completedOn });
-        setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch } : p));
+        setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch, updated_at: new Date().toISOString() } : p));
         upsertWonQuote(quote.id, { project_id: quoteProjectId, total_amount: quote.total_amount || 0, gross_profit: Math.round(gp), completed_on: completedOn });
         removeSubmittedQuote(quote.id);
       } catch (e) { alert(e.message); }
@@ -241,7 +241,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
       setConf(null);
       try {
         const projectPatch = await unadoptQuoteInDb(supabase, { quoteId: quote.id, projectId: quoteProjectId });
-        setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch } : p));
+        setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch, updated_at: new Date().toISOString() } : p));
         removeWonQuote(quote.id);
         upsertSubmittedQuote(quote.id, { project_id: quoteProjectId });
       } catch (e) { alert(e.message); }
@@ -356,11 +356,11 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
     try {
       if (adopt) {
         const projectPatch = await adoptQuoteInDb(supabase, { quoteId, projectId: quoteProjectId, gp, completedOn });
-        setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch } : p));
+        setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch, updated_at: new Date().toISOString() } : p));
         upsertWonQuote(quoteId, { project_id: quoteProjectId, total_amount: Math.round(total), gross_profit: Math.round(gp), completed_on: completedOn });
       } else if (unadopt) {
         const projectPatch = await unadoptQuoteInDb(supabase, { quoteId, projectId: quoteProjectId });
-        setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch } : p));
+        setPjs(prev => prev.map(p => p.id === quoteProjectId ? { ...p, ...projectPatch, updated_at: new Date().toISOString() } : p));
         removeWonQuote(quoteId);
       }
       // 見積の最終的な状態(ed.status)にあわせて、未発注(submittedQuotes)側も同期する。
