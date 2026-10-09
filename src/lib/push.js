@@ -1,8 +1,9 @@
-// ウェブプッシュ通知の土台(第8弾テーマ26-2)。
-// この段階ではサービスワーカーの登録・通知許可・ローカルでのテスト表示のみを行う。
-// サーバーへのsubscribe送信・DB保存は次のステップ(26-3)で行う。
+// ウェブプッシュ通知の土台(第8弾テーマ26-2・26-3)。
+// サービスワーカーの登録・通知許可・ローカルでのテスト表示に加え、
+// 端末の登録(api/push-subscribe.js への送信)・登録状態の確認を行う。
+// 登録はセルフサービスで誰でもできるが、サーバー側で必ずenabled=falseで保存され、
+// 管理者がONにするまで通知は届かない(push_subscriptionsはanonから直接触れない設計)。
 
-// 次のステップ(26-3)でpushManager.subscribe()に使う予定。今回はまだ使用しない。
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || "";
 
 export function getVapidPublicKey() {
@@ -78,4 +79,101 @@ export async function showTestNotification() {
     badge: "/logo192.png",
     data: { url: "/" },
   });
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
+function arrayBufferToBase64Url(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+  return window.btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+// 端末の判別用ラベル(管理者の一覧で「誰のどの端末か」が分かるようにするための参考情報)
+export function getDeviceLabel() {
+  const ua = navigator.userAgent || "";
+  if (/ipad/i.test(ua)) return "iPad";
+  if (/iphone|ipod/i.test(ua)) return "iPhone";
+  if (/android/i.test(ua)) return "Android";
+  if (/macintosh/i.test(ua)) return "PC(Mac)";
+  if (/windows/i.test(ua)) return "PC(Windows)";
+  return "PC";
+}
+
+async function getOrCreateSubscription(registration) {
+  let sub = await registration.pushManager.getSubscription();
+  if (!sub) {
+    if (!VAPID_PUBLIC_KEY) {
+      throw new Error("通知の設定(VAPID公開鍵)が未設定です");
+    }
+    sub = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    });
+  }
+  return sub;
+}
+
+// 通知の許可・サービスワーカー登録・購読(subscribe)・サーバーへの登録を一気に行う。
+// サーバー側は必ずenabled=falseで保存するため、ここでONにはならない。
+export async function registerForPush(staffName) {
+  if (!staffName) {
+    throw new Error("お名前を選んでください");
+  }
+
+  const registration = await requestPermissionAndRegister();
+  const sub = await getOrCreateSubscription(registration);
+
+  const res = await fetch("/api/push-subscribe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      endpoint: sub.endpoint,
+      keys: {
+        p256dh: arrayBufferToBase64Url(sub.getKey("p256dh")),
+        auth: arrayBufferToBase64Url(sub.getKey("auth")),
+      },
+      staff_name: staffName,
+      device_label: getDeviceLabel(),
+    }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.error) {
+    throw new Error(data.error || "登録に失敗しました");
+  }
+  return data;
+}
+
+// この端末が登録済みか・管理者にONにされているかを確認する。
+// 自分のendpointだけを問い合わせるため、パスコードは不要。
+export async function checkOwnStatus() {
+  if (!isPushSupported() || Notification.permission !== "granted") {
+    return { registered: false, enabled: false };
+  }
+
+  const registration = await navigator.serviceWorker.getRegistration("/sw.js");
+  if (!registration) return { registered: false, enabled: false };
+
+  const sub = await registration.pushManager.getSubscription();
+  if (!sub) return { registered: false, enabled: false };
+
+  const res = await fetch("/api/push-subscribe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "status", endpoint: sub.endpoint }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.error) {
+    throw new Error(data.error || "確認に失敗しました");
+  }
+  return { registered: !!data.registered, enabled: !!data.enabled };
 }

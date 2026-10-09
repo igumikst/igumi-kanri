@@ -5,8 +5,9 @@ import { describeApiError } from "../lib/errorMessage";
 import {
   getPermissionState,
   getIosHint,
-  requestPermissionAndRegister,
   showTestNotification,
+  registerForPush,
+  checkOwnStatus,
 } from "../lib/push";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 
@@ -25,16 +26,25 @@ export default function LineSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
   const [tab, setTab] = useState("rules");
 
   const [pushPermission, setPushPermission] = useState("unsupported");
-  const [pushBusy, setPushBusy] = useState(false);
   const [pushTestBusy, setPushTestBusy] = useState(false);
   const [pushError, setPushError] = useState("");
   const [pushTestOk, setPushTestOk] = useState(false);
+
+  const [pushAssignees, setPushAssignees] = useState([]);
+  const [pushSelectedName, setPushSelectedName] = useState("");
+  const [pushStatus, setPushStatus] = useState(null); // { registered, enabled } | null
+  const [pushStatusLoading, setPushStatusLoading] = useState(false);
+  const [pushRegBusy, setPushRegBusy] = useState(false);
 
   useEffect(() => { loadData(); }, []);
 
   const openTab = (name) => {
     setTab(name);
-    if (name === "push") setPushPermission(getPermissionState());
+    if (name === "push") {
+      setPushPermission(getPermissionState());
+      loadPushAssignees();
+      refreshPushStatus();
+    }
   };
 
   const PUSH_STATE_LABEL = {
@@ -44,18 +54,38 @@ export default function LineSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
     denied: "拒否",
   };
 
-  const enablePush = async () => {
-    if (pushBusy) return;
-    setPushBusy(true);
+  const loadPushAssignees = async () => {
+    if (pushAssignees.length) return;
+    const { data } = await supabase.from("home_settings").select("value").eq("id", "assignee_names").single();
+    if (data?.value && Array.isArray(data.value) && data.value.length) setPushAssignees(data.value);
+    else setPushAssignees(["﨑岡", "後藤", "赤岡", "上村", "綱島", "伊藤"]);
+  };
+
+  const refreshPushStatus = async () => {
+    setPushStatusLoading(true);
+    try {
+      const status = await checkOwnStatus();
+      setPushStatus(status);
+    } catch {
+      setPushStatus(null);
+    }
+    setPushStatusLoading(false);
+  };
+
+  const registerPush = async () => {
+    if (pushRegBusy) return;
+    if (!pushSelectedName) { setPushError("お名前を選んでください"); return; }
+    setPushRegBusy(true);
     setPushError("");
     setPushTestOk(false);
     try {
-      await requestPermissionAndRegister();
+      await registerForPush(pushSelectedName);
       setPushPermission(getPermissionState());
+      await refreshPushStatus();
     } catch (e) {
-      setPushError(describeApiError(e, "通知の許可"));
+      setPushError(describeApiError(e, "通知の登録"));
     }
-    setPushBusy(false);
+    setPushRegBusy(false);
   };
 
   const testPush = async () => {
@@ -184,7 +214,7 @@ export default function LineSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
         <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
           <button style={s.tabBtn(tab === "rules")} onClick={() => setTab("rules")}>🔑 キーワード</button>
           <button style={s.tabBtn(tab === "staff")} onClick={() => openTab("staff")}>👤 スタッフ</button>
-          <button style={s.tabBtn(tab === "push")} onClick={() => openTab("push")}>🔔 プッシュ(テスト)</button>
+          <button style={s.tabBtn(tab === "push")} onClick={() => openTab("push")}>🔔 プッシュ通知</button>
         </div>
 
         {/* ── キーワードタブ ── */}
@@ -303,29 +333,37 @@ export default function LineSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
           </div>
         </>}
 
-        {/* ── プッシュ通知(テスト)タブ ── */}
+        {/* ── プッシュ通知タブ ── */}
         {tab === "push" && <>
-          <div style={{ ...s.card, background: "#EFF6FF", border: "1px solid #BFDBFE" }}>
-            <div style={{ fontSize: 13, color: "#1E40AF", lineHeight: 1.7 }}>
-              🧪 これはテスト段階の機能です。この端末だけでの表示確認で、他のスタッフやサーバーへは何も送られません。
-            </div>
-          </div>
-
           <div style={s.card}>
             <div style={s.sectionTitle}>🔔 この端末の通知状態</div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-              <span
-                style={{
-                  ...s.tag,
-                  margin: 0,
-                  background: pushPermission === "granted" ? "#DCFCE7" : pushPermission === "denied" ? "#FEE2E2" : "#F1F5F9",
-                  color: pushPermission === "granted" ? "#166534" : pushPermission === "denied" ? "#B91C1C" : "#64748B",
-                  fontWeight: 700,
-                }}
-              >
-                {PUSH_STATE_LABEL[pushPermission] || "未対応"}
-              </span>
+              {pushStatusLoading ? (
+                <span style={{ ...s.tag, margin: 0, background: "#F1F5F9", color: "#64748B", fontWeight: 700 }}>確認中...</span>
+              ) : pushStatus?.enabled ? (
+                <span style={{ ...s.tag, margin: 0, background: "#DCFCE7", color: "#166534", fontWeight: 700 }}>🔔 通知ON</span>
+              ) : pushStatus?.registered ? (
+                <span style={{ ...s.tag, margin: 0, background: "#FFF7ED", color: "#C2410C", fontWeight: 700 }}>登録済み(承認待ち)</span>
+              ) : (
+                <span
+                  style={{
+                    ...s.tag,
+                    margin: 0,
+                    background: pushPermission === "denied" ? "#FEE2E2" : "#F1F5F9",
+                    color: pushPermission === "denied" ? "#B91C1C" : "#64748B",
+                    fontWeight: 700,
+                  }}
+                >
+                  {PUSH_STATE_LABEL[pushPermission] || "未対応"}
+                </span>
+              )}
             </div>
+
+            {pushStatus?.registered && !pushStatus?.enabled && (
+              <div style={{ fontSize: 13, color: "#92400E", background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: 8, padding: "10px 12px", marginBottom: 14 }}>
+                登録しました。管理者が確認してONにするまで、通知は届きません。
+              </div>
+            )}
 
             {pushPermission === "unsupported" && (
               <div style={{ ...s.emptyText, padding: "8px 0" }}>このブラウザ・端末はプッシュ通知に対応していません</div>
@@ -343,14 +381,26 @@ export default function LineSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
               </div>
             )}
 
+            {!pushStatus?.registered && pushPermission !== "unsupported" && (
+              <>
+                <label style={s.label}>お名前</label>
+                <select style={{ ...s.select, marginBottom: 14 }} value={pushSelectedName} onChange={e => setPushSelectedName(e.target.value)}>
+                  <option value="">選んでください</option>
+                  {pushAssignees.map(name => (<option key={name} value={name}>{name}</option>))}
+                </select>
+              </>
+            )}
+
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button
-                style={{ ...s.btn, opacity: pushBusy || pushPermission === "granted" || pushPermission === "unsupported" ? 0.6 : 1 }}
-                onClick={enablePush}
-                disabled={pushBusy || pushPermission === "granted" || pushPermission === "unsupported"}
-              >
-                {pushBusy ? "確認中..." : pushPermission === "granted" ? "✓ 有効済み" : "通知を有効にする"}
-              </button>
+              {!pushStatus?.registered && (
+                <button
+                  style={{ ...s.btn, opacity: pushRegBusy || !pushSelectedName || pushPermission === "unsupported" ? 0.6 : 1 }}
+                  onClick={registerPush}
+                  disabled={pushRegBusy || !pushSelectedName || pushPermission === "unsupported"}
+                >
+                  {pushRegBusy ? "登録中..." : "通知を有効にする"}
+                </button>
+              )}
               <button
                 style={{ ...s.btnSm, opacity: pushTestBusy || pushPermission !== "granted" ? 0.6 : 1 }}
                 onClick={testPush}
@@ -358,6 +408,9 @@ export default function LineSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
               >
                 {pushTestBusy ? "表示中..." : "テスト通知を表示する"}
               </button>
+            </div>
+            <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 8 }}>
+              「テスト通知を表示する」は、この端末だけの表示確認です。サーバーからの通知ではありません。
             </div>
 
             {pushTestOk && (
@@ -377,7 +430,7 @@ export default function LineSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
 
           <div style={{ ...s.card, background: "#F8FAFC", border: "1px solid #E2E8F0" }}>
             <div style={{ fontSize: 13, color: "#64748B", lineHeight: 1.7 }}>
-              ℹ️ サーバーから各スタッフの端末に通知を送る機能(名前の登録・一覧管理)は、次のステップで追加予定です。
+              ℹ️ 登録した端末をON/OFFする管理画面は、次のステップで追加予定です。
             </div>
           </div>
         </>}
