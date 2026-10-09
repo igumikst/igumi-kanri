@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
-import { Modal, Inp } from "../components/UI";
+import { Modal, Inp, LineIcon } from "../components/UI";
 import AiAssistModal from "../components/AiAssistModal";
 import { supabase } from "../lib/supabase";
 import { HOMEPAGE_URL, BLOG_LIST_URL, PROJECT_STATS_SINCE, STORAGE_LIMIT_MB } from "../lib/constants";
@@ -808,7 +808,7 @@ export default function Home({ pjs, submittedQuotes, wonQuotes, cos, tks, links,
             <button key={t.key} onClick={() => handleTileClick(t)}
               style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "13px 18px", background: "none", border: "none", borderBottom: i < arr.length - 1 ? "1px solid #F3F4F6" : "none", cursor: "pointer", textAlign: "left" }}>
               <div style={{ width: 4, height: 36, borderRadius: 2, background: t.color, flexShrink: 0 }} />
-              <span style={{ fontSize: 22, flexShrink: 0 }}>{t.icon}</span>
+              {t.key === "linesettings" ? <LineIcon size={22} /> : <span style={{ fontSize: 22, flexShrink: 0 }}>{t.icon}</span>}
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: 14, color: "#1F2937", display: "flex", alignItems: "center", gap: 6 }}>
                   {t.label}
@@ -827,7 +827,7 @@ export default function Home({ pjs, submittedQuotes, wonQuotes, cos, tks, links,
           {tiles.map((t, i) => (
             <div key={t.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderBottom: i < tiles.length - 1 ? "1px solid #F3F4F6" : "none", opacity: t.visible ? 1 : 0.45 }}>
               <div style={{ width: 4, height: 32, borderRadius: 2, background: t.color, flexShrink: 0 }} />
-              <span style={{ fontSize: 20, flexShrink: 0 }}>{t.icon}</span>
+              {t.key === "linesettings" ? <LineIcon size={20} /> : <span style={{ fontSize: 20, flexShrink: 0 }}>{t.icon}</span>}
               <div style={{ flex: 1, fontWeight: 700, fontSize: 13, color: "#1F2937" }}>{t.label}</div>
               <div style={{ display: "flex", gap: 4 }}>
                 <button onClick={() => { const pi = tileConf.findIndex(x => x.key === t.key); if (pi > 0) { const n = [...tileConf]; [n[pi], n[pi - 1]] = [n[pi - 1], n[pi]]; saveTileConf(n); } }} style={{ background: "#F3F4F6", border: "none", borderRadius: 4, padding: "3px 8px", fontSize: 12, cursor: "pointer" }}>↑</button>

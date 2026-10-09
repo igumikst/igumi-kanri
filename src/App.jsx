@@ -20,6 +20,7 @@ import AutoEdit from "./pages/AutoEdit";
 import CallsPage from "./pages/CallsPage";
 import BlockedNumbers from "./pages/BlockedNumbers";
 import LineSettings from "./pages/LineSettings";
+import Settings from "./pages/Settings";
 import SystemManual from "./pages/SystemManual";
 import UserManual from "./pages/UserManual";
 import Schedule from "./pages/Schedule";
@@ -221,6 +222,7 @@ export default function App() {
   if (page === "calls") return <CallsPage {...commonProps} calls={calls} setCalls={setCalls} />;
   if (page === "blocked-numbers") return <BlockedNumbers {...commonProps} />;
   if (page === "linesettings") return <LineSettings {...commonProps} />;
+  if (page === "settings") return <Settings {...commonProps} />;
   if (page === "systemmanual") return <SystemManual {...commonProps} />;
   if (page === "usermanual") return <UserManual {...commonProps} />;
   if (page === "schedule") return <Schedule nav={nav} />;

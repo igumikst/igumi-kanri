@@ -1,5 +1,12 @@
 import { STATUS_STYLE } from "../lib/constants";
 
+// LINEを連想させる、自作のシンプルな吹き出しSVGアイコン(公式ロゴは使用しない)
+export const LineIcon = ({ size = 20, style }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0, ...style }}>
+    <path d="M12 3.5c-5.25 0-9.5 3.36-9.5 7.5 0 2.49 1.52 4.7 3.86 6.06-.14.74-.5 1.9-.66 2.37a.4.4 0 00.56.49c.9-.42 2.2-1.1 2.95-1.5.88.17 1.8.26 2.79.26 5.25 0 9.5-3.36 9.5-7.5S17.25 3.5 12 3.5Z" fill="#22C55E" />
+  </svg>
+);
+
 export const Badge = ({s}) => { const st=STATUS_STYLE[s]||STATUS_STYLE["見積中"]; return <span style={{background:st.bg,color:st.text,border:`1px solid ${st.border}`,borderRadius:6,padding:"2px 9px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{s}</span>; };
 
 export const Inp = ({label,...p}) => (<div style={{marginBottom:10}}>{label&&<div style={{fontSize:11,color:"#6B7280",marginBottom:3}}>{label}</div>}<input {...p} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",fontSize:13,background:"#FAFAFA",boxSizing:"border-box",outline:"none",color:"#1F2937"}}/></div>);
