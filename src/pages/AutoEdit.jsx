@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Hdr } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
+import { describeApiError } from "../lib/errorMessage";
 
 const AE_PIN = "0430";
 
@@ -29,9 +30,9 @@ export default function AutoEdit({ pjs, submittedQuotes, wonQuotes, cos, tks, li
       const res = await fetch('/api/auto-edit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ instruction }) });
       const data = await res.json();
       if (data.success) { setAeResult({ ok: true, msg: data.message }); setAeHistory(prev => prev.map((h, i) => i === 0 ? { ...h, status: "✅ 完了" } : h)); setAeInput(""); }
-      else { setAeResult({ ok: false, msg: data.error }); setAeHistory(prev => prev.map((h, i) => i === 0 ? { ...h, status: "❌ エラー" } : h)); }
+      else { setAeResult({ ok: false, msg: describeApiError(data.error, "自動修正の実行") }); setAeHistory(prev => prev.map((h, i) => i === 0 ? { ...h, status: "❌ エラー" } : h)); }
     } catch (e) {
-      setAeResult({ ok: false, msg: "通信エラーが発生しました" });
+      setAeResult({ ok: false, msg: describeApiError(e, "自動修正の実行") });
       setAeHistory(prev => prev.map((h, i) => i === 0 ? { ...h, status: "❌ エラー" } : h));
     }
     setAeLoading(false);
@@ -77,7 +78,15 @@ export default function AutoEdit({ pjs, submittedQuotes, wonQuotes, cos, tks, li
           </button>
         </div>
         {aeResult && <div style={{ background: aeResult.ok ? "#F0FDF4" : "#FEF2F2", border: `1.5px solid ${aeResult.ok ? "#BBF7D0" : "#FECACA"}`, borderRadius: 12, padding: "14px 16px", marginBottom: 14 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: aeResult.ok ? "#166534" : "#DC2626" }}>{aeResult.msg}</div>
+          {(() => {
+            const [summary, detail] = aeResult.msg.split("\n\n詳細: ");
+            return (
+              <>
+                <div style={{ fontSize: 14, fontWeight: 700, color: aeResult.ok ? "#166534" : "#DC2626", whiteSpace: "pre-wrap" }}>{summary}</div>
+                {detail && <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 6 }}>詳細: {detail}</div>}
+              </>
+            );
+          })()}
         </div>}
         <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
           <div style={{ fontWeight: 800, fontSize: 14, color: "#1A3A5C", marginBottom: 12 }}>💬 指示の例</div>

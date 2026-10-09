@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { describeApiError } from "../lib/errorMessage";
 
 const MENTOR_COLOR = "#1a56a0";
 const REVIEW_COLOR = "#22a06b";
@@ -71,13 +72,13 @@ export default function AiAssistModal({ mode, context, onClose }) {
       const data = await res.json();
 
       if (!res.ok || data.error) {
-        setError(data.error || "送信に失敗しました");
+        setError(data.error ? describeApiError(data.error, "送信") : "送信に失敗しました");
         return;
       }
 
       setMessages((prev) => [...prev, { role: "assistant", content: data.text }]);
-    } catch (_) {
-      setError("通信エラーが発生しました。もう一度お試しください。");
+    } catch (e) {
+      setError(describeApiError(e, "送信"));
     } finally {
       setLoading(false);
     }
@@ -185,11 +186,15 @@ export default function AiAssistModal({ mode, context, onClose }) {
           )}
         </div>
 
-        {error && (
-          <div style={{ padding: "8px 16px", background: "#fef2f2", color: "#dc2626", fontSize: 12, flexShrink: 0 }}>
-            {error}
-          </div>
-        )}
+        {error && (() => {
+          const [summary, detail] = error.split("\n\n詳細: ");
+          return (
+            <div style={{ padding: "8px 16px", background: "#fef2f2", flexShrink: 0 }}>
+              <div style={{ color: "#dc2626", fontSize: 12, whiteSpace: "pre-wrap" }}>{summary}</div>
+              {detail && <div style={{ color: "#9ca3af", fontSize: 11, marginTop: 4 }}>詳細: {detail}</div>}
+            </div>
+          );
+        })()}
 
         <div
           style={{

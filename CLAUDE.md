@@ -52,7 +52,7 @@ Supabase tables used:
 - `recording.js` / `recording-proxy.js` — Twilio voice call recording
 - `transcribe.js` — speech-to-text via OpenAI Whisper
 - `analyze.js` — call transcript analysis via **Claude** (Anthropic API), Supabase registration, and LINE push notification
-- `chat.js` — proxy to OpenAI Chat Completions (used by AiAssistModal)
+- `chat.js` — proxy to OpenAI Chat Completions (currently unused; AiAssistModal actually calls `ai-assist.js`, which uses the Claude API)
 - `voice.js` — Twilio TwiML response
 - `pipeline.js` — orchestrates voice → transcribe → analyze flow
 - `linegroup.js` — LINE group messaging

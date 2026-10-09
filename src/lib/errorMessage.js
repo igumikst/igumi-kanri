@@ -52,3 +52,19 @@ export function describeError(error, action) {
   const prefix = action ? `${action}に失敗しました。` : "";
   return `${prefix}${reason}\n${how}\n\n詳細: ${message}`;
 }
+
+/**
+ * describeError()と同じ3段の文を、通信(fetch)・外部APIからの生エラー向けに作る
+ * (第8弾テーマ14・段階5-A)。Postgresのエラーコードは前提にせず、メッセージ文字列だけで
+ * 判定する。英語の生メッセージ(「Method not allowed」やAPI側のエラー文など)が来ても、
+ * 先頭は必ず日本語の説明にし、元の文字列は「詳細」としてそのまま残す。
+ * @param {unknown} error - fetchの例外、またはAPIが返したエラー文字列
+ * @param {string} [action] - 何をしようとしていたか(例: "送信"・"自動修正の実行")。省略可
+ * @returns {string} describeError()と同じ形の、①何が起きたか②どうすればいいか③詳細の文字列
+ */
+export function describeApiError(error, action) {
+  const message = (error && (error.message || error.error_description)) || String(error ?? "") || "不明なエラー";
+  const { reason, how } = reasonFromMessage(message) || { reason: "操作が正しく完了しませんでした。", how: "もう一度お試しください。改善しない場合は、下の詳細を伝えてください。" };
+  const prefix = action ? `${action}に失敗しました。` : "";
+  return `${prefix}${reason}\n${how}\n\n詳細: ${message}`;
+}
