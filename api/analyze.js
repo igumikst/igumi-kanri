@@ -194,6 +194,15 @@ async function registerToSupabase({ caseNumber, analysis, transcript, recordingU
 }
 
 async function sendLineNotification({ caseNumber, analysis, fromNumber, isSalesSuspect }) {
+  if (isSalesSuspect) {
+    const resolvedPhone = (analysis.phone_number && String(analysis.phone_number).trim())
+      ? String(analysis.phone_number).trim()
+      : (fromNumber || "");
+    const last4 = resolvedPhone.slice(-4) || "----";
+    console.log(`[analyze] 迷惑電話リストの番号のため、LINE通知をスキップ (下4桁: ${last4})`);
+    return;
+  }
+
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   if (!token) {
     console.warn("[analyze] LINE credentials missing – skipping notification");
