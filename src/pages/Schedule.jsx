@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
+import { describeError } from "../lib/errorMessage";
 
 const STAFF = ["崎岡", "後藤", "赤岡", "上村", "綱島", "伊藤"];
 
@@ -138,6 +139,7 @@ export default function Schedule({ nav }) {
   const [schedules, setSchedules] = useState([]);
   const [cybozuEvents, setCybozuEvents] = useState([]);
   const [cybozuError, setCybozuError] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [subcontractors, setSubcontractors] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -169,23 +171,28 @@ export default function Schedule({ nav }) {
   async function fetchAll() {
     setLoading(true);
     setCybozuError("");
-    const [{ data: sc }, { data: sub }, { data: hs }, cybozuRes] = await Promise.all([
+    setLoadError("");
+    const [scRes, subRes, hsRes, cybozuRes] = await Promise.all([
       supabase.from("schedules").select("*").order("start_at"),
       supabase.from("subcontractors").select("*").order("name"),
       supabase.from("home_settings").select("*").eq("id", "schedule_members"),
       fetch("/api/cybozu-calendar").then(r => r.json()).catch(() => ({ events: [], error: "fetch failed" })),
     ]);
-    setSchedules(sc || []);
-    setSubcontractors(sub || []);
-    if (hs && hs[0]?.value) setCustomMembers(hs[0].value);
+    // 読み込みに失敗したものは、表示中のデータを空で上書きしない(今まで見えていたものをそのまま残す)
+    if (scRes.error || subRes.error || hsRes.error) setLoadError("読み込みに失敗しました。再読み込みしてください");
+    if (!scRes.error) setSchedules(scRes.data || []);
+    if (!subRes.error) setSubcontractors(subRes.data || []);
+    if (!hsRes.error && hsRes.data?.[0]?.value) setCustomMembers(hsRes.data[0].value);
     setCybozuEvents(Array.isArray(cybozuRes?.events) ? cybozuRes.events : []);
     if (cybozuRes?.error && !(cybozuRes.events?.length)) setCybozuError("サイボウズ予定の取得に失敗しました");
     setLoading(false);
   }
 
   async function saveMembers(list) {
+    const prev = customMembers;
     setCustomMembers(list);
-    await supabase.from("home_settings").upsert({ id: "schedule_members", value: list });
+    const { error } = await supabase.from("home_settings").upsert({ id: "schedule_members", value: list });
+    if (error) { setCustomMembers(prev); alert(describeError(error, "メンバーの保存")); }
   }
 
   async function handleSave() {
@@ -199,29 +206,38 @@ export default function Schedule({ nav }) {
       memo: form.memo,
       location: form.contractors.length > 0 ? `対応：${form.contractors.join("・")}` : "",
     };
-    if (editItem) { await supabase.from("schedules").update(payload).eq("id", editItem.id); }
-    else { await supabase.from("schedules").insert([payload]); }
+    const { error } = editItem
+      ? await supabase.from("schedules").update(payload).eq("id", editItem.id)
+      : await supabase.from("schedules").insert([payload]);
+    // 失敗したときは、入力画面を閉じない(入力した内容を残して、もう一度保存できるようにする)
+    if (error) { alert(describeError(error, "予定の保存")); return; }
     setShowModal(false); setEditItem(null); setForm(emptyForm); fetchAll();
   }
 
   async function handleDelete(id) {
     if (!confirm("この予定を削除しますか？")) return;
-    await supabase.from("schedules").delete().eq("id", id);
+    const { error } = await supabase.from("schedules").delete().eq("id", id);
+    if (error) { alert(describeError(error, "予定の削除")); return; }
     setShowModal(false); fetchAll();
   }
 
   async function addSubcontractor() {
     if (!newSubName.trim()) return;
-    await supabase.from("subcontractors").insert([{ name: newSubName.trim() }]);
+    const { error } = await supabase.from("subcontractors").insert([{ name: newSubName.trim() }]);
+    // 失敗したときは、入力した名前を消さない(もう一度「追加」を押せるようにする)
+    if (error) { alert(describeError(error, "協力業者の追加")); return; }
     setNewSubName("");
-    const { data } = await supabase.from("subcontractors").select("*").order("name");
+    const { data, error: selErr } = await supabase.from("subcontractors").select("*").order("name");
+    if (selErr) { alert(describeError(selErr, "協力業者一覧の取得")); return; }
     setSubcontractors(data || []);
   }
 
   async function deleteSubcontractor(id) {
     if (!confirm("削除しますか？")) return;
-    await supabase.from("subcontractors").delete().eq("id", id);
-    const { data } = await supabase.from("subcontractors").select("*").order("name");
+    const { error } = await supabase.from("subcontractors").delete().eq("id", id);
+    if (error) { alert(describeError(error, "協力業者の削除")); return; }
+    const { data, error: selErr } = await supabase.from("subcontractors").select("*").order("name");
+    if (selErr) { alert(describeError(selErr, "協力業者一覧の取得")); return; }
     setSubcontractors(data || []);
   }
 
@@ -340,6 +356,13 @@ export default function Schedule({ nav }) {
           <button onClick={() => setShowSubModal(true)} style={headerBtnStyle}>🏢</button>
         </div>
       </div>
+
+      {/* 予定・業者・メンバーの読み込み失敗(第8弾テーマ14・段階5-B)。表示中のデータはそのまま残す */}
+      {loadError && (
+        <div style={{ background: "#fef2f2", borderBottom: "1px solid #fecaca", padding: "6px 12px", fontSize: 11, color: "#dc2626", fontWeight: 700 }}>
+          ⚠️ {loadError}
+        </div>
+      )}
 
       {/* サイボウズ連携バナー */}
       <div style={{ background: "#ecfdf5", borderBottom: "1px solid #a7f3d0", padding: "6px 12px", display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "#065f46" }}>
