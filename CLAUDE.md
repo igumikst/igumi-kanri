@@ -80,6 +80,14 @@ DBの変更を伴う作業は、SQLを提案して実行者の確認を待って
 デプロイ後は、https://igumi-kanri.vercel.app で、トップ・案件管理・ダッシュボード・
 単価管理・取引先が開くことを確認する。
 
+### 本番データでのテスト禁止
+
+本番のDB(Supabase)に書き込む動作テスト(INSERT/UPDATE/DELETE、画面からの保存・削除を含む)は、
+ユーザーの許可なく行わない。通信失敗の再現(`window.fetch` の一時差し替えなど)は、実際には
+本番に書き込まない形でのみ行う。本番のデータを消したり変えたりしそうな操作の前には、対象の
+名前とIDを先に記録し、報告に残す。どうしても本番での書き込みテストが必要な場合は、先にユーザー
+に聞いて、許可をもらってから行う。
+
 ### Styling conventions
 
 All styles are **inline JSX style objects** — no Tailwind, no CSS modules, no styled-components. Brand colors come from `DEFAULT_CUST` in constants: navy `#1A3A5C`, accent orange `#E07B39`, link blue `#2563EB`. The font stack is `'Hiragino Sans','Yu Gothic',sans-serif`.
