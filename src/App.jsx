@@ -32,7 +32,11 @@ import QuoteImport from "./pages/QuoteImport";
 import PriceAdmin from "./pages/PriceAdmin";
 
 export default function App() {
-  const [page, setPage] = useState(() => consumeResumePage() || "home");
+  // アプリを開いた直後だけ、PC(isPCと同じ判定。768px以上)なら案件管理から始める(第8弾テーマ24)。
+  // tel:発信からの復帰(consumeResumePage)があれば、それを優先する。
+  // この初期値はuseStateの初期化関数として一度だけ評価されるため、画面幅を後で変えても
+  // 再評価されない(ユーザーがnav("home")を選んだ後に勝手にページが切り替わることもない)
+  const [page, setPage] = useState(() => consumeResumePage() || (window.innerWidth >= 768 ? "projects" : "home"));
   const [cos, setCos] = useState([]);
   const [pjs, setPjs] = useState([]);
   const [tks, setTks] = useState([]);
