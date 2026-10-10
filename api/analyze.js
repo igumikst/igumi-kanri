@@ -1,5 +1,7 @@
+/* global require, module, process, Buffer */
 // /api/analyze.js
 const { createClient } = require("@supabase/supabase-js");
+const { ensureVapidConfigured, sendPushToOne } = require("./_pushLib");
 
 function isUsablePhoneNumber(num) {
   if (!num || typeof num !== "string") return false;
@@ -86,6 +88,10 @@ async function analyzeAndRegister({ transcript, recordingUrl, callSid, fromNumbe
 
   await sendLineNotification({ caseNumber, analysis, fromNumber, isSalesSuspect });
   console.log("[analyze] LINE notification sent");
+
+  await sendPushNotifications({ caseNumber, analysis, fromNumber, isSalesSuspect }).catch(err => {
+    console.warn("[analyze] Push notification failed:", err.message);
+  });
 
   return call;
 }
@@ -312,6 +318,52 @@ async function sendLineNotification({ caseNumber, analysis, fromNumber, isSalesS
       console.log(`[analyze] LINE notification sent to ${userId}`);
     }
   }
+}
+
+// プッシュ通知(第8弾テーマ26-5)。LINEとは別の通知経路として並行運用する。
+// 宛先は、キーワードの宛先ルールを使わず、enabled=trueの端末すべて。
+// 失敗してもcalls登録・LINE通知を止めないよう、呼び出し元で必ず.catch()されることを前提にする。
+async function sendPushNotifications({ caseNumber, analysis, isSalesSuspect }) {
+  if (isSalesSuspect) {
+    console.log("[analyze] 迷惑電話リストの番号のため、プッシュ通知をスキップ");
+    return;
+  }
+
+  const supabase = getSupabase();
+  const { data: subs, error } = await supabase
+    .from("push_subscriptions")
+    .select("id, endpoint, p256dh, auth")
+    .eq("enabled", true);
+  if (error) throw error;
+  if (!subs || subs.length === 0) {
+    console.log("[analyze] プッシュ通知の宛先(ON端末)がないためスキップ");
+    return;
+  }
+
+  ensureVapidConfigured();
+
+  const isUrgent = analysis.urgency === "緊急";
+  const payload = {
+    title: isUrgent ? "🚨 緊急案件" : "⚡ 新規案件",
+    body: [
+      analysis.company_name || "会社名不明",
+      analysis.case_type || "その他",
+      analysis.property_name || "物件名不明",
+    ].join(" / "),
+    url: "/",
+  };
+  const options = {
+    TTL: 60 * 60,
+    urgency: isUrgent ? "high" : "normal",
+    timeout: 8000,
+  };
+  const deactivate = async (id) => {
+    await supabase.from("push_subscriptions").update({ enabled: false, updated_at: new Date().toISOString() }).eq("id", id);
+  };
+
+  const results = await Promise.allSettled(subs.map(sub => sendPushToOne(sub, payload, options, deactivate)));
+  const okCount = results.filter(r => r.status === "fulfilled" && r.value?.success).length;
+  console.log(`[analyze] プッシュ通知: ${okCount}/${subs.length} 件送信 (案件番号: ${caseNumber})`);
 }
 
 let _supabase = null;
