@@ -3,7 +3,17 @@
 // プッシュ通知の宛先管理(管理者専用)。一覧取得・ON/OFF切替・削除・テスト送信を行う。
 // home_settingsのfinance_passwordとパスコードを照合し、一致しなければ403にする。
 const { createClient } = require("@supabase/supabase-js");
-const webpush = require("web-push");
+
+let webpush = null;
+let webpushLoadError = null;
+try {
+  webpush = require("web-push");
+} catch (err) {
+  webpushLoadError = err;
+}
+
+// 画面・ログに出してよい「原因の種類」だけを運ぶエラー。秘密鍵・endpoint・鍵の値は含めない。
+class PushAdminError extends Error {}
 
 let _supabase = null;
 function getSupabase() {
@@ -58,14 +68,32 @@ async function verifyPasscode(passcode) {
   return typeof passcode === "string" && passcode === saved;
 }
 
+// 前後の空白・改行・引用符を取り除く(Vercelの環境変数への貼り付け時の混入対策)
+function cleanEnvValue(v) {
+  if (typeof v !== "string") return "";
+  return v.trim().replace(/^['"]+|['"]+$/g, "").trim();
+}
+
 function ensureVapidConfigured() {
-  const subject = process.env.VAPID_SUBJECT;
-  const publicKey = process.env.VITE_VAPID_PUBLIC_KEY;
-  const privateKey = process.env.VAPID_PRIVATE_KEY;
-  if (!subject || !publicKey || !privateKey) {
-    throw new Error("通知の送信設定(VAPID)が未設定です");
+  if (webpushLoadError) {
+    throw new PushAdminError("web-pushの読み込みに失敗しました(サーバー側の設定を確認してください)");
   }
-  webpush.setVapidDetails(subject, publicKey, privateKey);
+
+  const subject = cleanEnvValue(process.env.VAPID_SUBJECT);
+  const publicKey = cleanEnvValue(process.env.VITE_VAPID_PUBLIC_KEY);
+  const privateKey = cleanEnvValue(process.env.VAPID_PRIVATE_KEY);
+
+  if (!subject || !publicKey || !privateKey) {
+    throw new PushAdminError("VAPID未設定(VAPID_PRIVATE_KEY・VITE_VAPID_PUBLIC_KEY・VAPID_SUBJECTのいずれかが空です)");
+  }
+  if (!/^(mailto:|https:)/i.test(subject)) {
+    throw new PushAdminError("VAPID連絡先の形式エラー(VAPID_SUBJECTはmailto:またはhttps:で始まる必要があります)");
+  }
+  try {
+    webpush.setVapidDetails(subject, publicKey, privateKey);
+  } catch {
+    throw new PushAdminError("VAPID鍵の形式エラー(公開鍵・秘密鍵の値に余分な文字が混ざっていないか確認してください)");
+  }
 }
 
 // 1件へテスト送信する。410/404(端末が無効)はenabled=falseに戻す。
@@ -87,10 +115,14 @@ async function sendTestToOne(sub) {
         .from("push_subscriptions")
         .update({ enabled: false, updated_at: new Date().toISOString() })
         .eq("id", sub.id);
-      return { id: sub.id, success: false, deactivated: true, error: "この端末は無効になりました(再登録が必要です)" };
+      return { id: sub.id, success: false, deactivated: true, error: `送信先が無効でした(ステータス: ${statusCode})。端末を無効にしました` };
     }
-    console.error("[push-admin] send error:", err?.message || err);
-    return { id: sub.id, success: false, deactivated: false, error: "送信に失敗しました" };
+    if (typeof statusCode === "number") {
+      console.error("[push-admin] send error status:", statusCode);
+      return { id: sub.id, success: false, deactivated: false, error: `送信先がエラーを返しました(ステータス: ${statusCode})` };
+    }
+    console.error("[push-admin] send error category:", err?.name || "unknown");
+    return { id: sub.id, success: false, deactivated: false, error: "送信できませんでした(その他のエラー)" };
   }
 }
 
@@ -172,7 +204,13 @@ module.exports = async (req, res) => {
 
     return res.status(200).json({ ok: true, subscriptions: data || [] });
   } catch (err) {
+    if (err instanceof PushAdminError) {
+      // あらかじめ安全な日本語文だけを用意したエラー。種類をそのまま画面に返してよい。
+      console.error("[push-admin] push admin error:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    // それ以外(DBエラー等)は、生のメッセージを画面には出さない。
     console.error("[push-admin] error:", err.message);
-    return res.status(500).json({ error: err.message === "通知の送信設定(VAPID)が未設定です" ? err.message : "操作に失敗しました" });
+    return res.status(500).json({ error: "操作に失敗しました" });
   }
 };

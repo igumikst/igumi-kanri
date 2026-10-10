@@ -11,6 +11,32 @@ import {
 } from "../lib/push";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 
+// 左右に動くスイッチ型のON/OFF(第8弾テーマ26-4b)。ボタンの文字を「次の操作」にすると
+// ONの人に「OFF」と表示されて分かりづらいため、状態そのものを見せる形にする。
+const ToggleSwitch = ({ checked, onClick, disabled }) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    style={{
+      width: 44, height: 24, borderRadius: 12, border: "none", padding: 2,
+      background: checked ? "#059669" : "#CBD5E1",
+      cursor: disabled ? "default" : "pointer",
+      opacity: disabled ? 0.6 : 1,
+      flexShrink: 0,
+      transition: "background 0.15s",
+    }}
+  >
+    <span
+      style={{
+        display: "block", width: 20, height: 20, borderRadius: "50%", background: "#fff",
+        transform: checked ? "translateX(20px)" : "translateX(0)",
+        transition: "transform 0.15s",
+        boxShadow: "0 1px 2px rgba(0,0,0,0.25)",
+      }}
+    />
+  </button>
+);
+
 export default function LineSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_W, cust, pjs, submittedQuotes, wonQuotes, cos, tks, finFiles, tmplFiles, tileConf }) {
   const [rules, setRules] = useState([]);
   const [staffList, setStaffList] = useState([]);
@@ -22,6 +48,7 @@ export default function LineSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
   const [editRuleId, setEditRuleId] = useState(null);
   const [editStaffId, setEditStaffId] = useState(null);
   const [editStaffName, setEditStaffName] = useState("");
+  const [staffRowMsg, setStaffRowMsg] = useState({});
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("rules");
 
@@ -141,11 +168,11 @@ export default function LineSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
       const result = (data.results || [])[0];
       if (result?.success) {
         setRowMsg(id, "✅ 送信しました");
-      } else if (result?.deactivated) {
-        setAdminList(prev => prev.map(r => r.id === id ? { ...r, enabled: false } : r));
-        setRowMsg(id, "⚠️ 端末が無効になりました(再登録が必要です)");
       } else {
-        setRowMsg(id, "❌ 送信に失敗しました");
+        if (result?.deactivated) {
+          setAdminList(prev => prev.map(r => r.id === id ? { ...r, enabled: false } : r));
+        }
+        setRowMsg(id, `❌ ${result?.error || "送信に失敗しました"}`);
       }
     } catch (e) {
       if (e.status === 403) { setAdminUnlocked(false); setAdminPasscode(""); }
@@ -269,7 +296,10 @@ export default function LineSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
   };
 
   const toggleStaffActive = async (id) => {
+    const target = staffList.find(s => s.id === id);
+    const nextActive = !(target?.active !== false);
     await saveStaff(staffList.map(s => s.id === id ? { ...s, active: !s.active } : s));
+    setStaffRowMsg(prev => ({ ...prev, [id]: nextActive ? "✅ ONにしました" : "OFFにしました" }));
   };
 
   const deleteStaff = async (id) => {
@@ -420,14 +450,20 @@ export default function LineSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
                     <>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 700, fontSize: 15, color: staff.active === false ? "#94A3B8" : "#1F2937" }}>
-                          {staff.active === false ? "🔕 " : "🔔 "}{staff.name}
+                          {staff.name}
                         </div>
                         <div style={{ fontSize: 11, color: "#94A3B8" }}>ID: {staff.id.slice(0, 10)}...</div>
+                        {staffRowMsg[staff.id] && (
+                          <div style={{ fontSize: 11, color: "#374151", marginTop: 4 }}>{staffRowMsg[staff.id]}</div>
+                        )}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <ToggleSwitch checked={staff.active !== false} onClick={() => toggleStaffActive(staff.id)} />
+                        <span style={{ fontSize: 11, fontWeight: 700, color: staff.active !== false ? "#059669" : "#94A3B8", whiteSpace: "nowrap" }}>
+                          {staff.active !== false ? "通知ON" : "通知OFF"}
+                        </span>
                       </div>
                       <button style={s.btnGray} onClick={() => { setEditStaffId(staff.id); setEditStaffName(staff.name); }}>名前変更</button>
-                      <button style={{ ...s.btnSm, background: staff.active === false ? "#059669" : "#F59E0B" }} onClick={() => toggleStaffActive(staff.id)}>
-                        {staff.active === false ? "ON" : "OFF"}
-                      </button>
                       <button style={s.btnDanger} onClick={() => deleteStaff(staff.id)}>削除</button>
                     </>
                   )}
@@ -606,18 +642,14 @@ export default function LineSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
                                 登録日: {d.created_at ? new Date(d.created_at).toLocaleDateString("ja-JP") : "-"}
                               </span>
                             </div>
-                            <span style={{ ...s.tag, margin: 0, background: d.enabled ? "#DCFCE7" : "#F1F5F9", color: d.enabled ? "#166534" : "#64748B", fontWeight: 700 }}>
-                              {d.enabled ? "ON" : "OFF"}
-                            </span>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <ToggleSwitch checked={!!d.enabled} onClick={() => toggleAdminDevice(d.id, !d.enabled)} disabled={adminBusyIds[d.id]} />
+                              <span style={{ fontSize: 12, fontWeight: 700, color: d.enabled ? "#059669" : "#94A3B8", whiteSpace: "nowrap" }}>
+                                {d.enabled ? "通知ON" : "通知OFF"}
+                              </span>
+                            </div>
                           </div>
                           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                            <button
-                              style={{ ...s.btnSm, background: d.enabled ? "#F59E0B" : "#059669", opacity: adminBusyIds[d.id] ? 0.6 : 1 }}
-                              onClick={() => toggleAdminDevice(d.id, !d.enabled)}
-                              disabled={adminBusyIds[d.id]}
-                            >
-                              {d.enabled ? "OFFにする" : "ONにする"}
-                            </button>
                             <button style={{ ...s.btnSm, opacity: adminBusyIds[d.id] ? 0.6 : 1 }} onClick={() => testAdminDevice(d.id)} disabled={adminBusyIds[d.id]}>
                               テスト送信
                             </button>
