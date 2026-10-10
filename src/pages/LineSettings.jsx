@@ -36,6 +36,15 @@ export default function LineSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
   const [pushStatusLoading, setPushStatusLoading] = useState(false);
   const [pushRegBusy, setPushRegBusy] = useState(false);
 
+  const [adminUnlocked, setAdminUnlocked] = useState(false);
+  const [adminPasscode, setAdminPasscode] = useState("");
+  const [adminPasscodeInput, setAdminPasscodeInput] = useState("");
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminError, setAdminError] = useState("");
+  const [adminList, setAdminList] = useState([]);
+  const [adminBusyIds, setAdminBusyIds] = useState({});
+  const [adminRowMsg, setAdminRowMsg] = useState({});
+
   useEffect(() => { loadData(); }, []);
 
   const openTab = (name) => {
@@ -45,6 +54,104 @@ export default function LineSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
       loadPushAssignees();
       refreshPushStatus();
     }
+  };
+
+  const callPushAdmin = async (passcode, body) => {
+    const res = await fetch("/api/push-admin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ passcode, ...body }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) {
+      const err = new Error(data.error || "操作に失敗しました");
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  };
+
+  const unlockAdmin = async () => {
+    if (adminLoading) return;
+    setAdminLoading(true);
+    setAdminError("");
+    try {
+      const data = await callPushAdmin(adminPasscodeInput, {});
+      setAdminList(data.subscriptions || []);
+      setAdminPasscode(adminPasscodeInput);
+      setAdminUnlocked(true);
+      setAdminPasscodeInput("");
+    } catch (e) {
+      setAdminError(describeApiError(e, "パスコードの確認"));
+    }
+    setAdminLoading(false);
+  };
+
+  const refreshAdminList = async () => {
+    try {
+      const data = await callPushAdmin(adminPasscode, {});
+      setAdminList(data.subscriptions || []);
+    } catch (e) {
+      if (e.status === 403) { setAdminUnlocked(false); setAdminPasscode(""); }
+      setAdminError(describeApiError(e, "一覧の取得"));
+    }
+  };
+
+  const setRowBusy = (id, busy) => setAdminBusyIds(prev => ({ ...prev, [id]: busy }));
+  const setRowMsg = (id, msg) => setAdminRowMsg(prev => ({ ...prev, [id]: msg }));
+
+  const toggleAdminDevice = async (id, enabled) => {
+    if (adminBusyIds[id]) return;
+    setRowBusy(id, true);
+    setAdminError("");
+    setRowMsg(id, "");
+    try {
+      await callPushAdmin(adminPasscode, { action: "toggle", id, enabled });
+      setAdminList(prev => prev.map(r => r.id === id ? { ...r, enabled } : r));
+      setRowMsg(id, enabled ? "✅ ONにしました" : "OFFにしました");
+    } catch (e) {
+      if (e.status === 403) { setAdminUnlocked(false); setAdminPasscode(""); }
+      setAdminError(describeApiError(e, "切り替え"));
+    }
+    setRowBusy(id, false);
+  };
+
+  const deleteAdminDevice = async (id) => {
+    if (adminBusyIds[id]) return;
+    if (!window.confirm("この端末をリストから削除しますか?")) return;
+    setRowBusy(id, true);
+    setAdminError("");
+    try {
+      await callPushAdmin(adminPasscode, { action: "delete", id });
+      setAdminList(prev => prev.filter(r => r.id !== id));
+    } catch (e) {
+      if (e.status === 403) { setAdminUnlocked(false); setAdminPasscode(""); }
+      setAdminError(describeApiError(e, "削除"));
+    }
+    setRowBusy(id, false);
+  };
+
+  const testAdminDevice = async (id) => {
+    if (adminBusyIds[id]) return;
+    setRowBusy(id, true);
+    setAdminError("");
+    setRowMsg(id, "");
+    try {
+      const data = await callPushAdmin(adminPasscode, { action: "test", id });
+      const result = (data.results || [])[0];
+      if (result?.success) {
+        setRowMsg(id, "✅ 送信しました");
+      } else if (result?.deactivated) {
+        setAdminList(prev => prev.map(r => r.id === id ? { ...r, enabled: false } : r));
+        setRowMsg(id, "⚠️ 端末が無効になりました(再登録が必要です)");
+      } else {
+        setRowMsg(id, "❌ 送信に失敗しました");
+      }
+    } catch (e) {
+      if (e.status === 403) { setAdminUnlocked(false); setAdminPasscode(""); }
+      setAdminError(describeApiError(e, "テスト送信"));
+    }
+    setRowBusy(id, false);
   };
 
   const PUSH_STATE_LABEL = {
@@ -215,6 +322,7 @@ export default function LineSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
           <button style={s.tabBtn(tab === "rules")} onClick={() => setTab("rules")}>🔑 キーワード</button>
           <button style={s.tabBtn(tab === "staff")} onClick={() => openTab("staff")}>👤 スタッフ</button>
           <button style={s.tabBtn(tab === "push")} onClick={() => openTab("push")}>🔔 プッシュ通知</button>
+          <button style={s.tabBtn(tab === "push-admin")} onClick={() => openTab("push-admin")}>🔔 プッシュ通知の管理</button>
         </div>
 
         {/* ── キーワードタブ ── */}
@@ -430,9 +538,114 @@ export default function LineSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
 
           <div style={{ ...s.card, background: "#F8FAFC", border: "1px solid #E2E8F0" }}>
             <div style={{ fontSize: 13, color: "#64748B", lineHeight: 1.7 }}>
-              ℹ️ 登録した端末をON/OFFする管理画面は、次のステップで追加予定です。
+              ℹ️ 登録した端末のON/OFFは、管理者が「🔔 プッシュ通知の管理」タブから行います。
             </div>
           </div>
+        </>}
+
+        {/* ── プッシュ通知の管理タブ(管理者専用) ── */}
+        {tab === "push-admin" && <>
+          {!adminUnlocked ? (
+            <div style={s.card}>
+              <div style={s.sectionTitle}>🔒 管理者用パスコード</div>
+              <div style={{ fontSize: 13, color: "#64748B", marginBottom: 14 }}>
+                財務・書類管理と同じパスコードを入力してください。
+              </div>
+              <input
+                type="password"
+                style={{ ...s.input, marginBottom: 14 }}
+                value={adminPasscodeInput}
+                onChange={e => setAdminPasscodeInput(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && unlockAdmin()}
+                placeholder="パスコード"
+              />
+              <button style={{ ...s.btn, opacity: adminLoading || !adminPasscodeInput ? 0.6 : 1 }} onClick={unlockAdmin} disabled={adminLoading || !adminPasscodeInput}>
+                {adminLoading ? "確認中..." : "開く"}
+              </button>
+              {adminError && (() => {
+                const [summary, detail] = adminError.split("\n\n詳細: ");
+                return (
+                  <div style={{ marginTop: 12, padding: "10px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8 }}>
+                    <div style={{ color: "#DC2626", fontSize: 13, whiteSpace: "pre-wrap" }}>{summary}</div>
+                    {detail && <div style={{ color: "#9CA3AF", fontSize: 11, marginTop: 4 }}>詳細: {detail}</div>}
+                  </div>
+                );
+              })()}
+            </div>
+          ) : (
+            <>
+              <div style={{ ...s.card, background: "#EFF6FF", border: "1px solid #BFDBFE" }}>
+                <div style={{ fontSize: 13, color: "#1E40AF", lineHeight: 1.7 }}>
+                  ℹ️ 登録しただけでは通知は届きません。ここでONにしたスタッフ・端末にだけ、今後の通知が届くようになります。
+                </div>
+              </div>
+
+              <div style={s.card}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                  <div style={s.sectionTitle}>🔔 登録済みの端末</div>
+                  <button style={s.btnGray} onClick={refreshAdminList}>更新</button>
+                </div>
+
+                {adminList.length === 0 ? (
+                  <div style={s.emptyText}>登録された端末はありません</div>
+                ) : (
+                  Object.entries(
+                    adminList.reduce((acc, row) => {
+                      (acc[row.staff_name] = acc[row.staff_name] || []).push(row);
+                      return acc;
+                    }, {})
+                  ).map(([name, devices]) => (
+                    <div key={name} style={{ marginBottom: 18 }}>
+                      <div style={{ fontWeight: 800, fontSize: 15, color: "#1A3A5C", marginBottom: 8 }}>👤 {name}</div>
+                      {devices.map(d => (
+                        <div key={d.id} style={s.ruleCard}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                            <div>
+                              <span style={{ fontWeight: 700, fontSize: 14 }}>{d.device_label || "端末"}</span>
+                              <span style={{ fontSize: 11, color: "#94A3B8", marginLeft: 8 }}>
+                                登録日: {d.created_at ? new Date(d.created_at).toLocaleDateString("ja-JP") : "-"}
+                              </span>
+                            </div>
+                            <span style={{ ...s.tag, margin: 0, background: d.enabled ? "#DCFCE7" : "#F1F5F9", color: d.enabled ? "#166534" : "#64748B", fontWeight: 700 }}>
+                              {d.enabled ? "ON" : "OFF"}
+                            </span>
+                          </div>
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            <button
+                              style={{ ...s.btnSm, background: d.enabled ? "#F59E0B" : "#059669", opacity: adminBusyIds[d.id] ? 0.6 : 1 }}
+                              onClick={() => toggleAdminDevice(d.id, !d.enabled)}
+                              disabled={adminBusyIds[d.id]}
+                            >
+                              {d.enabled ? "OFFにする" : "ONにする"}
+                            </button>
+                            <button style={{ ...s.btnSm, opacity: adminBusyIds[d.id] ? 0.6 : 1 }} onClick={() => testAdminDevice(d.id)} disabled={adminBusyIds[d.id]}>
+                              テスト送信
+                            </button>
+                            <button style={{ ...s.btnDanger, opacity: adminBusyIds[d.id] ? 0.6 : 1 }} onClick={() => deleteAdminDevice(d.id)} disabled={adminBusyIds[d.id]}>
+                              削除
+                            </button>
+                          </div>
+                          {adminRowMsg[d.id] && (
+                            <div style={{ fontSize: 12, color: "#374151", marginTop: 8 }}>{adminRowMsg[d.id]}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ))
+                )}
+
+                {adminError && (() => {
+                  const [summary, detail] = adminError.split("\n\n詳細: ");
+                  return (
+                    <div style={{ marginTop: 12, padding: "10px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8 }}>
+                      <div style={{ color: "#DC2626", fontSize: 13, whiteSpace: "pre-wrap" }}>{summary}</div>
+                      {detail && <div style={{ color: "#9CA3AF", fontSize: 11, marginTop: 4 }}>詳細: {detail}</div>}
+                    </div>
+                  );
+                })()}
+              </div>
+            </>
+          )}
         </>}
       </div>
     </div>
