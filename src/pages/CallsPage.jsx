@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { markLeavingForTel, consumeResumeCallId } from "../lib/androidResume";
+import { normalizeAssigneeName, isDuplicateAssigneeName } from "../lib/assignees";
 
 const STATUS_CONFIG = {
   "未対応": { color: "#ef4444", bg: "#fef2f2", icon: "🔴" },
@@ -126,6 +127,14 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
   const saveAssignees = async (list) => {
     setAssignees(list);
     await supabase.from("home_settings").upsert({ id: "assignee_names", value: list, updated_at: new Date().toISOString() });
+  };
+
+  const addAssignee = () => {
+    const name = normalizeAssigneeName(assigneeInput);
+    if (!name) return;
+    if (isDuplicateAssigneeName(assignees, name)) { alert("その名前はすでに追加されています"); return; }
+    saveAssignees([...assignees, name]);
+    setAssigneeInput("");
   };
 
   const allTags = ["すべて", ...customTags];
@@ -278,10 +287,10 @@ export default function CallsPage({ cust, isPC, pp, nav, calls, setCalls }) {
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <input value={assigneeInput} onChange={e => setAssigneeInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter" && assigneeInput.trim()) { saveAssignees([...assignees, assigneeInput.trim()]); setAssigneeInput(""); }}}
+                  onKeyDown={e => { if (e.key === "Enter") addAssignee(); }}
                   placeholder="名前を追加..."
                   style={{ flex: 1, border: "1.5px solid #E5E7EB", borderRadius: 8, padding: "7px 12px", fontSize: 13, outline: "none", color: "#1F2937" }} />
-                <button onClick={() => { if (assigneeInput.trim()) { saveAssignees([...assignees, assigneeInput.trim()]); setAssigneeInput(""); }}}
+                <button onClick={addAssignee}
                   style={{ background: c1, border: "none", color: "#fff", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>追加</button>
               </div>
             </div>

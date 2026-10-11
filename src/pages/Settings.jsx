@@ -9,6 +9,12 @@ const SETTINGS_ITEMS = [
     label: "LINE通知設定",
     sub: "キーワード・スタッフ管理・プッシュ通知(テスト)",
   },
+  {
+    key: "assigneesettings",
+    icon: <span style={{ fontSize: 24 }}>👤</span>,
+    label: "担当者の管理",
+    sub: "名前の追加・削除",
+  },
 ];
 
 export default function Settings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_W, cust, pjs, submittedQuotes, wonQuotes, cos, tks, finFiles, tmplFiles, tileConf }) {

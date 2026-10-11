@@ -586,6 +586,7 @@ export default function Home({ pjs, submittedQuotes, wonQuotes, cos, tks, links,
           {item("🤖 AI補助", () => drawerNav(() => nav("ai")))}
           {item("🎣 釣り情報", () => drawerNav(() => nav("fishing")))}
           {item("📗 使い方", () => drawerNav(() => nav("usermanual")))}
+          {item("⚙️ 設定", () => drawerNav(() => nav("settings")))}
         </div>
       </>
     );
