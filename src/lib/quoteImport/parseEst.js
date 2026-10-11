@@ -169,6 +169,45 @@ function findTitleAndTotalsByAmount(buf, dv, dec, topSum100, detectedRate) {
   return candidates.find(c => isRealTitle(c.title)) || candidates[0];
 }
 
+// 数値レコードの手前(レコード先頭から -12 / -10 / -8 バイト)に、階層のリンクが1バイトずつ入っている:
+//   -12: この行のID(行ごとに+1) / -10: 小計行なら「最後の子」のID(明細行は0) / -8: 「1つ前の兄弟」のID(無ければ0)
+// 小計行の子は、最後の子から「1つ前の兄弟」をたどると全員分そろう。
+// 金額が偶然同じ明細が並んでも(例: 10,000円が2行続く)、合計の一致だけに頼ると、小計と取り違えるため、
+// このリンクで「小計行ごとの子の数」を先に決める。読み取った結果が1か所でも矛盾したら nullを返し、
+// 従来の合計一致(スタック方式)だけで組み立てる(=他のESTで形式が違っても、悪くならない)
+export function readEstChildCounts(dv, records) {
+  const n = records.length;
+  const ids = [], lastChild = [], prevSibling = [];
+  for (const r of records) {
+    if (r.off < 12) return null;
+    ids.push(dv.getUint8(r.off - 12));
+    lastChild.push(dv.getUint8(r.off - 10));
+    prevSibling.push(dv.getUint8(r.off - 8));
+  }
+  const byId = new Map();
+  for (let i = 0; i < n; i++) {
+    if (ids[i] === 0 || byId.has(ids[i])) return null;
+    byId.set(ids[i], i);
+  }
+  const counts = new Array(n).fill(0);
+  for (let i = 0; i < n; i++) {
+    if (!lastChild[i]) continue;
+    const seen = new Set();
+    let cur = lastChild[i], sum = 0, cnt = 0;
+    while (cur) {
+      const j = byId.get(cur);
+      if (j === undefined || j >= i || seen.has(j)) return null; // 子は、ファイル上で親より前にあるはず
+      seen.add(j);
+      sum += Number(records[j].amountA) || 0;
+      cnt++;
+      cur = prevSibling[j];
+    }
+    if (Math.abs(sum - (Number(records[i].amountA) || 0)) >= 1) return null; // 子の合計が、小計と合わない
+    counts[i] = cnt;
+  }
+  return counts;
+}
+
 // スタック方式で、階層(小計/明細)を組み立てる。
 // 各行の l.groupOverride は3つの状態を持つ:
 //   undefined(自動) → 直前の未確定(ペンディング)行たちの合計と金額が一致すれば、小計(グループ)にする
@@ -184,12 +223,21 @@ export function buildEstTree(lines, amountKey = "amountA") {
     const amt = Number(l[amountKey]) || 0;
     const forceGroup = l.groupOverride === true;
     const forceLeaf = l.groupOverride === false;
+    // linkChildCount: ファイル内のリンクから読み取った「子の数」(0=明細、1以上=小計)。手動で切り替えた行には使わない
+    const hint = l.groupOverride === undefined && Number.isInteger(l.linkChildCount) ? l.linkChildCount : null;
     let matched = null;
-    if (!forceLeaf) {
-      for (let k = 1; k <= pending.length; k++) {
-        const slice = pending.slice(pending.length - k);
+    if (!forceLeaf && hint !== 0) {
+      if (hint > 0 && hint <= pending.length) {
+        const slice = pending.slice(pending.length - hint);
         const sum = slice.reduce((s, n) => s + (Number(n[amountKey]) || 0), 0);
-        if (Math.abs(sum - amt) < EPS) { matched = slice; break; }
+        if (Math.abs(sum - amt) < EPS) matched = slice;
+      }
+      if (!matched) {
+        for (let k = 1; k <= pending.length; k++) {
+          const slice = pending.slice(pending.length - k);
+          const sum = slice.reduce((s, n) => s + (Number(n[amountKey]) || 0), 0);
+          if (Math.abs(sum - amt) < EPS) { matched = slice; break; }
+        }
       }
     }
     if (matched) {
@@ -257,6 +305,7 @@ export function parseEstFile(arrayBuffer, fileName = "") {
   const detectedRate = rateSet.length === 1 ? rateSet[0] : Math.round(records[0].rate);
   if (rateSet.length > 1) warnings.push(`行によって掛け率が異なります(${rateSet.join("% / ")}%)。最初の行の値(${detectedRate}%)を初期値にします`);
 
+  const childCounts = readEstChildCounts(dv, records);
   const lines = records.map((r, i) => {
     const f = table.fields.slice(i * 6, i * 6 + 6);
     const [rawName, spec, , note, unit] = f;
@@ -275,6 +324,7 @@ export function parseEstFile(arrayBuffer, fileName = "") {
       amountB: r.amountB,
       rate: r.rate,
       nameFromSpec,
+      linkChildCount: childCounts ? childCounts[i] : undefined,
     };
   });
 
