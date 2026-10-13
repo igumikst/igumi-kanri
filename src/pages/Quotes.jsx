@@ -14,6 +14,9 @@ import { usePreventWindowFileDrop } from "../lib/useFileDropGuard";
 import { describeError } from "../lib/errorMessage";
 import { CONSTRUCTION_TYPES } from "../lib/quoteFinancials";
 import { defaultOwnCrewId } from "../lib/crews";
+import { loadQuoteForExport } from "../lib/quoteExport/loadQuoteForExport";
+import { exportQuoteXlsx } from "../lib/quoteExport/buildQuoteXlsx";
+import { exportQuotePdf } from "../lib/quoteExport/buildQuotePdf";
 
 // 見積の状態は、画面上は「発注前」「完工済」の2つだけ。DBの値は既存の制約に合わせる
 // (発注前=submitted / 完工済=won)。既存の下書き(draft)・失注(lost)は、画面では発注前と表示する
@@ -29,6 +32,11 @@ const blankEd = { id: null, quote_no: null, title: "", price_set_id: "", status:
 const newKey = () => "l" + Date.now() + Math.random().toString(36).slice(2);
 // quote_no は text 型のため、数字だけを取り出して数として扱う(DB関数 import_quote と同じ考え方)
 const quoteNoNum = q => parseInt(String(q.quote_no ?? "").replace(/[^0-9]/g, ""), 10) || 0;
+// 見積書の出力(Excel/PDF)で「保存していない変更」があるかを見るための、保存される項目だけの写し
+const savedSnapshot = e => JSON.stringify({
+  title: e.title, price_set_id: e.price_set_id, status: e.status, construction_type: e.construction_type, crew_id: e.crew_id,
+  lines: e.lines.map(l => [l.group_name, l.name, l.spec, l.unit, Number(l.qty) || 0, Number(l.sale_price) || 0, l.note || "", l.cost_price ?? null, !!l.cost_confirmed, !!l.is_subcontracted]),
+});
 
 export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, setSubmittedQuotes, setPjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteProjectId, setQuoteImportCtx, setOpenProjectId, crews, setCrews }) {
   usePreventWindowFileDrop();
@@ -62,6 +70,8 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
   const [subCosts, setSubCosts] = useState([]); // 下請けの原価(quote_subcontractor_costs)
   const [subForm, setSubForm] = useState({ subcontractor_id: "", amount: "", note: "", file: null });
   const [savingSub, setSavingSub] = useState(false);
+  const [exporting, setExporting] = useState(null); // 見積書の出力中: "xlsx" | "pdf" | null
+  const openedSnapRef = useRef(null); // 編集画面を開いたときの保存済みの状態(savedSnapshot)
   const [showHiddenQuoteFiles, setShowHiddenQuoteFiles] = useState(false); // 第8弾テーマ12①: 非表示のファイルを表示するトグル
   // 施工形態は見積ごとに持つ(第8弾テーマ21)。案件の値は新規見積の初期値としてだけ使う
   const constructionType = ed.construction_type || "自社のみ";
@@ -147,12 +157,37 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
       labor_count: r.line_type === "labor" ? (parseFloat(r.spec) || "") : undefined,
       note: r.note || "",
     }));
-    setEd({ id: q.id, quote_no: q.quote_no, title: q.title, price_set_id: q.price_set_id || "", status: q.status === "won" ? "won" : "submitted", construction_type: q.construction_type || "自社のみ", crew_id: q.crew_id || "", profit_confirmed: !!q.profit_confirmed, lines });
+    const openedEd = { id: q.id, quote_no: q.quote_no, title: q.title, price_set_id: q.price_set_id || "", status: q.status === "won" ? "won" : "submitted", construction_type: q.construction_type || "自社のみ", crew_id: q.crew_id || "", profit_confirmed: !!q.profit_confirmed, lines };
+    openedSnapRef.current = savedSnapshot(openedEd);
+    setEd(openedEd);
     setSubForm({ subcontractor_id: "", amount: "", note: "", file: null });
     await loadSubCosts(q.id);
     setSearch(""); setCategoryFilter(""); setGroupFilter("");
     setView("edit");
   };
+
+  // 見積書の出力(Excel/PDF)。いつもDBから最新のデータを読み直して作る(原価は読まない)
+  const exportQuote = async (kind, quoteId) => {
+    if (exporting) return;
+    setExporting(kind);
+    const t0 = performance.now();
+    try {
+      const model = await loadQuoteForExport(supabase, quoteId);
+      if (kind === "xlsx") await exportQuoteXlsx(model);
+      else await exportQuotePdf(model);
+      console.info(`[見積書の出力] ${kind} ${Math.round(performance.now() - t0)}ms`);
+    } catch (e) {
+      alert(e?.message ? `見積書を出力できませんでした。
+${e.message}` : "見積書を出力できませんでした。");
+    } finally {
+      setExporting(null);
+    }
+  };
+  const exportFromEditor = kind => {
+    if (!ed.id || savedSnapshot(ed) !== openedSnapRef.current) { alert("保存していない変更があります。先に保存してください。"); return; }
+    exportQuote(kind, ed.id);
+  };
+  const exportBtnStyle = { padding: "8px 10px", background: "none", border: "none", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#1A3A5C", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" };
 
   const addSubCost = async () => {
     if (!ed.id) { alert("先に見積を保存してください"); return; }
@@ -523,6 +558,8 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
                                 ? { flex: 1, padding: "8px 0", background: "#059669", border: "none", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#fff", fontWeight: 800, cursor: "pointer" }
                                 : { flex: 1, padding: "8px 0", background: "none", border: "none", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#059669", fontWeight: 700, cursor: "pointer" }}>✅ 採用にする</button>
                             )}
+                            <button onClick={() => exportQuote("xlsx", q.id)} disabled={!!exporting} style={{ ...exportBtnStyle, opacity: exporting ? 0.5 : 1 }}>{exporting === "xlsx" ? "作成中..." : "📤 Excel"}</button>
+                            <button onClick={() => exportQuote("pdf", q.id)} disabled={!!exporting} style={{ ...exportBtnStyle, opacity: exporting ? 0.5 : 1 }}>{exporting === "pdf" ? "作成中..." : "📄 PDF"}</button>
                             {visibleQuoteFiles.filter(f => f.quote_id === q.id).map(f => (
                               <div key={f.id} style={{ display: "flex", alignItems: "center", borderRight: "1px solid #F3F4F6" }}>
                                 <button onClick={() => openQuoteFile(f)} title={f.original_name} style={{ padding: "8px 10px", background: "none", border: "none", fontSize: 12, color: "#2563EB", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>📎 元ファイル</button>
@@ -831,6 +868,10 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
               </div>
             </div>
 
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <button onClick={() => exportFromEditor("xlsx")} disabled={!!exporting} style={{ flex: 1, padding: "10px 0", background: "#fff", border: "1.5px solid #1A3A5C", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer", color: "#1A3A5C", opacity: exporting ? 0.5 : 1 }}>{exporting === "xlsx" ? "作成中..." : "📤 Excelで出力"}</button>
+              <button onClick={() => exportFromEditor("pdf")} disabled={!!exporting} style={{ flex: 1, padding: "10px 0", background: "#fff", border: "1.5px solid #1A3A5C", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer", color: "#1A3A5C", opacity: exporting ? 0.5 : 1 }}>{exporting === "pdf" ? "作成中..." : "📄 PDFで出力"}</button>
+            </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={() => setView("list")} style={{ flex: 1, padding: "12px 0", background: "#F3F4F6", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer", color: "#374151" }}>キャンセル</button>
               <button onClick={saveQuote} disabled={saving} style={{ flex: 2, padding: "12px 0", background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1 }}>{saving ? "保存中..." : "💾 保存する"}</button>
