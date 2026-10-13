@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/note-parse.js": {
+      "maxDuration": 60
+    }
+  }
+}

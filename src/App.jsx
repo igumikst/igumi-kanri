@@ -32,6 +32,7 @@ import Dashboard from "./pages/Dashboard";
 import SwipeHome from "./components/SwipeHome";
 import Quotes from "./pages/Quotes";
 import QuoteImport from "./pages/QuoteImport";
+import NoteQuote from "./pages/NoteQuote";
 import PriceAdmin from "./pages/PriceAdmin";
 
 export default function App() {
@@ -58,6 +59,7 @@ export default function App() {
   const [submittedQuotes, setSubmittedQuotes] = useState([]);
   const [quoteProjectId, setQuoteProjectId] = useState(null);
   const [quoteImportCtx, setQuoteImportCtx] = useState(null); // { from: 戻り先のページ, projectId: 追加先の案件 }
+  const [openQuoteId, setOpenQuoteId] = useState(null); // ノート見積作成から、登録した見積の編集画面を直接開くためのid
   const [openProjectId, setOpenProjectId] = useState(null); // 他の画面から、この案件の詳細を開いた状態でProjects画面に入るためのid
   const [cust, setCust] = useState(DEFAULT_CUST);
   const [ec, setEc] = useState({ ...DEFAULT_CUST });
@@ -187,7 +189,7 @@ export default function App() {
   const nav = p => { setPage(p); setModal(null); };
   const pp = isPC ? { marginLeft: SB_W, marginRight: rpOpen ? RP_W : 32 } : {};
   const commonProps = { pjs, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, tileConf, SB_W, RP_W, salesReps, setSalesReps, branches, setBranches, crews, setCrews, wonQuotes, setWonQuotes, submittedQuotes, setSubmittedQuotes };
-  const quoteProps = { ...commonProps, quoteProjectId, setPjs, setQuoteImportCtx, setOpenProjectId };
+  const quoteProps = { ...commonProps, quoteProjectId, setPjs, setQuoteImportCtx, setOpenProjectId, openQuoteId, setOpenQuoteId };
 
   if (loading) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", fontFamily: "'Hiragino Sans',sans-serif", background: "#F0F4F8" }}><div style={{ textAlign: "center" }}><div style={{ fontSize: 32, marginBottom: 12 }}>⚡</div><div style={{ color: "#1A3A5C", fontWeight: 700 }}>読み込み中...</div></div></div>;
 
@@ -209,6 +211,7 @@ export default function App() {
   if (page === "projects") return <Projects {...commonProps} setPjs={setPjs} setCos={setCos} setQuoteProjectId={setQuoteProjectId} setQuoteImportCtx={setQuoteImportCtx} openProjectId={openProjectId} setOpenProjectId={setOpenProjectId} />;
   if (page === "quotes") return <Quotes {...quoteProps} />;
   if (page === "quoteImport") return <QuoteImport {...commonProps} setPjs={setPjs} setCos={setCos} setQuoteProjectId={setQuoteProjectId} quoteImportCtx={quoteImportCtx} setOpenProjectId={setOpenProjectId} />;
+  if (page === "noteQuote") return <NoteQuote {...commonProps} setPjs={setPjs} setCos={setCos} setQuoteProjectId={setQuoteProjectId} setOpenQuoteId={setOpenQuoteId} />;
   if (page === "priceadmin") return <PriceAdmin {...commonProps} />;
   if (page === "companies") return <Companies {...commonProps} setCos={setCos} />;
   if (page === "tasks") return <Tasks {...commonProps} setTks={setTks} />;

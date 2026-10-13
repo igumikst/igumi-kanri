@@ -655,6 +655,13 @@ export default function Home({ pjs, submittedQuotes, wonQuotes, cos, tks, links,
         }
       />
       <FeatureCard
+        icon="📝" title="ノート見積作成" desc="現調ノートを貼ると、見積の下書きを作ります(AI)" bg="#fdf1e7" accent="#E07B39"
+        onCardClick={() => nav("noteQuote")}
+        pills={[
+          <Pill key="n" onClick={() => nav("noteQuote")}>📋 ノートを貼る</Pill>,
+        ]}
+      />
+      <FeatureCard
         icon="🏠" title="ホームページ" desc="公式サイトを見る" bg="#f0ecfa" accent="#7c5cd6"
         onCardClick={() => window.open(HOMEPAGE_URL, "_blank")}
         pills={[

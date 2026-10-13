@@ -38,7 +38,7 @@ const savedSnapshot = e => JSON.stringify({
   lines: e.lines.map(l => [l.group_name, l.name, l.spec, l.unit, Number(l.qty) || 0, Number(l.sale_price) || 0, l.note || "", l.cost_price ?? null, !!l.cost_confirmed, !!l.is_subcontracted]),
 });
 
-export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, setSubmittedQuotes, setPjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteProjectId, setQuoteImportCtx, setOpenProjectId, crews, setCrews }) {
+export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, setSubmittedQuotes, setPjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteProjectId, setQuoteImportCtx, setOpenProjectId, crews, setCrews, openQuoteId, setOpenQuoteId }) {
   usePreventWindowFileDrop();
   const project = pjs.find(p => p.id === quoteProjectId);
   const pending = tks.filter(t => !t.done);
@@ -71,6 +71,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
   const [subForm, setSubForm] = useState({ subcontractor_id: "", amount: "", note: "", file: null });
   const [savingSub, setSavingSub] = useState(false);
   const [exporting, setExporting] = useState(null); // 見積書の出力中: "xlsx" | "pdf" | null
+  const openQuoteRef = useRef(null); // ノート見積作成から来たとき、loadQuotes の中で openQuote を呼ぶため
   const openedSnapRef = useRef(null); // 編集画面を開いたときの保存済みの状態(savedSnapshot)
   const [showHiddenQuoteFiles, setShowHiddenQuoteFiles] = useState(false); // 第8弾テーマ12①: 非表示のファイルを表示するトグル
   // 施工形態は見積ごとに持つ(第8弾テーマ21)。案件の値は新規見積の初期値としてだけ使う
@@ -88,6 +89,9 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
     setQuoteFiles(filesRes.data || []); // テーブルが未作成でも、見積一覧はそのまま表示する
     setReportFiles(reportFilesRes.data || []);
     setLoadingQuotes(false);
+    // ノート見積作成で登録した見積は、一覧ではなく編集画面を直接開く(一度だけ)
+    const target = openQuoteId && (data || []).find(q => q.id === openQuoteId);
+    if (target) { setOpenQuoteId?.(null); openQuoteRef.current?.(target); }
   };
   useEffect(() => { loadQuotes(); }, [quoteProjectId]);
   // crews の読み込みがまだで班の初期値を入れられなかった新規見積に、読み込み完了後に「自社」を入れる。
@@ -189,6 +193,8 @@ ${e.message}` : "見積書を出力できませんでした。");
   };
   const exportBtnStyle = { padding: "8px 10px", background: "none", border: "none", borderRight: "1px solid #F3F4F6", fontSize: 12, color: "#1A3A5C", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" };
 
+  // loadQuotes(この関数より前に定義)から openQuote を呼ぶための参照
+  useEffect(() => { openQuoteRef.current = openQuote; });
   const addSubCost = async () => {
     if (!ed.id) { alert("先に見積を保存してください"); return; }
     if (!subForm.subcontractor_id || !subForm.amount) { alert("下請け会社と金額を入力してください"); return; }
