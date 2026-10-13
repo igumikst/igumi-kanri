@@ -58,7 +58,7 @@ export function buildDraft({ draft, noteText, price, laborUnitPrice }) {
     qty: labor.manDays != null ? 1 : null, salePrice: labor.manDays != null ? labor.manDays * unit : 0,
     note: "", raws: (draft?.crew || []).map(c => c.raw), sourceName: LABOR_ITEM_NAME,
     match: laborItem ? { status: "exact", item: laborItem, candidates: [] } : { status: "none", item: null, candidates: [] },
-    flags: { laborStatus: labor.status, laborReason: labor.reason },
+    flags: { laborStatus: labor.status, laborReason: labor.reason, manDays: labor.manDays },
   };
 
   // 配管モール → 配管モール施工費 の1行(決定事項8)。中身は備考に残す
@@ -163,6 +163,10 @@ export function resolveLine(line, price) {
   // 原価(決定事項6): ノートの卸値 → 無ければ単価表の原価。人が入れた原価があればそれ
   const base = item ? price?.costs?.[item.id] : null;
   let costPrice = base?.cost_price ?? null, costConfirmed = !!base?.cost_confirmed && costPrice != null;
+  // 人工の行: 単価表の原価は「1人工あたり」(虎生の回答A)。数量は1式なので、原価単価=単価表の原価×人工数にする。
+  // ※ 既存の見積編集画面(Quotes.jsx)は、人工を足したとき原価に人工数を掛けていない(食い違いあり。別の作業で直す)
+  if (line.kind === "labor" && costPrice != null) costPrice = line.flags.manDays != null ? costPrice * line.flags.manDays : null;
+  if (line.kind === "labor" && costPrice == null) costConfirmed = false;
   if (line.wholesale?.value != null) { costPrice = line.wholesale.value; costConfirmed = true; }
   if (line.costOverride !== undefined) { costPrice = line.costOverride.price; costConfirmed = line.costOverride.confirmed; }
 
