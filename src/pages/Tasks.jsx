@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase";
 import { PRIO } from "../lib/constants";
 import { Inp, Sel, Modal, Hdr, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
+import { getOwnEndpoint } from "../lib/push";
 
 const NEW_TASK_DEFAULT = { title: "", due: "", prio: "mid", assignees: [], shared: false };
 
@@ -38,8 +39,28 @@ export default function Tasks({ pjs, submittedQuotes, wonQuotes, cos, tks, setTk
       title: nTk.title, done: false, priority: nTk.prio, due: nTk.due,
       assignees: nTk.assignees, shared: nTk.shared,
     }]).select();
-    if (data) setTks([{ ...data[0], prio: data[0].priority || "mid" }, ...tks]);
+    if (data) {
+      const newTask = data[0];
+      setTks([{ ...newTask, prio: newTask.priority || "mid" }, ...tks]);
+      notifyTaskAssignees(newTask, nTk.assignees);
+    }
     setNTk(NEW_TASK_DEFAULT); setModal(null);
+  };
+
+  // タスクの追加・担当者指名の直後に、関わる人のON端末へ通知する(第8弾テーマ27-2)。
+  // 失敗してもタスクの保存自体は既に成功しているため、画面には何も出さない。
+  const notifyTaskAssignees = async (task, notifyNames) => {
+    if (!task.shared && (!notifyNames || !notifyNames.length)) return;
+    try {
+      const excludeEndpoint = await getOwnEndpoint();
+      await fetch("/api/task-notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskId: task.id, notifyNames, excludeEndpoint }),
+      });
+    } catch {
+      /* 通知の失敗は無視する */
+    }
   };
 
   const delTk = async id => {

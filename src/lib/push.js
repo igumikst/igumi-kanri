@@ -177,3 +177,13 @@ export async function checkOwnStatus() {
   }
   return { registered: !!data.registered, enabled: !!data.enabled };
 }
+
+// この端末のプッシュ購読のendpointを取得する(登録済みのときだけ。無ければnull)。
+// 「操作した本人には送らない」の除外対象として、サーバーへの通知依頼に添える用途(第8弾テーマ27-2)。
+export async function getOwnEndpoint() {
+  if (!isPushSupported() || Notification.permission !== "granted") return null;
+  const registration = await navigator.serviceWorker.getRegistration("/sw.js");
+  if (!registration) return null;
+  const sub = await registration.pushManager.getSubscription();
+  return sub ? sub.endpoint : null;
+}
