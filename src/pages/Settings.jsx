@@ -15,6 +15,12 @@ const SETTINGS_ITEMS = [
     label: "担当者の管理",
     sub: "名前の追加・削除",
   },
+  {
+    key: "dashboardsettings",
+    icon: <span style={{ fontSize: 24 }}>📊</span>,
+    label: "ダッシュボードの表示設定",
+    sub: "項目のオン・オフ、レイアウト、明るさ",
+  },
 ];
 
 export default function Settings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_W, cust, pjs, submittedQuotes, wonQuotes, cos, tks, finFiles, tmplFiles, tileConf }) {
