@@ -1187,7 +1187,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   const buildingCell=cws.getCell('E6');
   buildingCell.value=safeCellStr(uBuilding);
   buildingCell.font=gothicC(20,true);
-  buildingCell.alignment={horizontal:'center',vertical:'middle'};
+  buildingCell.alignment={horizontal:'center',vertical:'middle',shrinkToFit:true};
 
   // 工事名称 B10:S13（明朝22pt太字・中央）
   cws.mergeCells('B10:S13');
