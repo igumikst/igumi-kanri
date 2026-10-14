@@ -1,0 +1,23 @@
+#!/bin/sh
+# mainへのプッシュの前に、scripts/predeploy-check.mjs を自動で実行する。
+# 失敗したら、プッシュを中止する(mainへのプッシュだけが対象。他のブランチへの
+# プッシュはそのまま通す)。このフックは .git/hooks にあり、このリポジトリの
+# すべてのワークツリー(git worktree)で共有される。
+
+while read local_ref local_sha remote_ref remote_sha
+do
+  if [ "$remote_ref" = "refs/heads/main" ]; then
+    if [ ! -f scripts/predeploy-check.mjs ]; then
+      echo "✗ scripts/predeploy-check.mjs が見つかりません。mainへのプッシュを中止します" >&2
+      exit 1
+    fi
+    echo "mainへのプッシュ前チェック(scripts/predeploy-check.mjs)を実行します..." >&2
+    node scripts/predeploy-check.mjs
+    if [ $? -ne 0 ]; then
+      echo "✗ predeploy-check に失敗したため、mainへのプッシュを中止しました" >&2
+      exit 1
+    fi
+  fi
+done
+
+exit 0
