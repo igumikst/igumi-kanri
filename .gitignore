@@ -36,3 +36,4 @@ docs/igumi_*_instructions.md
 
 # predeploy-check.mjs が、mainとの比較用に一時的に作る作業ツリー
 .predeploy-tmp-main
+.claude/settings.local.json

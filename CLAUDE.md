@@ -129,8 +129,8 @@ All styles are **inline JSX style objects** — no Tailwind, no CSS modules, no 
 
 1. 作業の前に、必ず git pull で最新のmainを取り込む。
 2. 作業は必ず自分用ブランチで行う。ブランチ名は「yuka/テーマ名」(例: yuka/estimate-layout)。mainのままで作業しない。
-3. main への直接のコミット・push・マージは、絶対にしない。push するのは自分用ブランチだけ。push するとVercelがプレビューURLを作るので、そのURLで動きを確認する。
-4. 本番に入れる(mainにマージする)のは、虎生がプレビューを確認してから。ゆうかちゃんのCodeは、マージまで進めない。
+3. ゆうかちゃんは yuka/テーマ名 のブランチで作業し、最新のmainを取り込んだうえで、プレビュー確認なしで、mainへマージしてpushしてよい(虎生が許可済み)。push の前の自動チェック(pre-push)は、必ず通す。
+4. 止まって聞く条件(売上・粗利・受注率の考え方を変える、【テスト】以外のデータを消す・書き換える、想定と違う点が見つかる)は、これまで通り変えない。
 5. 次のものは触らない: api/ の電話関連(voice・recording・transcribe・analyze・chat)、.env、vercel.json。
 6. DBの変更(SQL)は、Codeが実行しない。必要なときはSQLを書いて、虎生に見せて止まる。
 7. このリポジトリは公開なので、パスワード・キー・実名・サンプルファイル(.est・.xls・.xlsx・.pdf)・個人用パスをコミットしない。
