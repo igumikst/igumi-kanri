@@ -123,6 +123,10 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
 }
 .check-row .check-label{font-size:13px;font-weight:700;color:var(--text);line-height:1.4}
 .check-row .check-sub{font-size:11px;color:var(--muted);font-weight:600;margin-top:2px}
+.wt-fields{display:flex;align-items:center;gap:8px;margin-top:8px}
+.wt-fields input[type="time"]{flex:1;min-width:0;min-height:44px}
+.wt-sep{font-size:15px;color:var(--text);flex-shrink:0}
+.wt-msg{font-size:11px;color:var(--red);font-weight:700;margin-top:6px}
 .export-note{font-size:11px;color:var(--muted);line-height:1.7;margin:-4px 0 10px;padding:10px 12px;background:#F8FAFC;border-radius:10px;border:1px solid var(--border)}
 .export-note strong{color:var(--navy)}
 .btn-orange{background:var(--orange);color:#fff;font-size:16px;padding:15px}
@@ -193,6 +197,21 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
     <div class="field"><label>住所</label><input type="text" id="u-address" placeholder="例: 東京都〇〇市〇〇町１丁目２３－４"></div>
     <div class="field"><label>工事名称 *（表紙・報告書にリンク）</label><input type="text" id="u-workname" placeholder="例: 101・201号室　漏水調査"></div>
     <div class="field"><label>作業実施日</label><input type="date" id="u-date"></div>
+    <div class="field">
+      <label class="check-row">
+        <input type="checkbox" id="u-wt-on" onchange="onWorkTimeChange()">
+        <span>
+          <div class="check-label">対応時間を記載する</div>
+          <div class="check-sub">チェックした時だけ、日付の右側に表示</div>
+        </span>
+      </label>
+      <div id="u-wt-fields" class="wt-fields" style="display:none">
+        <input type="time" id="u-wt-start" aria-label="開始時刻" oninput="onWorkTimeChange()">
+        <span class="wt-sep">〜</span>
+        <input type="time" id="u-wt-end" aria-label="終了時刻" oninput="onWorkTimeChange()">
+      </div>
+      <div id="u-wt-msg" class="wt-msg" style="display:none"></div>
+    </div>
     <div class="field"><label>作業者</label><input type="text" id="u-worker" placeholder="例: 﨑岡"></div>
     <div class="field"><label>会社名（表紙下部）</label><input type="text" id="u-company" placeholder="例: 株式会社IGUMI"></div>
     <div class="field">
@@ -208,6 +227,21 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
     <div class="field"><label>住所</label><input type="text" id="prop-address" placeholder="例: 東京都〇〇市〇〇町１丁目２３－４"></div>
     <div class="field"><label>件名 *</label><input type="text" id="work-name" placeholder="例: 101・201号室　漏水調査" oninput="refreshPreview()"></div>
     <div class="field"><label>作業日 *</label><input type="date" id="work-date" oninput="refreshPreview()"></div>
+    <div class="field">
+      <label class="check-row">
+        <input type="checkbox" id="wt-on" onchange="onWorkTimeChange()">
+        <span>
+          <div class="check-label">対応時間を記載する</div>
+          <div class="check-sub">チェックした時だけ、日付の右側に表示</div>
+        </span>
+      </label>
+      <div id="wt-fields" class="wt-fields" style="display:none">
+        <input type="time" id="wt-start" aria-label="開始時刻" oninput="onWorkTimeChange()">
+        <span class="wt-sep">〜</span>
+        <input type="time" id="wt-end" aria-label="終了時刻" oninput="onWorkTimeChange()">
+      </div>
+      <div id="wt-msg" class="wt-msg" style="display:none"></div>
+    </div>
     <div class="field"><label>施工者</label><input type="text" id="worker" placeholder="例: 﨑岡"></div>
     <div class="field" id="content-field" style="display:none">
       <label>内容</label>
@@ -536,10 +570,14 @@ function refreshPreview(){
   if(reportType==='union'){propName=document.getElementById('u-building').value;workName=document.getElementById('u-workname').value;workDate=document.getElementById('u-date').value;worker=document.getElementById('u-worker').value;}
   else{propName=document.getElementById('prop-name').value;workName=document.getElementById('work-name').value;workDate=document.getElementById('work-date').value;worker=document.getElementById('worker').value;}
   let dateStr='';if(workDate){const d=new Date(workDate);dateStr=`${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;}
+  const workTimeRange=currentWorkTime().range;
+  const pvRows=[['物件名',propName],['件名',workName],['作業日',dateStr]];
+  if(workTimeRange)pvRows.push(['対応時間',workTimeRange]);
+  pvRows.push(['施工者',worker]);
   let html=`<div style="background:#F8FAFC;border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
     <div style="font-size:15px;font-weight:900;color:var(--navy);text-align:center;letter-spacing:.2em;margin-bottom:12px;border-bottom:2px solid var(--navy);padding-bottom:9px">工　事　写　真　帳</div>
     <table style="width:100%;border-collapse:collapse">
-      ${[['物件名',propName],['件名',workName],['作業日',dateStr],['施工者',worker]].map(([l,v])=>`
+      ${pvRows.map(([l,v])=>`
       <tr><td style="font-size:11px;color:var(--muted);padding:5px 0;width:58px;font-weight:600">${l}</td><td style="font-size:13px;font-weight:700;padding:5px 0;border-bottom:1px solid var(--border)">${esc(v)}</td></tr>`).join('')}
     </table></div>`;
   const pageCount=Math.ceil(photos.length/3);
@@ -560,6 +598,70 @@ function refreshPreview(){
 }
 
 // ============================================================
+// 対応時間（チェックした報告書だけ日付の右側に出す）
+// ============================================================
+function workTimePrefix(kind){return kind==='union'?'u-':'';}
+
+/** 入力の「09:00」を表示用の「9:00」にする */
+function formatWorkTime(t){
+  const m=/^(\d{1,2}):(\d{2})/.exec(t||'');
+  return m?`${parseInt(m[1],10)}:${m[2]}`:'';
+}
+
+/** kind: 'union' か それ以外。range は「9:00〜17:00」（入力に問題があれば空） */
+function getWorkTime(kind){
+  const pfx=workTimePrefix(kind);
+  const on=!!document.getElementById(pfx+'wt-on').checked;
+  const start=document.getElementById(pfx+'wt-start').value;
+  const end=document.getElementById(pfx+'wt-end').value;
+  let error='',range='';
+  if(on){
+    if(!start&&!end)error='開始と終了の時刻を入力してください';
+    else if(!start||!end)error='開始と終了の両方を入力してください';
+    else if(start.slice(0,5)===end.slice(0,5))error='開始と終了が同じ時刻です';
+    else range=`${formatWorkTime(start)}〜${end.slice(0,5)<start.slice(0,5)?'翌':''}${formatWorkTime(end)}`;
+  }
+  return{on,start,end,error,range};
+}
+function currentWorkTime(){return getWorkTime(reportType==='union'?'union':'normal');}
+function workTimeLabel(range){return range?`対応時間 ${range}`:'';}
+
+/** Excel用: 日付の後ろへ全角スペース2つで続ける（対応時間なしなら日付だけ） */
+function joinDateAndWorkTime(dateStr,range){
+  const t=workTimeLabel(range);
+  if(!t)return dateStr;
+  return dateStr?`${dateStr}　　${t}`:t;
+}
+
+/** PDF用: 日付と対応時間を別々のspanで、約24px空けて並べる（対応時間なしなら日付だけ） */
+function buildDateWithWorkTimeHtml(dateStr,range){
+  const t=workTimeLabel(range);
+  if(!t)return esc(dateStr);
+  return `<span>${esc(dateStr)}</span><span style="margin-left:${dateStr?24:0}px">${esc(t)}</span>`;
+}
+
+function updateWorkTimeUI(kind){
+  const pfx=workTimePrefix(kind);
+  const wt=getWorkTime(kind);
+  document.getElementById(pfx+'wt-fields').style.display=wt.on?'flex':'none';
+  const msg=document.getElementById(pfx+'wt-msg');
+  msg.textContent=wt.error;
+  msg.style.display=wt.error?'block':'none';
+}
+function onWorkTimeChange(){
+  updateWorkTimeUI('normal');
+  updateWorkTimeUI('union');
+  refreshPreview();
+}
+function setWorkTimeFields(kind,on,start,end){
+  const pfx=workTimePrefix(kind);
+  document.getElementById(pfx+'wt-on').checked=!!on;
+  document.getElementById(pfx+'wt-start').value=start||'';
+  document.getElementById(pfx+'wt-end').value=end||'';
+  updateWorkTimeUI(kind);
+}
+
+// ============================================================
 // 共通：出力前バリデーション・ファイル名
 // ============================================================
 function validateReportForExport(){
@@ -572,6 +674,8 @@ function validateReportForExport(){
     const workName=document.getElementById('work-name').value.trim();
     if(!propName||!workName){showToast('⚠️ 物件名と件名を入力してください');return false;}
   }
+  const wt=currentWorkTime();
+  if(wt.error){updateWorkTimeUI(reportType==='union'?'union':'normal');showToast('⚠️ 対応時間: '+wt.error);return false;}
   if(photos.length===0){showToast('⚠️ 写真を1枚以上追加してください');return false;}
   return true;
 }
@@ -652,8 +756,8 @@ function getExportFilename(ext){
 // ============================================================
 // PDF EXPORT（LINE等でそのまま閲覧可能）
 // ============================================================
-function buildPdfCoverRow(label,value){
-  return `<div class="pdf-cover-row"><div class="pdf-cover-lbl">${esc(label)}</div><div class="pdf-cover-gap"></div><div class="pdf-cover-val">${esc(value)}</div></div>`;
+function buildPdfCoverRow(label,value,valueHtml){
+  return `<div class="pdf-cover-row"><div class="pdf-cover-lbl">${esc(label)}</div><div class="pdf-cover-gap"></div><div class="pdf-cover-val">${valueHtml!=null?valueHtml:esc(value)}</div></div>`;
 }
 function buildPdfPhotoLines(caption){
   const capLines=splitCaption(caption||'',11,8);
@@ -676,12 +780,13 @@ function buildPdfPagesHtml(logoSrc){
     const company=document.getElementById('u-company').value.trim();
     let uDateStr='';
     if(uDate){const d=new Date(uDate);uDateStr=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+    const uDateHtml=buildDateWithWorkTimeHtml(uDateStr,getWorkTime('union').range);
     pages.push(`<div class="pdf-page" style="padding:0;border:1px solid #333;box-sizing:border-box;display:flex;flex-direction:column;width:794px;height:1123px;position:relative;">
       ${logoHtml}
       <div style="width:794px;height:1123px;display:flex;flex-direction:column;justify-content:space-around;align-items:center;padding:60px;box-sizing:border-box;">
         <div style="text-align:center;font-size:22px;font-weight:700;">${esc(building)}</div>
         <div style="text-align:center;font-size:20px;font-weight:700;">${esc(workname)}</div>
-        <div style="text-align:center;font-size:18px;font-weight:700;">${esc(uDateStr)}</div>
+        <div style="text-align:center;font-size:18px;font-weight:700;">${uDateHtml}</div>
         <div style="text-align:center;font-size:18px;font-weight:700;">${esc(company)}</div>
       </div>
     </div>`);
@@ -690,7 +795,7 @@ function buildPdfPagesHtml(logoSrc){
     const content=document.getElementById('u-content').value.trim();
     pages.push(`<div class="pdf-page">
       <div class="pdf-report-title">調査報告書</div>
-      ${[['建築物名称',building],['住所',address],['工事名称',workname],['作業実施日',uDateStr],['作業者',worker]].map(([l,v])=>`<div class="pdf-report-row"><div class="pdf-report-lbl">${esc(l)}</div><div class="pdf-report-val">${esc(v)}</div></div>`).join('')}
+      ${[['建築物名称',building],['住所',address],['工事名称',workname],['作業実施日',uDateStr,uDateHtml],['作業者',worker]].map(([l,v,h])=>`<div class="pdf-report-row"><div class="pdf-report-lbl">${esc(l)}</div><div class="pdf-report-val">${h!=null?h:esc(v)}</div></div>`).join('')}
       <div style="text-align:center;font-size:13px;font-weight:700;margin:18px 0 8px">【　作　業　内　容　】</div>
       <div class="pdf-report-content">${esc(content)}</div>
       <div style="text-align:center;font-size:12px;margin-top:16px">（別紙写真添付参照）</div>
@@ -705,13 +810,14 @@ function buildPdfPagesHtml(logoSrc){
     const worker=document.getElementById('worker').value.trim();
     const workContent=document.getElementById('work-content').value.trim();
     const dateStr=formatDateJa(workDate);
-    let rows=[['物　件　名',propName],['住　　　所',address],['件　　　名',workName],['作　業　日',dateStr],['施　工　者',worker]];
+    const dateHtml=buildDateWithWorkTimeHtml(dateStr,getWorkTime('normal').range);
+    let rows=[['物　件　名',propName],['住　　　所',address],['件　　　名',workName],['作　業　日',dateStr,dateHtml],['施　工　者',worker]];
     if(reportType==='tama'&&workContent.trim())rows.push(['内　　　容',workContent]);
     pages.push(`<div class="pdf-page pdf-cover-page">
       ${logoHtml}
       <div class="pdf-cover-title">工　事　写　真　帳</div>
       <div class="pdf-cover-body">
-      ${rows.map(([l,v])=>buildPdfCoverRow(l,v)).join('')}
+      ${rows.map(([l,v,h])=>buildPdfCoverRow(l,v,h)).join('')}
       </div>
     </div>`);
   }
@@ -892,6 +998,8 @@ const NORMAL_COVER_ITEM_ROWS=[
   {row:18,label:'作　業　日',valueKey:'workDate'},
   {row:20,label:'施　工　者',valueKey:'worker'},
 ];
+// 長い名前が枠からはみ出さないよう「縮小して全体を表示」にする行(物件名・住所・件名)。作業日・施工者は付けない
+const NORMAL_COVER_SHRINK_ROWS=[12,14,16];
 
 function applyNormalCoverRowHeights(ws){
   // 印刷範囲はA1:L28。29行以降を高くするとExcel→PDF変換で空白ページが増える
@@ -954,7 +1062,8 @@ function fillNormalCoverItemRow(cws,row,label,value,minchoFont,thin,nextRowTop=t
   const valueCell=cws.getCell(`D${row}`);
   valueCell.value=value?safeCellStr(value):'';
   valueCell.font=minchoFont(14);
-  valueCell.alignment=row===18?{horizontal:'left',vertical:'middle'}:{vertical:'middle'};
+  valueCell.alignment=row===18?{horizontal:'left',vertical:'middle'}
+    :NORMAL_COVER_SHRINK_ROWS.includes(row)?{vertical:'middle',shrinkToFit:true}:{vertical:'middle'};
   for(let ci='D'.charCodeAt(0);ci<='K'.charCodeAt(0);ci++){
     cws.getCell(String.fromCharCode(ci)+row).border={bottom:thin};
   }
@@ -1005,7 +1114,7 @@ async function buildNormalWorkbook(wb, minchoFont, thin, double) {
     propName:document.getElementById('prop-name').value.trim(),
     address:document.getElementById('prop-address').value.trim(),
     workName:document.getElementById('work-name').value.trim(),
-    workDate:formatNormalCoverDate(document.getElementById('work-date').value),
+    workDate:joinDateAndWorkTime(formatNormalCoverDate(document.getElementById('work-date').value),getWorkTime('normal').range),
     worker:document.getElementById('worker').value.trim(),
     workContent:document.getElementById('work-content').value.trim(),
   };
@@ -1081,7 +1190,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   const buildingCell=cws.getCell('E6');
   buildingCell.value=safeCellStr(uBuilding);
   buildingCell.font=gothicC(20,true);
-  buildingCell.alignment={horizontal:'center',vertical:'middle'};
+  buildingCell.alignment={horizontal:'center',vertical:'middle',shrinkToFit:true};
 
   // 工事名称 B10:S13（明朝22pt太字・中央）
   cws.mergeCells('B10:S13');
@@ -1197,7 +1306,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     ['B5:B7','C5:E7','F5:F7','G5:G7','H5:S7','建築物名称',uBuilding,'m'],
     ['B8:B10','C8:E10','F8:F10','G8:G10','H8:S10','住所',uAddress,'g'],
     ['B11:B13','C11:E13','F11:F13','G11:G13','H11:S13','工事名称',uWorkname,'m'],
-    ['B14:B16','C14:E16','F14:F16','G14:G16','H14:S16','作業実施日',uDateStr,'m'],
+    ['B14:B16','C14:E16','F14:F16','G14:G16','H14:S16','作業実施日',joinDateAndWorkTime(uDateStr,getWorkTime('union').range),'m'],
     ['B17:B19','C17:E19','F17:F19','G17:G19','H17:S19','作業者',uWorker,'g'],
   ];
   reportItems2.forEach(([bMerge,cMerge,fMerge,gMerge,hMerge,label,val,valFont])=>{
@@ -1213,7 +1322,9 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     vc.value=safeCellStr(val);
     vc.font=(valFont==='m')?{name:'ＭＳ Ｐ明朝',size:12,bold:false}:{name:'ＭＳ Ｐゴシック',size:12,bold:false};
     if(label==='住所'||label==='作業者')vc.font={...vc.font,bold:false};
-    vc.alignment={horizontal:'left',vertical:'middle'};
+    // 建築物名称・住所・工事名称は、長いとはみ出すため「縮小して全体を表示」(作業実施日・作業者は付けない)
+    const shrink=label==='建築物名称'||label==='住所'||label==='工事名称';
+    vc.alignment=shrink?{horizontal:'left',vertical:'middle',shrinkToFit:true}:{horizontal:'left',vertical:'middle'};
   });
 
   // 【作業内容】C21:G22
@@ -1518,8 +1629,8 @@ function ensureThumb(p){
 
 function saveData(){
   const data={reportType,
-    cover:{propName:document.getElementById('prop-name').value,address:document.getElementById('prop-address').value,workName:document.getElementById('work-name').value,workDate:document.getElementById('work-date').value,worker:document.getElementById('worker').value,content:document.getElementById('work-content').value,filename:document.getElementById('filename').value,coverLogo:isCoverLogoEnabled()},
-    union:{building:document.getElementById('u-building').value,address:document.getElementById('u-address').value,workname:document.getElementById('u-workname').value,date:document.getElementById('u-date').value,worker:document.getElementById('u-worker').value,company:document.getElementById('u-company').value,content:document.getElementById('u-content').value},
+    cover:{propName:document.getElementById('prop-name').value,address:document.getElementById('prop-address').value,workName:document.getElementById('work-name').value,workDate:document.getElementById('work-date').value,worker:document.getElementById('worker').value,content:document.getElementById('work-content').value,filename:document.getElementById('filename').value,coverLogo:isCoverLogoEnabled(),workTimeOn:document.getElementById('wt-on').checked,workTimeStart:document.getElementById('wt-start').value,workTimeEnd:document.getElementById('wt-end').value},
+    union:{building:document.getElementById('u-building').value,address:document.getElementById('u-address').value,workname:document.getElementById('u-workname').value,date:document.getElementById('u-date').value,worker:document.getElementById('u-worker').value,company:document.getElementById('u-company').value,content:document.getElementById('u-content').value,workTimeOn:document.getElementById('u-wt-on').checked,workTimeStart:document.getElementById('u-wt-start').value,workTimeEnd:document.getElementById('u-wt-end').value},
     quality,photos:photos.map(p=>({id:p.id,dataUrl:p.dataUrl,thumbUrl:p.thumbUrl||null,caption:p.caption})),nextId};
   const blob=new Blob([JSON.stringify(data)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
@@ -1546,6 +1657,9 @@ function loadData(e){
         document.getElementById('filename').value=data.cover.filename||'';
         document.getElementById('cover-logo').checked=!!data.cover.coverLogo;
       }
+      // 対応時間（古いファイルには無いので「チェックなし・空欄」になる）
+      setWorkTimeFields('normal',data.cover?.workTimeOn,data.cover?.workTimeStart,data.cover?.workTimeEnd);
+      setWorkTimeFields('union',data.union?.workTimeOn,data.union?.workTimeStart,data.union?.workTimeEnd);
       if(data.union){
         document.getElementById('u-building').value=data.union.building||'';
         document.getElementById('u-address').value=data.union.address||'';
@@ -1877,6 +1991,8 @@ function gatherReportText(){
     lines.push(`【住所】${document.getElementById('u-address').value.trim()}`);
     lines.push(`【工事名称】${document.getElementById('u-workname').value.trim()}`);
     lines.push(`【作業実施日】${document.getElementById('u-date').value}`);
+    const wt=getWorkTime('union');
+    if(wt.range)lines.push(`【対応時間】${wt.range}`);
     lines.push(`【作業者】${document.getElementById('u-worker').value.trim()}`);
     lines.push(`【会社名】${document.getElementById('u-company').value.trim()}`);
     lines.push(`【作業内容】\n${document.getElementById('u-content').value.trim()}`);
@@ -1885,6 +2001,8 @@ function gatherReportText(){
     lines.push(`【住所】${document.getElementById('prop-address').value.trim()}`);
     lines.push(`【件名】${document.getElementById('work-name').value.trim()}`);
     lines.push(`【作業日】${document.getElementById('work-date').value}`);
+    const wt=getWorkTime('normal');
+    if(wt.range)lines.push(`【対応時間】${wt.range}`);
     lines.push(`【施工者】${document.getElementById('worker').value.trim()}`);
     if(reportType==='tama') lines.push(`【内容】${document.getElementById('work-content').value.trim()}`);
   }
@@ -1975,6 +2093,8 @@ function confirmReset(){
     document.getElementById('work-date').value=new Date().toISOString().split('T')[0];
     document.getElementById('u-date').value=new Date().toISOString().split('T')[0];
     document.getElementById('cover-logo').checked=false;
+    setWorkTimeFields('normal',false,'','');
+    setWorkTimeFields('union',false,'','');
     closeModal();showToast('🗑 リセットしました');
   };
   document.getElementById('modal').style.display='flex';
@@ -2014,6 +2134,7 @@ function loadSampleData(){
     document.getElementById('u-worker').value='崎岡';
     document.getElementById('u-company').value='株式会社IGUMI';
     document.getElementById('u-content').value='402号室天井裏の給水管を調査\n501号室浴室配管の通水試験を実施';
+    setWorkTimeFields('union',true,'09:00','17:00');
   }else{
     document.getElementById('prop-name').value='サンプルマンション';
     document.getElementById('prop-address').value='東京都八王子市上柚木428';
@@ -2021,6 +2142,7 @@ function loadSampleData(){
     document.getElementById('work-date').value=today;
     document.getElementById('worker').value='株式会社IGUMI';
     document.getElementById('work-content').value=reportType==='tama'?'3階天井給水管ピンホール補修':'';
+    setWorkTimeFields('normal',true,'09:00','17:00');
   }
   photos=[];
   sampleNums.forEach((num,i)=>{

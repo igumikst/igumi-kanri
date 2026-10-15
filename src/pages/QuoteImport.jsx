@@ -39,6 +39,41 @@ const label = { fontSize: 11, color: "#6B7280", marginBottom: 3 };
 const sectionTitle = { fontSize: 11, fontWeight: 700, color: "#6B7280", marginBottom: 6 };
 const num = v => (v == null ? "—" : Number(v).toLocaleString());
 const yen = v => (v == null ? "—" : `¥${Math.round(Number(v)).toLocaleString()}`);
+// 既存の案件に追加するときの案件名の変更(テーマ30)
+// - draft が null(今の案件名のまま)・空・今の名前と同じなら、変更しない(null を返す)
+const renamePlan = (currentName, draft) => {
+  const from = currentName || "";
+  const to = (draft ?? "").trim();
+  return draft != null && to && to !== from.trim() ? { from, to } : null;
+};
+const renameConfirmText = ({ from, to }) => `案件名を「${from}」から「${to}」に変更して、見積を追加します。\nよろしいですか?`;
+// 見積の登録が済んだあとに、案件名だけを変える。失敗したら、表示用のメッセージを返す
+async function applyProjectRename(projectId, plan) {
+  if (!plan) return null;
+  const { error } = await supabase.from("projects").update({ name: plan.to }).eq("id", projectId);
+  return error ? describeError(error, "案件名の変更") : null;
+}
+
+// 既存の案件の名前を、追加と同時に変えられる入力欄。初期値は今の案件名(draft = null)
+function ExistingProjectNameField({ currentName, fileName, draft, onChange }) {
+  const value = draft ?? currentName;
+  const changed = !!renamePlan(currentName, draft);
+  const btn = active => ({ padding: "4px 10px", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", border: `1.5px solid ${active ? "#1A3A5C" : "#D1D5DB"}`, background: active ? "#1A3A5C" : "#fff", color: active ? "#fff" : "#374151" });
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={label}>案件名(変えない場合はそのまま)</div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
+        <button type="button" onClick={() => onChange(null)} style={btn(!changed)}>今の案件名のまま</button>
+        {fileName && fileName.trim() !== currentName.trim() && (
+          <button type="button" onClick={() => onChange(fileName)} style={btn(changed && value.trim() === fileName.trim())}>ファイルの工事名称に変更</button>
+        )}
+      </div>
+      <input value={value} onChange={e => onChange(e.target.value)} style={{ ...inp, borderColor: changed ? "#E07B39" : "#E5E7EB" }} />
+      {changed && <div style={{ fontSize: 11, color: "#9A3412", marginTop: 3 }}>⚠️ 登録すると、案件名を「{currentName}」から「{value.trim()}」に変更します</div>}
+    </div>
+  );
+}
+
 // import_quote の後始末(下請け関連)。import_quote 自体のSQLは直さず、登録後の更新で済ませる
 // (新しい列を増やすたびに import_quote を直すと、その都度DB実行待ちが必要になるため)
 // - subFlagsBySortOrder: 下請け施工チェックが付いた行の sort_order(= p_items の配列index)一覧
@@ -134,8 +169,11 @@ export default function QuoteImport({ pjs, submittedQuotes, wonQuotes, setPjs, c
   };
   const targetProject = pjs.find(p => p.id === quoteImportCtx?.projectId);
 
-  const addProjectToState = async projectId => {
-    if (pjs.some(p => p.id === projectId)) return;
+  const addProjectToState = async (projectId, patch) => {
+    if (pjs.some(p => p.id === projectId)) {
+      if (patch) setPjs(prev => prev.map(p => (p.id === projectId ? { ...p, ...patch } : p)));
+      return;
+    }
     const { data } = await supabase.from("projects").select("*").eq("id", projectId).single();
     if (data) setPjs(prev => [{ ...data, subIds: data.subcontractorIds || [], gp: data.grossProfit || 0, qDate: data.quoteDate || "" }, ...prev]);
   };
@@ -209,6 +247,7 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
   const [pickedSetId, setPriceSetId] = useState("");
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
+  const [renameDraft, setRenameDraft] = useState(null); // 既存の案件名の変更(テーマ30)。null = 今の案件名のまま
   const [np, setNp] = useState({ name: initialTitle, clientId: "", branchId: "", salesRepId: "", inCharge: "", respondedAt: todayStr(), constructionType: "自社のみ" });
   // 班(誰が施工したか)。見積ごとに持つ(第8弾テーマ21)。初期値は「自社」(第8弾テーマ21-A追加)
   const [crewId, setCrewId] = useState(() => defaultOwnCrewId(crews));
@@ -317,10 +356,13 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
   if (!priceSetId) problems.push("単価セットを選んでください");
   if (!lines.length) problems.push("明細がありません");
   if (projectMode === "existing" && !projectId) problems.push("追加先の案件を選んでください");
+  if (projectMode === "existing" && projectId && renameDraft != null && !renameDraft.trim()) problems.push("案件名を入力してください(変えない場合は「今の案件名のまま」を押してください)");
   if (projectMode === "new" && !np.name.trim()) problems.push("案件名を入力してください");
 
   const register = async () => {
     if (problems.length || registering) return;
+    const rename = projectMode === "existing" ? renamePlan(pjs.find(p => p.id === projectId)?.name, renameDraft) : null;
+    if (rename && !window.confirm(renameConfirmText(rename))) return;
     setRegistering(true);
     const rep = salesReps.find(s => s.id === np.salesRepId);
     const pProject = projectMode === "existing" ? { id: projectId } : {
@@ -370,8 +412,9 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
       }).eq("id", data.project_id);
     }
     await applySubcontractorFollowUps({ quoteId: data.quote_id, subFlagsBySortOrder, subCosts });
-    await onRegistered(data.project_id);
-    setResult({ ok: true, projectId: data.project_id, quoteNo: data.quote_no, projectName: projectMode === "existing" ? pjs.find(p => p.id === projectId)?.name : np.name.trim() });
+    const renameError = await applyProjectRename(data.project_id, rename);
+    await onRegistered(data.project_id, rename && !renameError ? { name: rename.to } : null);
+    setResult({ ok: true, projectId: data.project_id, quoteNo: data.quote_no, projectName: projectMode === "existing" ? (rename && !renameError ? rename.to : pjs.find(p => p.id === projectId)?.name) : np.name.trim(), rename, renameError });
     setRegistering(false);
   };
 
@@ -385,7 +428,10 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
         <div>
           <div style={{ fontSize: 12, fontWeight: 700, color: "#6B7280", marginBottom: 6 }}>登録の結果</div>
           <div style={{ fontSize: 13, color: "#065F46", marginBottom: 4 }}>✅ 元ファイルの保管: 保存しました(案件の見積一覧から開けます)</div>
-          <div style={{ fontSize: 13, color: "#065F46", marginBottom: 10 }}>✅ 案件・見積・明細・原価: 登録しました(案件「{result.projectName}」/ 見積 No.{result.quoteNo})</div>
+          <div style={{ fontSize: 13, color: "#065F46", marginBottom: result.rename ? 4 : 10 }}>✅ 案件・見積・明細・原価: 登録しました(案件「{result.projectName}」/ 見積 No.{result.quoteNo})</div>
+          {result.rename && (result.renameError
+            ? <div style={{ fontSize: 13, color: "#B91C1C", marginBottom: 10, whiteSpace: "pre-wrap" }}>⚠️ 案件名の変更: できませんでした(案件名は「{result.rename.from}」のままです。見積は追加済み)。{"\n"}{result.renameError}</div>
+            : <div style={{ fontSize: 13, color: "#065F46", marginBottom: 10 }}>✅ 案件名: 「{result.rename.from}」から「{result.rename.to}」に変更しました</div>)}
           <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 10 }}>案件の受注金額・粗利は変わっていません。反映するには、見積一覧で「採用にする」を押してください。</div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => onOpenProject(result.projectId)} style={{ flex: 1, padding: "10px 0", background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>🏗️ この案件を開く →</button>
@@ -482,7 +528,7 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
               <div style={{ background: "#FFFBEB", border: "1px solid #FCD34D", borderRadius: 8, padding: "8px 10px", marginBottom: 8 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: "#92400E", marginBottom: 4 }}>⚠️ 名前の似た案件があります(二重登録に注意)</div>
                 {similarProjects.map(({ p }) => (
-                  <button key={p.id} onClick={() => { setProjectMode("existing"); setProjectId(p.id); }} style={{ display: "block", width: "100%", textAlign: "left", background: projectMode === "existing" && projectId === p.id ? "#FDE68A" : "#fff", border: "1px solid #FCD34D", borderRadius: 6, padding: "4px 8px", marginBottom: 3, fontSize: 12, cursor: "pointer", color: "#1F2937" }}>
+                  <button key={p.id} onClick={() => { setProjectMode("existing"); setProjectId(p.id); setRenameDraft(null); }} style={{ display: "block", width: "100%", textAlign: "left", background: projectMode === "existing" && projectId === p.id ? "#FDE68A" : "#fff", border: "1px solid #FCD34D", borderRadius: 6, padding: "4px 8px", marginBottom: 3, fontSize: 12, cursor: "pointer", color: "#1F2937" }}>
                     {p.name}<span style={{ float: "right", color: "#92400E" }}>この案件に追加 →</span>
                   </button>
                 ))}
@@ -492,10 +538,11 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
             {projectMode === "existing" ? (
               <div style={{ marginBottom: 8 }}>
                 <div style={label}>追加先の案件 *</div>
-                <select value={projectId} onChange={e => { const pid = e.target.value; setProjectId(pid); const proj = pjs.find(p => p.id === pid); setNp(prev => ({ ...prev, constructionType: proj?.constructionType || "自社のみ" })); }} style={inp}>
+                <select value={projectId} onChange={e => { const pid = e.target.value; setProjectId(pid); setRenameDraft(null); const proj = pjs.find(p => p.id === pid); setNp(prev => ({ ...prev, constructionType: proj?.constructionType || "自社のみ" })); }} style={inp}>
                   <option value="">選択してください</option>
                   {pjs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
+                {projectId && <ExistingProjectNameField currentName={pjs.find(p => p.id === projectId)?.name || ""} fileName={initialTitle} draft={renameDraft} onChange={setRenameDraft} />}
                 <div style={{ marginTop: 8 }}>
                   <div style={label}>施工形態</div>
                   <select value={np.constructionType} onChange={e => setNp({ ...np, constructionType: e.target.value })} style={inp}>
@@ -832,6 +879,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
   const [pickedSetId, setPriceSetId] = useState("");
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
+  const [renameDraft, setRenameDraft] = useState(null); // 既存の案件名の変更(テーマ30)。null = 今の案件名のまま
   const [np, setNp] = useState({ name: initialTitle, clientId: "", branchId: "", salesRepId: "", inCharge: "", respondedAt: todayStr(), constructionType: "自社のみ" });
   // 班(誰が施工したか)。見積ごとに持つ(第8弾テーマ21)。初期値は「自社」(第8弾テーマ21-A追加)
   const [crewId, setCrewId] = useState(() => defaultOwnCrewId(crews));
@@ -995,10 +1043,13 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
   else if (totalCheckOk == null && !totalMissingAck) problems.push("ファイルの合計を確認できなかったことを、チェックで確認してください");
   if (!priceSetId) problems.push("単価セットを選んでください");
   if (projectMode === "existing" && !projectId) problems.push("追加先の案件を選んでください");
+  if (projectMode === "existing" && projectId && renameDraft != null && !renameDraft.trim()) problems.push("案件名を入力してください(変えない場合は「今の案件名のまま」を押してください)");
   if (projectMode === "new" && !np.name.trim()) problems.push("案件名を入力してください");
 
   const register = async () => {
     if (problems.length || registering) return;
+    const rename = projectMode === "existing" ? renamePlan(pjs.find(p => p.id === projectId)?.name, renameDraft) : null;
+    if (rename && !window.confirm(renameConfirmText(rename))) return;
     setRegistering(true);
     const rep = salesReps.find(s => s.id === np.salesRepId);
     const pProject = projectMode === "existing" ? { id: projectId } : {
@@ -1053,8 +1104,9 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
     // 使った掛け率とESTの出力率を残す(import_quoteのSQLは直さず、登録後の更新で済ませる)
     await supabase.from("quotes").update({ applied_rates: appliedRates }).eq("id", data.quote_id);
     await applySubcontractorFollowUps({ quoteId: data.quote_id, subFlagsBySortOrder, subCosts });
-    await onRegistered(data.project_id);
-    setResult({ ok: true, projectId: data.project_id, quoteNo: data.quote_no, projectName: projectMode === "existing" ? pjs.find(p => p.id === projectId)?.name : np.name.trim() });
+    const renameError = await applyProjectRename(data.project_id, rename);
+    await onRegistered(data.project_id, rename && !renameError ? { name: rename.to } : null);
+    setResult({ ok: true, projectId: data.project_id, quoteNo: data.quote_no, projectName: projectMode === "existing" ? (rename && !renameError ? rename.to : pjs.find(p => p.id === projectId)?.name) : np.name.trim(), rename, renameError });
     setRegistering(false);
   };
 
@@ -1068,7 +1120,10 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
         <div>
           <div style={{ fontSize: 12, fontWeight: 700, color: "#6B7280", marginBottom: 6 }}>登録の結果</div>
           <div style={{ fontSize: 13, color: "#065F46", marginBottom: 4 }}>✅ 元ファイルの保管: 保存しました(案件の見積一覧から開けます)</div>
-          <div style={{ fontSize: 13, color: "#065F46", marginBottom: 10 }}>✅ 案件・見積・明細・原価: 登録しました(案件「{result.projectName}」/ 見積 No.{result.quoteNo})</div>
+          <div style={{ fontSize: 13, color: "#065F46", marginBottom: result.rename ? 4 : 10 }}>✅ 案件・見積・明細・原価: 登録しました(案件「{result.projectName}」/ 見積 No.{result.quoteNo})</div>
+          {result.rename && (result.renameError
+            ? <div style={{ fontSize: 13, color: "#B91C1C", marginBottom: 10, whiteSpace: "pre-wrap" }}>⚠️ 案件名の変更: できませんでした(案件名は「{result.rename.from}」のままです。見積は追加済み)。{"\n"}{result.renameError}</div>
+            : <div style={{ fontSize: 13, color: "#065F46", marginBottom: 10 }}>✅ 案件名: 「{result.rename.from}」から「{result.rename.to}」に変更しました</div>)}
           <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 10 }}>案件の受注金額・粗利は変わっていません。反映するには、見積一覧で「採用にする」を押してください。</div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => onOpenProject(result.projectId)} style={{ flex: 1, padding: "10px 0", background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>🏗️ この案件を開く →</button>
@@ -1172,7 +1227,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
           <div style={{ background: "#FFFBEB", border: "1px solid #FCD34D", borderRadius: 8, padding: "8px 10px", marginBottom: 8 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: "#92400E", marginBottom: 4 }}>⚠️ 名前の似た案件があります(二重登録に注意)</div>
             {similarProjects.map(({ p }) => (
-              <button key={p.id} onClick={() => { setProjectMode("existing"); setProjectId(p.id); }} style={{ display: "block", width: "100%", textAlign: "left", background: projectMode === "existing" && projectId === p.id ? "#FDE68A" : "#fff", border: "1px solid #FCD34D", borderRadius: 6, padding: "4px 8px", marginBottom: 3, fontSize: 12, cursor: "pointer", color: "#1F2937" }}>
+              <button key={p.id} onClick={() => { setProjectMode("existing"); setProjectId(p.id); setRenameDraft(null); }} style={{ display: "block", width: "100%", textAlign: "left", background: projectMode === "existing" && projectId === p.id ? "#FDE68A" : "#fff", border: "1px solid #FCD34D", borderRadius: 6, padding: "4px 8px", marginBottom: 3, fontSize: 12, cursor: "pointer", color: "#1F2937" }}>
                 {p.name}<span style={{ float: "right", color: "#92400E" }}>この案件に追加 →</span>
               </button>
             ))}
@@ -1182,10 +1237,11 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
         {projectMode === "existing" ? (
           <div style={{ marginBottom: 8 }}>
             <div style={label}>追加先の案件 *</div>
-            <select value={projectId} onChange={e => { const pid = e.target.value; setProjectId(pid); const proj = pjs.find(p => p.id === pid); setNp(prev => ({ ...prev, constructionType: proj?.constructionType || "自社のみ" })); }} style={inp}>
+            <select value={projectId} onChange={e => { const pid = e.target.value; setProjectId(pid); setRenameDraft(null); const proj = pjs.find(p => p.id === pid); setNp(prev => ({ ...prev, constructionType: proj?.constructionType || "自社のみ" })); }} style={inp}>
               <option value="">選択してください</option>
               {pjs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
+            {projectId && <ExistingProjectNameField currentName={pjs.find(p => p.id === projectId)?.name || ""} fileName={initialTitle} draft={renameDraft} onChange={setRenameDraft} />}
             <div style={{ marginTop: 8 }}>
               <div style={label}>施工形態</div>
               <select value={np.constructionType} onChange={e => setNp({ ...np, constructionType: e.target.value })} style={inp}>
@@ -1472,6 +1528,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
   const [pickedSetId, setPriceSetId] = useState("");
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
+  const [renameDraft, setRenameDraft] = useState(null); // 既存の案件名の変更(テーマ30)。null = 今の案件名のまま
   const [np, setNp] = useState({ name: initialTitle, clientId: "", branchId: "", salesRepId: "", inCharge: "", respondedAt: todayStr(), constructionType: "自社のみ" });
   // 班(誰が施工したか)。見積ごとに持つ(第8弾テーマ21)。初期値は「自社」(第8弾テーマ21-A追加)
   const [crewId, setCrewId] = useState(() => defaultOwnCrewId(crews));
@@ -1612,10 +1669,13 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
   if (!priceSetId) problems.push("単価セットを選んでください");
   if (!lines.length) problems.push("明細がありません");
   if (projectMode === "existing" && !projectId) problems.push("追加先の案件を選んでください");
+  if (projectMode === "existing" && projectId && renameDraft != null && !renameDraft.trim()) problems.push("案件名を入力してください(変えない場合は「今の案件名のまま」を押してください)");
   if (projectMode === "new" && !np.name.trim()) problems.push("案件名を入力してください");
 
   const register = async () => {
     if (problems.length || registering) return;
+    const rename = projectMode === "existing" ? renamePlan(pjs.find(p => p.id === projectId)?.name, renameDraft) : null;
+    if (rename && !window.confirm(renameConfirmText(rename))) return;
     setRegistering(true);
     const rep = salesReps.find(s => s.id === np.salesRepId);
     const pProject = projectMode === "existing" ? { id: projectId } : {
@@ -1670,8 +1730,9 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
     // 使った掛け率と見積番号を残す(import_quoteのSQLは直さず、登録後の更新で済ませる)
     await supabase.from("quotes").update({ applied_rates: appliedRates }).eq("id", data.quote_id);
     await applySubcontractorFollowUps({ quoteId: data.quote_id, subFlagsBySortOrder, subCosts });
-    await onRegistered(data.project_id);
-    setResult({ ok: true, projectId: data.project_id, quoteNo: data.quote_no, projectName: projectMode === "existing" ? pjs.find(p => p.id === projectId)?.name : np.name.trim() });
+    const renameError = await applyProjectRename(data.project_id, rename);
+    await onRegistered(data.project_id, rename && !renameError ? { name: rename.to } : null);
+    setResult({ ok: true, projectId: data.project_id, quoteNo: data.quote_no, projectName: projectMode === "existing" ? (rename && !renameError ? rename.to : pjs.find(p => p.id === projectId)?.name) : np.name.trim(), rename, renameError });
     setRegistering(false);
   };
 
@@ -1685,7 +1746,10 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
         <div>
           <div style={{ fontSize: 12, fontWeight: 700, color: "#6B7280", marginBottom: 6 }}>登録の結果</div>
           <div style={{ fontSize: 13, color: "#065F46", marginBottom: 4 }}>✅ 元ファイルの保管: 保存しました(案件の見積一覧から開けます)</div>
-          <div style={{ fontSize: 13, color: "#065F46", marginBottom: 10 }}>✅ 案件・見積・明細・原価: 登録しました(案件「{result.projectName}」/ 見積 No.{result.quoteNo})</div>
+          <div style={{ fontSize: 13, color: "#065F46", marginBottom: result.rename ? 4 : 10 }}>✅ 案件・見積・明細・原価: 登録しました(案件「{result.projectName}」/ 見積 No.{result.quoteNo})</div>
+          {result.rename && (result.renameError
+            ? <div style={{ fontSize: 13, color: "#B91C1C", marginBottom: 10, whiteSpace: "pre-wrap" }}>⚠️ 案件名の変更: できませんでした(案件名は「{result.rename.from}」のままです。見積は追加済み)。{"\n"}{result.renameError}</div>
+            : <div style={{ fontSize: 13, color: "#065F46", marginBottom: 10 }}>✅ 案件名: 「{result.rename.from}」から「{result.rename.to}」に変更しました</div>)}
           <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 10 }}>案件の受注金額・粗利は変わっていません。反映するには、見積一覧で「採用にする」を押してください。</div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => onOpenProject(result.projectId)} style={{ flex: 1, padding: "10px 0", background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>🏗️ この案件を開く →</button>
@@ -1784,7 +1848,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
               <div style={{ background: "#FFFBEB", border: "1px solid #FCD34D", borderRadius: 8, padding: "8px 10px", marginBottom: 8 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: "#92400E", marginBottom: 4 }}>⚠️ 名前の似た案件があります(二重登録に注意)</div>
                 {similarProjects.map(({ p }) => (
-                  <button key={p.id} onClick={() => { setProjectMode("existing"); setProjectId(p.id); }} style={{ display: "block", width: "100%", textAlign: "left", background: projectMode === "existing" && projectId === p.id ? "#FDE68A" : "#fff", border: "1px solid #FCD34D", borderRadius: 6, padding: "4px 8px", marginBottom: 3, fontSize: 12, cursor: "pointer", color: "#1F2937" }}>
+                  <button key={p.id} onClick={() => { setProjectMode("existing"); setProjectId(p.id); setRenameDraft(null); }} style={{ display: "block", width: "100%", textAlign: "left", background: projectMode === "existing" && projectId === p.id ? "#FDE68A" : "#fff", border: "1px solid #FCD34D", borderRadius: 6, padding: "4px 8px", marginBottom: 3, fontSize: 12, cursor: "pointer", color: "#1F2937" }}>
                     {p.name}<span style={{ float: "right", color: "#92400E" }}>この案件に追加 →</span>
                   </button>
                 ))}
@@ -1794,10 +1858,11 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
             {projectMode === "existing" ? (
               <div style={{ marginBottom: 8 }}>
                 <div style={label}>追加先の案件 *</div>
-                <select value={projectId} onChange={e => { const pid = e.target.value; setProjectId(pid); const proj = pjs.find(p => p.id === pid); setNp(prev => ({ ...prev, constructionType: proj?.constructionType || "自社のみ" })); }} style={inp}>
+                <select value={projectId} onChange={e => { const pid = e.target.value; setProjectId(pid); setRenameDraft(null); const proj = pjs.find(p => p.id === pid); setNp(prev => ({ ...prev, constructionType: proj?.constructionType || "自社のみ" })); }} style={inp}>
                   <option value="">選択してください</option>
                   {pjs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
+                {projectId && <ExistingProjectNameField currentName={pjs.find(p => p.id === projectId)?.name || ""} fileName={initialTitle} draft={renameDraft} onChange={setRenameDraft} />}
                 <div style={{ marginTop: 8 }}>
                   <div style={label}>施工形態</div>
                   <select value={np.constructionType} onChange={e => setNp({ ...np, constructionType: e.target.value })} style={inp}>
@@ -2015,6 +2080,7 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
   const [pickedSetId, setPriceSetId] = useState("");
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
+  const [renameDraft, setRenameDraft] = useState(null); // 既存の案件名の変更(テーマ30)。null = 今の案件名のまま
   const [np, setNp] = useState({ name: initialTitle, clientId: "", branchId: "", salesRepId: "", inCharge: d.cover.inCharge || "", respondedAt: todayStr(), constructionType: "自社のみ" });
   // 班(誰が施工したか)。見積ごとに持つ(第8弾テーマ21)。初期値は「自社」(第8弾テーマ21-A追加)
   const [crewId, setCrewId] = useState(() => defaultOwnCrewId(crews));
@@ -2145,10 +2211,13 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
   if (!priceSetId) problems.push("単価セットを選んでください");
   if (!lines.length) problems.push("明細がありません");
   if (projectMode === "existing" && !projectId) problems.push("追加先の案件を選んでください");
+  if (projectMode === "existing" && projectId && renameDraft != null && !renameDraft.trim()) problems.push("案件名を入力してください(変えない場合は「今の案件名のまま」を押してください)");
   if (projectMode === "new" && !np.name.trim()) problems.push("案件名を入力してください");
 
   const register = async () => {
     if (problems.length || registering) return;
+    const rename = projectMode === "existing" ? renamePlan(pjs.find(p => p.id === projectId)?.name, renameDraft) : null;
+    if (rename && !window.confirm(renameConfirmText(rename))) return;
     setRegistering(true);
     const rep = salesReps.find(s => s.id === np.salesRepId);
     const pProject = projectMode === "existing" ? { id: projectId } : {
@@ -2203,8 +2272,9 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
     // 使った掛け率(常に1.0)を残す(import_quoteのSQLは直さず、登録後の更新で済ませる)
     await supabase.from("quotes").update({ applied_rates: appliedRates }).eq("id", data.quote_id);
     await applySubcontractorFollowUps({ quoteId: data.quote_id, subFlagsBySortOrder, subCosts });
-    await onRegistered(data.project_id);
-    setResult({ ok: true, projectId: data.project_id, quoteNo: data.quote_no, projectName: projectMode === "existing" ? pjs.find(p => p.id === projectId)?.name : np.name.trim() });
+    const renameError = await applyProjectRename(data.project_id, rename);
+    await onRegistered(data.project_id, rename && !renameError ? { name: rename.to } : null);
+    setResult({ ok: true, projectId: data.project_id, quoteNo: data.quote_no, projectName: projectMode === "existing" ? (rename && !renameError ? rename.to : pjs.find(p => p.id === projectId)?.name) : np.name.trim(), rename, renameError });
     setRegistering(false);
   };
 
@@ -2218,7 +2288,10 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
         <div>
           <div style={{ fontSize: 12, fontWeight: 700, color: "#6B7280", marginBottom: 6 }}>登録の結果</div>
           <div style={{ fontSize: 13, color: "#065F46", marginBottom: 4 }}>✅ 元ファイルの保管: 保存しました(案件の見積一覧から開けます)</div>
-          <div style={{ fontSize: 13, color: "#065F46", marginBottom: 10 }}>✅ 案件・見積・明細・原価: 登録しました(案件「{result.projectName}」/ 見積 No.{result.quoteNo})</div>
+          <div style={{ fontSize: 13, color: "#065F46", marginBottom: result.rename ? 4 : 10 }}>✅ 案件・見積・明細・原価: 登録しました(案件「{result.projectName}」/ 見積 No.{result.quoteNo})</div>
+          {result.rename && (result.renameError
+            ? <div style={{ fontSize: 13, color: "#B91C1C", marginBottom: 10, whiteSpace: "pre-wrap" }}>⚠️ 案件名の変更: できませんでした(案件名は「{result.rename.from}」のままです。見積は追加済み)。{"\n"}{result.renameError}</div>
+            : <div style={{ fontSize: 13, color: "#065F46", marginBottom: 10 }}>✅ 案件名: 「{result.rename.from}」から「{result.rename.to}」に変更しました</div>)}
           <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 10 }}>案件の受注金額・粗利は変わっていません。反映するには、見積一覧で「採用にする」を押してください。</div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => onOpenProject(result.projectId)} style={{ flex: 1, padding: "10px 0", background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>🏗️ この案件を開く →</button>
@@ -2294,7 +2367,7 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
               <div style={{ background: "#FFFBEB", border: "1px solid #FCD34D", borderRadius: 8, padding: "8px 10px", marginBottom: 8 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: "#92400E", marginBottom: 4 }}>⚠️ 名前の似た案件があります(二重登録に注意)</div>
                 {similarProjects.map(({ p }) => (
-                  <button key={p.id} onClick={() => { setProjectMode("existing"); setProjectId(p.id); }} style={{ display: "block", width: "100%", textAlign: "left", background: projectMode === "existing" && projectId === p.id ? "#FDE68A" : "#fff", border: "1px solid #FCD34D", borderRadius: 6, padding: "4px 8px", marginBottom: 3, fontSize: 12, cursor: "pointer", color: "#1F2937" }}>
+                  <button key={p.id} onClick={() => { setProjectMode("existing"); setProjectId(p.id); setRenameDraft(null); }} style={{ display: "block", width: "100%", textAlign: "left", background: projectMode === "existing" && projectId === p.id ? "#FDE68A" : "#fff", border: "1px solid #FCD34D", borderRadius: 6, padding: "4px 8px", marginBottom: 3, fontSize: 12, cursor: "pointer", color: "#1F2937" }}>
                     {p.name}<span style={{ float: "right", color: "#92400E" }}>この案件に追加 →</span>
                   </button>
                 ))}
@@ -2304,10 +2377,11 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
             {projectMode === "existing" ? (
               <div style={{ marginBottom: 8 }}>
                 <div style={label}>追加先の案件 *</div>
-                <select value={projectId} onChange={e => { const pid = e.target.value; setProjectId(pid); const proj = pjs.find(p => p.id === pid); setNp(prev => ({ ...prev, constructionType: proj?.constructionType || "自社のみ" })); }} style={inp}>
+                <select value={projectId} onChange={e => { const pid = e.target.value; setProjectId(pid); setRenameDraft(null); const proj = pjs.find(p => p.id === pid); setNp(prev => ({ ...prev, constructionType: proj?.constructionType || "自社のみ" })); }} style={inp}>
                   <option value="">選択してください</option>
                   {pjs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
+                {projectId && <ExistingProjectNameField currentName={pjs.find(p => p.id === projectId)?.name || ""} fileName={initialTitle} draft={renameDraft} onChange={setRenameDraft} />}
                 <div style={{ marginTop: 8 }}>
                   <div style={label}>施工形態</div>
                   <select value={np.constructionType} onChange={e => setNp({ ...np, constructionType: e.target.value })} style={inp}>

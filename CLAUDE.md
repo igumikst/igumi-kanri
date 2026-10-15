@@ -76,6 +76,10 @@ Backend API (Vercel env vars, no `VITE_` prefix):
 `main`へのプッシュで、Vercelが本番(https://igumi-kanri.vercel.app)へ自動デプロイする。
 `main`へのプッシュ前には、`node scripts/predeploy-check.mjs`(build/lint/差分の内容チェック)が
 git の pre-push フックで自動実行され、失敗するとプッシュが止まる。
+
+pre-push フックの入れ方: 新しいPCでは、最初に `node scripts/install-hooks.mjs` を1回実行する。
+フックは .git/hooks に置かれ、Gitの共有に入らないため、PCごとに必要。
+(フックの元は scripts/hooks/pre-push)
 DBの変更を伴う作業は、SQLを提案して実行者の確認を待ってからデプロイする。
 デプロイ後は、https://igumi-kanri.vercel.app で、トップ・案件管理・ダッシュボード・
 単価管理・取引先が開くことを確認する。
@@ -122,3 +126,19 @@ All styles are **inline JSX style objects** — no Tailwind, no CSS modules, no 
 9. 調査だけで止まるときも、同じ形式で書く。最後の行は「止まっています。ご確認をお願いします。」にする。
 
 10. 日本語で、やさしい言葉で書く。専門用語は一言で補う。
+
+## ゆうかちゃんのPCで作業するときのルール
+
+このリポジトリは、虎生のPCに加えて、ゆうかちゃんのPC(C:\dev\igumi-kanri)でも作業する。mainにpushすると本番に自動反映されるため、次のルールを必ず守ること。
+
+1. 作業の前に、必ず git pull で最新のmainを取り込む。
+2. 作業は必ず自分用ブランチで行う。ブランチ名は「yuka/テーマ名」(例: yuka/estimate-layout)。mainのままで作業しない。
+3. ゆうかちゃんは yuka/テーマ名 のブランチで作業し、最新のmainを取り込んだうえで、プレビュー確認なしで、mainへマージしてpushしてよい(虎生が許可済み)。push の前の自動チェック(pre-push)は、必ず通す。
+4. 止まって聞く条件(売上・粗利・受注率の考え方を変える、【テスト】以外のデータを消す・書き換える、想定と違う点が見つかる)は、これまで通り変えない。
+5. 次のものは触らない: api/ の電話関連(voice・recording・transcribe・analyze・chat)、.env、vercel.json。
+6. DBの変更(SQL)は、Codeが実行しない。必要なときはSQLを書いて、虎生に見せて止まる。
+7. このリポジトリは公開なので、パスワード・キー・実名・サンプルファイル(.est・.xls・.xlsx・.pdf)・個人用パスをコミットしない。
+8. npm audit fix --force は実行しない(部品のバージョンが一気に変わり、動かなくなるため)。
+9. テスト用のデータは、名前を【テスト】から始める。【テスト】以外のデータを、勝手に書き換え・削除しない。
+10. 売上・粗利・受注率の考え方を変えるとき、想定と違う点が見つかったときは、作業を止めて虎生に聞く。
+11. 作業の最後の報告は、「報告の書き方」に従って、1つのコードブロックにまとめる。
