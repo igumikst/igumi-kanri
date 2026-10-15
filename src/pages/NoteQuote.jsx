@@ -19,6 +19,12 @@ import { DEFAULT_LABOR_UNIT_PRICE } from "../lib/noteDraft/rules";
 
 const NOTE_MAX_CHARS = 5000; // api/_noteParseCore.js の上限と同じ
 const AI_TIMEOUT_MS = 60000;
+// 合言葉(不正利用対策)。値はコードに書かず、スタッフが画面で入力し、この端末にだけ覚えておく。
+// サーバー(api/note-parse.js)は、Vercel の環境変数 NOTE_PARSE_PASSPHRASE と照らし合わせる
+const PASSPHRASE_STORAGE_KEY = "igumi_note_passphrase";
+const PASSPHRASE_HEADER = "x-note-passphrase";
+const loadPassphrase = () => { try { return localStorage.getItem(PASSPHRASE_STORAGE_KEY) || ""; } catch { return ""; } };
+const savePassphrase = v => { try { if (v) localStorage.setItem(PASSPHRASE_STORAGE_KEY, v); else localStorage.removeItem(PASSPHRASE_STORAGE_KEY); } catch { /* 保存できない端末では、毎回入力する */ } };
 
 const card = { background: "#fff", borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" };
 const th = { padding: "6px 6px", fontSize: 11, color: "#6B7280", textAlign: "left", whiteSpace: "nowrap" };
@@ -55,6 +61,8 @@ export default function NoteQuote({ pjs, setPjs, cos, setCos, salesReps, setSale
   const [registering, setRegistering] = useState(false);
   const [registerError, setRegisterError] = useState("");
   const abortRef = useRef(null);
+  const [passphrase, setPassphrase] = useState(loadPassphrase);
+  const [showPassphrase, setShowPassphrase] = useState(() => !loadPassphrase());
 
   // 単価表・原価・別名辞書・1人工の単価を読む(取り込み画面と同じ)
   useEffect(() => {
@@ -79,6 +87,7 @@ export default function NoteQuote({ pjs, setPjs, cos, setCos, salesReps, setSale
 
   const readNote = async () => {
     if (reading || !noteText.trim() || !price) return;
+    if (!passphrase.trim()) { setShowPassphrase(true); setReadError("合言葉を入力してください"); return; }
     setReading(true); setReadError(""); setBuilt(null); setLines([]);
     const { text, count } = maskPhoneNumbers(noteText); // AIに送る前に電話番号を伏せる(この1か所だけ)
     setMaskedCount(count);
@@ -86,9 +95,11 @@ export default function NoteQuote({ pjs, setPjs, cos, setCos, salesReps, setSale
     abortRef.current = ctrl;
     const timer = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
     try {
-      const res = await fetch("/api/note-parse", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }), signal: ctrl.signal });
+      const res = await fetch("/api/note-parse", { method: "POST", headers: { "Content-Type": "application/json", [PASSPHRASE_HEADER]: encodeURIComponent(passphrase.trim()) }, body: JSON.stringify({ text }), signal: ctrl.signal });
       const data = await res.json().catch(() => null);
+      if (res.status === 401) setShowPassphrase(true); // 合言葉が違う・無い → 入力欄を出し直す
       if (!res.ok || !data?.ok) throw new Error(data?.error || `AIの読み取りに失敗しました(${res.status})`);
+      savePassphrase(passphrase.trim()); // 通ったときだけ、この端末に覚えておく
       const b = buildDraft({ draft: data.draft, noteText: text, price, laborUnitPrice });
       setBuilt(b);
       setLines(b.lines);
@@ -187,6 +198,14 @@ export default function NoteQuote({ pjs, setPjs, cos, setCos, salesReps, setSale
             AIは「たたき台」までです。色の付いた行を確認してから登録してください。電話番号らしい文字は、AIに送る前に伏せます。
           </div>
           {price?.error && <div style={{ background: "#FEF2F2", color: "#991B1B", borderRadius: 10, padding: "8px 12px", fontSize: 12, fontWeight: 700, marginBottom: 10 }}>⚠️ {price.error}</div>}
+          {showPassphrase ? (
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+              <span style={{ fontSize: 12, color: "#374151", whiteSpace: "nowrap" }}>🔑 合言葉</span>
+              <input type="password" value={passphrase} onChange={e => setPassphrase(e.target.value)} placeholder="社内で決めた合言葉(この端末に覚えます)" autoComplete="off" style={{ ...inp, flex: 1 }} />
+            </div>
+          ) : (
+            <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 8 }}>🔑 合言葉はこの端末に保存済みです <button onClick={() => setShowPassphrase(true)} style={{ background: "none", border: "none", color: "#2563EB", fontSize: 11, cursor: "pointer", padding: 0 }}>変更する</button></div>
+          )}
           <textarea value={noteText} onChange={e => setNoteText(e.target.value)} disabled={reading} placeholder={"例:\n○○マンション101\n給水管一部更新工事\n2名作業9:00〜17:00\n○○さん案件\n・内容\n…\n・材料\n13エルボ×5"} rows={10} style={{ ...inp, resize: "vertical", fontFamily: "inherit", lineHeight: 1.5 }} />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
             <span style={{ fontSize: 11, color: noteText.length > NOTE_MAX_CHARS ? "#DC2626" : "#9CA3AF" }}>{noteText.length} / {NOTE_MAX_CHARS} 文字</span>
