@@ -2421,7 +2421,7 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
                   />
                 </div>
                 <div style={{ flex: 1, minWidth: 160 }}>
-                  <div style={label}>現場担当(社内。初期値 = {lb.fileShort}の担当者)</div>
+                  <div style={label}>{lb.inChargeLabel || `現場担当(社内。初期値 = ${lb.fileShort}の担当者)`}</div>
                   <input value={np.inCharge} onChange={e => setNp({ ...np, inCharge: e.target.value })} style={inp} />
                 </div>
                 <div style={{ flex: 1, minWidth: 200 }}>

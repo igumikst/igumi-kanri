@@ -13,14 +13,16 @@ const str = v => (v == null ? "" : String(v)).split(IDEOGRAPHIC_SPACE).join(" ")
 // ラベルの比較用。NFKC正規化して、全角・半角の空白をすべて除く(全角スペース入りの「小 計」→「小計」)
 const labelKey = v => (v == null ? "" : String(v)).normalize("NFKC").replace(/\s+/g, "");
 
-// 「見積書」シートの列(0始まり)。A:ラベル C:工事名の値(C:H結合) D:合計金額(D:H結合) J:金額(J:L結合)・担当者のラベル L:担当者の値
-const COL = { label: 0, title: 2, grandTotal: 3, amount: 9, inChargeLabel: 9, inCharge: 11 };
+// 「見積書」シートの列(0始まり)。A:ラベル C:工事名の値(C:H結合) D:合計金額(D:H結合) J:金額(J:L結合)
+// 表紙の「担当者」(J:ラベル L:値)は、読み取らない。現場担当は空欄で始め、画面で入力する(虎生の指示 2026-10-16)
+const COL = { label: 0, title: 2, grandTotal: 3, amount: 9 };
 
 // 画面・登録メモの文言(PDFの文言は SelfQuotePdfImportForm 側の初期値のまま)
 export const SELF_COVER_LABELS = {
   source: "自社見積書Excel(表紙つき)",
   issuedDateFrom: "概要メモの見積年月日から読み取り",
   fileShort: "Excel",
+  inChargeLabel: "現場担当(社内)",
 };
 
 // シート「見積書」と「内訳明細」があり、「表紙」「大項目」が無いブック
@@ -31,7 +33,7 @@ export function isSelfCoverWorkbook(wb) {
 
 const cellValue = (ws, r, c) => ws?.[XLSX.utils.encode_cell({ r, c })]?.v;
 
-// A列(担当者だけJ列)のラベルで行を探す。見つからなければ -1
+// 指定した列のラベルで行を探す。見つからなければ -1
 const findRow = (ws, col, label) => {
   if (!ws?.["!ref"]) return -1;
   const range = XLSX.utils.decode_range(ws["!ref"]);
@@ -71,8 +73,6 @@ export function parseSelfCoverWorkbook(wb) {
 
   const titleRow = findRow(coverWs, COL.label, "工事名");
   const title = titleRow >= 0 ? str(cellValue(coverWs, titleRow, COL.title)) : "";
-  const chargeRow = findRow(coverWs, COL.inChargeLabel, "担当者");
-  const inCharge = chargeRow >= 0 ? str(cellValue(coverWs, chargeRow, COL.inCharge)) : "";
 
   // 内訳明細・見積日(概要メモの見積年月日、空なら出力年月日)は、Concluの読み取りを使い回す。
   // 表紙のM2は =TODAY() で開くたびに変わるため使わない
@@ -112,7 +112,7 @@ export function parseSelfCoverWorkbook(wb) {
 
   return {
     cover: {
-      title, issuedDate: conclu.cover.issuedDate || "", quoteNo: null, inCharge,
+      title, issuedDate: conclu.cover.issuedDate || "", quoteNo: null, inCharge: "", // 表紙の担当者は拾わず、空欄にする
       totalExTax: subtotal.value, tax, totalInclTax, overheadAmount, discountAmount,
     },
     lines,
