@@ -130,11 +130,12 @@ export default function QuoteImport({ pjs, submittedQuotes, wonQuotes, setPjs, c
     if (!files.length) return;
     setReading(true);
     // ライブラリが大きいので、ファイルを選んだ時だけ読み込む
-    const [{ parseConcluWorkbook }, { parseEstFile }, { parseSelfQuoteWorkbook, isSelfQuoteWorkbook }, { parseSelfQuotePdfFile }, XLSX] = await Promise.all([
+    const [{ parseConcluWorkbook }, { parseEstFile }, { parseSelfQuoteWorkbook, isSelfQuoteWorkbook }, { parseSelfQuotePdfFile }, { parseSelfCoverWorkbook, isSelfCoverWorkbook }, XLSX] = await Promise.all([
       import("../lib/quoteImport/parseConclu.js"),
       import("../lib/quoteImport/parseEst.js"),
       import("../lib/quoteImport/parseSelfQuote.js"),
       import("../lib/quoteImport/parseSelfQuotePdf.js"),
+      import("../lib/quoteImport/parseSelfCover.js"),
       import("xlsx"),
     ]);
     const next = [];
@@ -152,6 +153,8 @@ export default function QuoteImport({ pjs, submittedQuotes, wonQuotes, setPjs, c
         } else {
           const wb = XLSX.read(await f.arrayBuffer(), { type: "array" });
           if (isSelfQuoteWorkbook(wb)) next.push({ ...base, kind: "selfquote", data: parseSelfQuoteWorkbook(wb) });
+          // 表紙つき自社見積書Excel(「見積書」+「内訳明細」)。確認画面は自社見積書PDFと同じものを使う
+          else if (isSelfCoverWorkbook(wb)) next.push({ ...base, kind: "selfcover", data: parseSelfCoverWorkbook(wb) });
           else next.push({ ...base, kind: "conclu", data: parseConcluWorkbook(wb) });
         }
       } catch (e) {
@@ -225,7 +228,7 @@ function FileCard({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branche
   }
   if (r.kind === "est") return <EstImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} crews={crews} setCrews={setCrews} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onOpenProject={onOpenProject} onRemove={onRemove} />;
   if (r.kind === "selfquote") return <SelfQuoteImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} crews={crews} setCrews={setCrews} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onOpenProject={onOpenProject} onRemove={onRemove} />;
-  if (r.kind === "selfquote-pdf") return <SelfQuotePdfImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} crews={crews} setCrews={setCrews} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onOpenProject={onOpenProject} onRemove={onRemove} />;
+  if (r.kind === "selfquote-pdf" || r.kind === "selfcover") return <SelfQuotePdfImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} crews={crews} setCrews={setCrews} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onOpenProject={onOpenProject} onRemove={onRemove} />;
   return <ImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} crews={crews} setCrews={setCrews} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onOpenProject={onOpenProject} onRemove={onRemove} />;
 }
 
@@ -2077,6 +2080,8 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
 // のため掛け率は常に1.0固定(選択UIを出さない)。諸経費・値引きは単価表への当てはめをしない
 function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, crews, setCrews, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
   const d = r.data;
+  // 画面・メモの文言。表紙つき自社見積書Excelは d.labels で切り替える(PDFは初期値のまま)
+  const lb = { source: "自社見積書PDF", issuedDateFrom: "表紙の日付から読み取り", fileShort: "PDF", ...d.labels };
   const initialTitle = stripFeeSuffix(d.cover.title || "");
   // 見積タイトルは見積の名前そのものなので、「費」を外さずファイルの工事名称をそのまま使う(初期値のみ。案件名はこれまでどおりinitialTitleを使う)
   const [title, setTitle] = useState(d.cover.title || "");
@@ -2229,7 +2234,7 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
       salesRepId: np.salesRepId || null, salesRep: repName(rep), inCharge: np.inCharge.trim(),
       subcontractorIds: [], quoteDate: issuedDate || "",
     };
-    const memo = `見積ファイル「${r.fileName}」(自社見積書PDF)から取り込み。掛け率1.0(IGUMI原価ベース保管用)のまま登録。ファイルの税抜合計 ${fileTotal?.toLocaleString()}円`;
+    const memo = `見積ファイル「${r.fileName}」(${lb.source})から取り込み。掛け率1.0(IGUMI原価ベース保管用)のまま登録。ファイルの税抜合計 ${fileTotal?.toLocaleString()}円`;
     const appliedRates = { rate: 1, choice: "none", quote_no: null };
     const pQuote = { title: title.trim(), price_set_id: priceSetId, status: "submitted", total_amount: Math.round(total), issued_at: issuedDate || null, memo, construction_type: constructionType, crew_id: crewId || null };
     const pItems = view.map(l => ({
@@ -2312,14 +2317,14 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
 
           {/* 表紙 */}
           <div style={{ background: "#F9FAFB", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
-            <div style={sectionTitle}>表紙(自社見積書PDF・IGUMI原価ベース保管用)</div>
+            <div style={sectionTitle}>表紙({lb.source}・IGUMI原価ベース保管用)</div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
               <div style={{ flex: 3, minWidth: 220 }}>
                 <div style={label}>見積タイトル(初期値 = 工事名称)*</div>
                 <input value={title} onChange={e => setTitle(e.target.value)} style={inp} />
               </div>
               <div style={{ flex: 1, minWidth: 150 }}>
-                <div style={label}>見積日(表紙の日付から読み取り)</div>
+                <div style={label}>見積日({lb.issuedDateFrom})</div>
                 <input type="date" value={issuedDate} onChange={e => setIssuedDate(e.target.value)} style={inp} />
               </div>
             </div>
@@ -2336,7 +2341,7 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
             <div style={sectionTitle}>検算(ファイルの内容)</div>
             {ngChecks.length === 0
               ? <div style={{ background: "#ECFDF5", color: "#065F46", borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 700, marginBottom: 6 }}>✅ 読み取った明細の合計({fmt(d.linesTotal)})が、ファイルの小計と一致しています</div>
-              : <div style={{ background: "#FEF2F2", color: "#991B1B", borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 700, marginBottom: 6 }}>⚠️ 合計が合いません(PDF: {fmt(d.cover.totalExTax)} / 取り込み: {fmt(d.linesTotal)})。明細を確認してください</div>}
+              : <div style={{ background: "#FEF2F2", color: "#991B1B", borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 700, marginBottom: 6 }}>⚠️ 合計が合いません({lb.fileShort}: {fmt(d.cover.totalExTax)} / 取り込み: {fmt(d.linesTotal)})。明細を確認してください</div>}
             <details>
               <summary style={{ fontSize: 11, color: "#6B7280", cursor: "pointer" }}>検算の内訳を見る</summary>
               {d.checks.map((c, i) => (
@@ -2411,7 +2416,7 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
                   />
                 </div>
                 <div style={{ flex: 1, minWidth: 160 }}>
-                  <div style={label}>現場担当(社内。初期値 = PDFの担当者)</div>
+                  <div style={label}>現場担当(社内。初期値 = {lb.fileShort}の担当者)</div>
                   <input value={np.inCharge} onChange={e => setNp({ ...np, inCharge: e.target.value })} style={inp} />
                 </div>
                 <div style={{ flex: 1, minWidth: 200 }}>
