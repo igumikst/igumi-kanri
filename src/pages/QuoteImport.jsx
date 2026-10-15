@@ -23,6 +23,9 @@ const ACCEPT_RE = /\.(xls|xlsx|est|pdf)$/i;
 const EST_RE = /\.est$/i;
 const PDF_RE = /\.pdf$/i;
 
+// 見積タイトルの初期値 = 見積ファイル名(最後の拡張子だけ除く)
+const fileBaseName = name => String(name || "").replace(/\.[A-Za-z0-9]{1,5}$/, "").trim();
+
 // 案件名・見積タイトルの自動生成(ファイルから読み取った工事名称)の語尾の「費」を外す。
 // 例: 「漏水調査費」→「漏水調査」。「経費」のように2文字以下になる場合は、別の単語の
 // 可能性が高いため外さない(「費用」は語尾が「用」なのでそもそも対象外)
@@ -245,8 +248,8 @@ let lineSeq = 0;
 function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, crews, setCrews, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
   const d = r.data;
   const initialTitle = stripFeeSuffix(d.cover.title || "");
-  // 見積タイトルは見積の名前そのものなので、「費」を外さずファイルの工事名称をそのまま使う(初期値のみ。案件名はこれまでどおりinitialTitleを使う)
-  const [title, setTitle] = useState(d.cover.title || "");
+  // 見積タイトルの初期値は、取り込んだ見積ファイルの名前そのまま(拡張子だけ除く。虎生の指示 2026-10-16)。案件名はこれまでどおりinitialTitleを使う
+  const [title, setTitle] = useState(fileBaseName(r.fileName));
   const [issuedDate, setIssuedDate] = useState(d.cover.issuedDate || "");
   const [markup, setMarkup] = useState(null); // "before" | "after"(必須)
   const [pickedSetId, setPriceSetId] = useState("");
@@ -451,7 +454,7 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
             <div style={sectionTitle}>表紙</div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
               <div style={{ flex: 3, minWidth: 220 }}>
-                <div style={label}>見積タイトル(初期値 = 工事名称)*</div>
+                <div style={label}>見積タイトル(初期値 = ファイル名)*</div>
                 <input value={title} onChange={e => setTitle(e.target.value)} style={inp} />
               </div>
               <div style={{ flex: 1, minWidth: 150 }}>
@@ -873,8 +876,8 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
   const [lines, setLines] = useState(() => d.lines.map(l => ({ ...l, pickedItemId: undefined, costOverride: undefined, isSubcontracted: false })));
   // 工事名称。初期値はファイル内で見つかった工事名称(見つからなければファイル名)。確認画面で直せる
   const initialTitle = stripFeeSuffix(d.cover.title || "");
-  // 見積タイトルは見積の名前そのものなので、「費」を外さずファイルの工事名称をそのまま使う(初期値のみ。案件名はこれまでどおりinitialTitleを使う)
-  const [title, setTitle] = useState(d.cover.title || "");
+  // 見積タイトルの初期値は、取り込んだ見積ファイルの名前そのまま(拡張子だけ除く。虎生の指示 2026-10-16)。案件名はこれまでどおりinitialTitleを使う
+  const [title, setTitle] = useState(fileBaseName(r.fileName));
   // rateChoice: "none"(1.0) | "back"(×0.925) | "0.9"(×0.9) | "custom"(入力した掛け率) ※必須。
   // 手で触るまでは、取引先・営業所の「掛け率の初期値」をそのまま使う(manualの状態には入れない)
   const [manualRateChoice, setManualRateChoice] = useState(null);
@@ -1152,7 +1155,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
       <div style={{ background: "#F9FAFB", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
         <div style={sectionTitle}>表紙(EST)</div>
         <div style={{ marginBottom: 8 }}>
-          <div style={label}>見積タイトル(初期値 = 工事名称)*</div>
+          <div style={label}>見積タイトル(初期値 = ファイル名)*</div>
           <input value={title} onChange={e => setTitle(e.target.value)} style={inp} />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 6, fontSize: 12 }}>
@@ -1526,8 +1529,8 @@ const DATE_PREFIX_RE = /^\d{1,2}月\d{1,2}日/;
 function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, crews, setCrews, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
   const d = r.data;
   const initialTitle = stripFeeSuffix(d.cover.title || "");
-  // 見積タイトルは見積の名前そのものなので、「費」を外さずファイルの工事名称をそのまま使う(初期値のみ。案件名はこれまでどおりinitialTitleを使う)
-  const [title, setTitle] = useState(d.cover.title || "");
+  // 見積タイトルの初期値は、取り込んだ見積ファイルの名前そのまま(拡張子だけ除く。虎生の指示 2026-10-16)。案件名はこれまでどおりinitialTitleを使う
+  const [title, setTitle] = useState(fileBaseName(r.fileName));
   const [issuedDate, setIssuedDate] = useState(d.cover.issuedDate || "");
   // rateChoice: "none"(1.0) | "back"(×0.925) | "0.9"(×0.9) | "custom"(入力した掛け率) ※必須。
   // 手で触るまでは、取引先・営業所の「掛け率の初期値」をそのまま使う(manualの状態には入れない)
@@ -1779,7 +1782,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
             <div style={sectionTitle}>表紙(自社見積書)</div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
               <div style={{ flex: 3, minWidth: 220 }}>
-                <div style={label}>見積タイトル(初期値 = 工事名称)*</div>
+                <div style={label}>見積タイトル(初期値 = ファイル名)*</div>
                 <input value={title} onChange={e => setTitle(e.target.value)} style={inp} />
               </div>
               <div style={{ flex: 1, minWidth: 150 }}>
@@ -2087,8 +2090,8 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
   // 画面・メモの文言。表紙つき自社見積書Excelは d.labels で切り替える(PDFは初期値のまま)
   const lb = { source: "自社見積書PDF", issuedDateFrom: "表紙の日付から読み取り", fileShort: "PDF", ...d.labels };
   const initialTitle = stripFeeSuffix(d.cover.title || "");
-  // 見積タイトルは見積の名前そのものなので、「費」を外さずファイルの工事名称をそのまま使う(初期値のみ。案件名はこれまでどおりinitialTitleを使う)
-  const [title, setTitle] = useState(d.cover.title || "");
+  // 見積タイトルの初期値は、取り込んだ見積ファイルの名前そのまま(拡張子だけ除く。虎生の指示 2026-10-16)。案件名はこれまでどおりinitialTitleを使う
+  const [title, setTitle] = useState(fileBaseName(r.fileName));
   const [issuedDate, setIssuedDate] = useState(d.cover.issuedDate || "");
   const [pickedSetId, setPriceSetId] = useState("");
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
@@ -2325,7 +2328,7 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
             <div style={sectionTitle}>表紙({lb.source}・IGUMI原価ベース保管用)</div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
               <div style={{ flex: 3, minWidth: 220 }}>
-                <div style={label}>見積タイトル(初期値 = 工事名称)*</div>
+                <div style={label}>見積タイトル(初期値 = ファイル名)*</div>
                 <input value={title} onChange={e => setTitle(e.target.value)} style={inp} />
               </div>
               <div style={{ flex: 1, minWidth: 150 }}>
