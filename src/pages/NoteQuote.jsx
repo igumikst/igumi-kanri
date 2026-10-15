@@ -11,6 +11,7 @@ import { maskPhoneNumbers } from "../lib/noteDraft/maskPhone";
 import { buildDraft, resolveLine } from "../lib/noteDraft/buildDraftLines";
 import { findProjectCandidates, findRepCandidates } from "../lib/noteDraft/projectCandidates";
 import { DEFAULT_LABOR_UNIT_PRICE } from "../lib/noteDraft/rules";
+import { visibleProjects } from "../lib/projectMerge";
 
 // ノートから見積の下書きを作る画面(第8弾 ノート見積作成)。
 // ノートを貼る → 電話番号を伏せる → AIで分解(/api/note-parse)→ 案件を人が選ぶ → 明細を3色で確認 → 登録して見積編集画面を開く。
@@ -252,7 +253,7 @@ export default function NoteQuote({ pjs, setPjs, cos, setCos, salesReps, setSale
                   <div style={label}>一覧から選ぶ</div>
                   <select value={projectId} onChange={e => setProjectId(e.target.value)} style={inp}>
                     <option value="">選んでください</option>
-                    {pjs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    {visibleProjects(pjs).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                 </>
               ) : (

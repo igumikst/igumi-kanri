@@ -1,6 +1,7 @@
 import { Hdr } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { fmt, STORAGE_LIMIT_MB } from "../lib/constants";
+import { visibleProjects } from "../lib/projectMerge";
 
 // 発注済み/未発注の2区分の色(Quotes.jsxの完工済み=緑・発注前=青と合わせる)
 const TWO_STATE_STYLE = {
@@ -13,10 +14,12 @@ export default function Analytics({ pjs, submittedQuotes, wonQuotes, cos, tks, l
   // 発注済み/未発注は見積の状態だけで判断する(第8弾テーマ3)。案件のstatusは使わない
   const submittedProjectIds = new Set((submittedQuotes || []).map(q => q.project_id));
   const wonProjectIds = new Set((wonQuotes || []).map(q => q.project_id));
-  const active = pjs.filter(p => submittedProjectIds.has(p.id));
-  const done = pjs.filter(p => wonProjectIds.has(p.id));
-  const totalAmt = pjs.reduce((s, p) => s + (p.amount || 0), 0);
-  const totalGp = pjs.reduce((s, p) => s + (p.gp || 0), 0);
+  // 統合済み(統合元になって隠れた)案件は、件数・集計から除く(テーマ32)
+  const activePjs = visibleProjects(pjs);
+  const active = activePjs.filter(p => submittedProjectIds.has(p.id));
+  const done = activePjs.filter(p => wonProjectIds.has(p.id));
+  const totalAmt = activePjs.reduce((s, p) => s + (p.amount || 0), 0);
+  const totalGp = activePjs.reduce((s, p) => s + (p.gp || 0), 0);
   const avgGpRate = totalAmt ? (totalGp / totalAmt * 100).toFixed(1) : 0;
   const statusCount = [
     { s: "未発注", n: active.length },
@@ -27,9 +30,9 @@ export default function Analytics({ pjs, submittedQuotes, wonQuotes, cos, tks, l
   const wonByProject = {};
   (wonQuotes || []).forEach(q => { (wonByProject[q.project_id] ||= []).push(q); });
   const allUnconfirmed = pid => { const list = wonByProject[pid]; return !!list?.length && list.every(q => !q.profit_confirmed); };
-  const top5 = pjs.filter(p => p.amount > 0 && !allUnconfirmed(p.id)).sort((a, b) => (b.gp / b.amount) - (a.gp / a.amount)).slice(0, 5);
+  const top5 = activePjs.filter(p => p.amount > 0 && !allUnconfirmed(p.id)).sort((a, b) => (b.gp / b.amount) - (a.gp / a.amount)).slice(0, 5);
   const byCharge = {};
-  pjs.forEach(p => { const k = p.inCharge || "未設定"; byCharge[k] = (byCharge[k] || 0) + (p.amount || 0); });
+  activePjs.forEach(p => { const k = p.inCharge || "未設定"; byCharge[k] = (byCharge[k] || 0) + (p.amount || 0); });
   const chargeList = Object.entries(byCharge).sort((a, b) => b[1] - a[1]);
   const maxCharge = Math.max(...chargeList.map(x => x[1]), 1);
 
@@ -42,9 +45,9 @@ export default function Analytics({ pjs, submittedQuotes, wonQuotes, cos, tks, l
       <div style={{ padding: isPC ? "14px 0" : 14 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
           {[
-            { label: "総案件数", value: `${pjs.length}件`, sub: `進行中(未発注) ${active.length}件`, color: "#1A3A5C", icon: "📋" },
-            { label: "発注済み案件", value: `${done.length}件`, sub: `発注済み率 ${pjs.length ? (done.length / pjs.length * 100).toFixed(0) : 0}%`, color: "#059669", icon: "✅" },
-            { label: "受注合計", value: `¥${(totalAmt / 10000).toFixed(0)}万`, sub: pjs.length ? `平均 ¥${(totalAmt / pjs.length / 10000).toFixed(0)}万` : "", color: "#E07B39", icon: "💰" },
+            { label: "総案件数", value: `${activePjs.length}件`, sub: `進行中(未発注) ${active.length}件`, color: "#1A3A5C", icon: "📋" },
+            { label: "発注済み案件", value: `${done.length}件`, sub: `発注済み率 ${activePjs.length ? (done.length / activePjs.length * 100).toFixed(0) : 0}%`, color: "#059669", icon: "✅" },
+            { label: "受注合計", value: `¥${(totalAmt / 10000).toFixed(0)}万`, sub: activePjs.length ? `平均 ¥${(totalAmt / activePjs.length / 10000).toFixed(0)}万` : "", color: "#E07B39", icon: "💰" },
             { label: "平均粗利率", value: `${avgGpRate}%`, sub: `粗利計 ¥${(totalGp / 10000).toFixed(0)}万`, color: "#7C3AED", icon: "📈" },
           ].map(k => (
             <div key={k.label} style={{ background: "#fff", borderRadius: 14, padding: "14px 14px", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>

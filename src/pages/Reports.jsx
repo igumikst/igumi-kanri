@@ -4,6 +4,7 @@ import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { Confirm } from "../components/UI";
 import { normalizeText, similarity } from "../lib/priceMatch";
 import { describeError } from "../lib/errorMessage";
+import { visibleProjects } from "../lib/projectMerge";
 
 const HEADER_COLOR = "#1a56a0";
 const TYPE_LABELS = { normal: "通常", tama: "多摩", union: "ユニオン", manual: "手動登録", "": "未分類" };
@@ -59,7 +60,8 @@ export default function Reports({ pjs, submittedQuotes, wonQuotes, cos, tks, lin
   const projectCandidates = (propertyName) => {
     const t = normalizeText(propertyName || "");
     if (!t) return [];
-    return (pjs || [])
+    // 統合済み(統合元になって隠れた)案件は候補から除く(テーマ32)
+    return visibleProjects(pjs)
       .map((p) => {
         const n = normalizeText(p.name);
         const score = n && (n.includes(t) || t.includes(n)) ? 1 : similarity(t, p.name);
@@ -224,7 +226,7 @@ export default function Reports({ pjs, submittedQuotes, wonQuotes, cos, tks, lin
                   )}
                   <select defaultValue="" onChange={(e) => { if (e.target.value) linkReportToProject(selected.id, e.target.value); }} style={{ width: "100%", padding: "7px 10px", borderRadius: 8, border: "1.5px solid #e5e7eb", fontSize: 12, color: "#1f2937", background: "#fff" }}>
                     <option value="">案件を選んで紐づける…</option>
-                    {(pjs || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    {visibleProjects(pjs).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                 </>
               )}

@@ -119,7 +119,7 @@ export async function loadQuoteForExport(supabase, quoteId) {
   if (iErr) throw new Error("明細の読み込みに失敗しました: " + iErr.message);
   let project = null, clientName = "";
   if (quote.project_id) {
-    const { data: p } = await supabase.from("projects").select("name,clientId,salesRep").eq("id", quote.project_id).maybeSingle();
+    const { data: p } = await supabase.from("projects").select("name,clientId,salesRep,merged_into_id").eq("id", quote.project_id).maybeSingle();
     project = p || null;
     if (p?.clientId) {
       const { data: c } = await supabase.from("companies").select("name").eq("id", p.clientId).maybeSingle();

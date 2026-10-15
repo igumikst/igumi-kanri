@@ -2,6 +2,7 @@ import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { PRIO, PROJECT_STATS_SINCE, STORAGE_LIMIT_MB } from "../lib/constants";
 import { LineIcon } from "./UI";
+import { visibleProjects } from "../lib/projectMerge";
 
 const SB_W = 180, RP_W = 220;
 
@@ -56,7 +57,8 @@ export const PCSidebar = ({ cust, tileConf, pjs, cos, pending, page, nav, setMod
   // 進行中案件の期間の基準は「対応日」(無ければ登録日)。
   // 進行中 = 未発注(発注前の見積がある案件)。案件のstatusは使わない(第8弾テーマ3)
   const submittedProjectIds = new Set(submittedQuotes.map(q => q.project_id));
-  const statsPjs = pjs.filter(p => (p.respondedAt || p.created_at || "") >= PROJECT_STATS_SINCE);
+  // 統合済み(統合元になって隠れた)案件は、KPI表示から除く(テーマ32)
+  const statsPjs = visibleProjects(pjs).filter(p => (p.respondedAt || p.created_at || "") >= PROJECT_STATS_SINCE);
   const active = statsPjs.filter(p => submittedProjectIds.has(p.id));
 
   // 🔒 財務パスワード関連のstate
@@ -311,7 +313,8 @@ export const PCRightPanel = ({ rpOpen, setRpOpen, pjs, tks, finFiles, tmplFiles,
   // 進行中案件の期間の基準は「対応日」(無ければ登録日)。
   // 進行中 = 未発注(発注前の見積がある案件)。案件のstatusは使わない(第8弾テーマ3)
   const submittedProjectIds = new Set(submittedQuotes.map(q => q.project_id));
-  const statsPjs = pjs.filter(p => (p.respondedAt || p.created_at || "") >= PROJECT_STATS_SINCE);
+  // 統合済み(統合元になって隠れた)案件は、KPI表示から除く(テーマ32)
+  const statsPjs = visibleProjects(pjs).filter(p => (p.respondedAt || p.created_at || "") >= PROJECT_STATS_SINCE);
   const active = statsPjs.filter(p => submittedProjectIds.has(p.id));
   // 受注合計・粗利率は「今月・完工日基準」(完工済みの見積のうち、completed_onが今月のものだけ。見積ごと)
   const nowD = new Date();

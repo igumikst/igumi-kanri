@@ -4,6 +4,7 @@ import { Modal, Inp, LineIcon } from "../components/UI";
 import AiAssistModal from "../components/AiAssistModal";
 import { supabase } from "../lib/supabase";
 import { HOMEPAGE_URL, BLOG_LIST_URL, PROJECT_STATS_SINCE, STORAGE_LIMIT_MB } from "../lib/constants";
+import { visibleProjects } from "../lib/projectMerge";
 
 const NAVY = "#122a4a";
 const SCHEDULE_BLUE = "#1a56a0";
@@ -88,7 +89,9 @@ export default function Home({ pjs, submittedQuotes, wonQuotes, cos, tks, links,
   // 進行中案件の期間の基準は「対応日」(無ければ登録日)。
   // 進行中 = 未発注(発注前の見積がある案件)。案件のstatusは使わない(第8弾テーマ3)
   const submittedProjectIds = new Set((submittedQuotes || []).map(q => q.project_id));
-  const active = pjs.filter(p => (p.respondedAt || p.created_at || "") >= PROJECT_STATS_SINCE && submittedProjectIds.has(p.id));
+  // 統合済み(統合元になって隠れた)案件は、件数・集計から除く(テーマ32)
+  const activePjsAll = visibleProjects(pjs);
+  const active = activePjsAll.filter(p => (p.respondedAt || p.created_at || "") >= PROJECT_STATS_SINCE && submittedProjectIds.has(p.id));
   const pendingCalls = (calls || []).filter(c => c.status === "未対応");
   const pendingCallsCount = pendingCalls.length;
   const todayLabel = new Date().toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "short" });
@@ -433,7 +436,7 @@ export default function Home({ pjs, submittedQuotes, wonQuotes, cos, tks, links,
         <button onClick={() => setDrawerOpen(true)} style={{ background: "rgba(255,255,255,0.12)", border: "none", color: "#fff", borderRadius: 10, padding: "8px 10px", fontSize: 18, cursor: "pointer", lineHeight: 1 }}>☰</button>
       </div>
       <div style={{ padding: "0 16px 10px", fontSize: 11, color: "rgba(255,255,255,0.6)" }}>
-        {todayLabel} · 案件 {pjs.length}件 · 未対応電話 {pendingCallsCount}件
+        {todayLabel} · 案件 {activePjsAll.length}件 · 未対応電話 {pendingCallsCount}件
       </div>
     </div>
   );

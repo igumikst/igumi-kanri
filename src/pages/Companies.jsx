@@ -5,6 +5,7 @@ import { Inp, Sel, Modal, Hdr, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { MARKUP_CHOICE_OPTIONS, CUSTOM_RATE_MIN, CUSTOM_RATE_MAX, resolveMarkupChoice } from "../lib/quoteImport/markup";
 import { addContact, updateContact, deleteContact, findDuplicateContact, findDuplicateSalesRep, resolveContactBranchId, contactBranchName } from "../lib/contacts";
+import { visibleProjects } from "../lib/projectMerge";
 
 const markupSelStyle = { padding: "5px 8px", borderRadius: 6, border: "1.5px solid #E5E7EB", fontSize: 12, background: "#fff", color: "#1F2937" };
 const markupInputStyle = { width: 90, padding: "5px 8px", borderRadius: 6, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" };
@@ -60,7 +61,8 @@ export default function Companies({ pjs, submittedQuotes, wonQuotes, cos, setCos
   const [editBranch, setEditBranch] = useState(null); // { id, name }
 
   const pending = tks.filter(t => !t.done);
-  const getPF = cid => pjs.filter(p => p.clientId === cid || (p.subIds || []).includes(cid));
+  // 統合済み(統合元になって隠れた)案件は、関連案件の一覧・件数から除く(テーマ32)
+  const getPF = cid => visibleProjects(pjs).filter(p => p.clientId === cid || (p.subIds || []).includes(cid));
   // 発注済み/未発注は見積の状態だけで判断する(案件のstatusは使わない。第8弾テーマ3)
   const wonProjectIds = new Set((wonQuotes || []).map(q => q.project_id));
   const submittedProjectIds = new Set((submittedQuotes || []).map(q => q.project_id));

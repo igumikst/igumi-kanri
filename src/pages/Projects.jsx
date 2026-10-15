@@ -10,6 +10,8 @@ import FileDropZone from "../components/FileDropZone";
 import { usePreventWindowFileDrop } from "../lib/useFileDropGuard";
 import { REPORT_FILE_BUCKET, REPORT_FILE_TYPES, REPORT_FILE_MAX_SIZE, reportFileExt, openReportFile } from "../lib/reportFiles";
 import { describeError } from "../lib/errorMessage";
+import { visibleProjects, fetchMergeHistory, unmergeProjects } from "../lib/projectMerge";
+import MergeProjectModal from "../components/MergeProjectModal";
 
 // 営業所・営業担当の絞り込みで「未設定」(branchId/salesRepIdが無い案件)を選べるようにする値(第8弾テーマ15)
 const FLT_UNSET = "__unset__";
@@ -53,6 +55,23 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
   const [reportQuoteChoice, setReportQuoteChoice] = useState("");
   const [reportUploading, setReportUploading] = useState(false);
   const [showHiddenReports, setShowHiddenReports] = useState(false); // 第8弾テーマ9: 非表示のファイルを表示するトグル
+
+  // 案件の統合(テーマ32)
+  const [showMerge, setShowMerge] = useState(false);
+  const [mergeHistory, setMergeHistory] = useState([]);
+  const [assigneeNames, setAssigneeNames] = useState([]);
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from("home_settings").select("value").eq("id", "assignee_names").single();
+      setAssigneeNames(data?.value || []);
+    })();
+  }, []);
+  useEffect(() => {
+    (async () => {
+      if (!selP || selP.merged_into_id) { setMergeHistory([]); return; }
+      setMergeHistory(await fetchMergeHistory(supabase, selP.id));
+    })();
+  }, [selP]);
 
   // 一覧の📸件数バッジ用(第8弾テーマ11)。project_idとhidden_atだけをまとめて1回取得し、案件ごとに集計する
   const [reportCounts, setReportCounts] = useState({});
@@ -163,12 +182,15 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
   };
 
   const getC = id => cos.find(c => c.id === id);
-  const inChargeList = ["すべて", ...new Set(pjs.map(p => p.inCharge).filter(Boolean))];
+  // 統合済み(統合元になって隠れた)案件は、一覧・検索・絞り込みの候補から除く(テーマ32)。
+  // 案件単体を直接開く(selP・openProjectId)場合はpjsをそのまま使うので、ここでは影響しない
+  const activePjs = visibleProjects(pjs);
+  const inChargeList = ["すべて", ...new Set(activePjs.map(p => p.inCharge).filter(Boolean))];
 
   // 取引先→営業所→営業担当の絞り込みの候補(ダッシュボードの絞り込みと同じ考え方)
   const clientOptions = (() => {
     const map = new Map();
-    pjs.forEach(p => { if (p.clientId && !map.has(p.clientId)) map.set(p.clientId, getC(p.clientId)?.name || "不明"); });
+    activePjs.forEach(p => { if (p.clientId && !map.has(p.clientId)) map.set(p.clientId, getC(p.clientId)?.name || "不明"); });
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], "ja"));
   })();
   const branchOptions = branches
@@ -205,7 +227,7 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
   const profitAllUnconfirmed = id => { const l = wonByProjectForProfit[id]; return !!l?.length && l.every(q => !q.profit_confirmed); };
   const profitHasUnconfirmed = id => { const l = wonByProjectForProfit[id]; return !!l?.length && l.some(q => !q.profit_confirmed); };
 
-  const filtP = pjs.filter(p => {
+  const filtP = activePjs.filter(p => {
     if (fltS === "未発注" && !submittedProjectIds.has(p.id)) return false;
     if (fltS === "発注済み" && !wonProjectIds.has(p.id)) return false;
     if (fltInCharge !== "すべて" && p.inCharge !== fltInCharge) return false;
@@ -241,8 +263,60 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
   };
 
   const delPj = async id => {
-    await supabase.from("projects").delete().eq("id", id);
+    const target = pjs.find(p => p.id === id);
+    if (target?.merged_into_id) { alert("統合済みの案件は削除できません。先に統合を取り消してください。"); return; }
+    // 統合したことのある案件は、統合履歴(project_merges)から参照され続けるため削除できない。
+    // 以前はエラーを確認せずに一覧から消していたため、実際にはDBに残ったまま消えたように
+    // 見えてしまっていた(テーマ32で発見)。エラー時はちゃんと知らせて、一覧からは消さない
+    const { error } = await supabase.from("projects").delete().eq("id", id);
+    if (error) { alert(describeError(error, "削除")); return; }
     setPjs(pjs.filter(p => p.id !== id)); setSelP(null);
+  };
+
+  // 統合・取り消しのあと、一覧・集計をすぐ読み直す(テーマ32)。pjsだけでなく、
+  // 一覧の件数バッジ(wonCounts/submittedCounts/reportCounts)の元データも合わせて読み直す
+  const refreshAfterMerge = async () => {
+    const [{ data: pjData }, { data: wq }, { data: sq }, { data: rf }] = await Promise.all([
+      supabase.from("projects").select("*").order("updated_at", { ascending: false, nullsFirst: false }),
+      supabase.from("quotes").select("id,project_id,title,total_amount,gross_profit,completed_on,profit_confirmed,crew_id").eq("status", "won"),
+      supabase.from("quotes").select("id,project_id").neq("status", "won"),
+      supabase.from("report_files").select("project_id,hidden_at"),
+    ]);
+    const mapped = (pjData || []).map(p => ({ ...p, subIds: p.subcontractorIds || [], gp: p.grossProfit || 0, qDate: p.quoteDate || "" }));
+    setPjs(mapped);
+    if (wq) setWonQuotes(wq);
+    if (sq) setSubmittedQuotes(sq);
+    if (rf) {
+      const counts = {};
+      rf.forEach(r => { if (!r.hidden_at) counts[r.project_id] = (counts[r.project_id] || 0) + 1; });
+      setReportCounts(counts);
+    }
+    return mapped;
+  };
+
+  const handleMerged = async targetId => {
+    setShowMerge(false);
+    const mapped = await refreshAfterMerge();
+    const target = mapped.find(p => p.id === targetId);
+    if (target) setSelP(target);
+    alert("統合しました");
+  };
+
+  const askUnmerge = h => {
+    const srcName = pjs.find(p => p.id === h.source_project_id)?.name || "この案件";
+    setConf({
+      msg: `「${srcName}」の統合を取り消しますか？\n\n統合元が一覧に戻り、移した見積・予定・報告書は元に戻ります。`,
+      okLabel: "取り消す", okColor: "#DC2626",
+      onOk: async () => {
+        setConf(null);
+        const { error } = await unmergeProjects(supabase, { sourceId: h.source_project_id, performedBy: null });
+        if (error) { alert(error.message); return; }
+        const mapped = await refreshAfterMerge();
+        const refreshed = mapped.find(p => p.id === selP.id);
+        if (refreshed) setSelP(refreshed);
+        alert("統合を取り消しました");
+      },
+    });
   };
 
   const fltSel = { padding: "6px 10px", borderRadius: 10, border: "1.5px solid #E5E7EB", fontSize: 12, background: "#fff", color: "#1F2937" };
@@ -285,13 +359,24 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
                 <button onClick={updatePj} style={{ flex: 2, padding: "12px 0", background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>💾 保存する</button>
               </div>
             </div>
+          ) : selP.merged_into_id ? (
+            <div style={{ background: "#fff", borderRadius: 14, padding: 18, boxShadow: "0 2px 10px rgba(0,0,0,0.08)" }}>
+              <div style={{ fontWeight: 800, fontSize: 17, marginBottom: 10, color: "#1F2937" }}>{selP.name}</div>
+              <div style={{ background: "#FFFBEB", color: "#92400E", borderRadius: 10, padding: "12px 14px", fontSize: 13, lineHeight: 1.7 }}>
+                この案件は「{pjs.find(p => p.id === selP.merged_into_id)?.name || "別の案件"}」に統合されています。
+              </div>
+              {pjs.find(p => p.id === selP.merged_into_id) && (
+                <button onClick={() => setSelP(pjs.find(p => p.id === selP.merged_into_id))} style={{ width: "100%", marginTop: 12, padding: "13px 0", background: "#1A3A5C", color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>統合先を開く →</button>
+              )}
+            </div>
           ) : (
             <div style={{ background: "#fff", borderRadius: 14, padding: 18, boxShadow: "0 2px 10px rgba(0,0,0,0.08)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
                 <div style={{ fontWeight: 800, fontSize: 17, flex: 1, marginRight: 8, color: "#1F2937" }}>{selP.name}</div>
               </div>
               <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-                <button onClick={() => setEditP({ ...selP, respondedAt: selP.respondedAt || todayStr() })} style={{ flex: 2, padding: "8px 0", background: "#EFF6FF", color: "#1A3A5C", border: "1.5px solid #BFDBFE", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✏️ 編集</button>
+                <button onClick={() => setEditP({ ...selP, respondedAt: selP.respondedAt || todayStr() })} style={{ flex: 1, padding: "8px 0", background: "#EFF6FF", color: "#1A3A5C", border: "1.5px solid #BFDBFE", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✏️ 編集</button>
+                <button onClick={() => setShowMerge(true)} style={{ flex: 1, padding: "8px 0", background: "#F0F7FF", color: "#1A3A5C", border: "1.5px solid #93C5FD", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>🔗 統合</button>
                 <button onClick={() => setConf({ msg: `「${selP.name}」\n\nこの操作は元に戻せません。\n削除しますか？`, onOk: () => { delPj(selP.id); setConf(null); } })} style={{ flex: 1, padding: "8px 0", background: "#FEF2F2", color: "#DC2626", border: "1.5px solid #FECACA", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>🗑 削除</button>
               </div>
               <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
@@ -366,6 +451,24 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
                   </FileDropZone>
                 </div>
               </div>
+              {mergeHistory.length > 0 && (
+                <div style={{ borderTop: "1px solid #F3F4F6", paddingTop: 14, marginTop: 14 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: "#1A3A5C", marginBottom: 8 }}>🔗 統合履歴</div>
+                  {mergeHistory.map(h => {
+                    const srcName = pjs.find(p => p.id === h.source_project_id)?.name || "(不明な案件)";
+                    const movedCount = (h.moved_quote_ids?.length || 0) + (h.moved_schedule_ids?.length || 0) + (h.moved_report_ids?.length || 0) + (h.moved_quote_file_ids?.length || 0) + (h.moved_report_file_ids?.length || 0);
+                    return (
+                      <div key={h.id} style={{ background: "#F9FAFB", borderRadius: 8, padding: "10px 12px", marginBottom: 6 }}>
+                        <div style={{ fontWeight: 700, fontSize: 12, color: "#1F2937" }}>{srcName}</div>
+                        <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>{fullTimeJp(h.merged_at)} ・ 実行者: {h.merged_by || "未選択"} ・ 移動 {movedCount}件</div>
+                        {h.unmerged_at
+                          ? <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 4 }}>取り消し済み({fullTimeJp(h.unmerged_at)})</div>
+                          : <button onClick={() => askUnmerge(h)} style={{ marginTop: 6, padding: "6px 12px", background: "#FEF2F2", color: "#DC2626", border: "1.5px solid #FECACA", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>取り消す</button>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -498,6 +601,9 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
         <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: -4, marginBottom: 10 }}>受注金額・粗利は、見積を作成して「採用」すると自動で入ります</div>
       </Modal>)}
       {conf && <Confirm msg={conf.msg} onCancel={() => setConf(null)} onOk={conf.onOk} okLabel={conf.okLabel} okColor={conf.okColor} extra={conf.extra} />}
+      {showMerge && selP && (
+        <MergeProjectModal supabase={supabase} source={selP} pjs={pjs} assigneeNames={assigneeNames} onClose={() => setShowMerge(false)} onMerged={handleMerged} />
+      )}
     </div>
   );
 }

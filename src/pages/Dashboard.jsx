@@ -1,6 +1,7 @@
 import { Hdr } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import DashboardPC from "../components/DashboardPC";
+import { visibleProjects } from "../lib/projectMerge";
 
 export default function Dashboard({ pjs, wonQuotes, submittedQuotes, cos, tks, links, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, tileConf, SB_W, RP_W, branches, salesReps, crews, embedded }) {
   const pending = (tks || []).filter(t => !t.done);
@@ -10,8 +11,9 @@ export default function Dashboard({ pjs, wonQuotes, submittedQuotes, cos, tks, l
   const wonProjectIds = new Set((wonQuotes || []).map(q => q.project_id));
   const submittedProjectIds = new Set((submittedQuotes || []).map(q => q.project_id));
   // registeredAt: 進行中・発注待ち・受注率などの期間の基準は「対応日」(無ければ登録日)。
-  // 2026-09-01以降の条件(PROJECT_STATS_SINCE)は、DashboardPC側で適用する
-  const jobs = (pjs || []).map(p => {
+  // 2026-09-01以降の条件(PROJECT_STATS_SINCE)は、DashboardPC側で適用する。
+  // 統合済み(統合元になって隠れた)案件は、集計から除く(テーマ32)
+  const jobs = visibleProjects(pjs).map(p => {
     const sell = Number(p.amount) || 0;
     const gp = Number(p.gp) || 0;
     return {

@@ -16,6 +16,7 @@ import { QUOTE_FILE_BUCKET, FILE_TYPES, fileIcon } from "../lib/quoteFiles";
 import { computeQuoteFinancials, CONSTRUCTION_TYPES } from "../lib/quoteFinancials";
 import { describeError } from "../lib/errorMessage";
 import { defaultOwnCrewId } from "../lib/crews";
+import { visibleProjects } from "../lib/projectMerge";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ACCEPT_RE = /\.(xls|xlsx|est|pdf)$/i;
@@ -339,7 +340,8 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
   const similarProjects = useMemo(() => {
     const t = normalizeText(title);
     if (!t) return [];
-    return pjs.map(p => {
+    // 統合済み(統合元になって隠れた)案件は候補から除く(テーマ32)
+    return visibleProjects(pjs).map(p => {
       const n = normalizeText(p.name);
       const score = n && (n.includes(t) || t.includes(n)) ? 1 : similarity(title, p.name);
       return { p, score };
@@ -541,7 +543,7 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
                 <div style={label}>追加先の案件 *</div>
                 <select value={projectId} onChange={e => { const pid = e.target.value; setProjectId(pid); setRenameDraft(null); const proj = pjs.find(p => p.id === pid); setNp(prev => ({ ...prev, constructionType: proj?.constructionType || "自社のみ" })); }} style={inp}>
                   <option value="">選択してください</option>
-                  {pjs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  {visibleProjects(pjs).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
                 {projectId && <ExistingProjectNameField currentName={pjs.find(p => p.id === projectId)?.name || ""} fileName={initialTitle} draft={renameDraft} onChange={setRenameDraft} />}
                 <div style={{ marginTop: 8 }}>
@@ -1028,7 +1030,8 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
   const similarProjects = useMemo(() => {
     const t = normalizeText(projectMode === "new" ? np.name : "");
     if (!t) return [];
-    return pjs.map(p => {
+    // 統合済み(統合元になって隠れた)案件は候補から除く(テーマ32)
+    return visibleProjects(pjs).map(p => {
       const n = normalizeText(p.name);
       const score = n && (n.includes(t) || t.includes(n)) ? 1 : similarity(t, p.name);
       return { p, score };
@@ -1654,7 +1657,8 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
   const similarProjects = useMemo(() => {
     const t = normalizeText(title);
     if (!t) return [];
-    return pjs.map(p => {
+    // 統合済み(統合元になって隠れた)案件は候補から除く(テーマ32)
+    return visibleProjects(pjs).map(p => {
       const n = normalizeText(p.name);
       const score = n && (n.includes(t) || t.includes(n)) ? 1 : similarity(title, p.name);
       return { p, score };
@@ -1863,7 +1867,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
                 <div style={label}>追加先の案件 *</div>
                 <select value={projectId} onChange={e => { const pid = e.target.value; setProjectId(pid); setRenameDraft(null); const proj = pjs.find(p => p.id === pid); setNp(prev => ({ ...prev, constructionType: proj?.constructionType || "自社のみ" })); }} style={inp}>
                   <option value="">選択してください</option>
-                  {pjs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  {visibleProjects(pjs).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
                 {projectId && <ExistingProjectNameField currentName={pjs.find(p => p.id === projectId)?.name || ""} fileName={initialTitle} draft={renameDraft} onChange={setRenameDraft} />}
                 <div style={{ marginTop: 8 }}>
@@ -2199,7 +2203,8 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
   const similarProjects = useMemo(() => {
     const t = normalizeText(title);
     if (!t) return [];
-    return pjs.map(p => {
+    // 統合済み(統合元になって隠れた)案件は候補から除く(テーマ32)
+    return visibleProjects(pjs).map(p => {
       const n = normalizeText(p.name);
       const score = n && (n.includes(t) || t.includes(n)) ? 1 : similarity(title, p.name);
       return { p, score };
@@ -2383,7 +2388,7 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
                 <div style={label}>追加先の案件 *</div>
                 <select value={projectId} onChange={e => { const pid = e.target.value; setProjectId(pid); setRenameDraft(null); const proj = pjs.find(p => p.id === pid); setNp(prev => ({ ...prev, constructionType: proj?.constructionType || "自社のみ" })); }} style={inp}>
                   <option value="">選択してください</option>
-                  {pjs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  {visibleProjects(pjs).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
                 {projectId && <ExistingProjectNameField currentName={pjs.find(p => p.id === projectId)?.name || ""} fileName={initialTitle} draft={renameDraft} onChange={setRenameDraft} />}
                 <div style={{ marginTop: 8 }}>

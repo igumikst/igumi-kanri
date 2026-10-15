@@ -1,6 +1,7 @@
 // ノートの物件名・営業担当から、既存の案件(projects)の候補を探す。AIは案件を決めない。必ず人が選ぶ。
 // 物件名の比べ方は、見積ファイルの取り込みと同じ(片方がもう片方を含めば 1、それ以外は類似度。0.5以上の上位)。
 import { normalizeText, similarity } from "../priceMatch";
+import { visibleProjects } from "../projectMerge";
 
 export const PROJECT_MIN_SCORE = 0.5;
 export const PROJECT_MAX_CANDIDATES = 5;
@@ -19,7 +20,8 @@ export function findProjectCandidates({ pjs, salesReps, header }) {
   const rep = normalizeText(header.repName);
   const repIds = new Set((salesReps || []).filter(s => rep && normalizeText(s.name).startsWith(rep)).map(s => s.id));
   const noteRooms = roomNumbers(`${header.place} ${header.propertyRaw}`);
-  return (pjs || []).map(p => {
+  // 統合済み(統合元になって隠れた)案件は候補から除く(テーマ32)
+  return visibleProjects(pjs).map(p => {
     const score = Math.max(0, ...targets.map(t => nameScore(t, p.name)));
     const repMatch = !!rep && (repIds.has(p.salesRepId) || normalizeText(p.salesRep).startsWith(rep));
     const pRooms = roomNumbers(p.name);
