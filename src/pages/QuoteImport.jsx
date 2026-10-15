@@ -241,7 +241,8 @@ let lineSeq = 0;
 function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, crews, setCrews, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
   const d = r.data;
   const initialTitle = stripFeeSuffix(d.cover.title || "");
-  const [title, setTitle] = useState(initialTitle);
+  // 見積タイトルは見積の名前そのものなので、「費」を外さずファイルの工事名称をそのまま使う(初期値のみ。案件名はこれまでどおりinitialTitleを使う)
+  const [title, setTitle] = useState(d.cover.title || "");
   const [issuedDate, setIssuedDate] = useState(d.cover.issuedDate || "");
   const [markup, setMarkup] = useState(null); // "before" | "after"(必須)
   const [pickedSetId, setPriceSetId] = useState("");
@@ -867,7 +868,8 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
   const [lines, setLines] = useState(() => d.lines.map(l => ({ ...l, pickedItemId: undefined, costOverride: undefined, isSubcontracted: false })));
   // 工事名称。初期値はファイル内で見つかった工事名称(見つからなければファイル名)。確認画面で直せる
   const initialTitle = stripFeeSuffix(d.cover.title || "");
-  const [title, setTitle] = useState(initialTitle);
+  // 見積タイトルは見積の名前そのものなので、「費」を外さずファイルの工事名称をそのまま使う(初期値のみ。案件名はこれまでどおりinitialTitleを使う)
+  const [title, setTitle] = useState(d.cover.title || "");
   // rateChoice: "none"(1.0) | "back"(×0.925) | "0.9"(×0.9) | "custom"(入力した掛け率) ※必須。
   // 手で触るまでは、取引先・営業所の「掛け率の初期値」をそのまま使う(manualの状態には入れない)
   const [manualRateChoice, setManualRateChoice] = useState(null);
@@ -1518,7 +1520,8 @@ const DATE_PREFIX_RE = /^\d{1,2}月\d{1,2}日/;
 function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, crews, setCrews, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
   const d = r.data;
   const initialTitle = stripFeeSuffix(d.cover.title || "");
-  const [title, setTitle] = useState(initialTitle);
+  // 見積タイトルは見積の名前そのものなので、「費」を外さずファイルの工事名称をそのまま使う(初期値のみ。案件名はこれまでどおりinitialTitleを使う)
+  const [title, setTitle] = useState(d.cover.title || "");
   const [issuedDate, setIssuedDate] = useState(d.cover.issuedDate || "");
   // rateChoice: "none"(1.0) | "back"(×0.925) | "0.9"(×0.9) | "custom"(入力した掛け率) ※必須。
   // 手で触るまでは、取引先・営業所の「掛け率の初期値」をそのまま使う(manualの状態には入れない)
@@ -2075,7 +2078,8 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
 function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, crews, setCrews, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
   const d = r.data;
   const initialTitle = stripFeeSuffix(d.cover.title || "");
-  const [title, setTitle] = useState(initialTitle);
+  // 見積タイトルは見積の名前そのものなので、「費」を外さずファイルの工事名称をそのまま使う(初期値のみ。案件名はこれまでどおりinitialTitleを使う)
+  const [title, setTitle] = useState(d.cover.title || "");
   const [issuedDate, setIssuedDate] = useState(d.cover.issuedDate || "");
   const [pickedSetId, setPriceSetId] = useState("");
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
