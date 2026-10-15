@@ -21,6 +21,12 @@ const SETTINGS_ITEMS = [
     label: "ダッシュボードの表示設定",
     sub: "項目のオン・オフ、レイアウト、明るさ",
   },
+  {
+    key: "notepassphrase",
+    icon: <span style={{ fontSize: 24 }}>🔑</span>,
+    label: "見積作成パスワードを設定",
+    sub: "ノート見積作成の合言葉の設定・変更(マスターキーが必要)",
+  },
 ];
 
 export default function Settings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_W, cust, pjs, submittedQuotes, wonQuotes, cos, tks, finFiles, tmplFiles, tileConf }) {

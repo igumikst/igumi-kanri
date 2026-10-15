@@ -20,7 +20,7 @@ import { DEFAULT_LABOR_UNIT_PRICE } from "../lib/noteDraft/rules";
 const NOTE_MAX_CHARS = 5000; // api/_noteParseCore.js の上限と同じ
 const AI_TIMEOUT_MS = 60000;
 // 合言葉(不正利用対策)。値はコードに書かず、スタッフが画面で入力し、この端末にだけ覚えておく。
-// サーバー(api/note-parse.js)は、Vercel の環境変数 NOTE_PARSE_PASSPHRASE と照らし合わせる
+// サーバー(api/note-parse.js)は、設定画面で決めた「見積作成パスワード」のハッシュと照らし合わせる
 const PASSPHRASE_STORAGE_KEY = "igumi_note_passphrase";
 const PASSPHRASE_HEADER = "x-note-passphrase";
 const loadPassphrase = () => { try { return localStorage.getItem(PASSPHRASE_STORAGE_KEY) || ""; } catch { return ""; } };
@@ -63,6 +63,7 @@ export default function NoteQuote({ pjs, setPjs, cos, setCos, salesReps, setSale
   const abortRef = useRef(null);
   const [passphrase, setPassphrase] = useState(loadPassphrase);
   const [showPassphrase, setShowPassphrase] = useState(() => !loadPassphrase());
+  const [passphraseUnset, setPassphraseUnset] = useState(false); // 見積作成パスワードが未設定(設定画面への案内を出す)
 
   // 単価表・原価・別名辞書・1人工の単価を読む(取り込み画面と同じ)
   useEffect(() => {
@@ -88,7 +89,7 @@ export default function NoteQuote({ pjs, setPjs, cos, setCos, salesReps, setSale
   const readNote = async () => {
     if (reading || !noteText.trim() || !price) return;
     if (!passphrase.trim()) { setShowPassphrase(true); setReadError("合言葉を入力してください"); return; }
-    setReading(true); setReadError(""); setBuilt(null); setLines([]);
+    setReading(true); setReadError(""); setPassphraseUnset(false); setBuilt(null); setLines([]);
     const { text, count } = maskPhoneNumbers(noteText); // AIに送る前に電話番号を伏せる(この1か所だけ)
     setMaskedCount(count);
     const ctrl = new AbortController();
@@ -97,7 +98,9 @@ export default function NoteQuote({ pjs, setPjs, cos, setCos, salesReps, setSale
     try {
       const res = await fetch("/api/note-parse", { method: "POST", headers: { "Content-Type": "application/json", [PASSPHRASE_HEADER]: encodeURIComponent(passphrase.trim()) }, body: JSON.stringify({ text }), signal: ctrl.signal });
       const data = await res.json().catch(() => null);
-      if (res.status === 401) setShowPassphrase(true); // 合言葉が違う・無い → 入力欄を出し直す
+      // 合言葉が違う・無い → 端末に覚えた古い合言葉を消して、入力欄を出し直す(合言葉が変わったとき)
+      if (res.status === 401) { savePassphrase(""); setShowPassphrase(true); }
+      if (data?.code === "unset") setPassphraseUnset(true);
       if (!res.ok || !data?.ok) throw new Error(data?.error || `AIの読み取りに失敗しました(${res.status})`);
       savePassphrase(passphrase.trim()); // 通ったときだけ、この端末に覚えておく
       const b = buildDraft({ draft: data.draft, noteText: text, price, laborUnitPrice });
@@ -214,6 +217,7 @@ export default function NoteQuote({ pjs, setPjs, cos, setCos, salesReps, setSale
             </button>
           </div>
           {readError && <div style={{ background: "#FEF2F2", color: "#991B1B", borderRadius: 10, padding: "8px 12px", fontSize: 12, fontWeight: 700, marginTop: 10, whiteSpace: "pre-wrap" }}>⚠️ {readError}</div>}
+          {readError && passphraseUnset && <button onClick={() => nav("notepassphrase")} style={{ marginTop: 6, background: "none", border: "none", color: "#2563EB", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0 }}>🔑 設定画面で見積作成パスワードを設定する →</button>}
           {maskedCount > 0 && built && <div style={{ fontSize: 11, color: "#6B7280", marginTop: 6 }}>電話番号らしい文字を {maskedCount} か所伏せてから、AIに送りました</div>}
         </div>
 
