@@ -80,7 +80,9 @@ console.log("[4/4] 差分の内容(秘密のキー・個人用パス・メール
 const contentPatterns = [
   { re: /eyJ[A-Za-z0-9_-]{10,}/, label: "秘密のキーらしき文字列(eyJ…)" },
   { re: /sk-[A-Za-z0-9]{10,}/, label: "秘密のキーらしき文字列(sk-…)" },
-  { re: /service_role/i, label: "service_role という文字列" },
+  // service_role は、SQLのファイル(supabase/migrations/*.sql)ではDBの役割の名前(grant ... to service_role)として
+  // 普通に出てくるので、そこだけは対象外にする。キー(eyJ… / sk-…)などの検査は、SQLのファイルにもそのままかける
+  { re: /service_role/i, label: "service_role という文字列", skipFile: f => /^supabase\/migrations\/[^/]+\.sql$/.test(f) },
   { re: /password\s*=/i, label: "password= という文字列" },
   { re: /[A-Za-z]:\\/, label: "パソコンの個人用パス(C:\\ / D:\\ など)" },
   { re: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/, label: "メールアドレス" },
@@ -96,6 +98,7 @@ try {
     if (currentFile === "package-lock.json" || currentFile === "scripts/predeploy-check.mjs") continue;
     if (!line.startsWith("+") || line.startsWith("+++")) continue;
     for (const p of contentPatterns) {
+      if (p.skipFile && p.skipFile(currentFile)) continue;
       if (p.re.test(line)) { fail(`"${currentFile}" の追加行に、${p.label}が見つかりました`); contentOk = false; }
     }
   }
