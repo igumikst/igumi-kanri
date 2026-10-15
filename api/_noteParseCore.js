@@ -16,8 +16,9 @@ const API_TIMEOUT_MS = 45000; // Vercel の maxDuration(60秒)より先に、分
 // server-side fallbacks("default" の形)が使えるモデル。Haiku 5.5 には無い
 const FALLBACK_MODELS = new Set(["claude-sonnet-5-5", "claude-opus-5-5"]);
 
+// null にできるのは数字(人数・時間・数量)だけにする。文字の項目は「無ければ空文字」。
+// (「文字または null」を増やすと、APIが「形が複雑すぎる(compiled grammar is too large)」で 400 を返すため)
 const str = { type: "string" };
-const nullableStr = { anyOf: [{ type: "string" }, { type: "null" }] };
 const nullableNum = { anyOf: [{ type: "number" }, { type: "null" }] };
 const obj = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
 const arr = (items) => ({ type: "array", items });
@@ -27,12 +28,12 @@ export const NOTE_SCHEMA = obj({
   property: obj({ raw: str, name: str, place: str }),
   work_title: obj({ raw: str, name: str }),
   sales_rep: obj({ raw: str, name: str }),
-  crew: arr(obj({ raw: str, people: nullableNum, start: nullableStr, end: nullableStr, hours_min: nullableNum, hours_max: nullableNum, day_word: nullableStr })),
-  works: arr(obj({ raw: str, text: str, qty: nullableNum, unit: str, detail_raw: nullableStr })),
+  crew: arr(obj({ raw: str, people: nullableNum, start: str, end: str, hours_min: nullableNum, hours_max: nullableNum, day_word: str })),
+  works: arr(obj({ raw: str, text: str, qty: nullableNum, unit: str, detail_raw: str })),
   conditions: arr(obj({ raw: str })),
-  materials: arr(obj({ raw: str, name: str, qty: nullableNum, unit: str, qty_certain: { type: "boolean" }, spec_raw: nullableStr, breakdown_raw: nullableStr, list_price_raw: nullableStr, wholesale_price_raw: nullableStr })),
+  materials: arr(obj({ raw: str, name: str, qty: nullableNum, unit: str, qty_certain: { type: "boolean" }, spec_raw: str, breakdown_raw: str, list_price_raw: str, wholesale_price_raw: str })),
   mall_materials: arr(obj({ raw: str, name: str, qty: nullableNum, unit: str })),
-  markup_75: obj({ status: { type: "string", enum: ["unknown", "included", "not_included"] }, raw: nullableStr }),
+  markup_75: obj({ status: { type: "string", enum: ["unknown", "included", "not_included"] }, raw: str }),
   subcontract: arr(obj({ raw: str })),
   unparsed: arr(str),
   questions: arr(str),
@@ -50,6 +51,9 @@ export const NOTE_SYSTEM_PROMPT = `あなたは設備工事会社の事務アシ
 - 外注・他社見積の記述は、中身を変えずに subcontract に raw のまま入れる(項目・数量・仕様を足す・消す・変えるのは禁止)。
 - どこにも分けられない行は unparsed に、元の文字のまま入れる。迷ったことは questions に短い日本語で書く。
 
+# 書いていない項目
+- 文字の項目(start・end・day_word・detail_raw・spec_raw・breakdown_raw・list_price_raw・wholesale_price_raw・markup_75.raw)で書いていないものは空文字("")。数字の項目(people・hours_min・hours_max・qty)で書いていないものは null。
+
 # raw について
 - すべての項目の raw には、ノートの元の文字をそのまま(1文字も変えずに)入れる。1つの品が複数行にまたがるときは、品名の行を raw にする。
 - name / text には、記号(・ ↑ 先頭の空白)を外した、書いてあるとおりの言葉を入れる。言い換え・正式名称への変換・略語の展開はしない(「オスアダ」は「オスアダ」のまま)。
@@ -58,7 +62,7 @@ export const NOTE_SYSTEM_PROMPT = `あなたは設備工事会社の事務アシ
 - property: 物件名と部屋番号・場所。name=建物名(書いてあるとおり)、place=部屋番号や場所(「311」「805号室」「2Fテナント」「管理人室地下ピット」など。無ければ空文字)。物件名と工事名が1行にくっついているときは分ける(raw はその行)。
 - work_title: 工事名(「〜工事」の行)。name=工事名だけ。
 - sales_rep: 「○○さん案件」の行。name は「さん案件」を外した名前(「加藤超さん案件」→「加藤超」)。無ければ raw も name も空文字。
-- crew: 人数と時間の行(「2名作業9:00〜17:00」「1名1〜2時間」「2名1日」など)。people=人数、start/end=時刻("9:00" の形。無ければ null)、hours_min/hours_max=「1〜2時間」のような時間の幅(1つだけなら両方同じ。無ければ null)、day_word=「1日」「半日」などの言葉(無ければ null)。丸めや人工の計算はしない。
+- crew: 人数と時間の行(「2名作業9:00〜17:00」「1名1〜2時間」「2名1日」など)。people=人数、start/end=時刻("9:00" の形。無ければ空文字)、hours_min/hours_max=「1〜2時間」のような時間の幅(1つだけなら両方同じ。無ければ null)、day_word=「1日」「半日」などの言葉(無ければ空文字)。丸めや人工の計算はしない。
 - works: 「内容」「作業」の見出しの下の作業。qty は「×3」のように書いてあるときだけ。detail_raw は、続く括弧書きや次の行の補足(「(リビング×2・化粧台×1)」「(調査時の開口)」)。「↑」で始まる行は、その行を1つの作業として入れる。
 - materials: 「材料」の見出しの下の材料。name はサイズ込みの品名(「13ポリ管」「20×13オスアダ」「25A VBニップル150」「洗浄管38mm エルボ」)。qty と unit は「×5本」なら 5 と "本"、「×1」なら 1 と ""。spec_raw は寸法などの括弧書き(「(500×700)」)。breakdown_raw は数量の内訳の括弧書き(「13継手×15(チーズ×2)」の「(チーズ×2)」)。卸値・定価は、その品の list_price_raw / wholesale_price_raw に元の文字のまま(「¥ 9.447」「¥60,450」)。
 - mall_materials: 「配管モール材料」の見出しの下の材料。materials には入れない。
@@ -75,7 +79,7 @@ export const NOTE_SYSTEM_PROMPT = `あなたは設備工事会社の事務アシ
 32排水ホース1m程
 32エルボ×2
 卸値¥500
-返すJSONの要点: property={raw:"サンプルハイツ101",name:"サンプルハイツ",place:"101"}、work_title.name="洗面排水管交換工事"、sales_rep.name="山田"、crew=[{people:1,hours_min:2,hours_max:2,start:null,end:null,day_word:null}]、works=[{text:"洗面台脱着",detail_raw:null}]、conditions=[{raw:"(排水トラップ再利用の為交換無し)"}]、materials=[{name:"32排水ホース",qty:null,qty_certain:false,unit:""},{name:"32エルボ",qty:2,qty_certain:true,wholesale_price_raw:"¥500"}]、markup_75.status="unknown"。`;
+返すJSONの要点: property={raw:"サンプルハイツ101",name:"サンプルハイツ",place:"101"}、work_title.name="洗面排水管交換工事"、sales_rep.name="山田"、crew=[{people:1,hours_min:2,hours_max:2,start:"",end:"",day_word:""}]、works=[{text:"洗面台脱着",detail_raw:""}]、conditions=[{raw:"(排水トラップ再利用の為交換無し)"}]、materials=[{name:"32排水ホース",qty:null,qty_certain:false,unit:""},{name:"32エルボ",qty:2,qty_certain:true,wholesale_price_raw:"¥500"}]、markup_75.status="unknown"。`;
 
 export class NoteParseError extends Error {
   constructor(message, status = 502) { super(message); this.status = status; }
