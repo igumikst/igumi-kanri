@@ -129,7 +129,7 @@ All styles are **inline JSX style objects** — no Tailwind, no CSS modules, no 
 
 ## ゆうかちゃんのPCで作業するときのルール
 
-このリポジトリは、虎生のPCに加えて、ゆうかちゃんのPC(C:\dev\igumi-kanri)でも作業する。ゆうかちゃんのPCでも、虎生のPCと同じ運用で、条件を満たす限り、mainへのマージ・push・本番デプロイまで進めてよい。mainにpushすると本番に自動反映されるため、次のルールを必ず守ること。
+このリポジトリは、虎生のPCに加えて、ゆうかちゃんのPCでも作業する。ゆうかちゃんのPCでも、虎生のPCと同じ運用で、条件を満たす限り、mainへのマージ・push・本番デプロイまで進めてよい。mainにpushすると本番に自動反映されるため、次のルールを必ず守ること。
 
 ### 進め方
 1. 作業の前に、必ず git pull で最新のmainを取り込む。
