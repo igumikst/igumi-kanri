@@ -998,6 +998,8 @@ const NORMAL_COVER_ITEM_ROWS=[
   {row:18,label:'作　業　日',valueKey:'workDate'},
   {row:20,label:'施　工　者',valueKey:'worker'},
 ];
+// 長い名前が枠からはみ出さないよう「縮小して全体を表示」にする行(物件名・住所・件名)。作業日・施工者は付けない
+const NORMAL_COVER_SHRINK_ROWS=[12,14,16];
 
 function applyNormalCoverRowHeights(ws){
   // 印刷範囲はA1:L28。29行以降を高くするとExcel→PDF変換で空白ページが増える
@@ -1060,7 +1062,8 @@ function fillNormalCoverItemRow(cws,row,label,value,minchoFont,thin,nextRowTop=t
   const valueCell=cws.getCell(`D${row}`);
   valueCell.value=value?safeCellStr(value):'';
   valueCell.font=minchoFont(14);
-  valueCell.alignment=row===18?{horizontal:'left',vertical:'middle'}:{vertical:'middle'};
+  valueCell.alignment=row===18?{horizontal:'left',vertical:'middle'}
+    :NORMAL_COVER_SHRINK_ROWS.includes(row)?{vertical:'middle',shrinkToFit:true}:{vertical:'middle'};
   for(let ci='D'.charCodeAt(0);ci<='K'.charCodeAt(0);ci++){
     cws.getCell(String.fromCharCode(ci)+row).border={bottom:thin};
   }
@@ -1187,7 +1190,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   const buildingCell=cws.getCell('E6');
   buildingCell.value=safeCellStr(uBuilding);
   buildingCell.font=gothicC(20,true);
-  buildingCell.alignment={horizontal:'center',vertical:'middle'};
+  buildingCell.alignment={horizontal:'center',vertical:'middle',shrinkToFit:true};
 
   // 工事名称 B10:S13（明朝22pt太字・中央）
   cws.mergeCells('B10:S13');
@@ -1319,7 +1322,9 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     vc.value=safeCellStr(val);
     vc.font=(valFont==='m')?{name:'ＭＳ Ｐ明朝',size:12,bold:false}:{name:'ＭＳ Ｐゴシック',size:12,bold:false};
     if(label==='住所'||label==='作業者')vc.font={...vc.font,bold:false};
-    vc.alignment={horizontal:'left',vertical:'middle'};
+    // 建築物名称・住所・工事名称は、長いとはみ出すため「縮小して全体を表示」(作業実施日・作業者は付けない)
+    const shrink=label==='建築物名称'||label==='住所'||label==='工事名称';
+    vc.alignment=shrink?{horizontal:'left',vertical:'middle',shrinkToFit:true}:{horizontal:'left',vertical:'middle'};
   });
 
   // 【作業内容】C21:G22
