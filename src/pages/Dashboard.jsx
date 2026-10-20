@@ -64,6 +64,11 @@ export default function Dashboard({ pjs, wonQuotes, submittedQuotes, cos, tks, l
       {!embedded && (cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
       {!embedded && <Hdr title="🧭 ダッシュボード" back={() => nav("home")} />}
       <DashboardPC jobs={jobs} completedQuotes={completedQuotes} showTitle={!!embedded} branches={branches} salesReps={salesReps} crews={crews} />
+      {!embedded && (
+        <div style={{ textAlign: "center", padding: "4px 0 24px" }}>
+          <button onClick={() => nav("dashboardsettings")} style={{ background: "none", border: "none", color: "#9CA3AF", fontSize: 12, textDecoration: "underline", cursor: "pointer" }}>⚙ 表示の設定</button>
+        </div>
+      )}
     </div>
   );
 }
