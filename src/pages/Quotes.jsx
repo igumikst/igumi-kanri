@@ -4,6 +4,8 @@ import { Hdr, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import GroupTree, { BundleToolbar } from "../components/GroupTree";
 import { fmt, todayStr } from "../lib/constants";
+import { DENSITY, loadDensityKey, saveDensityKey } from "../lib/quoteTableDensity";
+import { listGroupPaths } from "../lib/groupTree";
 import { openQuoteFile, QUOTE_FILE_BUCKET, FILE_TYPES, fileIcon } from "../lib/quoteFiles";
 import { computeQuoteFinancials } from "../lib/quoteFinancials";
 import { computeAdoptTotals, buildAdoptMessage, buildUnadoptMessage, provisionalWarningLines, adoptQuote as adoptQuoteInDb, unadoptQuote as unadoptQuoteInDb, recalcProjectTotals, confirmQuoteProfit, unconfirmQuoteProfit } from "../lib/quoteAdopt";
@@ -67,6 +69,10 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
   const [laborPick, setLaborPick] = useState(null);
   const [laborCountInput, setLaborCountInput] = useState("");
   const [selectedKeys, setSelectedKeys] = useState(new Set());
+  // 明細の表の見た目(コンパクト/ゆったり。端末に覚える)と、グループの折りたたみ(画面の中だけ。DBには保存しない)
+  const [densityKey, setDensityKey] = useState(() => loadDensityKey(isPC));
+  const [collapsed, setCollapsed] = useState(() => new Set());
+  const [showPricePicker, setShowPricePicker] = useState(false); // 「単価項目を追加」は、ふだんは閉じておく
   const [subCosts, setSubCosts] = useState([]); // 下請けの原価(quote_subcontractor_costs)
   const [subForm, setSubForm] = useState({ subcontractor_id: "", amount: "", note: "", file: null });
   const [savingSub, setSavingSub] = useState(false);
@@ -136,6 +142,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
     setEd({ ...blankEd, construction_type: project?.constructionType || "自社のみ", crew_id: defaultCrewId, profit_confirmed: !!defaultCrewId });
     setSubCosts([]); setSubForm({ subcontractor_id: "", amount: "", note: "", file: null });
     setSearch(""); setCategoryFilter(""); setGroupFilter("");
+    setCollapsed(new Set()); setShowPricePicker(false); setSelectedKeys(new Set()); // 見積を開くたびに、グループは全部開いた状態から
     setView("edit");
   };
 
@@ -167,6 +174,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
     setSubForm({ subcontractor_id: "", amount: "", note: "", file: null });
     await loadSubCosts(q.id);
     setSearch(""); setCategoryFilter(""); setGroupFilter("");
+    setCollapsed(new Set()); setShowPricePicker(false); setSelectedKeys(new Set()); // 見積を開くたびに、グループは全部開いた状態から
     setView("edit");
   };
 
@@ -349,6 +357,37 @@ ${e.message}` : "見積書を出力できませんでした。");
   const updateLine = (key, patch) => setEd(prev => ({ ...prev, lines: prev.lines.map(l => l.key === key ? { ...l, ...patch } : l) }));
   const removeLine = key => setEd(prev => ({ ...prev, lines: prev.lines.filter(l => l.key !== key) }));
   const setLines = newLines => setEd(prev => ({ ...prev, lines: newLines }));
+  // 閉じたグループの中に入っている行か(入れ子も含む)
+  const hiddenBy = (set, groupName) => { const g = groupName || ""; for (const p of set) if (g === p || g.startsWith(p + " > ")) return true; return false; };
+  // 並び替え・グループ分けの結果を反映する。見えていた行が、閉じたグループの中に入ったときは、そのグループを自動で開く
+  // (閉じたまま中に入って見えなくなる事故を防ぐ)。名前が変わって無くなったグループの開閉の記録は片付ける
+  const onTreeChange = newLines => {
+    setCollapsed(prev => {
+      if (prev.size === 0) return prev;
+      const next = new Set([...prev].filter(p => listGroupPaths(newLines).includes(p)));
+      const before = new Map(ed.lines.map(l => [l.key, l.group_name || ""]));
+      for (const l of newLines) {
+        const was = before.get(l.key);
+        if (was === undefined || hiddenBy(prev, was)) continue; // もともと見えていなかった行は対象外
+        if (hiddenBy(next, l.group_name)) for (const p of [...next]) if ((l.group_name || "") === p || (l.group_name || "").startsWith(p + " > ")) next.delete(p);
+      }
+      return next;
+    });
+    setLines(newLines);
+  };
+  const toggleGroup = path => setCollapsed(prev => {
+    const next = new Set(prev);
+    if (next.has(path)) next.delete(path);
+    else {
+      next.add(path);
+      // 閉じるグループの中の行は、選択(まとめる用のチェック)から外す(見えない行がまとめられないように)
+      setSelectedKeys(sel => new Set([...sel].filter(k => !hiddenBy(next, ed.lines.find(l => l.key === k)?.group_name))));
+    }
+    return next;
+  });
+  const expandAll = () => setCollapsed(new Set());
+  const collapseAll = () => { const all = new Set(listGroupPaths(ed.lines)); setCollapsed(all); setSelectedKeys(sel => new Set([...sel].filter(k => !hiddenBy(all, ed.lines.find(l => l.key === k)?.group_name)))); };
+  const changeDensity = key => { setDensityKey(key); saveDensityKey(key); };
   const toggleSelect = key => setSelectedKeys(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
   const total = ed.lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.sale_price) || 0), 0);
@@ -499,6 +538,16 @@ ${e.message}` : "見積書を出力できませんでした。");
   const showSubCheckCol = isMixed;
   const showCostCol = !isSubOnly;
   const leafColumnCount = 4 + (showSubCheckCol ? 1 : 0) + (showCostCol ? 1 : 0);
+  const density = DENSITY[isPC ? densityKey : "cozy"]; // スマホはいつも「ゆったり」(今の縦積み)
+  const compactPC = isPC && density.oneLine;
+  const hasGroups = ed.lines.some(l => l.group_name);
+  // 原価が「未入力・未確認」の行(原価の欄を出している施工形態だけ。下請け施工の行は対象外=今の原価欄と同じ考え方)
+  const costMissing = l => showCostCol && !(isMixed && l.is_subcontracted) && (!l.cost_confirmed || l.cost_price == null);
+  const groupInfo = node => {
+    let count = 0, warnCount = 0;
+    (function walk(n) { for (const c of n.children) { if (c.isGroup) walk(c); else { count++; if (costMissing(c.line)) warnCount++; } } })(node);
+    return { count, warnCount };
+  };
 
   // 非表示(hidden_at)のファイルは、一覧・「元ファイル」ボタンの対象から外す(第8弾テーマ12①)
   const visibleQuoteFiles = quoteFiles.filter(f => !f.hidden_at);
@@ -659,9 +708,18 @@ ${e.message}` : "見積書を出力できませんでした。");
               </div>
             </div>
 
-            {ed.price_set_id && (
+            {ed.price_set_id && !showPricePicker && (
+              <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                <button onClick={() => setShowPricePicker(true)} style={{ flex: 2, padding: "10px 0", background: "#EEF2FF", color: "#3730A3", border: "1.5px solid #C7D2FE", borderRadius: 10, fontSize: 13, fontWeight: 800, cursor: "pointer" }}>＋ 単価表から追加</button>
+                <button onClick={addManualLine} style={{ flex: 1, padding: "10px 0", background: "#FFF7ED", color: "#9A3412", border: "1.5px dashed #FDBA74", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>✎ 手入力で追加</button>
+              </div>
+            )}
+            {ed.price_set_id && showPricePicker && (
               <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
-                <div style={{ fontWeight: 800, fontSize: 14, color: "#1A3A5C", marginBottom: 10 }}>🔍 単価項目を追加</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <div style={{ fontWeight: 800, fontSize: 14, color: "#1A3A5C" }}>🔍 単価項目を追加</div>
+                  <button onClick={() => setShowPricePicker(false)} style={{ background: "none", border: "1px solid #E5E7EB", borderRadius: 8, padding: "3px 10px", fontSize: 12, color: "#6B7280", cursor: "pointer" }}>閉じる ▲</button>
+                </div>
                 <input value={search} onChange={e => setSearch(e.target.value)} placeholder="名前・仕様で検索" style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, background: "#FAFAFA", boxSizing: "border-box", color: "#1F2937", marginBottom: 8 }} />
                 <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
                   <select value={categoryFilter} onChange={e => { setCategoryFilter(e.target.value); setGroupFilter(""); }} style={{ flex: 1, minWidth: 140, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, background: "#FAFAFA", color: "#1F2937" }}>
@@ -708,41 +766,129 @@ ${e.message}` : "見積書を出力できませんでした。");
             )}
 
             <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
-              <div style={{ fontWeight: 800, fontSize: 14, color: "#1A3A5C", marginBottom: 10 }}>📋 明細 ({ed.lines.length}件)</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                <div style={{ fontWeight: 800, fontSize: 14, color: "#1A3A5C", flex: 1 }}>📋 明細 ({ed.lines.length}件)</div>
+                {hasGroups && (
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <button onClick={expandAll} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 6, padding: "3px 8px", fontSize: 11, color: "#374151", cursor: "pointer" }}>▼ 全部開く</button>
+                    <button onClick={collapseAll} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 6, padding: "3px 8px", fontSize: 11, color: "#374151", cursor: "pointer" }}>▶ 全部閉じる</button>
+                  </div>
+                )}
+                {isPC && (
+                  <div style={{ display: "flex", border: "1px solid #E5E7EB", borderRadius: 6, overflow: "hidden" }}>
+                    {["compact", "cozy"].map(k => (
+                      <button key={k} onClick={() => changeDensity(k)} style={{ background: densityKey === k ? "#1A3A5C" : "#fff", color: densityKey === k ? "#fff" : "#374151", border: "none", padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{DENSITY[k].label}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
               {ed.lines.length === 0 ? (
                 <div style={{ padding: 16, textAlign: "center", fontSize: 12, color: "#9CA3AF" }}>まだ明細がありません</div>
               ) : (
-                <div style={{ overflowX: "auto" }}>
+                <div>
                   <BundleToolbar lines={ed.lines} onChange={setLines} selectedKeys={selectedKeys} setSelectedKeys={setSelectedKeys} />
                   <div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 6 }}>⠿をドラッグ、または↑↓・📂(このグループに移す)で並べ替え・グループ分けができます</div>
-                  <table style={{ width: "100%", minWidth: 640, borderCollapse: "collapse" }}>
+                  <div style={compactPC ? { maxHeight: "calc(100vh - 150px)", overflow: "auto", border: "1px solid #F3F4F6", borderRadius: 8 } : { overflowX: "auto" }}>
+                  <table style={{ width: "100%", minWidth: compactPC ? 760 : 640, borderCollapse: "collapse" }}>
                     <thead>
-                      <tr style={{ borderBottom: "2px solid #F3F4F6" }}>
-                        <th style={{ padding: "6px 8px", fontSize: 11, color: "#6B7280", textAlign: "left" }}></th>
-                        <th style={{ padding: "6px 8px", fontSize: 11, color: "#6B7280", textAlign: "left" }}>項目</th>
-                        <th style={{ padding: "6px 8px", fontSize: 11, color: "#6B7280", textAlign: "left" }}>数量</th>
-                        <th style={{ padding: "6px 8px", fontSize: 11, color: "#6B7280", textAlign: "left" }}>単価</th>
-                        <th style={{ padding: "6px 8px", fontSize: 11, color: "#6B7280", textAlign: "left" }}>金額</th>
-                        {showSubCheckCol && <th style={{ padding: "6px 8px", fontSize: 11, color: "#6B7280", textAlign: "center" }}>下請け施工</th>}
-                        {showCostCol && <th style={{ padding: "6px 8px", fontSize: 11, color: "#6B7280", textAlign: "left" }}>原価単価🔒</th>}
-                        <th style={{ padding: "6px 8px", fontSize: 11, color: "#6B7280" }}></th>
-                      </tr>
+                      {(() => {
+                        // PCのコンパクトは、見出しを箱の上に固定する
+                        const h = (align = "left", extra = {}) => ({ padding: density.oneLine ? "5px 4px" : "6px 8px", fontSize: 11, color: "#6B7280", textAlign: align, whiteSpace: "nowrap", ...(compactPC ? { position: "sticky", top: 0, zIndex: 3, background: "#fff", boxShadow: "inset 0 -2px 0 #F3F4F6" } : {}), ...extra });
+                        const num = density.oneLine ? "right" : "left";
+                        return (
+                          <tr style={{ borderBottom: "2px solid #F3F4F6" }}>
+                            <th style={h()}></th>
+                            <th style={h()}>{density.oneLine ? "品名・規格" : "項目"}</th>
+                            <th style={h(num)}>数量</th>
+                            <th style={h(num)}>単価</th>
+                            <th style={h(num)}>金額</th>
+                            {showSubCheckCol && <th style={h("center")}>{density.oneLine ? "下請" : "下請け施工"}</th>}
+                            {showCostCol && <th style={h()}>原価単価🔒</th>}
+                            <th style={h()}></th>
+                          </tr>
+                        );
+                      })()}
                     </thead>
                     <tbody>
                       <GroupTree
                         lines={ed.lines}
-                        onChange={setLines}
+                        onChange={onTreeChange}
+                        density={density}
+                        collapsedPaths={collapsed}
+                        onToggleGroup={toggleGroup}
+                        groupInfo={groupInfo}
                         amountOf={l => (Number(l.qty) || 0) * (Number(l.sale_price) || 0)}
                         formatAmount={fmt}
                         columnCount={leafColumnCount}
                         selectedKeys={selectedKeys}
                         onToggleSelect={toggleSelect}
                         onDeleteLeaf={removeLine}
-                        renderLeafCells={(l) => {
+                        renderLeafCells={(l, { depth } = {}) => {
                           const amount = (Number(l.qty) || 0) * (Number(l.sale_price) || 0);
                           const lineCostTotal = (Number(l.qty) || 0) * (Number(l.cost_price) || 0);
                           const unconfirmed = !l.cost_confirmed || l.cost_price == null;
                           const excluded = isMixed && l.is_subcontracted;
+                          if (density.oneLine) {
+                            const d = density;
+                            const cin = { padding: d.inputPad, borderRadius: 5, border: "1px solid #E5E7EB", fontSize: d.fontSize, color: "#1F2937", boxSizing: "border-box", height: 22 };
+                            const ctd = { padding: d.cellPad, verticalAlign: "middle", fontSize: d.fontSize, color: "#1F2937", lineHeight: d.lineHeight };
+                            const fullText = [l.name, l.spec].filter(Boolean).join(" ") + (l.note ? ` / 備考: ${l.note}` : "");
+                            const out = [
+                              <td key="item" title={fullText} style={{ ...ctd, maxWidth: 0, width: "100%", paddingLeft: 4 + (depth || 0) * 12 }}>
+                                {l.line_type === "adjust" ? (
+                                  <div style={{ display: "flex", gap: 4 }}>
+                                    <input value={l.name} onChange={e => updateLine(l.key, { name: e.target.value })} placeholder="項目名" style={{ ...cin, flex: 3, minWidth: 0, fontWeight: 700 }} />
+                                    <input value={l.spec} onChange={e => updateLine(l.key, { spec: e.target.value })} placeholder="仕様(任意)" style={{ ...cin, flex: 2, minWidth: 0, color: "#6B7280" }} />
+                                    {l.note && <span title={`備考: ${l.note}`} style={{ fontSize: 11, cursor: "help" }}>📝</span>}
+                                  </div>
+                                ) : (
+                                  <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                    <span style={{ fontWeight: 700 }}>{l.line_type === "labor" ? "👷 " : ""}{l.name}</span>
+                                    {l.spec && <span style={{ color: "#9CA3AF", marginLeft: 6 }}>{l.spec}</span>}
+                                    {l.note && <span title={`備考: ${l.note}`} style={{ marginLeft: 6, fontSize: 10, color: "#6B7280", cursor: "help" }}>📝{l.note}</span>}
+                                  </div>
+                                )}
+                              </td>,
+                              <td key="qty" style={{ ...ctd, whiteSpace: "nowrap", textAlign: "right" }}>
+                                {l.line_type === "labor" ? (
+                                  <input type="number" min="0" step="0.5" value={l.labor_count} onChange={e => updateLaborCount(l.key, e.target.value)} title="人工数" style={{ ...cin, width: d.qtyWidth, textAlign: "right" }} />
+                                ) : (
+                                  <input type="number" min="0" value={l.qty} onChange={e => updateLine(l.key, { qty: e.target.value })} style={{ ...cin, width: d.qtyWidth, textAlign: "right" }} />
+                                )}
+                              </td>,
+                              <td key="price" style={{ ...ctd, whiteSpace: "nowrap", textAlign: "right" }}>
+                                {l.line_type !== "labor" ? (
+                                  <input type="number" value={l.sale_price} onChange={e => updateLine(l.key, { sale_price: e.target.value })} style={{ ...cin, width: d.priceWidth, textAlign: "right" }} />
+                                ) : (
+                                  <span style={{ color: "#374151" }}>{fmt(l.sale_price)}</span>
+                                )}
+                              </td>,
+                              <td key="amount" style={{ ...ctd, fontWeight: 700, color: "#E07B39", whiteSpace: "nowrap", textAlign: "right" }}>{fmt(amount)}</td>,
+                            ];
+                            if (showSubCheckCol) {
+                              out.push(
+                                <td key="subflag" style={{ ...ctd, textAlign: "center", width: 32 }}>
+                                  <input type="checkbox" checked={!!l.is_subcontracted} onChange={e => updateLine(l.key, { is_subcontracted: e.target.checked })} style={{ margin: 0, verticalAlign: "middle" }} />
+                                </td>
+                              );
+                            }
+                            if (showCostCol) {
+                              out.push(
+                                <td key="cost" style={{ ...ctd, fontSize: 11, whiteSpace: "nowrap" }}>
+                                  {excluded ? (
+                                    <span style={{ color: "#9CA3AF" }}>下請け施工(対象外)</span>
+                                  ) : (
+                                    <>
+                                      {/* 原価単価を直すと、その行は「確認済み」になる。空にすると未入力に戻る */}
+                                      <input type="number" value={l.cost_price ?? ""} placeholder="未入力" onChange={e => updateLine(l.key, e.target.value === "" ? { cost_price: null, cost_confirmed: false } : { cost_price: e.target.value, cost_confirmed: true })} style={{ ...cin, width: d.costWidth, textAlign: "right", borderColor: unconfirmed ? "#FCA5A5" : "#E5E7EB" }} />
+                                      <span style={{ marginLeft: 4, fontSize: 10 }}>{unconfirmed ? <span style={{ color: "#DC2626", fontWeight: 700 }}>未確認</span> : <span style={{ color: "#6B7280" }}>計 {fmt(lineCostTotal)}</span>}</span>
+                                    </>
+                                  )}
+                                </td>
+                              );
+                            }
+                            return out;
+                          }
                           const cells = [
                             <td key="item" style={{ padding: "6px 8px" }}>
                               {l.line_type === "adjust" ? (
@@ -801,6 +947,7 @@ ${e.message}` : "見積書を出力できませんでした。");
                       />
                     </tbody>
                   </table>
+                  </div>
                 </div>
               )}
             </div>

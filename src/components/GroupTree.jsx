@@ -20,13 +20,33 @@ const iconBtn = { border: "none", background: "none", cursor: "pointer", fontSiz
 //   columnCount (renderLeafCellsが返す<td>の数。グループの見出し行のcolSpanに使う),
 //   selectedKeys, onToggleSelect(key) (チェックボックス。無ければ非表示),
 //   onDeleteLeaf(key) (任意)
+// 見積編集画面だけが使う、任意の指定(指定が無いときは今までと同じ見た目・動き。取り込み画面は指定しない):
+//   density: src/lib/quoteTableDensity.js の DENSITY の1つ。compact(oneLine)のときは、左に⠿だけ、
+//            ↑↓・📂・選択・🗑 は右端に横一列。余白も小さくする
+//   collapsedPaths(Set), onToggleGroup(path): グループの折りたたみ。閉じたグループの中身(入れ子も)は表示しない
+//            (表示しない行は、ドラッグ・↑↓・選択の対象にもならない)
+//   groupInfo(node) -> { count, warnCount }: 見出し行に出す件数と「原価未設定」の件数(入れ子の中も数える)
 export default function GroupTree({
   lines, onChange, amountOf, formatAmount, renderLeafCells, columnCount,
   selectedKeys, onToggleSelect, onDeleteLeaf, rowStyle,
+  density, collapsedPaths, onToggleGroup, groupInfo,
 }) {
   const [menuFor, setMenuFor] = useState(null); // "このグループに移す" メニューを開いている行のid
 
-  const rows = flattenGroupTree(lines);
+  const compact = !!density?.oneLine;
+  const ctrlTd = compact ? { ...td, padding: density.ctrlPad, fontSize: density.fontSize, verticalAlign: "middle", ...(density.lineHeight ? { lineHeight: density.lineHeight } : {}) } : td;
+  const btn = compact ? { ...iconBtn, fontSize: density.iconFont, padding: "0 2px" } : iconBtn;
+  const collapsible = !!onToggleGroup;
+  const isHidden = r => {
+    if (!collapsedPaths || collapsedPaths.size === 0) return false;
+    const gp = r.isGroup ? r.path : (r.line.group_name || "");
+    for (const p of collapsedPaths) {
+      if (r.isGroup ? gp.startsWith(p + " > ") : (gp === p || gp.startsWith(p + " > "))) return true;
+    }
+    return false;
+  };
+
+  const rows = flattenGroupTree(lines).filter(r => !isHidden(r));
   const groupPaths = listGroupPaths(lines);
   const ids = rows.map(r => r.id);
 
@@ -44,7 +64,7 @@ export default function GroupTree({
 
   const MoveMenu = ({ rowId, isGroup, path, leafKey }) => (
     <div style={{ position: "relative", display: "inline-block" }}>
-      <button onClick={() => setMenuFor(menuFor === rowId ? null : rowId)} title="このグループに移す" style={iconBtn}>📂</button>
+      <button onClick={() => setMenuFor(menuFor === rowId ? null : rowId)} title="このグループに移す" style={btn}>📂</button>
       {menuFor === rowId && (
         <div style={{ position: "absolute", right: 0, top: "100%", zIndex: 20, background: "#fff", border: "1px solid #E5E7EB", borderRadius: 8, boxShadow: "0 4px 12px rgba(0,0,0,0.12)", minWidth: 180, maxHeight: 220, overflowY: "auto" }}>
           <div
@@ -74,17 +94,21 @@ export default function GroupTree({
               <GroupHeaderRow key={r.id} id={r.id}>
                 {() => (
                   <>
-                    <td style={{ ...td, width: 60, whiteSpace: "nowrap", background: "#FFF7ED" }}>
-                      <button onClick={() => onChange(moveGroupUpDown(lines, r.path, -1))} title="上へ" style={iconBtn}>↑</button>
-                      <button onClick={() => onChange(moveGroupUpDown(lines, r.path, 1))} title="下へ" style={iconBtn}>↓</button>
+                    <td style={{ ...ctrlTd, width: compact ? 18 : 60, whiteSpace: "nowrap", background: "#FFF7ED" }}>
+                      {!compact && <>
+                        <button onClick={() => onChange(moveGroupUpDown(lines, r.path, -1))} title="上へ" style={btn}>↑</button>
+                        <button onClick={() => onChange(moveGroupUpDown(lines, r.path, 1))} title="下へ" style={btn}>↓</button>
+                      </>}
                     </td>
-                    <td colSpan={columnCount} style={{ ...td, paddingLeft: 6 + r.depth * 16, fontWeight: 700, color: "#9A3412", background: "#FFF7ED" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                        <span>小計: {r.name}</span>
-                        <span>{formatAmount(groupAmount(r.node, amountOf))}</span>
-                      </div>
+                    <td colSpan={columnCount} style={{ ...ctrlTd, paddingLeft: 6 + r.depth * 16, fontWeight: 700, color: "#9A3412", background: "#FFF7ED" }}>
+                      <GroupHeaderContent r={r} info={groupInfo ? groupInfo(r.node) : null} closed={!!collapsedPaths?.has(r.path)}
+                        collapsible={collapsible} onToggleGroup={onToggleGroup} btn={btn} amount={formatAmount(groupAmount(r.node, amountOf))} />
                     </td>
-                    <td style={{ ...td, background: "#FFF7ED" }}>
+                    <td style={compact ? { ...ctrlTd, background: "#FFF7ED", whiteSpace: "nowrap" } : { ...td, background: "#FFF7ED" }}>
+                      {compact && <>
+                        <button onClick={() => onChange(moveGroupUpDown(lines, r.path, -1))} title="上へ" style={btn}>↑</button>
+                        <button onClick={() => onChange(moveGroupUpDown(lines, r.path, 1))} title="下へ" style={btn}>↓</button>
+                      </>}
                       <MoveMenu rowId={r.id} isGroup path={r.path} />
                     </td>
                   </>
@@ -98,20 +122,26 @@ export default function GroupTree({
             <SortableLeafRow key={r.id} id={r.id} background={bg}>
               {(dragAttrs, dragListeners, isDragging) => (
                 <>
-                  <td style={{ ...td, width: 60, whiteSpace: "nowrap", opacity: isDragging ? 0.4 : 1, background: isDragging ? undefined : bg }}>
-                    <span {...dragAttrs} {...dragListeners} title="ドラッグで移動" style={{ cursor: "grab", marginRight: 3, touchAction: "none" }}>⠿</span>
-                    <button onClick={() => onChange(moveLeafUpDown(lines, r.line.key, -1))} title="上へ" style={iconBtn}>↑</button>
-                    <button onClick={() => onChange(moveLeafUpDown(lines, r.line.key, 1))} title="下へ" style={iconBtn}>↓</button>
+                  <td style={{ ...ctrlTd, width: compact ? 18 : 60, whiteSpace: "nowrap", opacity: isDragging ? 0.4 : 1, background: isDragging ? undefined : bg }}>
+                    <span {...dragAttrs} {...dragListeners} title="ドラッグで移動" style={{ cursor: "grab", marginRight: compact ? 0 : 3, touchAction: "none" }}>⠿</span>
+                    {!compact && <>
+                      <button onClick={() => onChange(moveLeafUpDown(lines, r.line.key, -1))} title="上へ" style={btn}>↑</button>
+                      <button onClick={() => onChange(moveLeafUpDown(lines, r.line.key, 1))} title="下へ" style={btn}>↓</button>
+                    </>}
                   </td>
                   {cells}
-                  <td style={td}>
+                  <td style={compact ? { ...ctrlTd, whiteSpace: "nowrap" } : td}>
+                    {compact && <>
+                      <button onClick={() => onChange(moveLeafUpDown(lines, r.line.key, -1))} title="上へ" style={btn}>↑</button>
+                      <button onClick={() => onChange(moveLeafUpDown(lines, r.line.key, 1))} title="下へ" style={btn}>↓</button>
+                    </>}
                     <MoveMenu rowId={r.id} isGroup={false} path={r.line.group_name || ""} leafKey={r.line.key} />
                     {onToggleSelect && (
                       <input type="checkbox" checked={!!selectedKeys?.has(r.line.key)} onChange={() => onToggleSelect(r.line.key)}
-                        title="選んでグループにまとめる" style={{ marginLeft: 6 }} />
+                        title="選んでグループにまとめる" style={compact ? { marginLeft: 3, verticalAlign: "middle" } : { marginLeft: 6 }} />
                     )}
                     {onDeleteLeaf && (
-                      <button onClick={() => onDeleteLeaf(r.line.key)} title="削除" style={{ ...iconBtn, color: "#DC2626", marginLeft: 4 }}>🗑</button>
+                      <button onClick={() => onDeleteLeaf(r.line.key)} title="削除" style={{ ...btn, color: "#DC2626", marginLeft: compact ? 2 : 4 }}>🗑</button>
                     )}
                   </td>
                 </>
@@ -121,6 +151,34 @@ export default function GroupTree({
         })}
       </SortableContext>
     </DndContext>
+  );
+}
+
+// グループの見出し行の中身(小計の名前・件数・原価未設定の警告・小計の金額)。
+// info が無い(取り込み画面)ときは、今までどおり「小計: 名前」と金額だけ
+function GroupHeaderContent({ r, info, closed, collapsible, onToggleGroup, btn, amount }) {
+  if (!info && !collapsible) {
+    return (
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+        <span>小計: {r.name}</span>
+        <span>{amount}</span>
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+      <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+        {collapsible && (
+          <button onClick={() => onToggleGroup(r.path)} title={closed ? "開く" : "閉じる"} style={{ ...btn, color: "#9A3412", width: 18 }}>{closed ? "▶" : "▼"}</button>
+        )}
+        <span style={info ? { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } : undefined}>小計: {r.name}</span>
+        {info && <span style={{ fontSize: 10, fontWeight: 600, color: "#B45309", whiteSpace: "nowrap" }}>({info.count}件)</span>}
+        {info && info.warnCount > 0 && (
+          <span title="原価単価が未入力・未確認の行(この中の入れ子も含む)。社内用の表示です" style={{ fontSize: 10, fontWeight: 700, color: "#92400E", background: "#F3F4F6", border: "1px solid #D1D5DB", borderRadius: 4, padding: "0 5px", whiteSpace: "nowrap" }}>⚠️ 原価未設定 {info.warnCount}件🔒</span>
+        )}
+      </span>
+      <span style={info ? { whiteSpace: "nowrap" } : undefined}>{amount}</span>
+    </div>
   );
 }
 
