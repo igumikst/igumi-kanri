@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase";
 import { Hdr, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import GroupTree, { BundleToolbar } from "../components/GroupTree";
+import PriceMultiPicker from "../components/PriceMultiPicker";
 import { fmt, todayStr } from "../lib/constants";
 import { DENSITY, loadDensityKey, saveDensityKey } from "../lib/quoteTableDensity";
 import { listGroupPaths } from "../lib/groupTree";
@@ -77,6 +78,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
   // 「単価表: ○○」と「↩ 単価表の名前にする」を出すために使う(DBには何も足さない。単価表も変えない)
   const [catalog, setCatalog] = useState({});
   const [noteOpen, setNoteOpen] = useState(() => new Set()); // コンパクトで備考の入力欄を開いている行
+  const [multiAdd, setMultiAdd] = useState(null); // 「＋まとめて追加」の画面。開いているときは { target: 最初の入れ先 }
   const [subCosts, setSubCosts] = useState([]); // 下請けの原価(quote_subcontractor_costs)
   const [subForm, setSubForm] = useState({ subcontractor_id: "", amount: "", note: "", file: null });
   const [savingSub, setSavingSub] = useState(false);
@@ -324,32 +326,60 @@ ${e.message}` : "見積書を出力できませんでした。");
   };
 
   const rememberCatalog = item => setCatalog(prev => ({ ...prev, [item.id]: { name: item.name || "", spec: item.spec || "" } }));
+  // 単価表の項目から明細の行を作る(原価は単価表の原価をコピー)。group_name は入れ先の大項目
+  const makeItemLine = (item, groupName, qty) => {
+    const cost = priceCosts[item.id];
+    return {
+      key: newKey(), price_item_id: item.id, line_type: "item",
+      group_name: groupName,
+      name: item.name, spec: item.spec || "", unit: item.unit || "",
+      qty, sale_price: item.sale_price || 0,
+      cost_price: cost?.cost_price ?? null, cost_confirmed: cost?.cost_confirmed ?? false,
+    };
+  };
+  const makeLaborLine = (item, groupName, count) => {
+    const cost = priceCosts[item.id];
+    return {
+      key: newKey(), price_item_id: item.id, line_type: "labor",
+      group_name: groupName,
+      name: item.name, spec: `${count}人工`, unit: "式",
+      qty: 1, sale_price: count * laborUnitPrice,
+      cost_price: cost?.cost_price ?? null, cost_confirmed: cost?.cost_confirmed ?? false,
+      labor_count: count,
+    };
+  };
   const addItemLine = item => {
     rememberCatalog(item);
-    const cost = priceCosts[item.id];
-    setEd(prev => ({ ...prev, lines: [...prev.lines, {
-      key: newKey(), price_item_id: item.id, line_type: "item",
-      group_name: groupsMap[item.price_group_id]?.name || "",
-      name: item.name, spec: item.spec || "", unit: item.unit || "",
-      qty: 1, sale_price: item.sale_price || 0,
-      cost_price: cost?.cost_price ?? null, cost_confirmed: cost?.cost_confirmed ?? false,
-    }] }));
+    const line = makeItemLine(item, groupsMap[item.price_group_id]?.name || "", 1);
+    setEd(prev => ({ ...prev, lines: [...prev.lines, line] }));
   };
 
   const confirmLaborAdd = () => {
     const count = Number(laborCountInput);
     if (!laborPick || !count || count <= 0) return;
     rememberCatalog(laborPick);
-    const cost = priceCosts[laborPick.id];
-    setEd(prev => ({ ...prev, lines: [...prev.lines, {
-      key: newKey(), price_item_id: laborPick.id, line_type: "labor",
-      group_name: groupsMap[laborPick.price_group_id]?.name || "",
-      name: laborPick.name, spec: `${count}人工`, unit: "式",
-      qty: 1, sale_price: count * laborUnitPrice,
-      cost_price: cost?.cost_price ?? null, cost_confirmed: cost?.cost_confirmed ?? false,
-      labor_count: count,
-    }] }));
+    const line = makeLaborLine(laborPick, groupsMap[laborPick.price_group_id]?.name || "", count);
+    setEd(prev => ({ ...prev, lines: [...prev.lines, line] }));
     setLaborPick(null); setLaborCountInput("");
+  };
+
+  // 「＋まとめて追加」の結果を入れる。入れ先の大項目の最後の行(中項目の中も含む)の直後に、選んだ順で差し込む。
+  // 入れ先がまだ無い(新しい大項目)ときは、明細の最後に足す。閉じている大項目に入れたときは開く
+  const addPicksToGroup = ({ target, picks }) => {
+    picks.forEach(p => rememberCatalog(p.item));
+    const newLines = picks.map(p => (p.item.item_type === "labor_manual" ? makeLaborLine(p.item, target, p.qty) : makeItemLine(p.item, target, p.qty)));
+    setEd(prev => {
+      const inTarget = l => { const g = l.group_name || ""; return g === target || g.startsWith(target + " > "); };
+      let last = -1;
+      prev.lines.forEach((l, i) => { if (inTarget(l)) last = i; });
+      const lines = last === -1 ? [...prev.lines, ...newLines] : [...prev.lines.slice(0, last + 1), ...newLines, ...prev.lines.slice(last + 1)];
+      return { ...prev, lines };
+    });
+    setCollapsed(prev => {
+      const next = new Set([...prev].filter(p => !(target === p || target.startsWith(p + " > "))));
+      return next.size === prev.size ? prev : next;
+    });
+    setMultiAdd(null);
   };
 
   const updateLaborCount = (key, count) => {
@@ -729,6 +759,7 @@ ${e.message}` : "見積書を出力できませんでした。");
             {ed.price_set_id && !showPricePicker && (
               <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
                 <button onClick={() => setShowPricePicker(true)} style={{ flex: 2, padding: "10px 0", background: "#EEF2FF", color: "#3730A3", border: "1.5px solid #C7D2FE", borderRadius: 10, fontSize: 13, fontWeight: 800, cursor: "pointer" }}>＋ 単価表から追加</button>
+                <button onClick={() => setMultiAdd({ target: "" })} style={{ flex: 2, padding: "10px 0", background: "#fff", color: "#3730A3", border: "1.5px solid #C7D2FE", borderRadius: 10, fontSize: 13, fontWeight: 800, cursor: "pointer" }}>☑ まとめて追加</button>
                 <button onClick={addManualLine} style={{ flex: 1, padding: "10px 0", background: "#FFF7ED", color: "#9A3412", border: "1.5px dashed #FDBA74", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>✎ 手入力で追加</button>
               </div>
             )}
@@ -835,6 +866,7 @@ ${e.message}` : "見積書を出力できませんでした。");
                         collapsedPaths={collapsed}
                         onToggleGroup={toggleGroup}
                         groupInfo={groupInfo}
+                        onAddToGroup={ed.price_set_id ? path => setMultiAdd({ target: path }) : undefined}
                         amountOf={l => (Number(l.qty) || 0) * (Number(l.sale_price) || 0)}
                         formatAmount={fmt}
                         columnCount={leafColumnCount}
@@ -1078,6 +1110,11 @@ ${e.message}` : "見積書を出力できませんでした。");
             </div>
           </div>
         </>
+      )}
+      {multiAdd && (
+        <PriceMultiPicker items={itemsForSet} groups={groupsForSet} groupsMap={groupsMap} groupPaths={listGroupPaths(ed.lines)}
+          initialTarget={multiAdd.target} lines={ed.lines} laborUnitPrice={laborUnitPrice} isPC={isPC}
+          onClose={() => setMultiAdd(null)} onAdd={addPicksToGroup} />
       )}
       {conf && <Confirm msg={conf.msg} onCancel={() => setConf(null)} onOk={conf.onOk} okLabel={conf.okLabel} okColor={conf.okColor} extra={conf.extra} />}
     </div>

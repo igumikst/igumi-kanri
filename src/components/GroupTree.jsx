@@ -26,10 +26,11 @@ const iconBtn = { border: "none", background: "none", cursor: "pointer", fontSiz
 //   collapsedPaths(Set), onToggleGroup(path): グループの折りたたみ。閉じたグループの中身(入れ子も)は表示しない
 //            (表示しない行は、ドラッグ・↑↓・選択の対象にもならない)
 //   groupInfo(node) -> { count, warnCount }: 見出し行に出す件数と「原価未設定」の件数(入れ子の中も数える)
+//   onAddToGroup(path): 見出し行に「＋まとめて追加」ボタンを出す(押すとそのグループのパスを渡す)
 export default function GroupTree({
   lines, onChange, amountOf, formatAmount, renderLeafCells, columnCount,
   selectedKeys, onToggleSelect, onDeleteLeaf, rowStyle,
-  density, collapsedPaths, onToggleGroup, groupInfo,
+  density, collapsedPaths, onToggleGroup, groupInfo, onAddToGroup,
 }) {
   const [menuFor, setMenuFor] = useState(null); // "このグループに移す" メニューを開いている行のid
 
@@ -102,7 +103,7 @@ export default function GroupTree({
                     </td>
                     <td colSpan={columnCount} style={{ ...ctrlTd, paddingLeft: 6 + r.depth * 16, fontWeight: 700, color: "#9A3412", background: "#FFF7ED" }}>
                       <GroupHeaderContent r={r} info={groupInfo ? groupInfo(r.node) : null} closed={!!collapsedPaths?.has(r.path)}
-                        collapsible={collapsible} onToggleGroup={onToggleGroup} btn={btn} amount={formatAmount(groupAmount(r.node, amountOf))} />
+                        collapsible={collapsible} onToggleGroup={onToggleGroup} btn={btn} amount={formatAmount(groupAmount(r.node, amountOf))} onAddToGroup={onAddToGroup} />
                     </td>
                     <td style={compact ? { ...ctrlTd, background: "#FFF7ED", whiteSpace: "nowrap" } : { ...td, background: "#FFF7ED" }}>
                       {compact && <>
@@ -156,8 +157,8 @@ export default function GroupTree({
 
 // グループの見出し行の中身(小計の名前・件数・原価未設定の警告・小計の金額)。
 // info が無い(取り込み画面)ときは、今までどおり「小計: 名前」と金額だけ
-function GroupHeaderContent({ r, info, closed, collapsible, onToggleGroup, btn, amount }) {
-  if (!info && !collapsible) {
+function GroupHeaderContent({ r, info, closed, collapsible, onToggleGroup, btn, amount, onAddToGroup }) {
+  if (!info && !collapsible && !onAddToGroup) {
     return (
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
         <span>小計: {r.name}</span>
@@ -175,6 +176,9 @@ function GroupHeaderContent({ r, info, closed, collapsible, onToggleGroup, btn, 
         {info && <span style={{ fontSize: 10, fontWeight: 600, color: "#B45309", whiteSpace: "nowrap" }}>({info.count}件)</span>}
         {info && info.warnCount > 0 && (
           <span title="原価単価が未入力・未確認の行(この中の入れ子も含む)。社内用の表示です" style={{ fontSize: 10, fontWeight: 700, color: "#92400E", background: "#F3F4F6", border: "1px solid #D1D5DB", borderRadius: 4, padding: "0 5px", whiteSpace: "nowrap" }}>⚠️ 原価未設定 {info.warnCount}件🔒</span>
+        )}
+        {onAddToGroup && (
+          <button onClick={() => onAddToGroup(r.path)} title="このグループに、単価表の項目をまとめて追加" style={{ fontSize: 10, fontWeight: 700, color: "#3730A3", background: "#EEF2FF", border: "1px solid #C7D2FE", borderRadius: 4, padding: "0 6px", cursor: "pointer", whiteSpace: "nowrap", lineHeight: "16px" }}>＋まとめて追加</button>
         )}
       </span>
       <span style={info ? { whiteSpace: "nowrap" } : undefined}>{amount}</span>
