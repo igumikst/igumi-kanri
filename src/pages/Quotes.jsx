@@ -73,6 +73,10 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
   const [densityKey, setDensityKey] = useState(() => loadDensityKey(isPC));
   const [collapsed, setCollapsed] = useState(() => new Set());
   const [showPricePicker, setShowPricePicker] = useState(false); // 「単価項目を追加」は、ふだんは閉じておく
+  // 単価表の今の名前(price_item_id → { name, spec })。単価表から入れた行の品名・規格を編集したとき、
+  // 「単価表: ○○」と「↩ 単価表の名前にする」を出すために使う(DBには何も足さない。単価表も変えない)
+  const [catalog, setCatalog] = useState({});
+  const [noteOpen, setNoteOpen] = useState(() => new Set()); // コンパクトで備考の入力欄を開いている行
   const [subCosts, setSubCosts] = useState([]); // 下請けの原価(quote_subcontractor_costs)
   const [subForm, setSubForm] = useState({ subcontractor_id: "", amount: "", note: "", file: null });
   const [savingSub, setSavingSub] = useState(false);
@@ -142,7 +146,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
     setEd({ ...blankEd, construction_type: project?.constructionType || "自社のみ", crew_id: defaultCrewId, profit_confirmed: !!defaultCrewId });
     setSubCosts([]); setSubForm({ subcontractor_id: "", amount: "", note: "", file: null });
     setSearch(""); setCategoryFilter(""); setGroupFilter("");
-    setCollapsed(new Set()); setShowPricePicker(false); setSelectedKeys(new Set()); // 見積を開くたびに、グループは全部開いた状態から
+    setCollapsed(new Set()); setShowPricePicker(false); setSelectedKeys(new Set()); setNoteOpen(new Set()); // 見積を開くたびに、グループは全部開いた状態から
     setView("edit");
   };
 
@@ -152,6 +156,9 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
     const ids = (itemsData || []).map(r => r.id);
     const { data: costsData } = ids.length ? await supabase.from("quote_item_costs").select("*").in("quote_item_id", ids) : { data: [] };
     const costsByItem = Object.fromEntries((costsData || []).map(c => [c.quote_item_id, c]));
+    const pids = [...new Set((itemsData || []).map(r => r.price_item_id).filter(Boolean))];
+    const { data: catData } = pids.length ? await supabase.from("price_items").select("id,name,spec").in("id", pids) : { data: [] };
+    setCatalog(Object.fromEntries((catData || []).map(c => [c.id, { name: c.name || "", spec: c.spec || "" }])));
     const lines = (itemsData || []).map(r => ({
       key: r.id,
       price_item_id: r.price_item_id,
@@ -174,7 +181,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
     setSubForm({ subcontractor_id: "", amount: "", note: "", file: null });
     await loadSubCosts(q.id);
     setSearch(""); setCategoryFilter(""); setGroupFilter("");
-    setCollapsed(new Set()); setShowPricePicker(false); setSelectedKeys(new Set()); // 見積を開くたびに、グループは全部開いた状態から
+    setCollapsed(new Set()); setShowPricePicker(false); setSelectedKeys(new Set()); setNoteOpen(new Set()); // 見積を開くたびに、グループは全部開いた状態から
     setView("edit");
   };
 
@@ -316,7 +323,9 @@ ${e.message}` : "見積書を出力できませんでした。");
     } });
   };
 
+  const rememberCatalog = item => setCatalog(prev => ({ ...prev, [item.id]: { name: item.name || "", spec: item.spec || "" } }));
   const addItemLine = item => {
+    rememberCatalog(item);
     const cost = priceCosts[item.id];
     setEd(prev => ({ ...prev, lines: [...prev.lines, {
       key: newKey(), price_item_id: item.id, line_type: "item",
@@ -330,6 +339,7 @@ ${e.message}` : "見積書を出力できませんでした。");
   const confirmLaborAdd = () => {
     const count = Number(laborCountInput);
     if (!laborPick || !count || count <= 0) return;
+    rememberCatalog(laborPick);
     const cost = priceCosts[laborPick.id];
     setEd(prev => ({ ...prev, lines: [...prev.lines, {
       key: newKey(), price_item_id: laborPick.id, line_type: "labor",
@@ -354,6 +364,12 @@ ${e.message}` : "見積書を出力できませんでした。");
     }] }));
   };
 
+  // 単価表から入れた行(item・labor)の、単価表の今の名前。手入力の行は無し
+  const catalogOf = l => (l.price_item_id && (l.line_type === "item" || l.line_type === "labor") ? catalog[l.price_item_id] || null : null);
+  // 単価表の名前と違うか(人工は品名だけ比べる。規格の「○人工」は人工数から作るので比べない)
+  const differsFromCatalog = (l, c) => !!c && (l.line_type === "labor" ? l.name !== c.name : (l.name !== c.name || (l.spec || "") !== (c.spec || "")));
+  const resetToCatalog = (l, c) => updateLine(l.key, l.line_type === "labor" ? { name: c.name } : { name: c.name, spec: c.spec || "" });
+  const toggleNote = key => setNoteOpen(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
   const updateLine = (key, patch) => setEd(prev => ({ ...prev, lines: prev.lines.map(l => l.key === key ? { ...l, ...patch } : l) }));
   const removeLine = key => setEd(prev => ({ ...prev, lines: prev.lines.filter(l => l.key !== key) }));
   const setLines = newLines => setEd(prev => ({ ...prev, lines: newLines }));
@@ -435,6 +451,8 @@ ${e.message}` : "見積書を出力できませんでした。");
   const saveQuote = () => {
     if (!ed.title.trim()) { alert("タイトルを入力してください"); return; }
     if (!ed.price_set_id) { alert("単価セットを選んでください"); return; }
+    const emptyNameCount = ed.lines.filter(l => !String(l.name || "").trim()).length;
+    if (emptyNameCount) alert(`品名が空の行が ${emptyNameCount} 件あります。このまま保存します(あとで直せます)`);
     const prevQuote = ed.id ? quotes.find(q => q.id === ed.id) : null;
     // 「すでに完工済み(採用済み)だったか」は is_adopted で判定する(第8弾テーマ10の不具合で、
     // status=won なのにis_adopted=falseの見積が残っていることがあるため。その場合は従来通り、
@@ -481,7 +499,7 @@ ${e.message}` : "見積書を出力できませんでした。");
         quote_id: quoteId, price_item_id: l.price_item_id, line_type: l.line_type, group_name: l.group_name,
         name: l.name, spec: l.spec, unit: l.unit, qty: Number(l.qty) || 0, sale_price: Number(l.sale_price) || 0, sort_order: i,
         is_subcontracted: !!l.is_subcontracted,
-        ...(l.note ? { note: l.note } : {}), // 備考(見積ファイルから取り込んだ行)。ない行は送らない
+        ...(l.note ? { note: l.note } : {}), // 備考(取り込んだ行・画面で入れた行)。ない行は送らない
       }));
       const { data: insertedItems, error: itemsErr } = await supabase.from("quote_items").insert(itemsPayload).select();
       if (itemsErr) { alert(describeError(itemsErr, "明細の保存")); setSaving(false); return; }
@@ -835,19 +853,35 @@ ${e.message}` : "見積書を出力できませんでした。");
                             const fullText = [l.name, l.spec].filter(Boolean).join(" ") + (l.note ? ` / 備考: ${l.note}` : "");
                             const out = [
                               <td key="item" title={fullText} style={{ ...ctd, maxWidth: 0, width: "100%", paddingLeft: 4 + (depth || 0) * 12 }}>
-                                {l.line_type === "adjust" ? (
-                                  <div style={{ display: "flex", gap: 4 }}>
-                                    <input value={l.name} onChange={e => updateLine(l.key, { name: e.target.value })} placeholder="項目名" style={{ ...cin, flex: 3, minWidth: 0, fontWeight: 700 }} />
-                                    <input value={l.spec} onChange={e => updateLine(l.key, { spec: e.target.value })} placeholder="仕様(任意)" style={{ ...cin, flex: 2, minWidth: 0, color: "#6B7280" }} />
-                                    {l.note && <span title={`備考: ${l.note}`} style={{ fontSize: 11, cursor: "help" }}>📝</span>}
-                                  </div>
-                                ) : (
-                                  <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                    <span style={{ fontWeight: 700 }}>{l.line_type === "labor" ? "👷 " : ""}{l.name}</span>
-                                    {l.spec && <span style={{ color: "#9CA3AF", marginLeft: 6 }}>{l.spec}</span>}
-                                    {l.note && <span title={`備考: ${l.note}`} style={{ marginLeft: 6, fontSize: 10, color: "#6B7280", cursor: "help" }}>📝{l.note}</span>}
-                                  </div>
-                                )}
+                                {(() => {
+                                  const c = catalogOf(l);
+                                  const diff = differsFromCatalog(l, c);
+                                  const catText = c ? [c.name, c.spec].filter(Boolean).join(" ") : "";
+                                  return (
+                                    <>
+                                      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                                        {l.line_type === "labor" && <span>👷</span>}
+                                        <input value={l.name} onChange={e => updateLine(l.key, { name: e.target.value })} placeholder="品名" style={{ ...cin, flex: 3, minWidth: 0, fontWeight: 700, borderColor: c ? "#BFDBFE" : "#E5E7EB" }} />
+                                        {l.line_type === "labor" ? (
+                                          <span style={{ color: "#9CA3AF", whiteSpace: "nowrap" }}>{l.spec}</span>
+                                        ) : (
+                                          <input value={l.spec} onChange={e => updateLine(l.key, { spec: e.target.value })} placeholder="規格(任意)" style={{ ...cin, flex: 2, minWidth: 0, color: "#6B7280", borderColor: c ? "#BFDBFE" : "#E5E7EB" }} />
+                                        )}
+                                        <button type="button" onClick={() => toggleNote(l.key)} title={l.note ? `備考: ${l.note}(押すと編集)` : "備考を入れる"} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 11, padding: "0 1px", opacity: l.note || noteOpen.has(l.key) ? 1 : 0.35 }}>📝</button>
+                                      </div>
+                                      {/* 単価表の名前と違う行だけ、下に1段足す(品名の欄を狭くしないため) */}
+                                      {diff && (
+                                        <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 1, fontSize: 10, color: "#6B7280" }}>
+                                          <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>単価表: {catText}</span>
+                                          <button type="button" onClick={() => resetToCatalog(l, c)} style={{ border: "1px solid #BFDBFE", background: "#EFF6FF", color: "#1D4ED8", borderRadius: 4, cursor: "pointer", fontSize: 10, padding: "0 4px", whiteSpace: "nowrap", lineHeight: "14px" }}>↩ 単価表の名前にする</button>
+                                        </div>
+                                      )}
+                                      {noteOpen.has(l.key) && (
+                                        <input value={l.note || ""} onChange={e => updateLine(l.key, { note: e.target.value })} placeholder="備考(任意)" style={{ ...cin, width: "100%", marginTop: 2, color: "#374151" }} />
+                                      )}
+                                    </>
+                                  );
+                                })()}
                               </td>,
                               <td key="qty" style={{ ...ctd, whiteSpace: "nowrap", textAlign: "right" }}>
                                 {l.line_type === "labor" ? (
@@ -891,18 +925,31 @@ ${e.message}` : "見積書を出力できませんでした。");
                           }
                           const cells = [
                             <td key="item" style={{ padding: "6px 8px" }}>
-                              {l.line_type === "adjust" ? (
-                                <>
-                                  <input value={l.name} onChange={e => updateLine(l.key, { name: e.target.value })} placeholder="項目名" style={{ width: "100%", padding: "4px 6px", borderRadius: 6, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937", marginBottom: 3, boxSizing: "border-box" }} />
-                                  <input value={l.spec} onChange={e => updateLine(l.key, { spec: e.target.value })} placeholder="仕様(任意)" style={{ width: "100%", padding: "4px 6px", borderRadius: 6, border: "1.5px solid #E5E7EB", fontSize: 11, color: "#6B7280", boxSizing: "border-box" }} />
-                                </>
-                              ) : (
-                                <>
-                                  <div style={{ fontSize: 12, fontWeight: 700, color: "#1F2937" }}>{l.line_type === "labor" ? "👷 " : ""}{l.name}</div>
-                                  <div style={{ fontSize: 11, color: "#9CA3AF" }}>{l.spec}</div>
-                                </>
-                              )}
-                              {l.note && <div style={{ fontSize: 10, color: "#6B7280", marginTop: 2 }}>備考: {l.note}</div>}
+                              {(() => {
+                                const c = catalogOf(l);
+                                const diff = differsFromCatalog(l, c);
+                                const border = `1.5px solid ${c ? "#BFDBFE" : "#E5E7EB"}`;
+                                return (
+                                  <>
+                                    <div style={{ display: "flex", gap: 4, alignItems: "center", marginBottom: 3 }}>
+                                      {l.line_type === "labor" && <span>👷</span>}
+                                      <input value={l.name} onChange={e => updateLine(l.key, { name: e.target.value })} placeholder="品名" style={{ width: "100%", padding: "4px 6px", borderRadius: 6, border, fontSize: 12, fontWeight: 700, color: "#1F2937", boxSizing: "border-box" }} />
+                                    </div>
+                                    {l.line_type === "labor" ? (
+                                      <div style={{ fontSize: 11, color: "#9CA3AF", marginBottom: 3 }}>{l.spec}</div>
+                                    ) : (
+                                      <input value={l.spec} onChange={e => updateLine(l.key, { spec: e.target.value })} placeholder="規格(任意)" style={{ width: "100%", padding: "4px 6px", borderRadius: 6, border, fontSize: 11, color: "#6B7280", boxSizing: "border-box", marginBottom: 3 }} />
+                                    )}
+                                    <input value={l.note || ""} onChange={e => updateLine(l.key, { note: e.target.value })} placeholder="備考(任意)" style={{ width: "100%", padding: "3px 6px", borderRadius: 6, border: "1.5px solid #E5E7EB", fontSize: 10, color: "#374151", boxSizing: "border-box" }} />
+                                    {diff && (
+                                      <div style={{ fontSize: 10, color: "#6B7280", marginTop: 3, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                                        <span>単価表: {[c.name, c.spec].filter(Boolean).join(" ")}</span>
+                                        <button type="button" onClick={() => resetToCatalog(l, c)} style={{ border: "1px solid #BFDBFE", background: "#EFF6FF", color: "#1D4ED8", borderRadius: 4, cursor: "pointer", fontSize: 10, padding: "1px 6px" }}>↩ 単価表の名前にする</button>
+                                      </div>
+                                    )}
+                                  </>
+                                );
+                              })()}
                             </td>,
                             <td key="qty" style={{ padding: "6px 8px" }}>
                               {l.line_type === "labor" ? (
