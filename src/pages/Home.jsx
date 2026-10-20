@@ -570,6 +570,7 @@ export default function Home({ pjs, submittedQuotes, wonQuotes, cos, tks, links,
           {item("🏠 ホーム", () => drawerNav(() => setCurrentPage(HOME_PAGE_INDEX)))}
           {item("📅 スケジュール", () => drawerNav(() => setCurrentPage(SCHEDULE_PAGE_INDEX)))}
           {item("📸 報告書作成", () => drawerNav(() => window.open("/report.html", "_blank")))}
+          {item("📝 見積書作成", () => drawerNav(() => nav("estimate")))}
           {item("📋 案件", () => drawerNav(() => nav("projects")))}
           {item("✅ タスク", () => drawerNav(() => nav("tasks")))}
           {item("🏢 取引先", () => drawerNav(() => nav("companies")))}
@@ -656,6 +657,14 @@ export default function Home({ pjs, submittedQuotes, wonQuotes, cos, tks, links,
             📦 保管箱
           </button>
         }
+      />
+      <FeatureCard
+        icon="📝" title="見積書作成" desc="見積書の作成・管理を行います" bg="#fef3e8" accent="#e8862e"
+        onCardClick={() => nav("estimate")}
+        pills={[
+          <Pill key="m" onClick={() => openAiAssist("mentor", "estimate")}>🧭 AIメンター</Pill>,
+          <Pill key="r" onClick={() => openAiAssist("review", "estimate")}>🛡️ AIレビュー</Pill>,
+        ]}
       />
       <FeatureCard
         icon="📝" title="ノート見積作成" desc="現調ノートを貼ると、見積の下書きを作ります(AI)" bg="#fdf1e7" accent="#E07B39"
