@@ -580,7 +580,7 @@ ${e.message}` : "見積書を出力できませんでした。");
   }).slice(0, 100);
 
   const hasSetLines = ed.price_set_id && ed.lines.some(l => l.line_type !== "adjust");
-  const subcontractors = cos.filter(c => c.type === "協力業者");
+  const subcontractors = cos.filter(c => c.type === "協力業者" || c.type === "両方");
   const isMixed = constructionType === "自社+下請け";
   const isSubOnly = constructionType === "下請けのみ";
   const showSubCheckCol = isMixed;

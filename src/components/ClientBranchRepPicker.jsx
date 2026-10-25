@@ -19,7 +19,7 @@ export default function ClientBranchRepPicker({ clientId, branchId, salesRepId, 
   const [newBranchName, setNewBranchName] = useState("");
   const [newRepName, setNewRepName] = useState("");
 
-  const clients = cos.filter(c => c.type === "取引先");
+  const clients = cos.filter(c => c.type === "取引先" || c.type === "両方");
   const branchesForClient = branches.filter(b => b.company_id === clientId);
   const repsForClient = salesReps.filter(s => s.company_id === clientId);
   const repsShown = branchId ? repsForClient.filter(s => s.branch_id === branchId) : repsForClient;

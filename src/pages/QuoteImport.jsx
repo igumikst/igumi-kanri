@@ -281,7 +281,7 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
   // 下請けの原価(まだ案件・見積が無いので、登録が終わるまではこの画面のローカル状態に置く)
   const [subCosts, setSubCosts] = useState([]);
   const [subForm, setSubForm] = useState({ subcontractor_id: "", amount: "", note: "", file: null });
-  const subcontractors = cos.filter(c => c.type === "協力業者");
+  const subcontractors = cos.filter(c => c.type === "協力業者" || c.type === "両方");
   const addSubCostDraft = () => {
     if (!subForm.subcontractor_id || !subForm.amount) { alert("下請け会社と金額を入力してください"); return; }
     setSubCosts(prev => [...prev, { key: "sc" + Date.now(), subcontractor_id: subForm.subcontractor_id, amount: Number(subForm.amount) || 0, note: subForm.note || "", file: subForm.file }]);
@@ -920,7 +920,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
   // 下請けの原価(まだ案件・見積が無いので、登録が終わるまではこの画面のローカル状態に置く)
   const [subCosts, setSubCosts] = useState([]);
   const [subForm, setSubForm] = useState({ subcontractor_id: "", amount: "", note: "", file: null });
-  const subcontractors = cos.filter(c => c.type === "協力業者");
+  const subcontractors = cos.filter(c => c.type === "協力業者" || c.type === "両方");
   const addSubCostDraft = () => {
     if (!subForm.subcontractor_id || !subForm.amount) { alert("下請け会社と金額を入力してください"); return; }
     setSubCosts(prev => [...prev, { key: "sc" + Date.now(), subcontractor_id: subForm.subcontractor_id, amount: Number(subForm.amount) || 0, note: subForm.note || "", file: subForm.file }]);
@@ -1564,7 +1564,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
   // 下請けの原価(まだ案件・見積が無いので、登録が終わるまではこの画面のローカル状態に置く)
   const [subCosts, setSubCosts] = useState([]);
   const [subForm, setSubForm] = useState({ subcontractor_id: "", amount: "", note: "", file: null });
-  const subcontractors = cos.filter(c => c.type === "協力業者");
+  const subcontractors = cos.filter(c => c.type === "協力業者" || c.type === "両方");
   const addSubCostDraft = () => {
     if (!subForm.subcontractor_id || !subForm.amount) { alert("下請け会社と金額を入力してください"); return; }
     setSubCosts(prev => [...prev, { key: "sc" + Date.now(), subcontractor_id: subForm.subcontractor_id, amount: Number(subForm.amount) || 0, note: subForm.note || "", file: subForm.file }]);
@@ -2120,7 +2120,7 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
   // 下請けの原価(まだ案件・見積が無いので、登録が終わるまではこの画面のローカル状態に置く)
   const [subCosts, setSubCosts] = useState([]);
   const [subForm, setSubForm] = useState({ subcontractor_id: "", amount: "", note: "", file: null });
-  const subcontractors = cos.filter(c => c.type === "協力業者");
+  const subcontractors = cos.filter(c => c.type === "協力業者" || c.type === "両方");
   const addSubCostDraft = () => {
     if (!subForm.subcontractor_id || !subForm.amount) { alert("下請け会社と金額を入力してください"); return; }
     setSubCosts(prev => [...prev, { key: "sc" + Date.now(), subcontractor_id: subForm.subcontractor_id, amount: Number(subForm.amount) || 0, note: subForm.note || "", file: subForm.file }]);

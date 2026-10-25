@@ -66,7 +66,9 @@ export default function Companies({ pjs, submittedQuotes, wonQuotes, cos, setCos
   // 発注済み/未発注は見積の状態だけで判断する(案件のstatusは使わない。第8弾テーマ3)
   const wonProjectIds = new Set((wonQuotes || []).map(q => q.project_id));
   const submittedProjectIds = new Set((submittedQuotes || []).map(q => q.project_id));
-  const filtC = cos.filter(c => { if (fltT !== "すべて" && c.type !== fltT) return false; if (schC && !c.name.includes(schC)) return false; return true; });
+  // 「両方」の会社は、取引先・協力業者どちらで絞り込んでも出てくるようにする(その他の絞り込みには出さない)
+  const matchesType = (c, t) => c.type === t || (c.type === "両方" && (t === "取引先" || t === "協力業者"));
+  const filtC = cos.filter(c => { if (fltT !== "すべて" && !matchesType(c, fltT)) return false; if (schC && !c.name.includes(schC)) return false; return true; });
 
   const saveCo = async () => {
     if (!nCo.name) return;
