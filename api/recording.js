@@ -24,7 +24,24 @@ module.exports = async (req, res) => {
 
   const { RecordingUrl, RecordingSid, CallSid, From, Caller, RecordingStatus } = req.body;
 
-  if (RecordingStatus && RecordingStatus !== "completed") {
+  // <Record>のactionコールバック(録音直後。RecordingStatusが無い)は、録音ファイルの
+  // 準備がまだ保証されていないため、ここでは文字起こし・AI分析・通知は行わない。
+  // 案内を読み上げて電話を終えるTwiMLだけ返す。実際のパイプラインは、ファイルの準備が
+  // 保証されるrecordingStatusCallback(RecordingStatus === "completed")側だけで動かす
+  // (第8弾: LINE・プッシュ通知が毎回2回届く不具合の修正。action/recordingStatusCallback
+  // の両方が同じURLを向いていたため、1回の電話でこの処理が2回動いていた)
+  if (!RecordingStatus) {
+    console.log(`[recording] action callback (${RecordingSid || "no sid"}) – 読み上げのみ、分析は行わない`);
+    const twiml = new twilio.twiml.VoiceResponse();
+    twiml.say(
+      { language: "ja-JP", voice: "Google.ja-JP-Wavenet-A" },
+      "ありがとうございました。担当者より折り返しご連絡いたします。"
+    );
+    res.setHeader("Content-Type", "text/xml");
+    return res.status(200).send(twiml.toString());
+  }
+
+  if (RecordingStatus !== "completed") {
     console.log(`[recording] Status: ${RecordingStatus} – skipping`);
     return res.status(200).send("OK");
   }

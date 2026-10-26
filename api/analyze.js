@@ -81,10 +81,17 @@ async function analyzeAndRegister({ transcript, recordingUrl, callSid, fromNumbe
     console.warn("[analyze] Blocked number check failed:", err.message);
   }
 
-  const call = await registerToSupabase({
+  const { call, isNew } = await registerToSupabase({
     caseNumber, analysis, transcript, recordingUrl, fromNumber, isSalesSuspect,
   });
-  console.log("[analyze] Registered to Supabase:", call.id);
+  console.log("[analyze] Registered to Supabase:", call.id, isNew ? "(new)" : "(既存案件・通知スキップ)");
+
+  // 既に登録済みの案件番号なら、LINE・プッシュ通知も送らない(第8弾: 同じ録音で
+  // この処理が2回動いても、通知は1回だけになるようにする安全策)
+  if (!isNew) {
+    console.log("[analyze] 既存案件のため、通知はスキップします:", caseNumber);
+    return call;
+  }
 
   await sendLineNotification({ caseNumber, analysis, fromNumber, isSalesSuspect });
   console.log("[analyze] LINE notification sent");
@@ -191,12 +198,12 @@ async function registerToSupabase({ caseNumber, analysis, transcript, recordingU
     .single();
   if (existing) {
     console.log("[analyze] 既存案件のためスキップ:", caseNumber);
-    return existing;
+    return { call: existing, isNew: false };
   }
 
   const { data, error } = await supabase.from("calls").insert([record]).select().single();
   if (error) throw new Error(`Supabase insert error: ${error.message}`);
-  return data;
+  return { call: data, isNew: true };
 }
 
 async function sendLineNotification({ caseNumber, analysis, fromNumber, isSalesSuspect }) {
