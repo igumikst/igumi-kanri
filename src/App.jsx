@@ -35,6 +35,7 @@ import Quotes from "./pages/Quotes";
 import QuoteImport from "./pages/QuoteImport";
 import NoteQuote from "./pages/NoteQuote";
 import PriceAdmin from "./pages/PriceAdmin";
+import WeeklyQuotes from "./pages/WeeklyQuotes";
 
 export default function App() {
   // アプリを開いた直後だけ、PC(isPCと同じ判定。768px以上)なら案件管理から始める(第8弾テーマ24)。
@@ -219,6 +220,7 @@ export default function App() {
   if (page === "finance") return <Finance {...commonProps} setFinFiles={setFinFiles} finFolders={finFolders} setFinFolders={setFinFolders} />;
   if (page === "templates") return <Templates {...commonProps} setTmplFiles={setTmplFiles} />;
   if (page === "estimate") return <Estimate {...commonProps} />;
+  if (page === "weeklyquotes") return <WeeklyQuotes {...commonProps} setQuoteProjectId={setQuoteProjectId} setOpenQuoteId={setOpenQuoteId} setOpenProjectId={setOpenProjectId} />;
   if (page === "analytics") return <Analytics {...commonProps} />;
   if (page === "ai") return <AI {...commonProps} aiMsgs={aiMsgs} setAiMsgs={setAiMsgs} aiInput={aiInput} setAiInput={setAiInput} />;
   if (page === "board") return <Board {...commonProps} boardPosts={boardPosts} setBoardPosts={setBoardPosts} boardComments={boardComments} setBoardComments={setBoardComments} />;
