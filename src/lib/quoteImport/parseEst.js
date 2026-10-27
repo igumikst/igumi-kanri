@@ -21,23 +21,30 @@ function readHeader(buf) {
   return buf.length >= 4 && String.fromCharCode(buf[0], buf[1], buf[2], buf[3]) === HEADER;
 }
 
-// 数値レコードをファイル全体から総当たりで探す(ファイルによって開始位置が多少ずれる可能性があるため)
+// 数値レコードをファイル全体から総当たりで探す(ファイルによって開始位置が多少ずれる可能性があるため)。
+// 予算側の数量(qty1)と見積側の数量(qty2)は、通常は同じだが、見積のときだけ数量を
+// 減らして単価を上げる(合計は変えない)ような行では異なることがある。そのため、
+// 「数量が同じはず」「単価B=単価A×掛け率」という前提では弾かず、
+// 「金額A=数量1×単価A」「金額B=金額A×掛け率/100」「金額B=数量2×単価B」という、
+// 数量が違っていても必ず成り立つ関係だけで判定する
 function findNumericRecords(dv, len) {
   const hits = [];
   for (let off = 0; off + RECORD_SIZE <= len; off++) {
     const qty1 = dv.getFloat64(off, true);
     const qty2 = dv.getFloat64(off + 8, true);
-    if (!(isReasonable(qty1) && qty1 > 0 && qty1 < 10000 && close(qty1, qty2, 1e-6))) continue;
+    if (!(isReasonable(qty1) && qty1 > 0 && qty1 < 10000)) continue;
+    if (!(isReasonable(qty2) && qty2 > 0 && qty2 < 10000)) continue;
     const priceA = dv.getFloat64(off + 16, true);
     const priceB = dv.getFloat64(off + 24, true);
     if (!(isReasonable(priceA) && priceA > 0)) continue;
+    if (!(isReasonable(priceB) && priceB > 0)) continue;
     const rate = dv.getFloat64(off + MARKUP_RATE_FIELD_OFFSET, true);
     if (!(Number.isFinite(rate) && rate >= 50 && rate <= 500)) continue;
-    if (!close(priceB, priceA * (rate / 100), Math.max(0.5, priceA * 0.0005))) continue;
     const amountA = dv.getFloat64(off + 40, true);
     const amountB = dv.getFloat64(off + 48, true);
     if (!close(amountA, qty1 * priceA, Math.max(0.5, Math.abs(amountA) * 0.0005))) continue;
-    if (!close(amountB, qty1 * priceB, Math.max(0.5, Math.abs(amountB) * 0.0005))) continue;
+    if (!close(amountB, amountA * (rate / 100), Math.max(0.5, Math.abs(amountB) * 0.0005))) continue;
+    if (!close(amountB, qty2 * priceB, Math.max(0.5, Math.abs(amountB) * 0.0005))) continue;
     hits.push({ off, qty: qty1, priceA, priceB, amountA, amountB, rate });
   }
   // 連続する一定間隔(ふつう107バイト)のものだけを、本物のレコード列として採用する。
@@ -298,8 +305,9 @@ export function parseEstFile(arrayBuffer, fileName = "") {
   const warnings = [];
   const checks = [];
 
-  // 行ごとの掛け率の整合性チェック(単価B÷単価A が、そのレコードの掛け率と合っているか)
-  const rateMismatches = records.filter(r => !close(r.priceB / r.priceA, r.rate / 100, 0.002));
+  // 行ごとの掛け率の整合性チェック(金額B が、金額A×掛け率と合っているか。予算と見積で
+  // 数量が異なる行では単価B÷単価Aが掛け率と一致しないことがあるため、金額どうしで見る)
+  const rateMismatches = records.filter(r => !close(r.amountB, r.amountA * (r.rate / 100), Math.max(0.5, Math.abs(r.amountA) * 0.002)));
   if (rateMismatches.length > 0) warnings.push(`${rateMismatches.length}行で、単価B÷単価Aが掛け率と一致しません(データが壊れている可能性があります)`);
   const rateSet = [...new Set(records.map(r => Math.round(r.rate)))];
   const detectedRate = rateSet.length === 1 ? rateSet[0] : Math.round(records[0].rate);
