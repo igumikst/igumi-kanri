@@ -28,6 +28,25 @@ export const MARKUP_CHOICE_OPTIONS = [
 
 const closeEnough = (a, b) => Math.abs(a - b) < 0.0005;
 
+// choice(と カスタムの数字)から掛け率の数を出す。未選択・カスタムの範囲外は null
+export function rateFromChoice(choice, custom) {
+  const o = MARKUP_CHOICE_OPTIONS.find(x => x.key === choice);
+  if (!o) return null;
+  if (o.rate != null) return o.rate;
+  const n = Number(custom);
+  return Number.isFinite(n) && n >= CUSTOM_RATE_MIN && n <= CUSTOM_RATE_MAX ? n : null;
+}
+
+// 案件の営業所 → 取引先 の順に「掛け率の初期値」を探す(見積編集の新規見積で使う。取り込み画面の決め方と同じ)
+export function resolveDefaultMarkupFor({ clientId, branchId, cos, branches }) {
+  const branch = branchId ? (branches || []).find(b => b.id === branchId) : null;
+  const fromBranch = branch ? resolveMarkupChoice(branch.markup_default) : null;
+  if (fromBranch) return { ...fromBranch, source: "営業所" };
+  const co = clientId ? (cos || []).find(c => c.id === clientId) : null;
+  const fromCo = co ? resolveMarkupChoice(co.markupDefault) : null;
+  return fromCo ? { ...fromCo, source: "取引先" } : null;
+}
+
 // 取引先・営業所の「掛け率の初期値」に保存されている文字列(数字)から、choiceとrateを決める。
 // null/空/数字でない場合は null(未設定・取引先に合わせる)
 export function resolveMarkupChoice(stored) {

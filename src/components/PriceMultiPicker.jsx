@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { fmt } from "../lib/constants";
+import { applyRate } from "../lib/quoteImport/markup";
 
 // 見積編集画面の「＋まとめて追加」: 入れ先の大項目を決めて、単価表の項目をチェックで複数選び、数量も入れて一度に追加する。
 // - 入れ先は、今ある大項目(グループのパス)か、新しい大項目の名前
@@ -13,11 +14,12 @@ import { fmt } from "../lib/constants";
 //   items: 今の単価セットの単価項目, groups: 今の単価セットの単価グループ, groupsMap: id → 単価グループ
 //   groupPaths: 今ある大項目のパス一覧, initialTarget: 最初に選んでおく入れ先("" なら新しい大項目)
 //   lines: 今の明細(「入れ済み」の判定に使う), laborUnitPrice: 人工単価
+//   rate: 見積の掛け率(合計の見込みに使う。指定が無ければ 1.0)
 //   isPC, onClose(), onAdd({ target, picks: [{ item, qty }] })  ※picks はチェックした順
 const NEW_TARGET = "__new__";
 const isLabor = item => item.item_type === "labor_manual";
 
-export default function PriceMultiPicker({ items, groups, groupsMap, groupPaths, initialTarget, lines, laborUnitPrice, isPC, onClose, onAdd }) {
+export default function PriceMultiPicker({ items, groups, groupsMap, groupPaths, initialTarget, lines, laborUnitPrice, rate = 1, isPC, onClose, onAdd }) {
   const [target, setTarget] = useState(initialTarget && groupPaths.includes(initialTarget) ? initialTarget : NEW_TARGET);
   const [newName, setNewName] = useState("");
   const [picks, setPicks] = useState(() => new Map()); // price_item_id → 数量の文字列(Map の順番 = チェックした順)
@@ -40,7 +42,7 @@ export default function PriceMultiPicker({ items, groups, groupsMap, groupPaths,
 
   const itemById = useMemo(() => Object.fromEntries(items.map(i => [i.id, i])), [items]);
   const chosen = [...picks].map(([id, qty]) => ({ item: itemById[id], qty })).filter(p => p.item);
-  const amountOf = p => isLabor(p.item) ? (Number(p.qty) || 0) * laborUnitPrice : (Number(p.qty) || 0) * (Number(p.item.sale_price) || 0);
+  const amountOf = p => isLabor(p.item) ? applyRate((Number(p.qty) || 0) * laborUnitPrice, rate) : (Number(p.qty) || 0) * applyRate(p.item.sale_price, rate);
   const sum = chosen.reduce((s, p) => s + amountOf(p), 0);
   const badQty = chosen.filter(p => !(Number(p.qty) > 0));
   const problem = !chosen.length ? "項目を選んでください"

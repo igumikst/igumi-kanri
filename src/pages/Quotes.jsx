@@ -21,6 +21,7 @@ import { loadQuoteForExport } from "../lib/quoteExport/loadQuoteForExport";
 import { exportQuoteXlsx } from "../lib/quoteExport/buildQuoteXlsx";
 import { exportQuotePdf } from "../lib/quoteExport/buildQuotePdf";
 import { getDeviceAssigneeName, setDeviceAssigneeName } from "../lib/deviceAssignee";
+import { applyRate, MARKUP_CHOICE_OPTIONS, CUSTOM_RATE_MIN, CUSTOM_RATE_MAX, resolveMarkupChoice, rateFromChoice, resolveDefaultMarkupFor } from "../lib/quoteImport/markup";
 
 // 見積の状態は、画面上は「発注前」「完工済」の2つだけ。DBの値は既存の制約に合わせる
 // (発注前=submitted / 完工済=won)。既存の下書き(draft)・失注(lost)は、画面では発注前と表示する
@@ -32,17 +33,26 @@ const STATUS_STYLE_DEFAULT = { label: "発注前", bg: "#E0F0FF", text: "#0B4F8A
 const STATUS_STYLE_WON = { label: "完工済", bg: "#D1FAE5", text: "#065F46", border: "#34D399" };
 const statusStyle = key => (key === "won" ? STATUS_STYLE_WON : STATUS_STYLE_DEFAULT);
 
-const blankEd = { id: null, quote_no: null, title: "", price_set_id: "", status: "submitted", construction_type: "自社のみ", crew_id: "", profit_confirmed: false, created_by: "", lines: [] };
+const blankEd = { id: null, quote_no: null, title: "", price_set_id: "", status: "submitted", construction_type: "自社のみ", crew_id: "", profit_confirmed: false, created_by: "", rate_choice: null, rate_custom: "", applied_rates: null, lines: [] };
+// 見積の掛け率(販売の単価 = 100%の単価 × 掛け率)。未選択は null
+const edRate = e => rateFromChoice(e.rate_choice, e.rate_custom);
+const rateLabel = r => (r == null ? "未選択" : `×${Number.isInteger(r) ? r.toFixed(1) : r}`);
+// 100%の単価(base_price)。空(取り込み・ノート見積作成で入った行、手入力の行)は今の単価と同じとして扱う
+const baseOf = l => (l.base_price === null || l.base_price === undefined || l.base_price === "" ? Number(l.sale_price) || 0 : Number(l.base_price) || 0);
+// 単価表から入れた行で、単価が「100%の単価 × 掛け率」のままの行(手で単価を直していない行)。掛け率を変えたら計算し直す対象
+const followsRate = (l, rate) => (l.line_type === "item" || l.line_type === "labor") && !!l.price_item_id
+  && l.base_price !== null && l.base_price !== undefined && l.base_price !== ""
+  && (Number(l.sale_price) || 0) === applyRate(l.base_price, rate);
 const newKey = () => "l" + Date.now() + Math.random().toString(36).slice(2);
 // quote_no は text 型のため、数字だけを取り出して数として扱う(DB関数 import_quote と同じ考え方)
 const quoteNoNum = q => parseInt(String(q.quote_no ?? "").replace(/[^0-9]/g, ""), 10) || 0;
 // 見積書の出力(Excel/PDF)で「保存していない変更」があるかを見るための、保存される項目だけの写し
 const savedSnapshot = e => JSON.stringify({
-  title: e.title, price_set_id: e.price_set_id, status: e.status, construction_type: e.construction_type, crew_id: e.crew_id,
-  lines: e.lines.map(l => [l.group_name, l.name, l.spec, l.unit, Number(l.qty) || 0, Number(l.sale_price) || 0, l.note || "", l.cost_price ?? null, !!l.cost_confirmed, !!l.is_subcontracted]),
+  title: e.title, price_set_id: e.price_set_id, status: e.status, construction_type: e.construction_type, crew_id: e.crew_id, rate: edRate(e),
+  lines: e.lines.map(l => [l.group_name, l.name, l.spec, l.unit, Number(l.qty) || 0, Number(l.sale_price) || 0, baseOf(l), l.note || "", l.cost_price ?? null, !!l.cost_confirmed, !!l.is_subcontracted]),
 });
 
-export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, setSubmittedQuotes, setPjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteProjectId, setQuoteImportCtx, setOpenProjectId, crews, setCrews, openQuoteId, setOpenQuoteId }) {
+export default function Quotes({ branches, pjs, submittedQuotes, wonQuotes, setWonQuotes, setSubmittedQuotes, setPjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteProjectId, setQuoteImportCtx, setOpenProjectId, crews, setCrews, openQuoteId, setOpenQuoteId }) {
   usePreventWindowFileDrop();
   const project = pjs.find(p => p.id === quoteProjectId);
   const pending = tks.filter(t => !t.done);
@@ -155,7 +165,9 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
     crewTouchedRef.current = false;
     // 班の初期値は「自社」(第8弾テーマ21-A追加)。自社の見積として作るので、粗利も最初から確定扱い
     const defaultCrewId = defaultOwnCrewId(crews);
-    setEd({ ...blankEd, construction_type: project?.constructionType || "自社のみ", crew_id: defaultCrewId, profit_confirmed: !!defaultCrewId, created_by: getDeviceAssigneeName() });
+    const mk = resolveDefaultMarkupFor({ clientId: project?.clientId, branchId: project?.branchId, cos, branches });
+    setEd({ ...blankEd, construction_type: project?.constructionType || "自社のみ", crew_id: defaultCrewId, profit_confirmed: !!defaultCrewId, created_by: getDeviceAssigneeName(),
+      rate_choice: mk?.choice ?? null, rate_custom: mk?.choice === "custom" ? String(mk.rate) : "", rate_source: mk?.source || "" });
     setSubCosts([]); setSubForm({ subcontractor_id: "", amount: "", note: "", file: null });
     setSearch(""); setCategoryFilter(""); setGroupFilter("");
     setCollapsed(new Set()); setShowPricePicker(false); setSelectedKeys(new Set()); setNoteOpen(new Set()); // 見積を開くたびに、グループは全部開いた状態から
@@ -181,13 +193,18 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
       unit: r.unit || "",
       qty: r.qty,
       sale_price: r.sale_price,
+      base_price: r.base_price ?? null,
       cost_price: costsByItem[r.id]?.cost_price ?? null,
       cost_confirmed: costsByItem[r.id]?.cost_confirmed ?? false,
       is_subcontracted: !!r.is_subcontracted,
       labor_count: r.line_type === "labor" ? (parseFloat(r.spec) || "") : undefined,
       note: r.note || "",
     }));
-    const openedEd = { id: q.id, quote_no: q.quote_no, title: q.title, price_set_id: q.price_set_id || "", status: q.status === "won" ? "won" : "submitted", construction_type: q.construction_type || "自社のみ", crew_id: q.crew_id || "", profit_confirmed: !!q.profit_confirmed, created_by: q.created_by || "", lines };
+    const ar = q.applied_rates || null;
+    const mk = ar?.choice && MARKUP_CHOICE_OPTIONS.some(o => o.key === ar.choice) && rateFromChoice(ar.choice, ar.rate) != null
+      ? { choice: ar.choice, rate: ar.rate } : (resolveMarkupChoice(ar?.rate) || { choice: "none", rate: 1 });
+    const openedEd = { id: q.id, quote_no: q.quote_no, title: q.title, price_set_id: q.price_set_id || "", status: q.status === "won" ? "won" : "submitted", construction_type: q.construction_type || "自社のみ", crew_id: q.crew_id || "", profit_confirmed: !!q.profit_confirmed, created_by: q.created_by || "",
+      rate_choice: mk.choice, rate_custom: mk.choice === "custom" ? String(mk.rate) : "", applied_rates: ar, rate_source: ar ? "" : "今までの見積(1.0扱い)", lines };
     openedSnapRef.current = savedSnapshot(openedEd);
     setEd(openedEd);
     setSubForm({ subcontractor_id: "", amount: "", note: "", file: null });
@@ -343,7 +360,7 @@ ${e.message}` : "見積書を出力できませんでした。");
       key: newKey(), price_item_id: item.id, line_type: "item",
       group_name: groupName,
       name: item.name, spec: item.spec || "", unit: item.unit || "",
-      qty, sale_price: item.sale_price || 0,
+      qty, base_price: Number(item.sale_price) || 0, sale_price: applyRate(item.sale_price || 0, edRate(ed) ?? 1),
       cost_price: cost?.cost_price ?? null, cost_confirmed: cost?.cost_confirmed ?? false,
     };
   };
@@ -353,7 +370,7 @@ ${e.message}` : "見積書を出力できませんでした。");
       key: newKey(), price_item_id: item.id, line_type: "labor",
       group_name: groupName,
       name: item.name, spec: `${count}人工`, unit: "式",
-      qty: 1, sale_price: count * laborUnitPrice,
+      qty: 1, base_price: count * laborUnitPrice, sale_price: applyRate(count * laborUnitPrice, edRate(ed) ?? 1),
       cost_price: cost?.cost_price ?? null, cost_confirmed: cost?.cost_confirmed ?? false,
       labor_count: count,
     };
@@ -394,7 +411,26 @@ ${e.message}` : "見積書を出力できませんでした。");
 
   const updateLaborCount = (key, count) => {
     const n = Number(count);
-    setEd(prev => ({ ...prev, lines: prev.lines.map(l => l.key === key ? { ...l, labor_count: count, spec: `${count || 0}人工`, sale_price: (n || 0) * laborUnitPrice } : l) }));
+    setEd(prev => ({ ...prev, lines: prev.lines.map(l => l.key === key ? { ...l, labor_count: count, spec: `${count || 0}人工`, base_price: (n || 0) * laborUnitPrice, sale_price: applyRate((n || 0) * laborUnitPrice, edRate(prev) ?? 1) } : l) }));
+  };
+
+  // 掛け率を変える。単価表から入れた行のうち、手で単価を直していない行だけを「100%の単価 × 新しい掛け率」に計算し直す。
+  // 計算し直す行があるときは、先に確認を出す。手入力の行・手で直した行・取り込みの行は変えない
+  const changeRate = (choice, custom = "") => {
+    const newRate = rateFromChoice(choice, custom);
+    if (newRate == null) return;
+    const oldRate = edRate(ed) ?? 1;
+    const apply = () => setEd(prev => ({
+      ...prev, rate_choice: choice, rate_custom: choice === "custom" ? String(custom) : "", rate_source: "",
+      lines: prev.lines.map(l => (followsRate(l, oldRate) ? { ...l, sale_price: applyRate(l.base_price, newRate) } : l)),
+    }));
+    const targets = ed.lines.filter(l => followsRate(l, oldRate) && applyRate(l.base_price, newRate) !== (Number(l.sale_price) || 0));
+    if (!targets.length) { apply(); return; }
+    const kept = ed.lines.length - ed.lines.filter(l => followsRate(l, oldRate)).length;
+    setConf({
+      msg: `掛け率を ${rateLabel(edRate(ed))} から ${rateLabel(newRate)} に変えます。\n\n単価表から入れた行のうち、単価を手で直していない ${targets.length}行の単価を「100%の単価 × ${newRate}」に計算し直します。` + (kept ? `\n手入力の行・手で単価を直した行・取り込んだ行(${kept}行)は変えません。` : ""),
+      okLabel: "計算し直す", okColor: "#1A3A5C", onOk: () => { setConf(null); apply(); },
+    });
   };
 
   const addManualLine = () => {
@@ -410,6 +446,9 @@ ${e.message}` : "見積書を出力できませんでした。");
   const differsFromCatalog = (l, c) => !!c && (l.line_type === "labor" ? l.name !== c.name : (l.name !== c.name || (l.spec || "") !== (c.spec || "")));
   const resetToCatalog = (l, c) => updateLine(l.key, l.line_type === "labor" ? { name: c.name } : { name: c.name, spec: c.spec || "" });
   const toggleNote = key => setNoteOpen(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
+  const priceHint = l => (l.price_item_id && l.line_type === "item"
+    ? (followsRate(l, edRate(ed) ?? 1) ? `100%の単価 ${fmt(baseOf(l))} × 掛け率 ${edRate(ed) ?? 1}` : `手で直した単価・取り込んだ単価(100%の単価として記録: ${fmt(baseOf(l))})。掛け率を変えても変わりません`)
+    : "");
   const updateLine = (key, patch) => setEd(prev => ({ ...prev, lines: prev.lines.map(l => l.key === key ? { ...l, ...patch } : l) }));
   const removeLine = key => setEd(prev => ({ ...prev, lines: prev.lines.filter(l => l.key !== key) }));
   const setLines = newLines => setEd(prev => ({ ...prev, lines: newLines }));
@@ -491,6 +530,7 @@ ${e.message}` : "見積書を出力できませんでした。");
   const saveQuote = () => {
     if (!ed.title.trim()) { alert("タイトルを入力してください"); return; }
     if (!ed.price_set_id) { alert("単価セットを選んでください"); return; }
+    if (edRate(ed) == null) { alert(ed.rate_choice === "custom" ? `掛け率は${CUSTOM_RATE_MIN}〜${CUSTOM_RATE_MAX}の範囲で入力してください` : "掛け率を選んでください"); return; }
     const emptyNameCount = ed.lines.filter(l => !String(l.name || "").trim()).length;
     if (emptyNameCount) alert(`品名が空の行が ${emptyNameCount} 件あります。このまま保存します(あとで直せます)`);
     const prevQuote = ed.id ? quotes.find(q => q.id === ed.id) : null;
@@ -524,7 +564,9 @@ ${e.message}` : "見積書を出力できませんでした。");
     // construction_type・crew_id・profit_confirmedは保存のたびに今のed(編集状態)の値を書き込むが、
     // profit_confirmed自体は「班を変更してis_ownが変わったとき」だけ変わる値なので、
     // 明細・金額だけの編集では実質触らないことになる(第8弾テーマ21)
-    const payload = { project_id: quoteProjectId, title: ed.title.trim(), price_set_id: ed.price_set_id, status: ed.status, total_amount: Math.round(total), construction_type: ed.construction_type || "自社のみ", crew_id: ed.crew_id || null, profit_confirmed: !!ed.profit_confirmed, created_by: ed.created_by || null };
+    const payload = { project_id: quoteProjectId, title: ed.title.trim(), price_set_id: ed.price_set_id, status: ed.status, total_amount: Math.round(total), construction_type: ed.construction_type || "自社のみ", crew_id: ed.crew_id || null, profit_confirmed: !!ed.profit_confirmed, created_by: ed.created_by || null,
+      // 使った掛け率。取り込みで入っていた他の記録(ESTの出力率など)は残す
+      applied_rates: { ...(ed.applied_rates || {}), rate: edRate(ed), choice: ed.rate_choice } };
     if (!quoteId) {
       const { data, error } = await supabase.from("quotes").insert([{ ...payload, quote_no: String(Math.max(0, ...quotes.map(quoteNoNum)) + 1) }]).select();
       if (error) { alert(describeError(error, "保存")); setSaving(false); return; }
@@ -538,6 +580,7 @@ ${e.message}` : "見積書を出力できませんでした。");
       const itemsPayload = ed.lines.map((l, i) => ({
         quote_id: quoteId, price_item_id: l.price_item_id, line_type: l.line_type, group_name: l.group_name,
         name: l.name, spec: l.spec, unit: l.unit, qty: Number(l.qty) || 0, sale_price: Number(l.sale_price) || 0, sort_order: i,
+        base_price: l.line_type === "adjust" ? Number(l.sale_price) || 0 : baseOf(l), // 100%の単価。手入力の行は入れた単価と同じ
         is_subcontracted: !!l.is_subcontracted,
         ...(l.note ? { note: l.note } : {}), // 備考(取り込んだ行・画面で入れた行)。ない行は送らない
       }));
@@ -765,6 +808,7 @@ ${e.message}` : "見積書を出力できませんでした。");
                   </select>
                   {hasSetLines && <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 3 }}>単価表の明細があるため変更できません</div>}
                 </div>
+                <RateField key={ed.id || "new"} ed={ed} onChange={changeRate} />
                 <div style={{ flex: 1, minWidth: 160 }}>
                   <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 3 }}>状態</div>
                   <select value={ed.status} onChange={e => setEd({ ...ed, status: e.target.value })} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, background: "#FAFAFA", boxSizing: "border-box", color: "#1F2937" }}>
@@ -954,7 +998,7 @@ ${e.message}` : "見積書を出力できませんでした。");
                               </td>,
                               <td key="price" style={{ ...ctd, whiteSpace: "nowrap", textAlign: "right" }}>
                                 {l.line_type !== "labor" ? (
-                                  <input type="number" value={l.sale_price} onChange={e => updateLine(l.key, { sale_price: e.target.value })} style={{ ...cin, width: d.priceWidth, textAlign: "right" }} />
+                                  <input type="number" value={l.sale_price} onChange={e => updateLine(l.key, { sale_price: e.target.value })} title={priceHint(l)} style={{ ...cin, width: d.priceWidth, textAlign: "right" }} />
                                 ) : (
                                   <span style={{ color: "#374151" }}>{fmt(l.sale_price)}</span>
                                 )}
@@ -1022,7 +1066,7 @@ ${e.message}` : "見積書を出力できませんでした。");
                             </td>,
                             <td key="price" style={{ padding: "6px 8px" }}>
                               {l.line_type !== "labor" ? (
-                                <input type="number" value={l.sale_price} onChange={e => updateLine(l.key, { sale_price: e.target.value })} style={{ width: 90, padding: "4px 6px", borderRadius: 6, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
+                                <input type="number" value={l.sale_price} onChange={e => updateLine(l.key, { sale_price: e.target.value })} title={priceHint(l)} style={{ width: 90, padding: "4px 6px", borderRadius: 6, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
                               ) : (
                                 <span style={{ fontSize: 12, color: "#374151" }}>{fmt(l.sale_price)}</span>
                               )}
@@ -1143,10 +1187,48 @@ ${e.message}` : "見積書を出力できませんでした。");
       )}
       {multiAdd && (
         <PriceMultiPicker items={itemsForSet} groups={groupsForSet} groupsMap={groupsMap} groupPaths={listGroupPaths(ed.lines)}
-          initialTarget={multiAdd.target} lines={ed.lines} laborUnitPrice={laborUnitPrice} isPC={isPC}
+          initialTarget={multiAdd.target} lines={ed.lines} laborUnitPrice={laborUnitPrice} rate={edRate(ed) ?? 1} isPC={isPC}
           onClose={() => setMultiAdd(null)} onAdd={addPicksToGroup} />
       )}
       {conf && <Confirm msg={conf.msg} onCancel={() => setConf(null)} onOk={conf.onOk} okLabel={conf.okLabel} okColor={conf.okColor} extra={conf.extra} />}
+    </div>
+  );
+}
+
+// 見積の「掛け率 *(必須)」。1.0 / 0.925 / 0.9 / カスタム(0.50〜1.20)。カスタムは数字を入れて「決定」で反映する
+function RateField({ ed, onChange }) {
+  const [custom, setCustom] = useState(ed.rate_choice === "custom" ? ed.rate_custom : "");
+  const [editingCustom, setEditingCustom] = useState(false);
+  const rate = edRate(ed);
+  const customNum = Number(custom);
+  const customValid = custom !== "" && Number.isFinite(customNum) && customNum >= CUSTOM_RATE_MIN && customNum <= CUSTOM_RATE_MAX;
+  const showCustom = editingCustom || ed.rate_choice === "custom";
+  const btn = on => ({ padding: "6px 12px", border: "none", borderRight: "1px solid #E5E7EB", background: on ? "#1A3A5C" : "#fff", color: on ? "#fff" : "#374151", fontSize: 13, fontWeight: 700, cursor: "pointer" });
+  return (
+    <div style={{ flexBasis: "100%", border: `2px solid ${rate == null ? "#E07B39" : "#E5E7EB"}`, borderRadius: 10, padding: "8px 10px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 12, fontWeight: 800, color: "#1A3A5C" }}>掛け率 *(必須)</span>
+        <div style={{ display: "flex", border: "1px solid #E5E7EB", borderRadius: 8, overflow: "hidden" }}>
+          {MARKUP_CHOICE_OPTIONS.map(o => {
+            const on = o.key === "custom" ? showCustom : ed.rate_choice === o.key && !editingCustom;
+            return (
+              <button key={o.key} type="button" style={btn(on)}
+                onClick={() => { if (o.key === "custom") { setEditingCustom(true); return; } setEditingCustom(false); onChange(o.key); }}>{o.label}</button>
+            );
+          })}
+        </div>
+        {showCustom && (
+          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <input type="number" step="0.001" min={CUSTOM_RATE_MIN} max={CUSTOM_RATE_MAX} value={custom} onChange={e => setCustom(e.target.value)}
+              placeholder={`${CUSTOM_RATE_MIN}〜${CUSTOM_RATE_MAX}`} style={{ width: 90, padding: "5px 8px", borderRadius: 6, border: `1.5px solid ${customValid || !custom ? "#E5E7EB" : "#FCA5A5"}`, fontSize: 13, color: "#1F2937" }} />
+            <button type="button" disabled={!customValid} onClick={() => { setEditingCustom(false); onChange("custom", custom); }}
+              style={{ padding: "5px 10px", borderRadius: 6, border: "none", background: customValid ? "#1A3A5C" : "#C7D2FE", color: "#fff", fontSize: 12, fontWeight: 700, cursor: customValid ? "pointer" : "default" }}>決定</button>
+          </span>
+        )}
+        <span style={{ fontSize: 12, fontWeight: 700, color: rate == null ? "#C2410C" : "#374151" }}>{rate == null ? "選んでください" : `今の掛け率 ${rateLabel(rate)}`}</span>
+        {ed.rate_source && <span style={{ fontSize: 10, color: "#6B7280", background: "#F3F4F6", borderRadius: 4, padding: "1px 6px" }}>{ed.rate_source === "営業所" || ed.rate_source === "取引先" ? `${ed.rate_source}の初期値` : ed.rate_source}</span>}
+      </div>
+      <div style={{ fontSize: 10, color: "#6B7280", marginTop: 4 }}>販売の単価 = 100%の単価 × 掛け率。単価表から入れた行に使います(手入力の行・手で直した単価には使いません)</div>
     </div>
   );
 }
