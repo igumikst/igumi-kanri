@@ -17,7 +17,7 @@ import { computeQuoteFinancials, CONSTRUCTION_TYPES } from "../lib/quoteFinancia
 import { describeError } from "../lib/errorMessage";
 import { defaultOwnCrewId } from "../lib/crews";
 import { visibleProjects } from "../lib/projectMerge";
-import { getDeviceAssigneeName } from "../lib/deviceAssignee";
+import { getValidDeviceAssigneeName } from "../lib/deviceAssignee";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ACCEPT_RE = /\.(xls|xlsx|est|pdf)$/i;
@@ -111,6 +111,14 @@ export default function QuoteImport({ pjs, submittedQuotes, wonQuotes, setPjs, c
   const [results, setResults] = useState([]);
   const [reading, setReading] = useState(false);
   const [price, setPrice] = useState(null);
+  // 作成者の自動記録(この端末の記憶名)に使う、今の担当者リスト
+  const [assigneeNames, setAssigneeNames] = useState([]);
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from("home_settings").select("value").eq("id", "assignee_names").single();
+      if (data?.value && Array.isArray(data.value)) setAssigneeNames(data.value);
+    })();
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -210,7 +218,7 @@ export default function QuoteImport({ pjs, submittedQuotes, wonQuotes, setPjs, c
         </div>
 
         {results.map(r => (
-          <FileCard key={r.key} r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps || []} setSalesReps={setSalesReps} branches={branches || []} setBranches={setBranches} crews={crews || []} setCrews={setCrews}
+          <FileCard key={r.key} r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps || []} setSalesReps={setSalesReps} branches={branches || []} setBranches={setBranches} crews={crews || []} setCrews={setCrews} assigneeNames={assigneeNames}
             defaultProjectId={quoteImportCtx?.projectId || ""}
             onRegistered={addProjectToState}
             onOpenQuote={projectId => { setQuoteProjectId(projectId); nav("quotes"); }}
@@ -222,7 +230,7 @@ export default function QuoteImport({ pjs, submittedQuotes, wonQuotes, setPjs, c
   );
 }
 
-function FileCard({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, crews, setCrews, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
+function FileCard({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, crews, setCrews, assigneeNames, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
   if (r.error) {
     return (
       <div style={{ ...card, borderLeft: "4px solid #DC2626" }}>
@@ -231,10 +239,10 @@ function FileCard({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branche
       </div>
     );
   }
-  if (r.kind === "est") return <EstImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} crews={crews} setCrews={setCrews} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onOpenProject={onOpenProject} onRemove={onRemove} />;
-  if (r.kind === "selfquote") return <SelfQuoteImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} crews={crews} setCrews={setCrews} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onOpenProject={onOpenProject} onRemove={onRemove} />;
-  if (r.kind === "selfquote-pdf" || r.kind === "selfcover") return <SelfQuotePdfImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} crews={crews} setCrews={setCrews} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onOpenProject={onOpenProject} onRemove={onRemove} />;
-  return <ImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} crews={crews} setCrews={setCrews} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onOpenProject={onOpenProject} onRemove={onRemove} />;
+  if (r.kind === "est") return <EstImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} crews={crews} setCrews={setCrews} assigneeNames={assigneeNames} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onOpenProject={onOpenProject} onRemove={onRemove} />;
+  if (r.kind === "selfquote") return <SelfQuoteImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} crews={crews} setCrews={setCrews} assigneeNames={assigneeNames} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onOpenProject={onOpenProject} onRemove={onRemove} />;
+  if (r.kind === "selfquote-pdf" || r.kind === "selfcover") return <SelfQuotePdfImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} crews={crews} setCrews={setCrews} assigneeNames={assigneeNames} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onOpenProject={onOpenProject} onRemove={onRemove} />;
+  return <ImportForm r={r} price={price} pjs={pjs} cos={cos} setCos={setCos} salesReps={salesReps} setSalesReps={setSalesReps} branches={branches} setBranches={setBranches} crews={crews} setCrews={setCrews} assigneeNames={assigneeNames} defaultProjectId={defaultProjectId} onRegistered={onRegistered} onOpenQuote={onOpenQuote} onOpenProject={onOpenProject} onRemove={onRemove} />;
 }
 
 const CardHead = ({ fileName, onRemove, locked }) => (
@@ -246,7 +254,7 @@ const CardHead = ({ fileName, onRemove, locked }) => (
 
 let lineSeq = 0;
 
-function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, crews, setCrews, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
+function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, crews, setCrews, assigneeNames, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
   const d = r.data;
   const initialTitle = stripFeeSuffix(d.cover.title || "");
   // 見積タイトルの初期値は、取り込んだ見積ファイルの名前そのまま(拡張子だけ除く。虎生の指示 2026-10-16)。案件名はこれまでどおりinitialTitleを使う
@@ -422,7 +430,7 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
       }).eq("id", data.project_id);
     }
     // 作成者(この端末の記憶名)を残す(import_quoteのSQLは直さず、登録後の更新で済ませる)
-    if (getDeviceAssigneeName()) await supabase.from("quotes").update({ created_by: getDeviceAssigneeName() }).eq("id", data.quote_id);
+    if (getValidDeviceAssigneeName(assigneeNames)) await supabase.from("quotes").update({ created_by: getValidDeviceAssigneeName(assigneeNames) }).eq("id", data.quote_id);
     await applySubcontractorFollowUps({ quoteId: data.quote_id, subFlagsBySortOrder, subCosts });
     const renameError = await applyProjectRename(data.project_id, rename);
     await onRegistered(data.project_id, rename && !renameError ? { name: rename.to } : null);
@@ -874,7 +882,7 @@ function resolveDefaultMarkup({ clientId, branchId, cos, branches }) {
 }
 
 // ESTファイル(見積ソフトのバイナリ形式)の確認画面。ステップ3: 登録・原価の当てはめ・粗利の計算まで行う
-function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, crews, setCrews, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
+function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, crews, setCrews, assigneeNames, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
   const d = r.data;
   const [lines, setLines] = useState(() => d.lines.map(l => ({ ...l, pickedItemId: undefined, costOverride: undefined, isSubcontracted: false })));
   // 工事名称。初期値はファイル内で見つかった工事名称(見つからなければファイル名)。確認画面で直せる
@@ -1116,7 +1124,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
       }).eq("id", data.project_id);
     }
     // 使った掛け率とESTの出力率、作成者(この端末の記憶名)を残す(import_quoteのSQLは直さず、登録後の更新で済ませる)
-    await supabase.from("quotes").update({ applied_rates: appliedRates, ...(getDeviceAssigneeName() ? { created_by: getDeviceAssigneeName() } : {}) }).eq("id", data.quote_id);
+    await supabase.from("quotes").update({ applied_rates: appliedRates, ...(getValidDeviceAssigneeName(assigneeNames) ? { created_by: getValidDeviceAssigneeName(assigneeNames) } : {}) }).eq("id", data.quote_id);
     await applySubcontractorFollowUps({ quoteId: data.quote_id, subFlagsBySortOrder, subCosts });
     const renameError = await applyProjectRename(data.project_id, rename);
     await onRegistered(data.project_id, rename && !renameError ? { name: rename.to } : null);
@@ -1529,7 +1537,7 @@ const DATE_PREFIX_RE = /^\d{1,2}月\d{1,2}日/;
 
 // Excel(.xls/.xlsx)で、シート名に「大項目」と「明細」がある形式(コンクル由来の自社見積書)の確認画面。
 // ESTの確認画面と同じ作り(元請が絡むかの4択・単価表への当てはめ・原価の手入力・並び替え・登録)にする
-function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, crews, setCrews, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
+function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, crews, setCrews, assigneeNames, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
   const d = r.data;
   const initialTitle = stripFeeSuffix(d.cover.title || "");
   // 見積タイトルの初期値は、取り込んだ見積ファイルの名前そのまま(拡張子だけ除く。虎生の指示 2026-10-16)。案件名はこれまでどおりinitialTitleを使う
@@ -1744,7 +1752,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
       }).eq("id", data.project_id);
     }
     // 使った掛け率と見積番号、作成者(この端末の記憶名)を残す(import_quoteのSQLは直さず、登録後の更新で済ませる)
-    await supabase.from("quotes").update({ applied_rates: appliedRates, ...(getDeviceAssigneeName() ? { created_by: getDeviceAssigneeName() } : {}) }).eq("id", data.quote_id);
+    await supabase.from("quotes").update({ applied_rates: appliedRates, ...(getValidDeviceAssigneeName(assigneeNames) ? { created_by: getValidDeviceAssigneeName(assigneeNames) } : {}) }).eq("id", data.quote_id);
     await applySubcontractorFollowUps({ quoteId: data.quote_id, subFlagsBySortOrder, subCosts });
     const renameError = await applyProjectRename(data.project_id, rename);
     await onRegistered(data.project_id, rename && !renameError ? { name: rename.to } : null);
@@ -2088,7 +2096,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
 // 自社見積書PDF(IGUMIが出力した表紙+見積内訳書)の確認画面(第8弾テーマ18)。
 // SelfQuoteImportForm(自社見積書Excel)とほぼ同じ作りだが、「IGUMI原価ベース(7.5%を載せない)保管用」
 // のため掛け率は常に1.0固定(選択UIを出さない)。諸経費・値引きは単価表への当てはめをしない
-function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, crews, setCrews, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
+function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, crews, setCrews, assigneeNames, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
   const d = r.data;
   // 画面・メモの文言。表紙つき自社見積書Excelは d.labels で切り替える(PDFは初期値のまま)
   const lb = { source: "自社見積書PDF", issuedDateFrom: "表紙の日付から読み取り", fileShort: "PDF", ...d.labels };
@@ -2290,7 +2298,7 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
       }).eq("id", data.project_id);
     }
     // 使った掛け率(常に1.0)と作成者(この端末の記憶名)を残す(import_quoteのSQLは直さず、登録後の更新で済ませる)
-    await supabase.from("quotes").update({ applied_rates: appliedRates, ...(getDeviceAssigneeName() ? { created_by: getDeviceAssigneeName() } : {}) }).eq("id", data.quote_id);
+    await supabase.from("quotes").update({ applied_rates: appliedRates, ...(getValidDeviceAssigneeName(assigneeNames) ? { created_by: getValidDeviceAssigneeName(assigneeNames) } : {}) }).eq("id", data.quote_id);
     await applySubcontractorFollowUps({ quoteId: data.quote_id, subFlagsBySortOrder, subCosts });
     const renameError = await applyProjectRename(data.project_id, rename);
     await onRegistered(data.project_id, rename && !renameError ? { name: rename.to } : null);

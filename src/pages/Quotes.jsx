@@ -20,7 +20,7 @@ import { defaultOwnCrewId } from "../lib/crews";
 import { loadQuoteForExport } from "../lib/quoteExport/loadQuoteForExport";
 import { exportQuoteXlsx } from "../lib/quoteExport/buildQuoteXlsx";
 import { exportQuotePdf } from "../lib/quoteExport/buildQuotePdf";
-import { getDeviceAssigneeName, setDeviceAssigneeName } from "../lib/deviceAssignee";
+import { getValidDeviceAssigneeName, setDeviceAssigneeName } from "../lib/deviceAssignee";
 import { applyRate, MARKUP_CHOICE_OPTIONS, CUSTOM_RATE_MIN, CUSTOM_RATE_MAX, resolveMarkupChoice, rateFromChoice, resolveDefaultMarkupFor } from "../lib/quoteImport/markup";
 
 // 見積の状態は、画面上は「発注前」「完工済」の2つだけ。DBの値は既存の制約に合わせる
@@ -166,7 +166,7 @@ export default function Quotes({ branches, pjs, submittedQuotes, wonQuotes, setW
     // 班の初期値は「自社」(第8弾テーマ21-A追加)。自社の見積として作るので、粗利も最初から確定扱い
     const defaultCrewId = defaultOwnCrewId(crews);
     const mk = resolveDefaultMarkupFor({ clientId: project?.clientId, branchId: project?.branchId, cos, branches });
-    setEd({ ...blankEd, construction_type: project?.constructionType || "自社のみ", crew_id: defaultCrewId, profit_confirmed: !!defaultCrewId, created_by: getDeviceAssigneeName(),
+    setEd({ ...blankEd, construction_type: project?.constructionType || "自社のみ", crew_id: defaultCrewId, profit_confirmed: !!defaultCrewId, created_by: getValidDeviceAssigneeName(assigneeNames),
       rate_choice: mk?.choice ?? null, rate_custom: mk?.choice === "custom" ? String(mk.rate) : "", rate_source: mk?.source || "" });
     setSubCosts([]); setSubForm({ subcontractor_id: "", amount: "", note: "", file: null });
     setSearch(""); setCategoryFilter(""); setGroupFilter("");

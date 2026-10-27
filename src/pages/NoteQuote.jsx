@@ -12,7 +12,7 @@ import { buildDraft, resolveLine } from "../lib/noteDraft/buildDraftLines";
 import { findProjectCandidates, findRepCandidates } from "../lib/noteDraft/projectCandidates";
 import { DEFAULT_LABOR_UNIT_PRICE } from "../lib/noteDraft/rules";
 import { visibleProjects } from "../lib/projectMerge";
-import { getDeviceAssigneeName } from "../lib/deviceAssignee";
+import { getValidDeviceAssigneeName } from "../lib/deviceAssignee";
 
 // ノートから見積の下書きを作る画面(第8弾 ノート見積作成)。
 // ノートを貼る → 電話番号を伏せる → AIで分解(/api/note-parse)→ 案件を人が選ぶ → 明細を3色で確認 → 登録して見積編集画面を開く。
@@ -66,6 +66,14 @@ export default function NoteQuote({ pjs, setPjs, cos, setCos, salesReps, setSale
   const [passphrase, setPassphrase] = useState(loadPassphrase);
   const [showPassphrase, setShowPassphrase] = useState(() => !loadPassphrase());
   const [passphraseUnset, setPassphraseUnset] = useState(false); // 見積作成パスワードが未設定(設定画面への案内を出す)
+  // 作成者の自動記録(この端末の記憶名)に使う、今の担当者リスト
+  const [assigneeNames, setAssigneeNames] = useState([]);
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from("home_settings").select("value").eq("id", "assignee_names").single();
+      if (data?.value && Array.isArray(data.value)) setAssigneeNames(data.value);
+    })();
+  }, []);
 
   // 単価表・原価・別名辞書・1人工の単価を読む(取り込み画面と同じ)
   useEffect(() => {
@@ -176,7 +184,7 @@ export default function NoteQuote({ pjs, setPjs, cos, setCos, salesReps, setSale
       }).eq("id", data.project_id);
     }
     // 作成者(この端末の記憶名)を残す(import_quoteのSQLは直さず、登録後の更新で済ませる)
-    if (getDeviceAssigneeName()) await supabase.from("quotes").update({ created_by: getDeviceAssigneeName() }).eq("id", data.quote_id);
+    if (getValidDeviceAssigneeName(assigneeNames)) await supabase.from("quotes").update({ created_by: getValidDeviceAssigneeName(assigneeNames) }).eq("id", data.quote_id);
     if (!pjs.some(p => p.id === data.project_id)) {
       const { data: p } = await supabase.from("projects").select("*").eq("id", data.project_id).single();
       if (p) setPjs(prev => [{ ...p, subIds: p.subcontractorIds || [], gp: p.grossProfit || 0, qDate: p.quoteDate || "" }, ...prev]);
