@@ -419,7 +419,7 @@ ${e.message}` : "見積書を出力できませんでした。");
     const kept = ed.lines.length - ed.lines.filter(l => followsRate(l, oldRate)).length;
     setConf({
       msg: `掛け率を ${rateLabel(edRate(ed))} から ${rateLabel(newRate)} に変えます。\n\n単価表から入れた行のうち、単価を手で直していない ${targets.length}行の単価を「100%の単価 × ${newRate}」に計算し直します。` + (kept ? `\n手入力の行・手で単価を直した行・取り込んだ行(${kept}行)は変えません。` : ""),
-      okLabel: "計算し直す", onOk: () => { setConf(null); apply(); },
+      okLabel: "計算し直す", okColor: "#1A3A5C", onOk: () => { setConf(null); apply(); },
     });
   };
 
@@ -437,7 +437,7 @@ ${e.message}` : "見積書を出力できませんでした。");
   const resetToCatalog = (l, c) => updateLine(l.key, l.line_type === "labor" ? { name: c.name } : { name: c.name, spec: c.spec || "" });
   const toggleNote = key => setNoteOpen(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
   const priceHint = l => (l.price_item_id && l.line_type === "item"
-    ? (followsRate(l, edRate(ed) ?? 1) ? `100%の単価 ${fmt(baseOf(l))} × 掛け率 ${edRate(ed) ?? 1}` : `手で直した単価(100%の単価 ${fmt(baseOf(l))})。掛け率を変えても変わりません`)
+    ? (followsRate(l, edRate(ed) ?? 1) ? `100%の単価 ${fmt(baseOf(l))} × 掛け率 ${edRate(ed) ?? 1}` : `手で直した単価・取り込んだ単価(100%の単価として記録: ${fmt(baseOf(l))})。掛け率を変えても変わりません`)
     : "");
   const updateLine = (key, patch) => setEd(prev => ({ ...prev, lines: prev.lines.map(l => l.key === key ? { ...l, ...patch } : l) }));
   const removeLine = key => setEd(prev => ({ ...prev, lines: prev.lines.filter(l => l.key !== key) }));
