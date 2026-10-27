@@ -4,6 +4,7 @@ import { Hdr } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { describeApiError } from "../lib/errorMessage";
 import { normalizeAssigneeName, isDuplicateAssigneeName } from "../lib/assignees";
+import { getDeviceAssigneeName, setDeviceAssigneeName } from "../lib/deviceAssignee";
 
 export default function AssigneeSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, RP_W, cust, pjs, submittedQuotes, wonQuotes, cos, tks, finFiles, tmplFiles, tileConf }) {
   const [names, setNames] = useState([]);
@@ -12,6 +13,8 @@ export default function AssigneeSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
+  const [deviceName, setDeviceNameState] = useState(() => getDeviceAssigneeName());
+  const changeDeviceName = (name) => { setDeviceAssigneeName(name); setDeviceNameState(name); };
 
   useEffect(() => {
     (async () => {
@@ -64,6 +67,21 @@ export default function AssigneeSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_
         <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 12, padding: "12px 14px", marginBottom: 16, fontSize: 13, color: "#1E40AF", lineHeight: 1.7 }}>
           ここで追加した名前は、電話受付の担当者選択や、プッシュ通知の登録画面で選べるようになります。
           追加しただけでは通知が届くようになるわけではありません(ONにするのは管理者です)。
+        </div>
+
+        <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
+          <div style={{ fontWeight: 800, fontSize: 14, color: "#1A3A5C", marginBottom: 6 }}>📱 この端末の担当者</div>
+          <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 10, lineHeight: 1.6 }}>
+            ここで選んだ名前が、この端末で見積を作成したときの「作成者」として自動で入ります(見積編集画面でも、保存前に変更できます)。
+          </div>
+          <select
+            value={deviceName}
+            onChange={e => changeDeviceName(e.target.value)}
+            style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #CBD5E1", fontSize: 14, boxSizing: "border-box", background: "#F8FAFC", color: "#1F2937" }}
+          >
+            <option value="">― 選択してください ―</option>
+            {names.map(name => <option key={name} value={name}>{name}</option>)}
+          </select>
         </div>
 
         <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>

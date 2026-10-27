@@ -17,6 +17,7 @@ import { computeQuoteFinancials, CONSTRUCTION_TYPES } from "../lib/quoteFinancia
 import { describeError } from "../lib/errorMessage";
 import { defaultOwnCrewId } from "../lib/crews";
 import { visibleProjects } from "../lib/projectMerge";
+import { getDeviceAssigneeName } from "../lib/deviceAssignee";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ACCEPT_RE = /\.(xls|xlsx|est|pdf)$/i;
@@ -420,6 +421,8 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
         ...(np.constructionType ? { constructionType: np.constructionType } : {}),
       }).eq("id", data.project_id);
     }
+    // 作成者(この端末の記憶名)を残す(import_quoteのSQLは直さず、登録後の更新で済ませる)
+    if (getDeviceAssigneeName()) await supabase.from("quotes").update({ created_by: getDeviceAssigneeName() }).eq("id", data.quote_id);
     await applySubcontractorFollowUps({ quoteId: data.quote_id, subFlagsBySortOrder, subCosts });
     const renameError = await applyProjectRename(data.project_id, rename);
     await onRegistered(data.project_id, rename && !renameError ? { name: rename.to } : null);
@@ -1112,8 +1115,8 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
         ...(np.constructionType ? { constructionType: np.constructionType } : {}),
       }).eq("id", data.project_id);
     }
-    // 使った掛け率とESTの出力率を残す(import_quoteのSQLは直さず、登録後の更新で済ませる)
-    await supabase.from("quotes").update({ applied_rates: appliedRates }).eq("id", data.quote_id);
+    // 使った掛け率とESTの出力率、作成者(この端末の記憶名)を残す(import_quoteのSQLは直さず、登録後の更新で済ませる)
+    await supabase.from("quotes").update({ applied_rates: appliedRates, ...(getDeviceAssigneeName() ? { created_by: getDeviceAssigneeName() } : {}) }).eq("id", data.quote_id);
     await applySubcontractorFollowUps({ quoteId: data.quote_id, subFlagsBySortOrder, subCosts });
     const renameError = await applyProjectRename(data.project_id, rename);
     await onRegistered(data.project_id, rename && !renameError ? { name: rename.to } : null);
@@ -1740,8 +1743,8 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
         ...(np.constructionType ? { constructionType: np.constructionType } : {}),
       }).eq("id", data.project_id);
     }
-    // 使った掛け率と見積番号を残す(import_quoteのSQLは直さず、登録後の更新で済ませる)
-    await supabase.from("quotes").update({ applied_rates: appliedRates }).eq("id", data.quote_id);
+    // 使った掛け率と見積番号、作成者(この端末の記憶名)を残す(import_quoteのSQLは直さず、登録後の更新で済ませる)
+    await supabase.from("quotes").update({ applied_rates: appliedRates, ...(getDeviceAssigneeName() ? { created_by: getDeviceAssigneeName() } : {}) }).eq("id", data.quote_id);
     await applySubcontractorFollowUps({ quoteId: data.quote_id, subFlagsBySortOrder, subCosts });
     const renameError = await applyProjectRename(data.project_id, rename);
     await onRegistered(data.project_id, rename && !renameError ? { name: rename.to } : null);
@@ -2286,8 +2289,8 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
         ...(np.constructionType ? { constructionType: np.constructionType } : {}),
       }).eq("id", data.project_id);
     }
-    // 使った掛け率(常に1.0)を残す(import_quoteのSQLは直さず、登録後の更新で済ませる)
-    await supabase.from("quotes").update({ applied_rates: appliedRates }).eq("id", data.quote_id);
+    // 使った掛け率(常に1.0)と作成者(この端末の記憶名)を残す(import_quoteのSQLは直さず、登録後の更新で済ませる)
+    await supabase.from("quotes").update({ applied_rates: appliedRates, ...(getDeviceAssigneeName() ? { created_by: getDeviceAssigneeName() } : {}) }).eq("id", data.quote_id);
     await applySubcontractorFollowUps({ quoteId: data.quote_id, subFlagsBySortOrder, subCosts });
     const renameError = await applyProjectRename(data.project_id, rename);
     await onRegistered(data.project_id, rename && !renameError ? { name: rename.to } : null);

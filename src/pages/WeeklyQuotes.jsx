@@ -4,6 +4,7 @@ import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { fmt } from "../lib/constants";
 import { computeAdoptTotals } from "../lib/quoteAdopt";
 import { TAX_RATE_PERCENT, TAX_ROUNDING, roundBy } from "../lib/quoteExport/loadQuoteForExport";
+import { describeError } from "../lib/errorMessage";
 
 const HEADER_COLOR = "#1A3A5C";
 
@@ -44,14 +45,23 @@ export default function WeeklyQuotes({ pjs, cos, cust, isPC, pp, nav, rpOpen, se
   const [tab, setTab] = useState("survey"); // "survey" | "construction"
   const [sortBy, setSortBy] = useState("new"); // "new" | "amount"
   const [clientFilter, setClientFilter] = useState("");
+  const [assigneeNames, setAssigneeNames] = useState([]);
+  const [settingAuthorFor, setSettingAuthorFor] = useState(null); // 作成者を設定中の見積id
   const pending = (tks || []).filter(t => !t.done);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from("home_settings").select("value").eq("id", "assignee_names").single();
+      if (data?.value && Array.isArray(data.value)) setAssigneeNames(data.value);
+    })();
+  }, []);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       const { data: quotes } = await supabase
         .from("quotes")
-        .select("id,title,project_id,total_amount,gross_profit,status,construction_type,profit_confirmed,created_at")
+        .select("id,title,project_id,total_amount,gross_profit,status,construction_type,profit_confirmed,created_by,created_at")
         .gte("created_at", week.startIso)
         .lt("created_at", week.endIso)
         .order("created_at", { ascending: false });
@@ -94,6 +104,15 @@ export default function WeeklyQuotes({ pjs, cos, cust, isPC, pp, nav, rpOpen, se
     nav("projects");
   };
 
+  const setAuthor = async (e, quoteId, name) => {
+    e.stopPropagation();
+    setSettingAuthorFor(null);
+    if (!name) return;
+    const { error } = await supabase.from("quotes").update({ created_by: name }).eq("id", quoteId);
+    if (error) { alert(describeError(error, "作成者の設定")); return; }
+    setRows(prev => prev.map(r => r.quote.id === quoteId ? { ...r, quote: { ...r.quote, created_by: name } } : r));
+  };
+
   const filtered = rows
     .filter(r => (tab === "survey" ? isSurvey(r) : !isSurvey(r)))
     .filter(r => !clientFilter || r.company?.name === clientFilter)
@@ -101,6 +120,8 @@ export default function WeeklyQuotes({ pjs, cos, cust, isPC, pp, nav, rpOpen, se
 
   const surveyCount = rows.filter(r => isSurvey(r) && (!clientFilter || r.company?.name === clientFilter)).length;
   const constructionCount = rows.filter(r => !isSurvey(r) && (!clientFilter || r.company?.name === clientFilter)).length;
+  const weekTotal = filtered.reduce((s, r) => s + r.total, 0);
+  const weekGp = filtered.reduce((s, r) => s + (Number(r.gp) || 0), 0);
 
   return (
     <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
@@ -113,36 +134,43 @@ export default function WeeklyQuotes({ pjs, cos, cust, isPC, pp, nav, rpOpen, se
       {(cust.showLauncher !== false) && <FloatLauncher links={links} isPC={isPC} nav={nav} />}
 
       <div style={{ maxWidth: isPC ? 800 : "100%", margin: "0 auto", width: "100%" }}>
-        <div style={{ background: HEADER_COLOR, color: "#fff", padding: "14px 16px", position: "sticky", top: 0, zIndex: 50, display: "flex", alignItems: "center", gap: 10 }}>
-          <button onClick={() => nav("home")} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, cursor: "pointer", fontWeight: 700, flexShrink: 0 }}>← 戻る</button>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 800, fontSize: 16 }}>🗓 今週作成した見積もり</div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>{fmtMd(week.monday)}(月)〜{fmtMd(week.sunday)}(日)</div>
+        <div style={{ position: "sticky", top: 0, zIndex: 50, background: "#F0F4F8" }}>
+          <div style={{ background: HEADER_COLOR, color: "#fff", padding: "14px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+            <button onClick={() => nav("home")} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, cursor: "pointer", fontWeight: 700, flexShrink: 0 }}>← 戻る</button>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 800, fontSize: 16 }}>🗓 今週作成した見積もり</div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>{fmtMd(week.monday)}(月)〜{fmtMd(week.sunday)}(日)</div>
+            </div>
           </div>
-        </div>
 
-        <div style={{ padding: "12px 14px 0" }}>
-          <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-            {[["survey", "調査", surveyCount], ["construction", "工事", constructionCount]].map(([key, label, count]) => (
-              <button key={key} onClick={() => setTab(key)} style={{
-                flex: 1, padding: "9px 0", borderRadius: 10, border: `1.5px solid ${tab === key ? HEADER_COLOR : "#E5E7EB"}`,
-                background: tab === key ? HEADER_COLOR : "#fff", color: tab === key ? "#fff" : "#374151",
-                fontSize: 13, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-              }}>
-                {label}
-                <span style={{ background: tab === key ? "rgba(255,255,255,0.25)" : "#F3F4F6", borderRadius: 10, padding: "1px 8px", fontSize: 11 }}>{count}</span>
-              </button>
-            ))}
-          </div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
-            <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ flex: "1 1 120px", padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937", background: "#fff" }}>
-              <option value="new">新しい順</option>
-              <option value="amount">金額順</option>
-            </select>
-            <select value={clientFilter} onChange={e => setClientFilter(e.target.value)} style={{ flex: "2 1 160px", padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937", background: "#fff" }}>
-              <option value="">取引先: すべて</option>
-              {clientOptions.map(n => <option key={n} value={n}>{n}</option>)}
-            </select>
+          <div style={{ padding: "10px 14px 0" }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              {[["survey", "調査", surveyCount], ["construction", "工事", constructionCount]].map(([key, label, count]) => (
+                <button key={key} onClick={() => setTab(key)} style={{
+                  flex: 1, padding: "9px 0", borderRadius: 10, border: `1.5px solid ${tab === key ? HEADER_COLOR : "#E5E7EB"}`,
+                  background: tab === key ? HEADER_COLOR : "#fff", color: tab === key ? "#fff" : "#374151",
+                  fontSize: 13, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                }}>
+                  {label}
+                  <span style={{ background: tab === key ? "rgba(255,255,255,0.25)" : "#F3F4F6", borderRadius: 10, padding: "1px 8px", fontSize: 11 }}>{count}</span>
+                </button>
+              ))}
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fff", borderRadius: 8, padding: "6px 10px", marginBottom: 8, fontSize: 11, color: "#6B7280" }}>
+              <span>{filtered.length}件</span>
+              <span>税抜合計 <b style={{ color: "#1F2937" }}>{fmt(weekTotal)}</b></span>
+              <span>粗利合計 <b style={{ color: "#059669" }}>{fmt(weekGp)}</b></span>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+              <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ flex: "1 1 120px", padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937", background: "#fff" }}>
+                <option value="new">新しい順</option>
+                <option value="amount">金額順</option>
+              </select>
+              <select value={clientFilter} onChange={e => setClientFilter(e.target.value)} style={{ flex: "2 1 160px", padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937", background: "#fff" }}>
+                <option value="">取引先: すべて</option>
+                {clientOptions.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -158,7 +186,7 @@ export default function WeeklyQuotes({ pjs, cos, cust, isPC, pp, nav, rpOpen, se
             filtered.map(r => (
               <div key={r.quote.id} onClick={() => openQuote(r)} style={{ background: "#fff", borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", cursor: "pointer", borderLeft: `4px solid ${HEADER_COLOR}` }}>
                 <div style={{ fontWeight: 800, fontSize: 14, color: "#1F2937", marginBottom: 4, wordBreak: "break-word" }}>{r.quote.title}</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", fontSize: 12, color: "#6B7280", marginBottom: 6 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", fontSize: 12, color: "#6B7280", marginBottom: 8 }}>
                   <span>📋 {r.project?.name || "(案件不明)"}</span>
                   {r.project?.merged_into_id && (
                     <span onClick={e => openMergedTarget(e, r.project.merged_into_id)} style={{ background: "#FFFBEB", color: "#92400E", borderRadius: 6, padding: "1px 7px", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>統合済み →</span>
@@ -166,14 +194,32 @@ export default function WeeklyQuotes({ pjs, cos, cust, isPC, pp, nav, rpOpen, se
                   {r.company?.name && <span>🏢 {r.company.name}</span>}
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 10 }}>
-                  <div style={{ fontSize: 11, color: "#9CA3AF" }}>{fmtCreated(r.quote.created_at)}作成</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: "#1F2937" }}>{fmt(r.total)}<span style={{ fontSize: 10, color: "#9CA3AF", fontWeight: 400 }}>(税抜)</span></div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: "#1F2937" }}>{fmt(r.total)}<span style={{ fontSize: 10, color: "#9CA3AF", fontWeight: 400 }}>(税抜)</span></div>
-                    <div style={{ fontSize: 11, color: "#9CA3AF" }}>税込 {fmt(taxIncluded(r.total))}</div>
-                    <div style={{ fontSize: 12, color: "#059669", fontWeight: 700, marginTop: 2 }}>
+                    <div style={{ fontSize: 13, color: "#059669", fontWeight: 700 }}>
                       粗利 {fmt(r.gp)}{r.provisional && <span style={{ color: "#D97706", fontWeight: 700 }}> (暫定)</span>}
                     </div>
+                    <div style={{ fontSize: 10, color: "#9CA3AF" }}>税込 {fmt(taxIncluded(r.total))}</div>
                   </div>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, paddingTop: 8, borderTop: "1px solid #F3F4F6", fontSize: 11, color: "#9CA3AF" }}>
+                  <span>{fmtCreated(r.quote.created_at)}作成</span>
+                  {r.quote.created_by ? (
+                    <span>👤 {r.quote.created_by}</span>
+                  ) : settingAuthorFor === r.quote.id ? (
+                    <select
+                      autoFocus
+                      onClick={e => e.stopPropagation()}
+                      onChange={e => setAuthor(e, r.quote.id, e.target.value)}
+                      onBlur={e => { e.stopPropagation(); setSettingAuthorFor(null); }}
+                      style={{ fontSize: 11, padding: "1px 4px", borderRadius: 6, border: "1px solid #E5E7EB", color: "#1F2937" }}
+                    >
+                      <option value="">選択</option>
+                      {assigneeNames.map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  ) : (
+                    <span onClick={e => { e.stopPropagation(); setSettingAuthorFor(r.quote.id); }} style={{ color: "#2563EB", fontWeight: 700, cursor: "pointer" }}>👤 作成者を設定</span>
+                  )}
                 </div>
               </div>
             ))

@@ -20,6 +20,7 @@ import { defaultOwnCrewId } from "../lib/crews";
 import { loadQuoteForExport } from "../lib/quoteExport/loadQuoteForExport";
 import { exportQuoteXlsx } from "../lib/quoteExport/buildQuoteXlsx";
 import { exportQuotePdf } from "../lib/quoteExport/buildQuotePdf";
+import { getDeviceAssigneeName, setDeviceAssigneeName } from "../lib/deviceAssignee";
 
 // 見積の状態は、画面上は「発注前」「完工済」の2つだけ。DBの値は既存の制約に合わせる
 // (発注前=submitted / 完工済=won)。既存の下書き(draft)・失注(lost)は、画面では発注前と表示する
@@ -31,7 +32,7 @@ const STATUS_STYLE_DEFAULT = { label: "発注前", bg: "#E0F0FF", text: "#0B4F8A
 const STATUS_STYLE_WON = { label: "完工済", bg: "#D1FAE5", text: "#065F46", border: "#34D399" };
 const statusStyle = key => (key === "won" ? STATUS_STYLE_WON : STATUS_STYLE_DEFAULT);
 
-const blankEd = { id: null, quote_no: null, title: "", price_set_id: "", status: "submitted", construction_type: "自社のみ", crew_id: "", profit_confirmed: false, lines: [] };
+const blankEd = { id: null, quote_no: null, title: "", price_set_id: "", status: "submitted", construction_type: "自社のみ", crew_id: "", profit_confirmed: false, created_by: "", lines: [] };
 const newKey = () => "l" + Date.now() + Math.random().toString(36).slice(2);
 // quote_no は text 型のため、数字だけを取り出して数として扱う(DB関数 import_quote と同じ考え方)
 const quoteNoNum = q => parseInt(String(q.quote_no ?? "").replace(/[^0-9]/g, ""), 10) || 0;
@@ -64,6 +65,15 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
   const [ed, setEd] = useState(blankEd);
   // 班の初期値を「自社」にする処理(第8弾テーマ21-A追加)で、ユーザーが班を手で選んだかどうかを覚えておく
   const crewTouchedRef = useRef(false);
+  // 見積の作成者欄(担当者管理のリストから選ぶ)。この端末の記憶名を保存前にその場で変更できる
+  const [assigneeNames, setAssigneeNames] = useState([]);
+  const [creatorEditing, setCreatorEditing] = useState(false);
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from("home_settings").select("value").eq("id", "assignee_names").single();
+      if (data?.value && Array.isArray(data.value)) setAssigneeNames(data.value);
+    })();
+  }, []);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [groupFilter, setGroupFilter] = useState("");
@@ -145,7 +155,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
     crewTouchedRef.current = false;
     // 班の初期値は「自社」(第8弾テーマ21-A追加)。自社の見積として作るので、粗利も最初から確定扱い
     const defaultCrewId = defaultOwnCrewId(crews);
-    setEd({ ...blankEd, construction_type: project?.constructionType || "自社のみ", crew_id: defaultCrewId, profit_confirmed: !!defaultCrewId });
+    setEd({ ...blankEd, construction_type: project?.constructionType || "自社のみ", crew_id: defaultCrewId, profit_confirmed: !!defaultCrewId, created_by: getDeviceAssigneeName() });
     setSubCosts([]); setSubForm({ subcontractor_id: "", amount: "", note: "", file: null });
     setSearch(""); setCategoryFilter(""); setGroupFilter("");
     setCollapsed(new Set()); setShowPricePicker(false); setSelectedKeys(new Set()); setNoteOpen(new Set()); // 見積を開くたびに、グループは全部開いた状態から
@@ -177,7 +187,7 @@ export default function Quotes({ pjs, submittedQuotes, wonQuotes, setWonQuotes, 
       labor_count: r.line_type === "labor" ? (parseFloat(r.spec) || "") : undefined,
       note: r.note || "",
     }));
-    const openedEd = { id: q.id, quote_no: q.quote_no, title: q.title, price_set_id: q.price_set_id || "", status: q.status === "won" ? "won" : "submitted", construction_type: q.construction_type || "自社のみ", crew_id: q.crew_id || "", profit_confirmed: !!q.profit_confirmed, lines };
+    const openedEd = { id: q.id, quote_no: q.quote_no, title: q.title, price_set_id: q.price_set_id || "", status: q.status === "won" ? "won" : "submitted", construction_type: q.construction_type || "自社のみ", crew_id: q.crew_id || "", profit_confirmed: !!q.profit_confirmed, created_by: q.created_by || "", lines };
     openedSnapRef.current = savedSnapshot(openedEd);
     setEd(openedEd);
     setSubForm({ subcontractor_id: "", amount: "", note: "", file: null });
@@ -514,7 +524,7 @@ ${e.message}` : "見積書を出力できませんでした。");
     // construction_type・crew_id・profit_confirmedは保存のたびに今のed(編集状態)の値を書き込むが、
     // profit_confirmed自体は「班を変更してis_ownが変わったとき」だけ変わる値なので、
     // 明細・金額だけの編集では実質触らないことになる(第8弾テーマ21)
-    const payload = { project_id: quoteProjectId, title: ed.title.trim(), price_set_id: ed.price_set_id, status: ed.status, total_amount: Math.round(total), construction_type: ed.construction_type || "自社のみ", crew_id: ed.crew_id || null, profit_confirmed: !!ed.profit_confirmed };
+    const payload = { project_id: quoteProjectId, title: ed.title.trim(), price_set_id: ed.price_set_id, status: ed.status, total_amount: Math.round(total), construction_type: ed.construction_type || "自社のみ", crew_id: ed.crew_id || null, profit_confirmed: !!ed.profit_confirmed, created_by: ed.created_by || null };
     if (!quoteId) {
       const { data, error } = await supabase.from("quotes").insert([{ ...payload, quote_no: String(Math.max(0, ...quotes.map(quoteNoNum)) + 1) }]).select();
       if (error) { alert(describeError(error, "保存")); setSaving(false); return; }
@@ -725,6 +735,26 @@ ${e.message}` : "見積書を出力できませんでした。");
               <div style={{ marginBottom: 10 }}>
                 <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 3 }}>見積タイトル *</div>
                 <input value={ed.title} onChange={e => setEd({ ...ed, title: e.target.value })} placeholder="例: ○○マンション改修工事 見積" style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, background: "#FAFAFA", boxSizing: "border-box", color: "#1F2937" }} />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#6B7280", marginBottom: 10 }}>
+                作成者:
+                {creatorEditing ? (
+                  <select
+                    autoFocus
+                    value={ed.created_by || ""}
+                    onChange={e => { const v = e.target.value; setEd({ ...ed, created_by: v }); setDeviceAssigneeName(v); setCreatorEditing(false); }}
+                    onBlur={() => setCreatorEditing(false)}
+                    style={{ padding: "2px 6px", borderRadius: 6, border: "1px solid #E5E7EB", fontSize: 12, color: "#1F2937" }}
+                  >
+                    <option value="">ー</option>
+                    {assigneeNames.map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                ) : (
+                  <>
+                    <span style={{ fontWeight: 700, color: "#374151" }}>{ed.created_by || "ー"}</span>
+                    <button onClick={() => setCreatorEditing(true)} style={{ background: "none", border: "none", color: "#2563EB", fontSize: 11, cursor: "pointer", padding: 0 }}>(変更する)</button>
+                  </>
+                )}
               </div>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <div style={{ flex: 1, minWidth: 160 }}>
