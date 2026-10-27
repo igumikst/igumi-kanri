@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { describeError } from "../lib/errorMessage";
 
+// 担当者管理(assignee_names)が読み込めなかったときだけ使う保険の初期値(第n弾)。
+// 通常はDBの assignee_names・schedule_members から読む(名前の変更がそのまま反映されるように)
 const STAFF = ["崎岡", "後藤", "赤岡", "上村", "綱島", "伊藤"];
 
 const CATEGORIES = [
@@ -150,6 +152,7 @@ export default function Schedule({ nav }) {
   const [newSubName, setNewSubName] = useState("");
 
   const [customMembers, setCustomMembers] = useState([]);
+  const [assigneeNames, setAssigneeNames] = useState([]);
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [newMemberName, setNewMemberName] = useState("");
 
@@ -172,10 +175,11 @@ export default function Schedule({ nav }) {
     setLoading(true);
     setCybozuError("");
     setLoadError("");
-    const [scRes, subRes, hsRes, cybozuRes] = await Promise.all([
+    const [scRes, subRes, hsRes, anRes, cybozuRes] = await Promise.all([
       supabase.from("schedules").select("*").order("start_at"),
       supabase.from("subcontractors").select("*").order("name"),
       supabase.from("home_settings").select("*").eq("id", "schedule_members"),
+      supabase.from("home_settings").select("*").eq("id", "assignee_names"),
       fetch("/api/cybozu-calendar").then(r => r.json()).catch(() => ({ events: [], error: "fetch failed" })),
     ]);
     // 読み込みに失敗したものは、表示中のデータを空で上書きしない(今まで見えていたものをそのまま残す)
@@ -183,6 +187,7 @@ export default function Schedule({ nav }) {
     if (!scRes.error) setSchedules(scRes.data || []);
     if (!subRes.error) setSubcontractors(subRes.data || []);
     if (!hsRes.error && hsRes.data?.[0]?.value) setCustomMembers(hsRes.data[0].value);
+    if (!anRes.error && Array.isArray(anRes.data?.[0]?.value)) setAssigneeNames(anRes.data[0].value);
     setCybozuEvents(Array.isArray(cybozuRes?.events) ? cybozuRes.events : []);
     if (cybozuRes?.error && !(cybozuRes.events?.length)) setCybozuError("サイボウズ予定の取得に失敗しました");
     setLoading(false);
@@ -296,7 +301,10 @@ export default function Schedule({ nav }) {
   const weekLabel = `${baseDate.getFullYear()}年 ${baseDate.getMonth()+1}月 ${baseDate.getDate()}日 (${DAYS_JP[baseDate.getDay()]})`;
   const monthLabel = `${baseDate.getFullYear()}年${baseDate.getMonth()+1}月`;
 
-  const allMembers = [...STAFF, ...customMembers.filter(m => !STAFF.includes(m))];
+  // 担当者管理(assignee_names)が読み込めている間はそれを基礎にする(名前の変更がそのまま反映される)。
+  // 読み込めなかったとき(空のまま)だけ、保険としてSTAFFを使う
+  const staffBase = assigneeNames.length ? assigneeNames : STAFF;
+  const allMembers = [...staffBase, ...customMembers.filter(m => !staffBase.includes(m))];
 
   // サイボウズ風の予定行（時刻 → カテゴリ＋青リンク → 担当）
   const ScChip = ({ sc }) => {
