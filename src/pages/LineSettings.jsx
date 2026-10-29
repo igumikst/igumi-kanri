@@ -192,7 +192,7 @@ export default function LineSettings({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
     if (pushAssignees.length) return;
     const { data } = await supabase.from("home_settings").select("value").eq("id", "assignee_names").single();
     if (data?.value && Array.isArray(data.value) && data.value.length) setPushAssignees(data.value);
-    else setPushAssignees(["﨑岡", "後藤", "赤岡", "上村", "綱島", "伊藤"]);
+    else setPushAssignees(["﨑岡", "後藤", "赤岡", "上村", "綱嶋", "伊藤"]);
   };
 
   const refreshPushStatus = async () => {

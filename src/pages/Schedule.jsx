@@ -4,7 +4,7 @@ import { describeError } from "../lib/errorMessage";
 
 // 担当者管理(assignee_names)が読み込めなかったときだけ使う保険の初期値(第n弾)。
 // 通常はDBの assignee_names・schedule_members から読む(名前の変更がそのまま反映されるように)
-const STAFF = ["崎岡", "後藤", "赤岡", "上村", "綱島", "伊藤"];
+const STAFF = ["崎岡", "後藤", "赤岡", "上村", "綱嶋", "伊藤"];
 
 const CATEGORIES = [
   { label: "現調", color: "#3b82f6" },

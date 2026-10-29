@@ -121,7 +121,7 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
             {[
               ["本番URL", "https://igumi-kanri.vercel.app/"],
               ["GitHubリポジトリ", "igumikst/igumi-kanri"],
-              ["スタッフ", "崎岡・後藤・赤岡・上村・綱島・伊藤"],
+              ["スタッフ", "崎岡・後藤・赤岡・上村・綱嶋・伊藤"],
             ].map(([l, v]) => (
               <div key={l} style={s.row}><div style={s.label}>{l}</div><div style={s.value}>{v}</div></div>
             ))}

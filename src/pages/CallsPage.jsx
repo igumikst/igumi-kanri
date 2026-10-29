@@ -17,7 +17,7 @@ const URGENCY_CONFIG = {
 };
 
 const DEFAULT_TAGS = ["漏水", "設備不具合", "緊急対応", "見積依頼", "定期点検", "その他"];
-const DEFAULT_ASSIGNEES = ["﨑岡", "後藤", "赤岡", "上村", "綱島", "伊藤"];
+const DEFAULT_ASSIGNEES = ["﨑岡", "後藤", "赤岡", "上村", "綱嶋", "伊藤"];
 
 const normalizeTags = (tags) => {
   if (Array.isArray(tags)) return tags.filter(t => typeof t === "string");
