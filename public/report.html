@@ -383,6 +383,8 @@ if(EXT_MODE)document.querySelectorAll('input,textarea').forEach(el=>{
   if(el.placeholder)el.placeholder=el.placeholder.replace(EXAMPLE_NAME_RE,'【名前】');
   if(el.value.search(EXAMPLE_NAME_RE)>=0)el.value='';
 });
+// 外部用モード: ユニオンの会社名欄の例文を、社名を伏せた形に差し替える
+if(EXT_MODE)document.getElementById('u-company').placeholder='例: 株式会社○○';
 const SUPABASE_URL = 'https://zejpcwpoqcncnwlwhnjv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InplanBjd3BvcWNuY253bHdobmp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NDQ2NDIsImV4cCI6MjA5NTMyMDY0Mn0.gsr0v1yKRwmHHTQdpUw7TXeOPuH_N5hzQxibK8nnS_I';
 
