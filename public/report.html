@@ -161,11 +161,13 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
 .pdf-report-lbl{width:100px;border-right:1px solid #333;padding:8px 10px;background:#f8fafc;flex-shrink:0}
 .pdf-report-val{flex:1;padding:8px 12px;font-weight:400}
 .pdf-report-content{margin-top:16px;border:1px solid #333;padding:12px;font-size:12px;line-height:1.8;min-height:200px;white-space:pre-wrap}
+/* 外部用モード(?ext=1): IGUMI本体へのリンク・API/Supabaseを使う機能を隠す */
+body.ext-mode .ext-hide{display:none!important}
 </style>
 </head>
 <body>
 <div class="hdr">
-  <button class="hdr-back" onclick="window.location.href='https://igumi-kanri.vercel.app'">← ホーム</button>
+  <button class="hdr-back ext-hide" onclick="window.location.href='https://igumi-kanri.vercel.app'">← ホーム</button>
   <div style="flex:1">
     <div class="hdr-title">工事写真報告書作成</div>
     <div class="hdr-sub">IGUMI 工事管理システム</div>
@@ -323,11 +325,11 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
   <!-- 出力・保存 -->
   <div class="card" id="card-export">
     <div class="card-ttl">📤 出力・保存</div>
-    <button class="btn btn-blue" onclick="aiReviewReport()" style="margin-bottom:10px">🧭 AIに精査してもらう</button>
+    <button class="btn btn-blue ext-hide" onclick="aiReviewReport()" style="margin-bottom:10px">🧭 AIに精査してもらう</button>
     <button class="btn btn-orange" onclick="exportPdf()" style="margin-bottom:8px">📄 PDFで報告書を出力</button>
     <p class="export-note"><strong>LINEで送ってそのまま見せる場合</strong>はPDF、または下のXLSX（シティフロント等と同形式）をご利用ください。<br>Excelでの編集が必要な場合もXLSXをお使いください。</p>
     <button class="btn btn-green" onclick="exportXlsx()" style="margin-bottom:10px">📊 XLSXで報告書を出力</button>
-    <button class="btn btn-ghost" onclick="saveToArchive()" style="margin-bottom:10px">💾 保管箱に保存</button>
+    <button class="btn btn-ghost ext-hide" onclick="saveToArchive()" style="margin-bottom:10px">💾 保管箱に保存</button>
     <div class="divider"></div>
     <p style="font-size:11px;color:var(--muted);margin-bottom:10px">作業データを保存・読み込みできます（写真含む）</p>
     <div style="display:flex;gap:8px">
@@ -335,7 +337,7 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
       <button class="btn btn-ghost btn-sm" onclick="document.getElementById('load-input').click()" style="flex:1">📂 読込</button>
       <button class="btn btn-red-soft btn-sm" onclick="confirmReset()" style="flex:1">🗑 リセット</button>
     </div>
-    <div style="display:flex;gap:8px;margin-top:8px">
+    <div class="ext-hide" style="display:flex;gap:8px;margin-top:8px">
       <button class="btn btn-ghost btn-sm" onclick="loadSampleData()" style="flex:1">🧪 サンプル読込</button>
     </div>
     <input type="file" id="load-input" accept=".json" style="display:none" onchange="loadData(event)">
@@ -372,6 +374,9 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
 </div>
 
 <script>
+// 外部用モード: URLに ?ext=1 が付いているときだけ有効
+const EXT_MODE=new URLSearchParams(location.search).get('ext')==='1';
+if(EXT_MODE)document.body.classList.add('ext-mode');
 const SUPABASE_URL = 'https://zejpcwpoqcncnwlwhnjv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InplanBjd3BvcWNuY253bHdobmp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NDQ2NDIsImV4cCI6MjA5NTMyMDY0Mn0.gsr0v1yKRwmHHTQdpUw7TXeOPuH_N5hzQxibK8nnS_I';
 
@@ -2018,6 +2023,7 @@ function gatherReportText(){
 }
 
 async function aiReviewReport(){
+  if(EXT_MODE)return;
   const summary=gatherReportText();
   showLoading('AIが精査中...','報告書の内容を確認しています');
   try{
@@ -2041,6 +2047,7 @@ async function aiReviewReport(){
 function closeAiReviewModal(){document.getElementById('ai-review-modal').style.display='none';}
 
 async function saveToArchive(){
+  if(EXT_MODE)return;
   const content=gatherReportText();
   let propertyName='',title='',createdBy='';
   if(reportType==='union'){
@@ -2122,6 +2129,7 @@ function generateSamplePhotoDataUrl(bgColor,label){
 }
 
 function loadSampleData(){
+  if(EXT_MODE)return;
   if(hasSampleOverwriteData()&&!confirm('入力内容を上書きします。よろしいですか？'))return;
   const today=new Date().toISOString().split('T')[0];
   const sampleNums=['①','②','③','④','⑤','⑥'];
