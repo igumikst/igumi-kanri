@@ -100,6 +100,11 @@ export function isDetailPage(rows) {
   });
 }
 
+// 数量・単価・金額の列は、数字(カンマ・ピリオド・▲・マイナスのみ)の断片だけを数値として扱う。
+// 「定価53000円」「1日2～3台」のような備考が、桁数の少ない金額のすぐ右側(備考の列に届く手前)に
+// 印字されていると、同じ列に拾われて金額の文字列に連結され、桁違いの数字になってしまうため
+const isNumericFragment = s => /^[0-9,.\s▲－—-]+$/.test(s);
+
 // 内訳書ページの行を、列ごとに分けて読み取る。見出し行より下、「合計」または「総合計」の行まで。
 // 名称だけで他の列が空の行は、大項目の見出し行(isGroupHeader)として返す
 export function readDetailRows(rows) {
@@ -108,7 +113,11 @@ export function readDetailRows(rows) {
   const out = [];
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const cells = { name: [], spec: [], qty: [], unit: [], price: [], amount: [], note: [] };
-    for (const it of rows[i].items) cells[columnOf(it.x)].push(it);
+    for (const it of rows[i].items) {
+      const col = columnOf(it.x);
+      if ((col === "qty" || col === "price" || col === "amount") && !isNumericFragment(it.str)) continue;
+      cells[col].push(it);
+    }
     const name = joinText(cells.name).trim();
     const spec = cells.spec.map(it => it.str).join(" ").trim();
     const qty = toNumber(joinText(cells.qty));
