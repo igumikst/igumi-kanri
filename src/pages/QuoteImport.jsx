@@ -2094,8 +2094,8 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
 }
 
 // 自社見積書PDF(IGUMIが出力した表紙+見積内訳書)の確認画面(第8弾テーマ18)。
-// SelfQuoteImportForm(自社見積書Excel)とほぼ同じ作りだが、「IGUMI原価ベース(7.5%を載せない)保管用」
-// のため掛け率は常に1.0固定(選択UIを出さない)。諸経費・値引きは単価表への当てはめをしない
+// SelfQuoteImportForm(自社見積書Excel)とほぼ同じ作り。掛け率は選べる(1.0 / 0.925 / 0.9 / カスタム。
+// 虎生の指示 2026-11-06 で、1.0固定をやめた)。諸経費・値引きは単価表への当てはめをしない(掛け率は、ほかの行と同じようにかける)
 function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branches, setBranches, crews, setCrews, assigneeNames, defaultProjectId, onRegistered, onOpenQuote, onOpenProject, onRemove }) {
   const d = r.data;
   // 画面・メモの文言。表紙つき自社見積書Excelは d.labels で切り替える(PDFは初期値のまま)
@@ -2104,6 +2104,11 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
   // 見積タイトルの初期値は、取り込んだ見積ファイルの名前そのまま(拡張子だけ除く。虎生の指示 2026-10-16)。案件名はこれまでどおりinitialTitleを使う
   const [title, setTitle] = useState(fileBaseName(r.fileName));
   const [issuedDate, setIssuedDate] = useState(d.cover.issuedDate || "");
+  // rateChoice: "none"(1.0) | "back"(×0.925) | "0.9"(×0.9) | "custom"(入力した掛け率) ※必須。
+  // 手で触るまでは、取引先・営業所の「掛け率の初期値」をそのまま使う(manualの状態には入れない)
+  const [manualRateChoice, setManualRateChoice] = useState(null);
+  const [manualCustomRate, setManualCustomRate] = useState("");
+  const [rateTouched, setRateTouched] = useState(false);
   const [pickedSetId, setPriceSetId] = useState("");
   const [projectMode, setProjectMode] = useState(defaultProjectId ? "existing" : "new");
   const [projectId, setProjectId] = useState(defaultProjectId);
@@ -2173,10 +2178,27 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
     return out;
   }, [index, allIndex, lines]);
 
-  const fileTotal = d.linesTotal; // PDFの明細(大項目の明細+諸経費+値引き)の合計。掛け率は常に1.0固定(IGUMI原価ベース保管用)
+  // 掛け率の初期値:取引先・営業所の「掛け率の初期値」から、手で触るまでは自動で入れる
+  const selectedProject = projectMode === "existing" ? pjs.find(p => p.id === projectId) : null;
+  const effClientId = projectMode === "existing" ? selectedProject?.clientId : np.clientId;
+  const effBranchId = projectMode === "existing" ? selectedProject?.branchId : np.branchId;
+  const autoMarkup = useMemo(() => resolveDefaultMarkup({ clientId: effClientId, branchId: effBranchId, cos, branches }), [effClientId, effBranchId, cos, branches]);
+  const rateChoice = rateTouched ? manualRateChoice : (autoMarkup?.choice ?? null);
+  const customRate = rateTouched ? manualCustomRate : (autoMarkup?.choice === "custom" ? String(autoMarkup.rate) : "");
+  const rateAutoSource = !rateTouched && autoMarkup ? autoMarkup.rate : null;
+  const setRateChoice = v => { setRateTouched(true); setManualRateChoice(v); setManualCustomRate(""); };
+  const setCustomRate = v => { setRateTouched(true); setManualRateChoice("custom"); setManualCustomRate(v); };
+  const customRateNum = Number(customRate);
+  const customRateValid = customRate.trim() !== "" && Number.isFinite(customRateNum) && customRateNum >= CUSTOM_RATE_MIN && customRateNum <= CUSTOM_RATE_MAX;
+  const rate = rateChoice === "back" ? MARKUP_BACK_RATE
+    : rateChoice === "0.9" ? 0.9
+    : rateChoice === "custom" ? (customRateValid ? customRateNum : 1)
+    : 1;
+
+  const fileTotal = d.linesTotal; // ファイルの明細(大項目の明細+諸経費+値引き)の合計 = 100%の合計。掛け率は、諸経費・値引きの行にも同じようにかける
 
   const view = lines.map(l => {
-    const basePrice = l.price; // 掛け率1.0のため、ファイルの金額のまま
+    const basePrice = applyRate(l.price, rate); // 掛け率1.0なら、ファイルの金額のまま
     const amount = lineAmount(l.qty, basePrice);
     if (l.isOverhead) {
       const picked = l.pickedItemId !== undefined;
@@ -2235,6 +2257,8 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
   const removeLine = key => setLines(prev => prev.filter(l => l.key !== key));
 
   const problems = [];
+  if (!rateChoice) problems.push("「掛け率」を選んでください");
+  else if (rateChoice === "custom" && !customRateValid) problems.push(`掛け率は${CUSTOM_RATE_MIN}〜${CUSTOM_RATE_MAX}の範囲で入力してください`);
   if (!title.trim()) problems.push("見積タイトルを入力してください");
   if (!priceSetId) problems.push("単価セットを選んでください");
   if (!lines.length) problems.push("明細がありません");
@@ -2253,8 +2277,8 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
       salesRepId: np.salesRepId || null, salesRep: repName(rep), inCharge: np.inCharge.trim(),
       subcontractorIds: [], quoteDate: issuedDate || "",
     };
-    const memo = `見積ファイル「${r.fileName}」(${lb.source})から取り込み。掛け率1.0(IGUMI原価ベース保管用)のまま登録。ファイルの税抜合計 ${fileTotal?.toLocaleString()}円`;
-    const appliedRates = { rate: 1, choice: "none", quote_no: null };
+    const memo = `見積ファイル「${r.fileName}」(${lb.source})から取り込み。${rateChoice === "none" ? "掛け率1.0のまま登録" : `掛け率×${rate}でIGUMIの販売金額を計算して登録(諸経費・値引きの行にも同じ掛け率をかけています)`}。ファイルの税抜合計(100%) ${fileTotal?.toLocaleString()}円`;
+    const appliedRates = { rate, choice: rateChoice, quote_no: null };
     const pQuote = { title: title.trim(), price_set_id: priceSetId, status: "submitted", total_amount: Math.round(total), issued_at: issuedDate || null, memo, construction_type: constructionType, crew_id: crewId || null };
     const pItems = view.map(l => ({
       price_item_id: l.item?.id ?? null,
@@ -2297,7 +2321,7 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
         ...(np.constructionType ? { constructionType: np.constructionType } : {}),
       }).eq("id", data.project_id);
     }
-    // 使った掛け率(常に1.0)と作成者(この端末の記憶名)を残す(import_quoteのSQLは直さず、登録後の更新で済ませる)
+    // 使った掛け率と作成者(この端末の記憶名)を残す(import_quoteのSQLは直さず、登録後の更新で済ませる)
     await supabase.from("quotes").update({ applied_rates: appliedRates, ...(getValidDeviceAssigneeName(assigneeNames) ? { created_by: getValidDeviceAssigneeName(assigneeNames) } : {}) }).eq("id", data.quote_id);
     await applySubcontractorFollowUps({ quoteId: data.quote_id, subFlagsBySortOrder, subCosts });
     const renameError = await applyProjectRename(data.project_id, rename);
@@ -2379,8 +2403,31 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
             </div>
           )}
 
-          <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 10, padding: "8px 12px", marginBottom: 12, fontSize: 12, color: "#1E40AF" }}>
-            ℹ️ 掛け率は1.0固定です(IGUMI原価ベース保管用のため、7.5%は載せません)。諸経費・値引きは、ファイルの金額のまま明細の1行として登録します
+          {/* 掛け率(必須) */}
+          <div style={{ border: `2px solid ${rateChoice ? "#E5E7EB" : "#E07B39"}`, borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#1A3A5C", marginBottom: 6 }}>掛け率 *(必須)</div>
+            <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 6 }}>IGUMIの販売金額 = ファイルの単価 × 掛け率(諸経費・値引きの行にも同じ掛け率をかけます)</div>
+            {MARKUP_CHOICE_OPTIONS.map(o => (
+              <label key={o.key} style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 13, marginBottom: 4, cursor: "pointer" }}>
+                <input type="radio" name={`mk-${r.key}`} checked={rateChoice === o.key} onChange={() => setRateChoice(o.key)} />
+                <span><b>{o.label}</b></span>
+              </label>
+            ))}
+            {rateChoice === "custom" && (
+              <div style={{ marginLeft: 22, marginBottom: 4 }}>
+                <input type="number" step="0.001" min={CUSTOM_RATE_MIN} max={CUSTOM_RATE_MAX} value={customRate} onChange={e => setCustomRate(e.target.value)}
+                  placeholder={`${CUSTOM_RATE_MIN}〜${CUSTOM_RATE_MAX}`} style={{ width: 100, padding: "5px 8px", borderRadius: 6, border: `1.5px solid ${customRateValid ? "#E5E7EB" : "#FCA5A5"}`, fontSize: 12, color: "#1F2937" }} />
+                {!customRateValid && <span style={{ fontSize: 11, color: "#DC2626", marginLeft: 6 }}>{CUSTOM_RATE_MIN}〜{CUSTOM_RATE_MAX}の範囲で入力してください</span>}
+              </div>
+            )}
+            {rateAutoSource != null && !rateTouched && <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>取引先の初期値(×{rateAutoSource})を使っています</div>}
+            {rateChoice && rateChoice !== "none" && (customRateValid || rateChoice !== "custom") && (
+              <div style={{ marginTop: 8, background: "#F9FAFB", borderRadius: 8, padding: "8px 10px", fontSize: 12, color: "#374151" }}>
+                100%の合計 {yen(fileTotal)} × {rate} = {yen(roundYen(fileTotal * rate))} / 単価ごとに戻した合計 {yen(total)}
+                <span style={{ marginLeft: 6, fontWeight: 700, color: "#9A3412" }}>差額 {(total - roundYen(fileTotal * rate)).toLocaleString()}円</span>
+                <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 2 }}>差額は、明細ごとに単価の円未満を四捨五入したことによるものです</div>
+              </div>
+            )}
           </div>
 
           {/* 案件・見積の設定 */}
