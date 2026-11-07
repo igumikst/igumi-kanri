@@ -735,17 +735,20 @@ async function getCoverLogoDataUrl(){
   return coverLogoDataUrlCache;
 }
 
-async function embedCoverLogo(ws,wb){
+// size: ロゴの大きさ(px)。省略すると通常書式の大きさ(200×141)。ユニオン書式は建物名のセル(E6:P8)に
+// かぶらないよう、小さくして渡す(縦横比は同じ 200:141)
+async function embedCoverLogo(ws,wb,size){
   if(!isCoverLogoEnabled())return;
   const base64=await getCoverLogoBase64();
   const imgId=wb.addImage({base64,extension:'jpeg'});
   // 表紙左上（読みやすいサイズ・タイトルと重ならない）
   ws.addImage(imgId,{
     tl:{col:0.1,row:0.08},
-    ext:{width:200,height:141},
+    ext:size||{width:200,height:141},
     editAs:'oneCell'
   });
 }
+const UNION_COVER_LOGO_SIZE={width:130,height:92};
 
 function getExportFilename(ext){
   const customFn=document.getElementById('filename').value.trim();
@@ -1196,7 +1199,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   }
 
   cws.properties.defaultRowHeight=20;
-  await embedCoverLogo(cws,wb);
+  await embedCoverLogo(cws,wb,UNION_COVER_LOGO_SIZE);
 
   // 建物名称 E6:P8（ゴシック20pt太字・中央）
   cws.mergeCells('E6:P8');
