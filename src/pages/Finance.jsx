@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase";
 import { Modal, Inp, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import { describeError } from "../lib/errorMessage";
+import { yearsToCreate, monthsToCreate } from "../lib/financeYm";
 
 const DEFAULT_FINANCE_ITEMS = [
   { id: "invoice",    label: "請求書PDF",   icon: "🧾" },
@@ -42,16 +43,6 @@ const displayFolderIcon = (folder, meta) => {
 };
 
 const displayFolderLabel = (folder, meta) => folder.label || "";
-
-const genYM = () => {
-  const now = new Date(), res = {};
-  for (let y = 2022; y <= now.getFullYear(); y++) {
-    res[y] = [];
-    const max = y === now.getFullYear() ? now.getMonth() + 1 : 12;
-    for (let m = 1; m <= max; m++) res[y].push(m);
-  }
-  return res;
-};
 
 const IGNORE_DROP_FILE_RE = /^(Thumbs\.db|\.DS_Store|desktop\.ini)$/i;
 const isIgnoredDropFile = (name) => IGNORE_DROP_FILE_RE.test(name) || name.startsWith("~$");
@@ -152,7 +143,6 @@ export default function Finance({ pjs, submittedQuotes, wonQuotes, cos, tks, lin
   const dropConflictResolverRef = useRef(null);
 
   const pending = tks.filter(t => !t.done);
-  const ym = genYM();
   const now = new Date(), cy = now.getFullYear(), cm = now.getMonth() + 1;
 
   const childFolders = useCallback((parentId) =>
@@ -212,11 +202,11 @@ export default function Finance({ pjs, submittedQuotes, wonQuotes, cos, tks, lin
   const ensureYearFolders = async (rootId) => {
     if (ymSyncedRef.current.has(`y:${rootId}`)) return;
     setYmSyncing(true);
-    const ymData = genYM();
     const created = [];
 
-    for (const y of Object.keys(ymData).map(Number).sort((a, b) => b - a)) {
-      if (childFolders(rootId).some(f => folderMeta(f).type === "year" && folderMeta(f).year === y)) continue;
+    // 削除した年フォルダが、開くたびに復活しないよう、まだ作っていない新しい年だけを作る(lib/financeYm.js)
+    const existingYears = childFolders(rootId).filter(f => folderMeta(f).type === "year").map(f => folderMeta(f).year);
+    for (const y of yearsToCreate(existingYears, new Date().getFullYear()).sort((a, b) => b - a)) {
       const siblings = childFolders(rootId);
       const { data, error } = await supabase.from("finance_folders").insert([{
         parent_id: rootId, label: `${y}年`, icon: `Y:${y}`,
@@ -237,11 +227,11 @@ export default function Finance({ pjs, submittedQuotes, wonQuotes, cos, tks, lin
     const key = `m:${yearFolder.id}`;
     if (ymSyncedRef.current.has(key)) return;
     setYmSyncing(true);
-    const months = ym[meta.year] || [];
     const created = [];
 
-    for (const m of months) {
-      if (childFolders(yearFolder.id).some(f => folderMeta(f).type === "month" && folderMeta(f).month === m)) continue;
+    // 削除した月フォルダが、開くたびに復活しないよう、まだ作っていない新しい月だけを作る(lib/financeYm.js)
+    const existingMonths = childFolders(yearFolder.id).filter(f => folderMeta(f).type === "month").map(f => folderMeta(f).month);
+    for (const m of monthsToCreate(existingMonths, meta.year)) {
       const siblings = childFolders(yearFolder.id);
       const { data, error } = await supabase.from("finance_folders").insert([{
         parent_id: yearFolder.id, label: `${m}月`, icon: `M:${m}`,
