@@ -84,6 +84,14 @@ DBの変更を伴う作業は、SQLを提案して実行者の確認を待って
 デプロイ後は、https://igumi-kanri.vercel.app で、トップ・案件管理・ダッシュボード・
 単価管理・原価管理・取引先が開くことを確認する。
 
+DB上の関数(import_quote など)を直す前には、リポジトリの migration ファイルだけを
+正としない。本番側で、migration ファイルに記録されていない変更(別セッション・
+SQL Editorでの直接実行など)が加わっていることがあるため、必ず
+`select pg_get_functiondef('public.関数名(引数の型...)'::regprocedure);` のような
+読み取り専用SQLで、本番の実際の定義を確認してから、それを元に修正案を作ること。
+確認が取れたら、修正で変えた部分以外は本番の定義と一字一句そろえ、新しく分かった
+本番の定義(migrationに無かった分)は、記録用のmigrationファイルとして追加する。
+
 本番に問題が出たときの戻し方(revert: 変更を打ち消すコミットを足して、元に戻す):
 1. 最新のmainを取り込む。
    `git switch main` → `git pull origin main`
