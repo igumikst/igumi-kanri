@@ -199,14 +199,34 @@ export default function Finance({ pjs, submittedQuotes, wonQuotes, cos, tks, lin
 
   const isFolderHidden = (id) => hiddenFolderIds.includes(id);
 
+  // 「年・月フォルダを一度準備したことがある」印(home_settings に保存)。
+  // 全部消したあとに、自動で作り直されないようにするため。読めなかったときは null(= 何も作らない)
+  const initFlagsRef = useRef(null);
+  const loadInitFlags = async () => {
+    if (initFlagsRef.current) return initFlagsRef.current;
+    const { data, error } = await supabase.from("home_settings").select("value").eq("id", "finance_ym_initialized").maybeSingle();
+    if (error) { console.warn("年月フォルダの準備印の読み込みエラー:", error.message); return null; }
+    const ids = data?.value?.ids;
+    initFlagsRef.current = new Set(Array.isArray(ids) ? ids : []);
+    return initFlagsRef.current;
+  };
+  const markInitialized = async (id) => {
+    const flags = await loadInitFlags();
+    if (!flags || flags.has(id)) return;
+    flags.add(id);
+    await supabase.from("home_settings").upsert({ id: "finance_ym_initialized", value: { ids: [...flags] }, updated_at: new Date().toISOString() });
+  };
+
   const ensureYearFolders = async (rootId) => {
     if (ymSyncedRef.current.has(`y:${rootId}`)) return;
+    const flags = await loadInitFlags();
+    if (!flags) return; // 準備印が読めないときは、消したものを作り直さないよう、何もしない
     setYmSyncing(true);
     const created = [];
 
     // 削除した年フォルダが、開くたびに復活しないよう、まだ作っていない新しい年だけを作る(lib/financeYm.js)
     const existingYears = childFolders(rootId).filter(f => folderMeta(f).type === "year").map(f => folderMeta(f).year);
-    for (const y of yearsToCreate(existingYears, new Date().getFullYear()).sort((a, b) => b - a)) {
+    for (const y of yearsToCreate(existingYears, new Date().getFullYear(), flags.has(rootId)).sort((a, b) => b - a)) {
       const siblings = childFolders(rootId);
       const { data, error } = await supabase.from("finance_folders").insert([{
         parent_id: rootId, label: `${y}年`, icon: `Y:${y}`,
@@ -218,6 +238,7 @@ export default function Finance({ pjs, submittedQuotes, wonQuotes, cos, tks, lin
 
     if (created.length) setFinFolders(prev => [...prev, ...created]);
     ymSyncedRef.current.add(`y:${rootId}`);
+    if (existingYears.length || created.length) await markInitialized(rootId);
     setYmSyncing(false);
   };
 
@@ -226,12 +247,14 @@ export default function Finance({ pjs, submittedQuotes, wonQuotes, cos, tks, lin
     if (!meta.year) return;
     const key = `m:${yearFolder.id}`;
     if (ymSyncedRef.current.has(key)) return;
+    const flags = await loadInitFlags();
+    if (!flags) return; // 準備印が読めないときは、消したものを作り直さないよう、何もしない
     setYmSyncing(true);
     const created = [];
 
     // 削除した月フォルダが、開くたびに復活しないよう、まだ作っていない新しい月だけを作る(lib/financeYm.js)
     const existingMonths = childFolders(yearFolder.id).filter(f => folderMeta(f).type === "month").map(f => folderMeta(f).month);
-    for (const m of monthsToCreate(existingMonths, meta.year)) {
+    for (const m of monthsToCreate(existingMonths, meta.year, new Date(), flags.has(yearFolder.id))) {
       const siblings = childFolders(yearFolder.id);
       const { data, error } = await supabase.from("finance_folders").insert([{
         parent_id: yearFolder.id, label: `${m}月`, icon: `M:${m}`,
@@ -243,6 +266,7 @@ export default function Finance({ pjs, submittedQuotes, wonQuotes, cos, tks, lin
 
     if (created.length) setFinFolders(prev => [...prev, ...created]);
     ymSyncedRef.current.add(key);
+    if (existingMonths.length || created.length) await markInitialized(yearFolder.id);
     setYmSyncing(false);
   };
 
