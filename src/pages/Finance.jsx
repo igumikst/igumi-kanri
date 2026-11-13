@@ -620,7 +620,10 @@ export default function Finance({ pjs, submittedQuotes, wonQuotes, cos, tks, lin
 
   const deleteFolder = async (id) => {
     const delIds = collectDescendantIds(id);
-    await supabase.from("finance_folders").delete().eq("id", id);
+    // 実際に消えたか確認する(消せていないのに画面だけ消すと、開き直したときに復活して見えるため)
+    const { data: deleted, error } = await supabase.from("finance_folders").delete().eq("id", id).select("id");
+    if (error) { alert(describeError(error, "フォルダの削除")); return; }
+    if (!deleted || deleted.length === 0) { alert("フォルダを削除できませんでした(データベース側で削除が許可されていない可能性があります)。このまま使い続けて大丈夫です。虎生に伝えてください。"); return; }
     setFinFolders(prev => prev.filter(f => !delIds.includes(f.id)));
     delIds.forEach(did => ymSyncedRef.current.delete(`m:${did}`));
     if (finItem && delIds.includes(finItem.id)) {
