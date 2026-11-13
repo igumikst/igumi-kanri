@@ -273,12 +273,13 @@ export default function Finance({ pjs, submittedQuotes, wonQuotes, cos, tks, lin
   useEffect(() => {
     if (!finItem) return;
     if (isMonthFolder(finItem)) return;
+    // フォルダの確認(必要なときだけ作成)は、画面の描画のあとに行う
     if (isYearFolder(finItem)) {
-      ensureMonthFolders(finItem);
+      Promise.resolve().then(() => ensureMonthFolders(finItem));
       return;
     }
     if (!finItem.parent_id) {
-      ensureYearFolders(finItem.id);
+      Promise.resolve().then(() => ensureYearFolders(finItem.id));
     }
   }, [finItem?.id]);
 
