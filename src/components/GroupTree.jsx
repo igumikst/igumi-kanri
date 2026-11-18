@@ -27,10 +27,12 @@ const iconBtn = { border: "none", background: "none", cursor: "pointer", fontSiz
 //            (表示しない行は、ドラッグ・↑↓・選択の対象にもならない)
 //   groupInfo(node) -> { count, warnCount }: 見出し行に出す件数と「原価未設定」の件数(入れ子の中も数える)
 //   onAddToGroup(path): 見出し行に「＋まとめて追加」ボタンを出す(押すとそのグループのパスを渡す)
+//   groupCheckbox(node) -> { checked, indeterminate, onChange(next) }: 見出し行にチェックボックスを出す
+//            (配下(入れ子も含む)の明細をまとめて切り替える用。第9弾テーマ2)
 export default function GroupTree({
   lines, onChange, amountOf, formatAmount, renderLeafCells, columnCount,
   selectedKeys, onToggleSelect, onDeleteLeaf, rowStyle,
-  density, collapsedPaths, onToggleGroup, groupInfo, onAddToGroup,
+  density, collapsedPaths, onToggleGroup, groupInfo, onAddToGroup, groupCheckbox,
 }) {
   const [menuFor, setMenuFor] = useState(null); // "このグループに移す" メニューを開いている行のid
 
@@ -103,7 +105,8 @@ export default function GroupTree({
                     </td>
                     <td colSpan={columnCount} style={{ ...ctrlTd, paddingLeft: 6 + r.depth * 16, fontWeight: 700, color: "#9A3412", background: "#FFF7ED" }}>
                       <GroupHeaderContent r={r} info={groupInfo ? groupInfo(r.node) : null} closed={!!collapsedPaths?.has(r.path)}
-                        collapsible={collapsible} onToggleGroup={onToggleGroup} btn={btn} amount={formatAmount(groupAmount(r.node, amountOf))} onAddToGroup={onAddToGroup} />
+                        collapsible={collapsible} onToggleGroup={onToggleGroup} btn={btn} amount={formatAmount(groupAmount(r.node, amountOf))} onAddToGroup={onAddToGroup}
+                        checkbox={groupCheckbox ? groupCheckbox(r.node) : null} />
                     </td>
                     <td style={compact ? { ...ctrlTd, background: "#FFF7ED", whiteSpace: "nowrap" } : { ...td, background: "#FFF7ED" }}>
                       {compact && <>
@@ -157,8 +160,8 @@ export default function GroupTree({
 
 // グループの見出し行の中身(小計の名前・件数・原価未設定の警告・小計の金額)。
 // info が無い(取り込み画面)ときは、今までどおり「小計: 名前」と金額だけ
-function GroupHeaderContent({ r, info, closed, collapsible, onToggleGroup, btn, amount, onAddToGroup }) {
-  if (!info && !collapsible && !onAddToGroup) {
+function GroupHeaderContent({ r, info, closed, collapsible, onToggleGroup, btn, amount, onAddToGroup, checkbox }) {
+  if (!info && !collapsible && !onAddToGroup && !checkbox) {
     return (
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
         <span>小計: {r.name}</span>
@@ -181,7 +184,20 @@ function GroupHeaderContent({ r, info, closed, collapsible, onToggleGroup, btn, 
           <button onClick={() => onAddToGroup(r.path)} title="このグループに、単価表の項目をまとめて追加" style={{ fontSize: 10, fontWeight: 700, color: "#3730A3", background: "#EEF2FF", border: "1px solid #C7D2FE", borderRadius: 4, padding: "0 6px", cursor: "pointer", whiteSpace: "nowrap", lineHeight: "16px" }}>＋まとめて追加</button>
         )}
       </span>
-      <span style={info ? { whiteSpace: "nowrap" } : undefined}>{amount}</span>
+      <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {checkbox && (
+          <label title="下請け施工(配下の明細をまとめて切り替え)" style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, fontWeight: 700, color: "#9A3412", whiteSpace: "nowrap", cursor: "pointer" }}>
+            <input
+              type="checkbox" checked={!!checkbox.checked}
+              ref={el => { if (el) el.indeterminate = !!checkbox.indeterminate; }}
+              onChange={e => checkbox.onChange(e.target.checked)}
+              style={{ margin: 0 }}
+            />
+            下請
+          </label>
+        )}
+        <span style={info ? { whiteSpace: "nowrap" } : undefined}>{amount}</span>
+      </span>
     </div>
   );
 }

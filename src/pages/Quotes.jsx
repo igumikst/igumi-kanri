@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "../lib/supabase";
-import { Hdr, Confirm } from "../components/UI";
+import { Hdr, Confirm, Modal, Inp } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import GroupTree, { BundleToolbar } from "../components/GroupTree";
 import PriceMultiPicker from "../components/PriceMultiPicker";
@@ -95,6 +95,7 @@ export default function Quotes({ branches, pjs, submittedQuotes, wonQuotes, setW
   const [densityKey, setDensityKey] = useState(() => loadDensityKey(isPC));
   const [collapsed, setCollapsed] = useState(() => new Set());
   const [showPricePicker, setShowPricePicker] = useState(false); // 「単価項目を追加」は、ふだんは閉じておく
+  const [splitFor, setSplitFor] = useState(null); // 明細1行を自社分・下請け分に分ける画面。開いているときは { key, mode: "qty"|"amount", value }
   // 単価表の今の名前(price_item_id → { name, spec })。単価表から入れた行の品名・規格を編集したとき、
   // 「単価表: ○○」と「↩ 単価表の名前にする」を出すために使う(DBには何も足さない。単価表も変えない)
   const [catalog, setCatalog] = useState({});
@@ -211,7 +212,9 @@ export default function Quotes({ branches, pjs, submittedQuotes, wonQuotes, setW
     setSubForm({ subcontractor_id: "", amount: "", note: "", file: null });
     await loadSubCosts(q.id);
     setSearch(""); setCategoryFilter(""); setGroupFilter("");
-    setCollapsed(new Set()); setShowPricePicker(false); setSelectedKeys(new Set()); setNoteOpen(new Set()); // 見積を開くたびに、グループは全部開いた状態から
+    // 「下請けのみ」の見積は、開いたときから大項目(小計)だけの表示にする(第9弾テーマ2)。それ以外は、今までどおり全部開いた状態から
+    setCollapsed(openedEd.construction_type === "下請けのみ" ? new Set(listGroupPaths(lines)) : new Set());
+    setShowPricePicker(false); setSelectedKeys(new Set()); setNoteOpen(new Set());
     setView("edit");
   };
 
@@ -650,6 +653,20 @@ ${e.message}` : "見積書を出力できませんでした。");
     (function walk(n) { for (const c of n.children) { if (c.isGroup) walk(c); else { count++; if (costMissing(c.line)) warnCount++; } } })(node);
     return { count, warnCount };
   };
+  // 小計(グループ)見出しの「下請け施工」チェック。配下(入れ子も含む)の明細をまとめて切り替える(第9弾テーマ1)。
+  // 自社+下請けのときだけ出す(チェック自体がこの施工形態にしか無いため)
+  const groupCheckbox = isMixed ? node => {
+    const leaves = [];
+    (function walk(n) { for (const c of n.children) { if (c.isGroup) walk(c); else leaves.push(c.line); } })(node);
+    if (!leaves.length) return null;
+    const checkedCount = leaves.filter(l => !!l.is_subcontracted).length;
+    const keys = new Set(leaves.map(l => l.key));
+    return {
+      checked: checkedCount === leaves.length,
+      indeterminate: checkedCount > 0 && checkedCount < leaves.length,
+      onChange: next => setLines(ed.lines.map(l => (keys.has(l.key) ? { ...l, is_subcontracted: next } : l))),
+    };
+  } : undefined;
 
   // 非表示(hidden_at)のファイルは、一覧・「元ファイル」ボタンの対象から外す(第8弾テーマ12①)
   const visibleQuoteFiles = quoteFiles.filter(f => !f.hidden_at);
@@ -820,7 +837,12 @@ ${e.message}` : "見積書を出力できませんでした。");
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
                 <div style={{ flex: 1, minWidth: 160 }}>
                   <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 3 }}>施工形態</div>
-                  <select value={ed.construction_type || "自社のみ"} onChange={e => setEd({ ...ed, construction_type: e.target.value })} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, background: "#FAFAFA", boxSizing: "border-box", color: "#1F2937" }}>
+                  <select value={ed.construction_type || "自社のみ"} onChange={e => {
+                    const v = e.target.value;
+                    setEd({ ...ed, construction_type: v });
+                    // 「下請けのみ」に切り替えた、その時だけ大項目(小計)だけの表示にする(第9弾テーマ2)。以後の開閉は手で行う
+                    if (v === "下請けのみ" && ed.construction_type !== "下請けのみ") setCollapsed(new Set(listGroupPaths(ed.lines)));
+                  }} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, background: "#FAFAFA", boxSizing: "border-box", color: "#1F2937" }}>
                     {CONSTRUCTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
@@ -941,6 +963,7 @@ ${e.message}` : "見積書を出力できませんでした。");
                         collapsedPaths={collapsed}
                         onToggleGroup={toggleGroup}
                         groupInfo={groupInfo}
+                        groupCheckbox={groupCheckbox}
                         onAddToGroup={ed.price_set_id ? path => setMultiAdd({ target: path }) : undefined}
                         amountOf={l => (Number(l.qty) || 0) * (Number(l.sale_price) || 0)}
                         formatAmount={fmt}
@@ -1008,8 +1031,11 @@ ${e.message}` : "見積書を出力できませんでした。");
                             ];
                             if (showSubCheckCol) {
                               out.push(
-                                <td key="subflag" style={{ ...ctd, textAlign: "center", width: 32 }}>
+                                <td key="subflag" style={{ ...ctd, textAlign: "center", width: 54, whiteSpace: "nowrap" }}>
                                   <input type="checkbox" checked={!!l.is_subcontracted} onChange={e => updateLine(l.key, { is_subcontracted: e.target.checked })} style={{ margin: 0, verticalAlign: "middle" }} />
+                                  {l.line_type !== "labor" && (
+                                    <button type="button" onClick={() => setSplitFor({ key: l.key, mode: "qty", value: "" })} title="自社分・下請け分の2行に分ける" style={{ border: "none", background: "none", cursor: "pointer", fontSize: 12, padding: "0 0 0 2px" }}>✂️</button>
+                                  )}
                                 </td>
                               );
                             }
@@ -1076,8 +1102,11 @@ ${e.message}` : "見積書を出力できませんでした。");
                           ];
                           if (showSubCheckCol) {
                             cells.push(
-                              <td key="subflag" style={{ padding: "6px 8px", textAlign: "center" }}>
+                              <td key="subflag" style={{ padding: "6px 8px", textAlign: "center", whiteSpace: "nowrap" }}>
                                 <input type="checkbox" checked={!!l.is_subcontracted} onChange={e => updateLine(l.key, { is_subcontracted: e.target.checked })} />
+                                {l.line_type !== "labor" && (
+                                  <button type="button" onClick={() => setSplitFor({ key: l.key, mode: "qty", value: "" })} title="自社分・下請け分の2行に分ける" style={{ border: "1px solid #E5E7EB", background: "#fff", color: "#374151", borderRadius: 6, cursor: "pointer", fontSize: 11, padding: "2px 6px", marginLeft: 4 }}>✂️ 分割</button>
+                                )}
                               </td>
                             );
                           }
@@ -1189,6 +1218,50 @@ ${e.message}` : "見積書を出力できませんでした。");
           onClose={() => setMultiAdd(null)} onAdd={addPicksToGroup} />
       )}
       {conf && <Confirm msg={conf.msg} onCancel={() => setConf(null)} onOk={conf.onOk} okLabel={conf.okLabel} okColor={conf.okColor} extra={conf.extra} />}
+      {splitFor && (() => {
+        const l = ed.lines.find(x => x.key === splitFor.key);
+        if (!l) return null;
+        const qty = Number(l.qty) || 0;
+        const price = Number(l.sale_price) || 0;
+        const raw = Number(splitFor.value);
+        const subQtyRaw = splitFor.mode === "qty" ? raw : (price ? raw / price : NaN);
+        const subQty = Number.isFinite(subQtyRaw) ? Math.round(subQtyRaw * 100) / 100 : NaN;
+        const valid = splitFor.value !== "" && Number.isFinite(subQty) && subQty > 0 && subQty < qty;
+        const ownQty = valid ? qty - subQty : null;
+        const doSplit = () => {
+          if (!valid) return;
+          const updatedOriginal = { ...l, qty: ownQty, is_subcontracted: false };
+          const newLine = { ...l, key: newKey(), qty: subQty, is_subcontracted: true };
+          setLines(ed.lines.flatMap(x => (x.key === l.key ? [updatedOriginal, newLine] : [x])));
+          setSplitFor(null);
+        };
+        return (
+          <Modal title={`分割: ${l.name || "(品名未入力)"}`} onClose={() => setSplitFor(null)} onSave={valid ? doSplit : undefined}>
+            <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 10, lineHeight: 1.6 }}>
+              今の数量 {l.qty} ・ 単価 {fmt(price)} ・ 金額 {fmt(qty * price)}<br />
+              自社分・下請け分の2行に分けます。単価は変えないので、2行の金額の合計は、今の金額とぴったり同じになります。
+            </div>
+            <div style={{ display: "flex", gap: 14, marginBottom: 10 }}>
+              <label style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+                <input type="radio" checked={splitFor.mode === "qty"} onChange={() => setSplitFor({ ...splitFor, mode: "qty" })} /> 数量で分ける
+              </label>
+              <label style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 4, cursor: price ? "pointer" : "default", opacity: price ? 1 : 0.4 }}>
+                <input type="radio" disabled={!price} checked={splitFor.mode === "amount"} onChange={() => setSplitFor({ ...splitFor, mode: "amount" })} /> 金額で分ける{!price && "(単価が0のため使えません)"}
+              </label>
+            </div>
+            <Inp label={`下請け分の${splitFor.mode === "qty" ? "数量" : "金額(税抜)"}(自社分は、残りから自動で計算します)`} type="number" value={splitFor.value} onChange={e => setSplitFor({ ...splitFor, value: e.target.value })} />
+            {splitFor.value !== "" && !valid && (
+              <div style={{ fontSize: 11, color: "#DC2626", marginBottom: 8 }}>0より大きく、今の{splitFor.mode === "qty" ? "数量" : "金額"}未満の数を入れてください</div>
+            )}
+            {valid && (
+              <div style={{ background: "#F9FAFB", borderRadius: 8, padding: "8px 10px", fontSize: 12, color: "#374151", lineHeight: 1.7 }}>
+                自社分: 数量 {ownQty} ・ 金額 {fmt(ownQty * price)}<br />
+                下請け分: 数量 {subQty} ・ 金額 {fmt(subQty * price)}(この行だけ「下請け施工」にチェックが付きます)
+              </div>
+            )}
+          </Modal>
+        );
+      })()}
     </div>
   );
 }
