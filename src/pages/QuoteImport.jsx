@@ -9,6 +9,7 @@ import { buildEstTree, flattenEstTree, reverseSiblingOrder } from "../lib/quoteI
 import GroupTree, { BundleToolbar } from "../components/GroupTree";
 import ClientBranchRepPicker from "../components/ClientBranchRepPicker";
 import CrewPicker from "../components/CrewPicker";
+import SubcontractorPicker from "../components/SubcontractorPicker";
 import SubQuoteFileReader from "../components/SubQuoteFileReader";
 import FileDropZone from "../components/FileDropZone";
 import { usePreventWindowFileDrop } from "../lib/useFileDropGuard";
@@ -708,10 +709,7 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
                 );
               })}
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, paddingTop: 8, borderTop: "1px solid #F3F4F6" }}>
-                <select value={subForm.subcontractor_id} onChange={e => setSubForm({ ...subForm, subcontractor_id: e.target.value })} style={{ flex: 1, minWidth: 160, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, background: "#fff", color: "#1F2937" }}>
-                  <option value="">下請け会社を選択</option>
-                  {subcontractors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <SubcontractorPicker cos={cos} setCos={setCos} subcontractors={subcontractors} value={subForm.subcontractor_id} onChange={id => setSubForm({ ...subForm, subcontractor_id: id })} selectStyle={{ background: "#fff" }} />
                 <input type="number" value={subForm.amount} onChange={e => setSubForm({ ...subForm, amount: e.target.value })} placeholder="金額(税抜)" style={{ width: 120, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
                 <input value={subForm.note} onChange={e => setSubForm({ ...subForm, note: e.target.value })} placeholder="備考(任意)" style={{ flex: 1, minWidth: 140, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
                 <FileDropZone
@@ -1472,10 +1470,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
             );
           })}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, paddingTop: 8, borderTop: "1px solid #F3F4F6" }}>
-            <select value={subForm.subcontractor_id} onChange={e => setSubForm({ ...subForm, subcontractor_id: e.target.value })} style={{ flex: 1, minWidth: 160, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, background: "#fff", color: "#1F2937" }}>
-              <option value="">下請け会社を選択</option>
-              {subcontractors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <SubcontractorPicker cos={cos} setCos={setCos} subcontractors={subcontractors} value={subForm.subcontractor_id} onChange={id => setSubForm({ ...subForm, subcontractor_id: id })} selectStyle={{ background: "#fff" }} />
             <input type="number" value={subForm.amount} onChange={e => setSubForm({ ...subForm, amount: e.target.value })} placeholder="金額(税抜)" style={{ width: 120, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
             <input value={subForm.note} onChange={e => setSubForm({ ...subForm, note: e.target.value })} placeholder="備考(任意)" style={{ flex: 1, minWidth: 140, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
             <FileDropZone
@@ -2032,10 +2027,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
                 );
               })}
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, paddingTop: 8, borderTop: "1px solid #F3F4F6" }}>
-                <select value={subForm.subcontractor_id} onChange={e => setSubForm({ ...subForm, subcontractor_id: e.target.value })} style={{ flex: 1, minWidth: 160, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, background: "#fff", color: "#1F2937" }}>
-                  <option value="">下請け会社を選択</option>
-                  {subcontractors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <SubcontractorPicker cos={cos} setCos={setCos} subcontractors={subcontractors} value={subForm.subcontractor_id} onChange={id => setSubForm({ ...subForm, subcontractor_id: id })} selectStyle={{ background: "#fff" }} />
                 <input type="number" value={subForm.amount} onChange={e => setSubForm({ ...subForm, amount: e.target.value })} placeholder="金額(税抜)" style={{ width: 120, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
                 <input value={subForm.note} onChange={e => setSubForm({ ...subForm, note: e.target.value })} placeholder="備考(任意)" style={{ flex: 1, minWidth: 140, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
                 <FileDropZone
@@ -2598,10 +2590,7 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
                 );
               })}
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, paddingTop: 8, borderTop: "1px solid #F3F4F6" }}>
-                <select value={subForm.subcontractor_id} onChange={e => setSubForm({ ...subForm, subcontractor_id: e.target.value })} style={{ flex: 1, minWidth: 160, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, background: "#fff", color: "#1F2937" }}>
-                  <option value="">下請け会社を選択</option>
-                  {subcontractors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <SubcontractorPicker cos={cos} setCos={setCos} subcontractors={subcontractors} value={subForm.subcontractor_id} onChange={id => setSubForm({ ...subForm, subcontractor_id: id })} selectStyle={{ background: "#fff" }} />
                 <input type="number" value={subForm.amount} onChange={e => setSubForm({ ...subForm, amount: e.target.value })} placeholder="金額(税抜)" style={{ width: 120, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
                 <input value={subForm.note} onChange={e => setSubForm({ ...subForm, note: e.target.value })} placeholder="備考(任意)" style={{ flex: 1, minWidth: 140, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
                 <FileDropZone

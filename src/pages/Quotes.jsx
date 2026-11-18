@@ -12,6 +12,7 @@ import { computeQuoteFinancials } from "../lib/quoteFinancials";
 import { computeAdoptTotals, buildAdoptMessage, buildUnadoptMessage, provisionalWarningLines, adoptQuote as adoptQuoteInDb, unadoptQuote as unadoptQuoteInDb, recalcProjectTotals, confirmQuoteProfit, unconfirmQuoteProfit } from "../lib/quoteAdopt";
 import SubQuoteFileReader from "../components/SubQuoteFileReader";
 import CrewPicker from "../components/CrewPicker";
+import SubcontractorPicker from "../components/SubcontractorPicker";
 import FileDropZone from "../components/FileDropZone";
 import { usePreventWindowFileDrop } from "../lib/useFileDropGuard";
 import { describeError } from "../lib/errorMessage";
@@ -52,7 +53,7 @@ const savedSnapshot = e => JSON.stringify({
   lines: e.lines.map(l => [l.group_name, l.name, l.spec, l.unit, Number(l.qty) || 0, Number(l.sale_price) || 0, baseOf(l), l.note || "", l.cost_price ?? null, !!l.cost_confirmed, !!l.is_subcontracted]),
 });
 
-export default function Quotes({ branches, pjs, submittedQuotes, wonQuotes, setWonQuotes, setSubmittedQuotes, setPjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteProjectId, setQuoteImportCtx, setOpenProjectId, crews, setCrews, openQuoteId, setOpenQuoteId }) {
+export default function Quotes({ branches, pjs, submittedQuotes, wonQuotes, setWonQuotes, setSubmittedQuotes, setPjs, cos, setCos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, links, tileConf, tks, SB_W, RP_W, quoteProjectId, setQuoteImportCtx, setOpenProjectId, crews, setCrews, openQuoteId, setOpenQuoteId }) {
   usePreventWindowFileDrop();
   const project = pjs.find(p => p.id === quoteProjectId);
   const pending = tks.filter(t => !t.done);
@@ -1123,10 +1124,7 @@ ${e.message}` : "見積書を出力できませんでした。");
                   );
                 })}
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, paddingTop: 10, borderTop: "1px solid #F3F4F6" }}>
-                  <select value={subForm.subcontractor_id} onChange={e => setSubForm({ ...subForm, subcontractor_id: e.target.value })} style={{ flex: 1, minWidth: 160, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, background: "#FAFAFA", color: "#1F2937" }}>
-                    <option value="">下請け会社を選択</option>
-                    {subcontractors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
+                  <SubcontractorPicker cos={cos} setCos={setCos} subcontractors={subcontractors} value={subForm.subcontractor_id} onChange={id => setSubForm({ ...subForm, subcontractor_id: id })} />
                   <input type="number" value={subForm.amount} onChange={e => setSubForm({ ...subForm, amount: e.target.value })} placeholder="金額(税抜)" style={{ width: 120, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
                   <input value={subForm.note} onChange={e => setSubForm({ ...subForm, note: e.target.value })} placeholder="備考(任意)" style={{ flex: 1, minWidth: 140, padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, color: "#1F2937" }} />
                   <FileDropZone
