@@ -11,6 +11,7 @@ import ClientBranchRepPicker from "../components/ClientBranchRepPicker";
 import CrewPicker from "../components/CrewPicker";
 import SubcontractorPicker from "../components/SubcontractorPicker";
 import SubQuoteFileReader from "../components/SubQuoteFileReader";
+import SplitLineModal from "../components/SplitLineModal";
 import FileDropZone from "../components/FileDropZone";
 import { usePreventWindowFileDrop } from "../lib/useFileDropGuard";
 import { QUOTE_FILE_BUCKET, FILE_TYPES, fileIcon } from "../lib/quoteFiles";
@@ -19,6 +20,8 @@ import { describeError } from "../lib/errorMessage";
 import { defaultOwnCrewId } from "../lib/crews";
 import { visibleProjects } from "../lib/projectMerge";
 import { getValidDeviceAssigneeName } from "../lib/deviceAssignee";
+import { useGroupCollapse } from "../lib/groupCollapse";
+import { buildGroupCheckbox } from "../lib/subcontractGroup";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ACCEPT_RE = /\.(xls|xlsx|est|pdf)$/i;
@@ -288,6 +291,8 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
   const [registering, setRegistering] = useState(false);
   const [result, setResult] = useState(null); // { ok, message, projectId, quoteNo }
   const [selectedKeys, setSelectedKeys] = useState(new Set());
+  const [splitFor, setSplitFor] = useState(null); // 明細1行を自社分・下請け分に分ける画面(SplitLineModal)。開いているときは { key }
+  const { collapsed, toggleGroup, expandAll, collapseAll, collapseAllIfSubOnly } = useGroupCollapse();
   // 下請けの原価(まだ案件・見積が無いので、登録が終わるまではこの画面のローカル状態に置く)
   const [subCosts, setSubCosts] = useState([]);
   const [subForm, setSubForm] = useState({ subcontractor_id: "", amount: "", note: "", file: null });
@@ -304,6 +309,7 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
     const prevByKey = new Map(prev.map(l => [l.key, l]));
     return newLines.map(nl => ({ ...prevByKey.get(nl.key), groupName: nl.group_name }));
   });
+  const setConstructionType = v => { setNp(prev => ({ ...prev, constructionType: v })); if (v === "下請けのみ" && np.constructionType !== "下請けのみ") collapseAllIfSubOnly(v, view.map(l => ({ ...l, group_name: l.groupName }))); };
 
   // 単価セットの初期値: 工事見積用
   const defaultSetId = price?.sets?.length ? (price.sets.find(s => s.code === "construction") || price.sets[0]).id : "";
@@ -343,6 +349,11 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
   const isSubOnly = constructionType === "下請けのみ";
   const showSubCheckCol = isMixed;
   const showCostCol = !isSubOnly;
+  const hasGroups = lines.some(l => l.groupName);
+  const groupCheckbox = isMixed ? node => buildGroupCheckbox(node, {
+    isChecked: l => !!l.isSubcontracted,
+    onBulkChange: (keys, next) => setLines(prev => prev.map(l => (keys.has(l.key) ? { ...l, isSubcontracted: next } : l))),
+  }) : undefined;
   const subAmountTotal = subCosts.reduce((s, c) => s + (Number(c.amount) || 0), 0);
   const financials = computeQuoteFinancials({
     constructionType, saleTotal: total,
@@ -566,7 +577,7 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
                 {projectId && <ExistingProjectNameField currentName={pjs.find(p => p.id === projectId)?.name || ""} fileName={initialTitle} draft={renameDraft} onChange={setRenameDraft} />}
                 <div style={{ marginTop: 8 }}>
                   <div style={label}>施工形態</div>
-                  <select value={np.constructionType} onChange={e => setNp({ ...np, constructionType: e.target.value })} style={inp}>
+                  <select value={np.constructionType} onChange={e => setConstructionType(e.target.value)} style={inp}>
                     {CONSTRUCTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
@@ -598,7 +609,7 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
                 </div>
                 <div style={{ flex: 1, minWidth: 160 }}>
                   <div style={label}>施工形態</div>
-                  <select value={np.constructionType} onChange={e => setNp({ ...np, constructionType: e.target.value })} style={inp}>
+                  <select value={np.constructionType} onChange={e => setConstructionType(e.target.value)} style={inp}>
                     {CONSTRUCTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
@@ -620,9 +631,17 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
           </div>
 
           {/* 明細 */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6, flexWrap: "wrap", gap: 6 }}>
             <div style={sectionTitle}>明細({lines.length}行)</div>
-            {unmatchedCount > 0 && <div style={{ fontSize: 11, color: "#B45309", fontWeight: 700 }}>単価表に当てはまらない行: {unmatchedCount}行(原価未入力)</div>}
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {unmatchedCount > 0 && <div style={{ fontSize: 11, color: "#B45309", fontWeight: 700 }}>単価表に当てはまらない行: {unmatchedCount}行(原価未入力)</div>}
+              {hasGroups && (
+                <div style={{ display: "flex", gap: 4 }}>
+                  <button type="button" onClick={expandAll} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 6, padding: "3px 8px", fontSize: 11, color: "#374151", cursor: "pointer" }}>▼ 全部開く</button>
+                  <button type="button" onClick={() => collapseAll(view.map(l => ({ ...l, group_name: l.groupName })))} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 6, padding: "3px 8px", fontSize: 11, color: "#374151", cursor: "pointer" }}>▶ 全部閉じる</button>
+                </div>
+              )}
+            </div>
           </div>
           <div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 6 }}>⠿をドラッグ、または↑↓・📂(このグループに移す)で並べ替え・グループ分けができます</div>
           <BundleToolbar lines={view.map(l => ({ ...l, group_name: l.groupName }))} onChange={handleArrangeConclu} selectedKeys={selectedKeys} setSelectedKeys={setSelectedKeys} />
@@ -650,6 +669,9 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
                   formatAmount={yen}
                   columnCount={(markup === "after" ? 8 : 7) + (showSubCheckCol ? 1 : 0)}
                   rowStyle={l => (l.summaryOnly ? "#FFF7ED" : !l.item ? "#FFFBEB" : "transparent")}
+                  collapsedPaths={collapsed}
+                  onToggleGroup={toggleGroup}
+                  groupCheckbox={groupCheckbox}
                   selectedKeys={selectedKeys}
                   onToggleSelect={key => setSelectedKeys(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; })}
                   onDeleteLeaf={removeLine}
@@ -668,8 +690,9 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
                     );
                     if (showSubCheckCol) {
                       cells.push(
-                        <td key="subflag" style={{ ...td, textAlign: "center", width: 60 }}>
-                          <input type="checkbox" checked={!!l.isSubcontracted} onChange={e => updateLine(l.key, { isSubcontracted: e.target.checked })} />
+                        <td key="subflag" style={{ ...td, textAlign: "center", width: 80, whiteSpace: "nowrap" }}>
+                          <input type="checkbox" checked={!!l.isSubcontracted} onChange={e => updateLine(l.key, { isSubcontracted: e.target.checked })} style={{ margin: 0, verticalAlign: "middle" }} />
+                          <button type="button" onClick={() => setSplitFor({ key: l.key })} title="自社分・下請け分の2行に分ける" style={{ border: "none", background: "none", cursor: "pointer", fontSize: 12, padding: "0 0 0 2px" }}>✂️</button>
                         </td>
                       );
                     }
@@ -763,6 +786,23 @@ function ImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, branc
           <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 4, textAlign: "center" }}>案件の受注金額・粗利は変わりません(反映は見積一覧の「採用にする」で行います)</div>
         </>
       )}
+      {splitFor && (() => {
+        const raw = lines.find(x => x.key === splitFor.key);
+        const vline = view.find(x => x.key === splitFor.key);
+        if (!raw || !vline) return null;
+        return (
+          <SplitLineModal
+            name={raw.name} qty={Number(raw.qty) || 0} price={Number(vline.basePrice) || 0} fmt={yen}
+            onClose={() => setSplitFor(null)}
+            onConfirm={(ownQty, subQty) => {
+              const updatedOriginal = { ...raw, qty: ownQty, isSubcontracted: false };
+              const newLine = { ...raw, key: "il" + (++lineSeq), qty: subQty, isSubcontracted: true };
+              setLines(prev => prev.flatMap(x => (x.key === raw.key ? [updatedOriginal, newLine] : [x])));
+              setSplitFor(null);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -915,6 +955,10 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
   const [result, setResult] = useState(null); // { ok, message, projectId, quoteNo }
   const [arrangedMeta, setArrangedMeta] = useState([]); // [{key, group_name}] 手でドラッグ・移動した並び・グループ(ステップ2)
   const [selectedKeys, setSelectedKeys] = useState(new Set());
+  // 「分割」は、ここ(ESTファイル取り込み)では置いていない。EST特有の小計の自動組み立て
+  // (金額の一致だけで判定している箇所)が、分割によって崩れることがあるため(第9弾テーマ3で確認)。
+  // 崩れた場合は既存の「合計が一致しません」のチェックで検知されるが、紛らわしいので今回は見送った
+  const { collapsed, toggleGroup: toggleGroupCollapse, expandAll, collapseAll, collapseAllIfSubOnly } = useGroupCollapse();
 
   // 掛け率②の初期値:取引先・営業所の「掛け率の初期値」から、手で触るまでは自動で入れる
   const selectedProject = projectMode === "existing" ? pjs.find(p => p.id === projectId) : null;
@@ -1031,6 +1075,12 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
   const isMixed = constructionType === "自社+下請け";
   const isSubOnly = constructionType === "下請けのみ";
   const showSubCheckCol = isMixed;
+  const hasGroups = view.some(l => l.group_name);
+  const groupCheckbox = isMixed ? node => buildGroupCheckbox(node, {
+    isChecked: l => !!l.isSubcontracted,
+    onBulkChange: (keys, next) => setLines(prev => prev.map(l => (keys.has(l.key) ? { ...l, isSubcontracted: next } : l))),
+  }) : undefined;
+  const setConstructionType = v => { setNp(prev => ({ ...prev, constructionType: v })); if (v === "下請けのみ" && np.constructionType !== "下請けのみ") collapseAllIfSubOnly(v, view); };
   const showCostCol = !isSubOnly;
   const subAmountTotal = subCosts.reduce((s, c) => s + (Number(c.amount) || 0), 0);
   const financials = computeQuoteFinancials({
@@ -1264,7 +1314,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
             {projectId && <ExistingProjectNameField currentName={pjs.find(p => p.id === projectId)?.name || ""} fileName={initialTitle} draft={renameDraft} onChange={setRenameDraft} />}
             <div style={{ marginTop: 8 }}>
               <div style={label}>施工形態</div>
-              <select value={np.constructionType} onChange={e => setNp({ ...np, constructionType: e.target.value })} style={inp}>
+              <select value={np.constructionType} onChange={e => setConstructionType(e.target.value)} style={inp}>
                 {CONSTRUCTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
@@ -1296,7 +1346,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
             </div>
             <div style={{ flex: 1, minWidth: 160 }}>
               <div style={label}>施工形態</div>
-              <select value={np.constructionType} onChange={e => setNp({ ...np, constructionType: e.target.value })} style={inp}>
+              <select value={np.constructionType} onChange={e => setConstructionType(e.target.value)} style={inp}>
                 {CONSTRUCTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
@@ -1393,9 +1443,17 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
 
       {/* ③ 並び替え・グループ分け(ステップ2)。②までで組み立てた明細を、ドラッグや
           ボタンで並べ替えたり、別のグループに移したりできる。原価の当てはめもここで行う */}
-      <div style={{ marginBottom: 6 }}>
-        <div style={sectionTitle}>③ 並び替え・グループ分け・原価の当てはめ</div>
-        <div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 6 }}>⠿をドラッグ、または↑↓・📂(このグループに移す)で並べ替え・グループ分けができます</div>
+      <div style={{ marginBottom: 6, display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 6 }}>
+        <div>
+          <div style={sectionTitle}>③ 並び替え・グループ分け・原価の当てはめ</div>
+          <div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 6 }}>⠿をドラッグ、または↑↓・📂(このグループに移す)で並べ替え・グループ分けができます</div>
+        </div>
+        {hasGroups && (
+          <div style={{ display: "flex", gap: 4 }}>
+            <button type="button" onClick={expandAll} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 6, padding: "3px 8px", fontSize: 11, color: "#374151", cursor: "pointer" }}>▼ 全部開く</button>
+            <button type="button" onClick={() => collapseAll(view)} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 6, padding: "3px 8px", fontSize: 11, color: "#374151", cursor: "pointer" }}>▶ 全部閉じる</button>
+          </div>
+        )}
       </div>
       <BundleToolbar lines={view} onChange={handleArrange} selectedKeys={selectedKeys} setSelectedKeys={setSelectedKeys} />
       {unmatchedCount > 0 && <div style={{ fontSize: 11, color: "#B45309", fontWeight: 700, marginBottom: 6 }}>単価表に当てはまらない行: {unmatchedCount}行(原価未入力)</div>}
@@ -1419,6 +1477,9 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
               amountOf={l => l.amount}
               formatAmount={yen}
               columnCount={4 + (showSubCheckCol ? 1 : 0) + 1}
+              collapsedPaths={collapsed}
+              onToggleGroup={toggleGroupCollapse}
+              groupCheckbox={groupCheckbox}
               selectedKeys={selectedKeys}
               onToggleSelect={key => setSelectedKeys(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; })}
               renderLeafCells={l => {
@@ -1431,7 +1492,7 @@ function EstImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesReps, br
                 if (showSubCheckCol) {
                   cells.push(
                     <td key="subflag" style={{ ...td, textAlign: "center", width: 60 }}>
-                      <input type="checkbox" checked={!!l.isSubcontracted} onChange={e => updateLine(l.key, { isSubcontracted: e.target.checked })} />
+                      <input type="checkbox" checked={!!l.isSubcontracted} onChange={e => updateLine(l.key, { isSubcontracted: e.target.checked })} style={{ margin: 0, verticalAlign: "middle" }} />
                     </td>
                   );
                 }
@@ -1567,6 +1628,8 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
   const [registering, setRegistering] = useState(false);
   const [result, setResult] = useState(null);
   const [selectedKeys, setSelectedKeys] = useState(new Set());
+  const [splitFor, setSplitFor] = useState(null); // 明細1行を自社分・下請け分に分ける画面(SplitLineModal)。開いているときは { key }
+  const { collapsed, toggleGroup, expandAll, collapseAll, collapseAllIfSubOnly } = useGroupCollapse();
   // 下請けの原価(まだ案件・見積が無いので、登録が終わるまではこの画面のローカル状態に置く)
   const [subCosts, setSubCosts] = useState([]);
   const [subForm, setSubForm] = useState({ subcontractor_id: "", amount: "", note: "", file: null });
@@ -1594,6 +1657,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
     const prevByKey = new Map(prev.map(l => [l.key, l]));
     return newLines.map(nl => ({ ...prevByKey.get(nl.key), groupName: nl.group_name }));
   });
+  const setConstructionType = v => { setNp(prev => ({ ...prev, constructionType: v })); if (v === "下請けのみ" && np.constructionType !== "下請けのみ") collapseAllIfSubOnly(v, view.map(l => ({ ...l, group_name: l.groupName }))); };
 
   // 単価セットの初期値: 事務員さん用(漏水調査費のため)
   const defaultSetId = price?.sets?.length ? (price.sets.find(s => s.code === "clerk") || price.sets[0]).id : "";
@@ -1654,6 +1718,11 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
   const isMixed = constructionType === "自社+下請け";
   const isSubOnly = constructionType === "下請けのみ";
   const showSubCheckCol = isMixed;
+  const hasGroups = lines.some(l => l.groupName);
+  const groupCheckbox = isMixed ? node => buildGroupCheckbox(node, {
+    isChecked: l => !!l.isSubcontracted,
+    onBulkChange: (keys, next) => setLines(prev => prev.map(l => (keys.has(l.key) ? { ...l, isSubcontracted: next } : l))),
+  }) : undefined;
   const showCostCol = !isSubOnly;
   const subAmountTotal = subCosts.reduce((s, c) => s + (Number(c.amount) || 0), 0);
   const financials = computeQuoteFinancials({
@@ -1884,7 +1953,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
                 {projectId && <ExistingProjectNameField currentName={pjs.find(p => p.id === projectId)?.name || ""} fileName={initialTitle} draft={renameDraft} onChange={setRenameDraft} />}
                 <div style={{ marginTop: 8 }}>
                   <div style={label}>施工形態</div>
-                  <select value={np.constructionType} onChange={e => setNp({ ...np, constructionType: e.target.value })} style={inp}>
+                  <select value={np.constructionType} onChange={e => setConstructionType(e.target.value)} style={inp}>
                     {CONSTRUCTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
@@ -1916,7 +1985,7 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
                 </div>
                 <div style={{ flex: 1, minWidth: 160 }}>
                   <div style={label}>施工形態</div>
-                  <select value={np.constructionType} onChange={e => setNp({ ...np, constructionType: e.target.value })} style={inp}>
+                  <select value={np.constructionType} onChange={e => setConstructionType(e.target.value)} style={inp}>
                     {CONSTRUCTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
@@ -1938,9 +2007,17 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
           </div>
 
           {/* 明細 */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6, flexWrap: "wrap", gap: 6 }}>
             <div style={sectionTitle}>明細({lines.length}行)</div>
-            {unmatchedCount > 0 && <div style={{ fontSize: 11, color: "#B45309", fontWeight: 700 }}>単価表に当てはまらない行: {unmatchedCount}行(原価未入力)</div>}
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {unmatchedCount > 0 && <div style={{ fontSize: 11, color: "#B45309", fontWeight: 700 }}>単価表に当てはまらない行: {unmatchedCount}行(原価未入力)</div>}
+              {hasGroups && (
+                <div style={{ display: "flex", gap: 4 }}>
+                  <button type="button" onClick={expandAll} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 6, padding: "3px 8px", fontSize: 11, color: "#374151", cursor: "pointer" }}>▼ 全部開く</button>
+                  <button type="button" onClick={() => collapseAll(view.map(l => ({ ...l, group_name: l.groupName })))} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 6, padding: "3px 8px", fontSize: 11, color: "#374151", cursor: "pointer" }}>▶ 全部閉じる</button>
+                </div>
+              )}
+            </div>
           </div>
           <div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 6 }}>⠿をドラッグ、または↑↓・📂(このグループに移す)で並べ替え・グループ分けができます</div>
           <BundleToolbar lines={view.map(l => ({ ...l, group_name: l.groupName }))} onChange={handleArrangeSelf} selectedKeys={selectedKeys} setSelectedKeys={setSelectedKeys} />
@@ -1968,6 +2045,9 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
                   formatAmount={yen}
                   columnCount={(rate !== 1 ? 8 : 7) + (showSubCheckCol ? 1 : 0)}
                   rowStyle={l => (!l.item ? "#FFFBEB" : "transparent")}
+                  collapsedPaths={collapsed}
+                  onToggleGroup={toggleGroup}
+                  groupCheckbox={groupCheckbox}
                   selectedKeys={selectedKeys}
                   onToggleSelect={key => setSelectedKeys(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; })}
                   onDeleteLeaf={removeLine}
@@ -1986,8 +2066,9 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
                     );
                     if (showSubCheckCol) {
                       cells.push(
-                        <td key="subflag" style={{ ...td, textAlign: "center", width: 60 }}>
-                          <input type="checkbox" checked={!!l.isSubcontracted} onChange={e => updateLine(l.key, { isSubcontracted: e.target.checked })} />
+                        <td key="subflag" style={{ ...td, textAlign: "center", width: 80, whiteSpace: "nowrap" }}>
+                          <input type="checkbox" checked={!!l.isSubcontracted} onChange={e => updateLine(l.key, { isSubcontracted: e.target.checked })} style={{ margin: 0, verticalAlign: "middle" }} />
+                          <button type="button" onClick={() => setSplitFor({ key: l.key })} title="自社分・下請け分の2行に分ける" style={{ border: "none", background: "none", cursor: "pointer", fontSize: 12, padding: "0 0 0 2px" }}>✂️</button>
                         </td>
                       );
                     }
@@ -2081,6 +2162,23 @@ function SelfQuoteImportForm({ r, price, pjs, cos, setCos, salesReps, setSalesRe
           <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 4, textAlign: "center" }}>案件の受注金額・粗利は変わりません(反映は見積一覧の「採用にする」で行います)</div>
         </>
       )}
+      {splitFor && (() => {
+        const raw = lines.find(x => x.key === splitFor.key);
+        const vline = view.find(x => x.key === splitFor.key);
+        if (!raw || !vline) return null;
+        return (
+          <SplitLineModal
+            name={raw.name} qty={Number(raw.qty) || 0} price={Number(vline.basePrice) || 0} fmt={yen}
+            onClose={() => setSplitFor(null)}
+            onConfirm={(ownQty, subQty) => {
+              const updatedOriginal = { ...raw, qty: ownQty, isSubcontracted: false };
+              const newLine = { ...raw, key: "il" + (++lineSeq), qty: subQty, isSubcontracted: true };
+              setLines(prev => prev.flatMap(x => (x.key === raw.key ? [updatedOriginal, newLine] : [x])));
+              setSplitFor(null);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -2125,6 +2223,8 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
   const [registering, setRegistering] = useState(false);
   const [result, setResult] = useState(null);
   const [selectedKeys, setSelectedKeys] = useState(new Set());
+  const [splitFor, setSplitFor] = useState(null); // 明細1行を自社分・下請け分に分ける画面(SplitLineModal)。開いているときは { key }
+  const { collapsed, toggleGroup, expandAll, collapseAll, collapseAllIfSubOnly } = useGroupCollapse();
   // 下請けの原価(まだ案件・見積が無いので、登録が終わるまではこの画面のローカル状態に置く)
   const [subCosts, setSubCosts] = useState([]);
   const [subForm, setSubForm] = useState({ subcontractor_id: "", amount: "", note: "", file: null });
@@ -2141,6 +2241,7 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
     const prevByKey = new Map(prev.map(l => [l.key, l]));
     return newLines.map(nl => ({ ...prevByKey.get(nl.key), groupName: nl.group_name }));
   });
+  const setConstructionType = v => { setNp(prev => ({ ...prev, constructionType: v })); if (v === "下請けのみ" && np.constructionType !== "下請けのみ") collapseAllIfSubOnly(v, view.map(l => ({ ...l, group_name: l.groupName }))); };
 
   // 単価セットの初期値: 事務員さん用(漏水調査費のため)
   const defaultSetId = price?.sets?.length ? (price.sets.find(s => s.code === "clerk") || price.sets[0]).id : "";
@@ -2222,6 +2323,11 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
   const isSubOnly = constructionType === "下請けのみ";
   const showSubCheckCol = isMixed;
   const showCostCol = !isSubOnly;
+  const hasGroups = lines.some(l => l.groupName);
+  const groupCheckbox = isMixed ? node => buildGroupCheckbox(node, {
+    isChecked: l => !!l.isSubcontracted,
+    onBulkChange: (keys, next) => setLines(prev => prev.map(l => (keys.has(l.key) ? { ...l, isSubcontracted: next } : l))),
+  }) : undefined;
   const subAmountTotal = subCosts.reduce((s, c) => s + (Number(c.amount) || 0), 0);
   const financials = computeQuoteFinancials({
     constructionType, saleTotal: total,
@@ -2451,7 +2557,7 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
                 {projectId && <ExistingProjectNameField currentName={pjs.find(p => p.id === projectId)?.name || ""} fileName={initialTitle} draft={renameDraft} onChange={setRenameDraft} />}
                 <div style={{ marginTop: 8 }}>
                   <div style={label}>施工形態</div>
-                  <select value={np.constructionType} onChange={e => setNp({ ...np, constructionType: e.target.value })} style={inp}>
+                  <select value={np.constructionType} onChange={e => setConstructionType(e.target.value)} style={inp}>
                     {CONSTRUCTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
@@ -2483,7 +2589,7 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
                 </div>
                 <div style={{ flex: 1, minWidth: 160 }}>
                   <div style={label}>施工形態</div>
-                  <select value={np.constructionType} onChange={e => setNp({ ...np, constructionType: e.target.value })} style={inp}>
+                  <select value={np.constructionType} onChange={e => setConstructionType(e.target.value)} style={inp}>
                     {CONSTRUCTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
@@ -2505,9 +2611,17 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
           </div>
 
           {/* 明細 */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6, flexWrap: "wrap", gap: 6 }}>
             <div style={sectionTitle}>明細({lines.length}行)</div>
-            {unmatchedCount > 0 && <div style={{ fontSize: 11, color: "#B45309", fontWeight: 700 }}>単価表に当てはまらない行: {unmatchedCount}行(原価未入力)</div>}
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {unmatchedCount > 0 && <div style={{ fontSize: 11, color: "#B45309", fontWeight: 700 }}>単価表に当てはまらない行: {unmatchedCount}行(原価未入力)</div>}
+              {hasGroups && (
+                <div style={{ display: "flex", gap: 4 }}>
+                  <button type="button" onClick={expandAll} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 6, padding: "3px 8px", fontSize: 11, color: "#374151", cursor: "pointer" }}>▼ 全部開く</button>
+                  <button type="button" onClick={() => collapseAll(view.map(l => ({ ...l, group_name: l.groupName })))} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 6, padding: "3px 8px", fontSize: 11, color: "#374151", cursor: "pointer" }}>▶ 全部閉じる</button>
+                </div>
+              )}
+            </div>
           </div>
           <div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 6 }}>⠿をドラッグ、または↑↓・📂(このグループに移す)で並べ替え・グループ分けができます</div>
           <BundleToolbar lines={view.map(l => ({ ...l, group_name: l.groupName }))} onChange={handleArrangeSelfPdf} selectedKeys={selectedKeys} setSelectedKeys={setSelectedKeys} />
@@ -2534,6 +2648,9 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
                   formatAmount={yen}
                   columnCount={7 + (showSubCheckCol ? 1 : 0)}
                   rowStyle={l => (!l.item && !l.isOverhead ? "#FFFBEB" : "transparent")}
+                  collapsedPaths={collapsed}
+                  onToggleGroup={toggleGroup}
+                  groupCheckbox={groupCheckbox}
                   selectedKeys={selectedKeys}
                   onToggleSelect={key => setSelectedKeys(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; })}
                   onDeleteLeaf={removeLine}
@@ -2549,8 +2666,9 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
                     ];
                     if (showSubCheckCol) {
                       cells.push(
-                        <td key="subflag" style={{ ...td, textAlign: "center", width: 60 }}>
-                          <input type="checkbox" checked={!!l.isSubcontracted} onChange={e => updateLine(l.key, { isSubcontracted: e.target.checked })} />
+                        <td key="subflag" style={{ ...td, textAlign: "center", width: 80, whiteSpace: "nowrap" }}>
+                          <input type="checkbox" checked={!!l.isSubcontracted} onChange={e => updateLine(l.key, { isSubcontracted: e.target.checked })} style={{ margin: 0, verticalAlign: "middle" }} />
+                          <button type="button" onClick={() => setSplitFor({ key: l.key })} title="自社分・下請け分の2行に分ける" style={{ border: "none", background: "none", cursor: "pointer", fontSize: 12, padding: "0 0 0 2px" }}>✂️</button>
                         </td>
                       );
                     }
@@ -2644,6 +2762,23 @@ function SelfQuotePdfImportForm({ r, price, pjs, cos, setCos, salesReps, setSale
           <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 4, textAlign: "center" }}>案件の受注金額・粗利は変わりません(反映は見積一覧の「採用にする」で行います)</div>
         </>
       )}
+      {splitFor && (() => {
+        const raw = lines.find(x => x.key === splitFor.key);
+        const vline = view.find(x => x.key === splitFor.key);
+        if (!raw || !vline) return null;
+        return (
+          <SplitLineModal
+            name={raw.name} qty={Number(raw.qty) || 0} price={Number(vline.basePrice) || 0} fmt={yen}
+            onClose={() => setSplitFor(null)}
+            onConfirm={(ownQty, subQty) => {
+              const updatedOriginal = { ...raw, qty: ownQty, isSubcontracted: false };
+              const newLine = { ...raw, key: "il" + (++lineSeq), qty: subQty, isSubcontracted: true };
+              setLines(prev => prev.flatMap(x => (x.key === raw.key ? [updatedOriginal, newLine] : [x])));
+              setSplitFor(null);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }

@@ -1,12 +1,15 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "../lib/supabase";
-import { Hdr, Confirm, Modal, Inp } from "../components/UI";
+import { Hdr, Confirm } from "../components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "../components/Layout";
 import GroupTree, { BundleToolbar } from "../components/GroupTree";
 import PriceMultiPicker from "../components/PriceMultiPicker";
+import SplitLineModal from "../components/SplitLineModal";
 import { fmt, todayStr } from "../lib/constants";
 import { DENSITY, loadDensityKey, saveDensityKey } from "../lib/quoteTableDensity";
 import { listGroupPaths } from "../lib/groupTree";
+import { useGroupCollapse } from "../lib/groupCollapse";
+import { buildGroupCheckbox } from "../lib/subcontractGroup";
 import { openQuoteFile, QUOTE_FILE_BUCKET, FILE_TYPES, fileIcon } from "../lib/quoteFiles";
 import { computeQuoteFinancials } from "../lib/quoteFinancials";
 import { computeAdoptTotals, buildAdoptMessage, buildUnadoptMessage, provisionalWarningLines, adoptQuote as adoptQuoteInDb, unadoptQuote as unadoptQuoteInDb, recalcProjectTotals, confirmQuoteProfit, unconfirmQuoteProfit } from "../lib/quoteAdopt";
@@ -93,9 +96,9 @@ export default function Quotes({ branches, pjs, submittedQuotes, wonQuotes, setW
   const [selectedKeys, setSelectedKeys] = useState(new Set());
   // 明細の表の見た目(コンパクト/ゆったり。端末に覚える)と、グループの折りたたみ(画面の中だけ。DBには保存しない)
   const [densityKey, setDensityKey] = useState(() => loadDensityKey(isPC));
-  const [collapsed, setCollapsed] = useState(() => new Set());
+  const { collapsed, setCollapsed, toggleGroup: toggleGroupShared, expandAll, collapseAll: collapseAllShared, collapseAllIfSubOnly } = useGroupCollapse();
   const [showPricePicker, setShowPricePicker] = useState(false); // 「単価項目を追加」は、ふだんは閉じておく
-  const [splitFor, setSplitFor] = useState(null); // 明細1行を自社分・下請け分に分ける画面。開いているときは { key, mode: "qty"|"amount", value }
+  const [splitFor, setSplitFor] = useState(null); // 明細1行を自社分・下請け分に分ける画面(SplitLineModal)。開いているときは { key }
   // 単価表の今の名前(price_item_id → { name, spec })。単価表から入れた行の品名・規格を編集したとき、
   // 「単価表: ○○」と「↩ 単価表の名前にする」を出すために使う(DBには何も足さない。単価表も変えない)
   const [catalog, setCatalog] = useState({});
@@ -474,18 +477,10 @@ ${e.message}` : "見積書を出力できませんでした。");
     });
     setLines(newLines);
   };
-  const toggleGroup = path => setCollapsed(prev => {
-    const next = new Set(prev);
-    if (next.has(path)) next.delete(path);
-    else {
-      next.add(path);
-      // 閉じるグループの中の行は、選択(まとめる用のチェック)から外す(見えない行がまとめられないように)
-      setSelectedKeys(sel => new Set([...sel].filter(k => !hiddenBy(next, ed.lines.find(l => l.key === k)?.group_name))));
-    }
-    return next;
-  });
-  const expandAll = () => setCollapsed(new Set());
-  const collapseAll = () => { const all = new Set(listGroupPaths(ed.lines)); setCollapsed(all); setSelectedKeys(sel => new Set([...sel].filter(k => !hiddenBy(all, ed.lines.find(l => l.key === k)?.group_name)))); };
+  // 閉じるグループの中の行は、選択(まとめる用のチェック)から外す(見えない行がまとめられないように)
+  const dropHiddenFromSelection = next => setSelectedKeys(sel => new Set([...sel].filter(k => !hiddenBy(next, ed.lines.find(l => l.key === k)?.group_name))));
+  const toggleGroup = path => toggleGroupShared(path, dropHiddenFromSelection);
+  const collapseAll = () => { collapseAllShared(ed.lines); dropHiddenFromSelection(new Set(listGroupPaths(ed.lines))); };
   const changeDensity = key => { setDensityKey(key); saveDensityKey(key); };
   const toggleSelect = key => setSelectedKeys(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
@@ -655,18 +650,10 @@ ${e.message}` : "見積書を出力できませんでした。");
   };
   // 小計(グループ)見出しの「下請け施工」チェック。配下(入れ子も含む)の明細をまとめて切り替える(第9弾テーマ1)。
   // 自社+下請けのときだけ出す(チェック自体がこの施工形態にしか無いため)
-  const groupCheckbox = isMixed ? node => {
-    const leaves = [];
-    (function walk(n) { for (const c of n.children) { if (c.isGroup) walk(c); else leaves.push(c.line); } })(node);
-    if (!leaves.length) return null;
-    const checkedCount = leaves.filter(l => !!l.is_subcontracted).length;
-    const keys = new Set(leaves.map(l => l.key));
-    return {
-      checked: checkedCount === leaves.length,
-      indeterminate: checkedCount > 0 && checkedCount < leaves.length,
-      onChange: next => setLines(ed.lines.map(l => (keys.has(l.key) ? { ...l, is_subcontracted: next } : l))),
-    };
-  } : undefined;
+  const groupCheckbox = isMixed ? node => buildGroupCheckbox(node, {
+    isChecked: l => !!l.is_subcontracted,
+    onBulkChange: (keys, next) => setLines(ed.lines.map(l => (keys.has(l.key) ? { ...l, is_subcontracted: next } : l))),
+  }) : undefined;
 
   // 非表示(hidden_at)のファイルは、一覧・「元ファイル」ボタンの対象から外す(第8弾テーマ12①)
   const visibleQuoteFiles = quoteFiles.filter(f => !f.hidden_at);
@@ -841,7 +828,7 @@ ${e.message}` : "見積書を出力できませんでした。");
                     const v = e.target.value;
                     setEd({ ...ed, construction_type: v });
                     // 「下請けのみ」に切り替えた、その時だけ大項目(小計)だけの表示にする(第9弾テーマ2)。以後の開閉は手で行う
-                    if (v === "下請けのみ" && ed.construction_type !== "下請けのみ") setCollapsed(new Set(listGroupPaths(ed.lines)));
+                    if (v === "下請けのみ" && ed.construction_type !== "下請けのみ") collapseAllIfSubOnly(v, ed.lines);
                   }} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 13, background: "#FAFAFA", boxSizing: "border-box", color: "#1F2937" }}>
                     {CONSTRUCTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
@@ -1034,7 +1021,7 @@ ${e.message}` : "見積書を出力できませんでした。");
                                 <td key="subflag" style={{ ...ctd, textAlign: "center", width: 54, whiteSpace: "nowrap" }}>
                                   <input type="checkbox" checked={!!l.is_subcontracted} onChange={e => updateLine(l.key, { is_subcontracted: e.target.checked })} style={{ margin: 0, verticalAlign: "middle" }} />
                                   {l.line_type !== "labor" && (
-                                    <button type="button" onClick={() => setSplitFor({ key: l.key, mode: "qty", value: "" })} title="自社分・下請け分の2行に分ける" style={{ border: "none", background: "none", cursor: "pointer", fontSize: 12, padding: "0 0 0 2px" }}>✂️</button>
+                                    <button type="button" onClick={() => setSplitFor({ key: l.key })} title="自社分・下請け分の2行に分ける" style={{ border: "none", background: "none", cursor: "pointer", fontSize: 12, padding: "0 0 0 2px" }}>✂️</button>
                                   )}
                                 </td>
                               );
@@ -1105,7 +1092,7 @@ ${e.message}` : "見積書を出力できませんでした。");
                               <td key="subflag" style={{ padding: "6px 8px", textAlign: "center", whiteSpace: "nowrap" }}>
                                 <input type="checkbox" checked={!!l.is_subcontracted} onChange={e => updateLine(l.key, { is_subcontracted: e.target.checked })} />
                                 {l.line_type !== "labor" && (
-                                  <button type="button" onClick={() => setSplitFor({ key: l.key, mode: "qty", value: "" })} title="自社分・下請け分の2行に分ける" style={{ border: "1px solid #E5E7EB", background: "#fff", color: "#374151", borderRadius: 6, cursor: "pointer", fontSize: 11, padding: "2px 6px", marginLeft: 4 }}>✂️ 分割</button>
+                                  <button type="button" onClick={() => setSplitFor({ key: l.key })} title="自社分・下請け分の2行に分ける" style={{ border: "1px solid #E5E7EB", background: "#fff", color: "#374151", borderRadius: 6, cursor: "pointer", fontSize: 11, padding: "2px 6px", marginLeft: 4 }}>✂️ 分割</button>
                                 )}
                               </td>
                             );
@@ -1221,45 +1208,17 @@ ${e.message}` : "見積書を出力できませんでした。");
       {splitFor && (() => {
         const l = ed.lines.find(x => x.key === splitFor.key);
         if (!l) return null;
-        const qty = Number(l.qty) || 0;
-        const price = Number(l.sale_price) || 0;
-        const raw = Number(splitFor.value);
-        const subQtyRaw = splitFor.mode === "qty" ? raw : (price ? raw / price : NaN);
-        const subQty = Number.isFinite(subQtyRaw) ? Math.round(subQtyRaw * 100) / 100 : NaN;
-        const valid = splitFor.value !== "" && Number.isFinite(subQty) && subQty > 0 && subQty < qty;
-        const ownQty = valid ? qty - subQty : null;
-        const doSplit = () => {
-          if (!valid) return;
-          const updatedOriginal = { ...l, qty: ownQty, is_subcontracted: false };
-          const newLine = { ...l, key: newKey(), qty: subQty, is_subcontracted: true };
-          setLines(ed.lines.flatMap(x => (x.key === l.key ? [updatedOriginal, newLine] : [x])));
-          setSplitFor(null);
-        };
         return (
-          <Modal title={`分割: ${l.name || "(品名未入力)"}`} onClose={() => setSplitFor(null)} onSave={valid ? doSplit : undefined}>
-            <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 10, lineHeight: 1.6 }}>
-              今の数量 {l.qty} ・ 単価 {fmt(price)} ・ 金額 {fmt(qty * price)}<br />
-              自社分・下請け分の2行に分けます。単価は変えないので、2行の金額の合計は、今の金額とぴったり同じになります。
-            </div>
-            <div style={{ display: "flex", gap: 14, marginBottom: 10 }}>
-              <label style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
-                <input type="radio" checked={splitFor.mode === "qty"} onChange={() => setSplitFor({ ...splitFor, mode: "qty" })} /> 数量で分ける
-              </label>
-              <label style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 4, cursor: price ? "pointer" : "default", opacity: price ? 1 : 0.4 }}>
-                <input type="radio" disabled={!price} checked={splitFor.mode === "amount"} onChange={() => setSplitFor({ ...splitFor, mode: "amount" })} /> 金額で分ける{!price && "(単価が0のため使えません)"}
-              </label>
-            </div>
-            <Inp label={`下請け分の${splitFor.mode === "qty" ? "数量" : "金額(税抜)"}(自社分は、残りから自動で計算します)`} type="number" value={splitFor.value} onChange={e => setSplitFor({ ...splitFor, value: e.target.value })} />
-            {splitFor.value !== "" && !valid && (
-              <div style={{ fontSize: 11, color: "#DC2626", marginBottom: 8 }}>0より大きく、今の{splitFor.mode === "qty" ? "数量" : "金額"}未満の数を入れてください</div>
-            )}
-            {valid && (
-              <div style={{ background: "#F9FAFB", borderRadius: 8, padding: "8px 10px", fontSize: 12, color: "#374151", lineHeight: 1.7 }}>
-                自社分: 数量 {ownQty} ・ 金額 {fmt(ownQty * price)}<br />
-                下請け分: 数量 {subQty} ・ 金額 {fmt(subQty * price)}(この行だけ「下請け施工」にチェックが付きます)
-              </div>
-            )}
-          </Modal>
+          <SplitLineModal
+            name={l.name} qty={Number(l.qty) || 0} price={Number(l.sale_price) || 0} fmt={fmt}
+            onClose={() => setSplitFor(null)}
+            onConfirm={(ownQty, subQty) => {
+              const updatedOriginal = { ...l, qty: ownQty, is_subcontracted: false };
+              const newLine = { ...l, key: newKey(), qty: subQty, is_subcontracted: true };
+              setLines(ed.lines.flatMap(x => (x.key === l.key ? [updatedOriginal, newLine] : [x])));
+              setSplitFor(null);
+            }}
+          />
         );
       })()}
     </div>
