@@ -674,6 +674,13 @@ export default function Home({ pjs, submittedQuotes, wonQuotes, cos, tks, links,
         ]}
       />
       <FeatureCard
+        icon="💴" title="材料の合計額" desc="材料を選んで数量を入れると、合計が出ます" bg="#e6f4f1" accent="#0D9488"
+        onCardClick={() => nav("materialtotal")}
+        pills={[
+          <Pill key="o" onClick={() => nav("materialtotal")}>💴 合計を出す</Pill>,
+        ]}
+      />
+      <FeatureCard
         icon="🏠" title="ホームページ" desc="公式サイトを見る" bg="#f0ecfa" accent="#7c5cd6"
         onCardClick={() => window.open(HOMEPAGE_URL, "_blank")}
         pills={[
