@@ -48,6 +48,7 @@ export const DEFAULT_TILE_CONF = [
   {key:"estimate",icon:"📝",label:"見積書作成",sub:"CSV出力対応",color:"#BE185D",visible:true},
   {key:"weeklyquotes",icon:"🗓",label:"今週作成した見積もり",sub:"調査・工事を確認",color:"#2563EB",visible:true},
   {key:"priceadmin",icon:"💲",label:"単価・原価管理",sub:"単価表の編集",color:"#9333EA",visible:true},
+  {key:"materialtotal",icon:"💴",label:"材料の合計額",sub:"材料を選んで合計を出す",color:"#0D9488",visible:true},
   {key:"analytics",icon:"📊",label:"分析ダッシュボード",sub:"グラフ・集計",color:"#0F766E",visible:true},
   {key:"ai",icon:"🤖",label:"AIアシスタント",sub:"データに質問",color:"#6D28D9",visible:true},
   {key:"chatgpt",icon:"💬",label:"ChatGPT",sub:"外部AIを開く",color:"#10A37F",visible:true},

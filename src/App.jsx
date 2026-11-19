@@ -36,6 +36,7 @@ import QuoteImport from "./pages/QuoteImport";
 import NoteQuote from "./pages/NoteQuote";
 import PriceAdmin from "./pages/PriceAdmin";
 import WeeklyQuotes from "./pages/WeeklyQuotes";
+import MaterialTotal from "./pages/MaterialTotal";
 
 export default function App() {
   // アプリを開いた直後だけ、PC(isPCと同じ判定。768px以上)なら案件管理から始める(第8弾テーマ24)。
@@ -228,6 +229,7 @@ export default function App() {
   if (page === "autoedit") return <AutoEdit {...commonProps} />;
   if (page === "calls") return <CallsPage {...commonProps} calls={calls} setCalls={setCalls} />;
   if (page === "blocked-numbers") return <BlockedNumbers {...commonProps} />;
+  if (page === "materialtotal") return <MaterialTotal {...commonProps} />;
   if (page === "linesettings") return <LineSettings {...commonProps} />;
   if (page === "settings") return <Settings {...commonProps} />;
   if (page === "assigneesettings") return <AssigneeSettings {...commonProps} />;
