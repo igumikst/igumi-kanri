@@ -11,7 +11,8 @@ import { supabase } from "../lib/supabase";
 const norm = (s) => (s == null ? "" : String(s)).normalize("NFKC").toLowerCase().replace(/\s+/g, "");
 const yen = (n) => "¥" + Math.round(Number(n) || 0).toLocaleString();
 
-export default function MaterialTotal({ cust, pp, nav }) {
+// solo: 協力業社用(/?tool=zairyo)。ホームへ戻るボタンや共有ボタンを出さず、この画面だけを使ってもらう
+export default function MaterialTotal({ cust, pp, nav, solo }) {
   const [items, setItems] = useState([]); // DBに登録された材料
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -19,6 +20,7 @@ export default function MaterialTotal({ cust, pp, nav }) {
   const [picked, setPicked] = useState([]); // 選んだ材料 [{key,name,price,qty,manual}]
   const [manual, setManual] = useState({ name: "", price: "" }); // その場だけの手入力(保存しない)
   const [copied, setCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -103,11 +105,22 @@ export default function MaterialTotal({ cust, pp, nav }) {
     <div style={{ fontFamily: "'Hiragino Sans','Yu Gothic',sans-serif", background: "#F0F4F8", minHeight: "100vh", ...pp }}>
       <div style={{ background: `linear-gradient(135deg,${cust.c1},${cust.c2})`, padding: "16px 20px", position: "sticky", top: 0, zIndex: 50 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button onClick={() => nav("home")} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>←</button>
+          {!solo && <button onClick={() => nav("home")} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>←</button>}
           <div style={{ flex: 1 }}>
-            <div style={{ color: "#fff", fontWeight: 800, fontSize: 18 }}>💴 材料の合計額</div>
+            <div style={{ color: "#fff", fontWeight: 800, fontSize: 18 }}>💴 材料の合計額{solo ? "(株式会社IGUMI)" : ""}</div>
             <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, marginTop: 2 }}>材料を選んで数量を入れると、合計が出ます</div>
           </div>
+          {!solo && (
+            <button
+              onClick={async () => {
+                const url = `${window.location.origin}/?tool=zairyo`;
+                try { await navigator.clipboard.writeText(url); } catch { window.prompt("このURLをコピーしてください", url); }
+                setLinkCopied(true); setTimeout(() => setLinkCopied(false), 1800);
+              }}
+              style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 8, padding: "6px 10px", fontSize: 11, cursor: "pointer", fontWeight: 700 }}>
+              {linkCopied ? "✅ コピー済" : "🔗 協力業社用URL"}
+            </button>
+          )}
         </div>
       </div>
 

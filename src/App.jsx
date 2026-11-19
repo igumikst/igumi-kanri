@@ -38,6 +38,10 @@ import PriceAdmin from "./pages/PriceAdmin";
 import WeeklyQuotes from "./pages/WeeklyQuotes";
 import MaterialTotal from "./pages/MaterialTotal";
 
+// 協力業社用の入り口(/?tool=zairyo)。この印があるときは、材料の合計額だけを表示して、
+// OSの他のページ・データは一切読み込まない(報告書ツールのように、URLを渡して使ってもらう用)
+const SOLO_TOOL = new URLSearchParams(window.location.search).get("tool");
+
 export default function App() {
   // アプリを開いた直後だけ、PC(isPCと同じ判定。768px以上)なら案件管理から始める(第8弾テーマ24)。
   // tel:発信からの復帰(consumeResumePage)があれば、それを優先する。
@@ -111,7 +115,7 @@ export default function App() {
     return () => window.removeEventListener("resize", h);
   }, []);
 
-  useEffect(() => { loadAll(); }, []);
+  useEffect(() => { if (SOLO_TOOL !== "zairyo") loadAll(); }, []);
 
   useEffect(() => {
     if (page !== "fishing" || fishWeather) return;
@@ -202,6 +206,7 @@ export default function App() {
     </Modal>
   );
 
+  if (SOLO_TOOL === "zairyo") return <MaterialTotal cust={cust} pp={{}} nav={null} solo />;
   if (page === "home") return (
     <SwipeHome
       dashboardOn="right"
