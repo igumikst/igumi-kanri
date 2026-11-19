@@ -172,6 +172,7 @@ body.ext-mode .ext-hide{display:none!important}
     <div class="hdr-title">工事写真報告書作成</div>
     <div class="hdr-sub ext-hide">IGUMI 工事管理システム</div>
   </div>
+  <button class="hdr-back ext-hide" id="hdr-extlink" onclick="copyExtUrl()" style="font-size:11px">🔗 業社用URL</button>
 </div>
 
 <div class="main">
@@ -374,6 +375,13 @@ body.ext-mode .ext-hide{display:none!important}
 </div>
 
 <script>
+// 業社用URL(?ext=1付き)をコピーする。協力業社に渡すと、ホームへ戻るボタンの無い外部用モードで開く
+async function copyExtUrl(){
+  const url=location.origin+'/report.html?ext=1';
+  const btn=document.getElementById('hdr-extlink');
+  try{await navigator.clipboard.writeText(url);}catch{window.prompt('このURLをコピーしてください',url);}
+  if(btn){btn.textContent='✅ コピー済';setTimeout(()=>{btn.textContent='🔗 業社用URL';},1800);}
+}
 // 外部用モード: URLに ?ext=1 が付いているときだけ有効
 const EXT_MODE=new URLSearchParams(location.search).get('ext')==='1';
 if(EXT_MODE)document.body.classList.add('ext-mode');
