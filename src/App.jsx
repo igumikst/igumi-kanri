@@ -37,6 +37,7 @@ import NoteQuote from "./pages/NoteQuote";
 import PriceAdmin from "./pages/PriceAdmin";
 import WeeklyQuotes from "./pages/WeeklyQuotes";
 import MaterialTotal from "./pages/MaterialTotal";
+import RoughEstimate from "./pages/RoughEstimate";
 
 // 協力業社用の入り口(/?tool=zairyo)。この印があるときは、材料の合計額だけを表示して、
 // OSの他のページ・データは一切読み込まない(報告書ツールのように、URLを渡して使ってもらう用)
@@ -235,6 +236,7 @@ export default function App() {
   if (page === "calls") return <CallsPage {...commonProps} calls={calls} setCalls={setCalls} />;
   if (page === "blocked-numbers") return <BlockedNumbers {...commonProps} />;
   if (page === "materialtotal") return <MaterialTotal {...commonProps} />;
+  if (page === "roughestimate") return <RoughEstimate {...commonProps} />;
   if (page === "linesettings") return <LineSettings {...commonProps} />;
   if (page === "settings") return <Settings {...commonProps} />;
   if (page === "assigneesettings") return <AssigneeSettings {...commonProps} />;

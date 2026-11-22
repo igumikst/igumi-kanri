@@ -674,10 +674,10 @@ export default function Home({ pjs, submittedQuotes, wonQuotes, cos, tks, links,
         ]}
       />
       <FeatureCard
-        icon="💴" title="材料の合計額" desc="材料を選んで数量を入れると、合計が出ます" bg="#e6f4f1" accent="#0D9488"
-        onCardClick={() => nav("materialtotal")}
+        icon="💰" title="概算費用計算" desc="調査・復旧の項目にチェックを入れると、概算が出ます" bg="#e6f4f1" accent="#0D9488"
+        onCardClick={() => nav("roughestimate")}
         pills={[
-          <Pill key="o" onClick={() => nav("materialtotal")}>💴 合計を出す</Pill>,
+          <Pill key="o" onClick={() => nav("roughestimate")}>💰 概算を出す</Pill>,
         ]}
       />
       <FeatureCard
