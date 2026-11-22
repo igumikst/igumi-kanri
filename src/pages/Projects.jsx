@@ -10,6 +10,7 @@ import FileDropZone from "../components/FileDropZone";
 import { usePreventWindowFileDrop } from "../lib/useFileDropGuard";
 import { REPORT_FILE_BUCKET, REPORT_FILE_TYPES, REPORT_FILE_MAX_SIZE, reportFileExt, openReportFile } from "../lib/reportFiles";
 import { describeError } from "../lib/errorMessage";
+import { quoteCategory, QUOTE_CATEGORIES } from "../lib/quoteCategory";
 import { visibleProjects, fetchMergeHistory, unmergeProjects } from "../lib/projectMerge";
 import MergeProjectModal from "../components/MergeProjectModal";
 
@@ -43,6 +44,19 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
   const [fltBranch, setFltBranch] = useState("");
   const [fltRep, setFltRep] = useState("");
   const [fltUnconfirmed, setFltUnconfirmed] = useState(false);
+  // 並べ替え(更新順・案件を作った順・見積を登録した順)と、見積書の名前から判断する分類の絞り込み
+  const [sortKey, setSortKey] = useState("touched"); // "touched" | "created" | "quote"
+  const [fltCat, setFltCat] = useState(""); // "" | 内装 | 調査 | 工事 | その他
+  const [quoteMeta, setQuoteMeta] = useState(null); // 見積の { project_id, title, created_at } 一覧(必要になったときだけ読む)
+  useEffect(() => {
+    if (quoteMeta !== null || (sortKey !== "quote" && !fltCat)) return;
+    let alive = true;
+    (async () => {
+      const { data } = await supabase.from("quotes").select("project_id,title,created_at").order("created_at", { ascending: false }).limit(5000);
+      if (alive) setQuoteMeta(data || []);
+    })();
+    return () => { alive = false; };
+  }, [sortKey, fltCat, quoteMeta]);
   const [fltOpen, setFltOpen] = useState(false);
   const [conf, setConf] = useState(null);
   const [editP, setEditP] = useState(null);
@@ -227,6 +241,13 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
   const profitAllUnconfirmed = id => { const l = wonByProjectForProfit[id]; return !!l?.length && l.every(q => !q.profit_confirmed); };
   const profitHasUnconfirmed = id => { const l = wonByProjectForProfit[id]; return !!l?.length && l.some(q => !q.profit_confirmed); };
 
+  // 案件ごとの「見積を最後に登録した日時」と「見積の分類(タイトルから判断)」
+  const lastQuoteAt = {};
+  const catsByProject = {};
+  (quoteMeta || []).forEach(q => {
+    if (!lastQuoteAt[q.project_id] || q.created_at > lastQuoteAt[q.project_id]) lastQuoteAt[q.project_id] = q.created_at;
+    (catsByProject[q.project_id] ||= new Set()).add(quoteCategory(q.title));
+  });
   const filtP = activePjs.filter(p => {
     if (fltS === "未発注" && !submittedProjectIds.has(p.id)) return false;
     if (fltS === "発注済み" && !wonProjectIds.has(p.id)) return false;
@@ -235,12 +256,18 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
     if (fltBranch === FLT_UNSET ? !!p.branchId : (fltBranch && p.branchId !== fltBranch)) return false;
     if (fltRep === FLT_UNSET ? !!p.salesRepId : (fltRep && p.salesRepId !== fltRep)) return false;
     if (fltUnconfirmed && !profitHasUnconfirmed(p.id)) return false;
+    if (fltCat && quoteMeta) {
+      const cats = catsByProject[p.id];
+      if (!(cats ? cats.has(fltCat) : fltCat === "その他")) return false;
+    }
     if (schP && !p.name.includes(schP) && !(getC(p.clientId)?.name || "").includes(schP) && !(p.inCharge || "").includes(schP)) return false;
     return true;
   });
   // 更新日時(無ければ作成日時で代用)が新しい順に並べる(第8弾テーマ22)
   const lastTouched = p => p.updated_at || p.created_at || "";
-  filtP.sort((a, b) => (lastTouched(a) < lastTouched(b) ? 1 : lastTouched(a) > lastTouched(b) ? -1 : 0));
+  // 並べ替えの基準: 更新順(今まで通り) / 案件を作った順 / 見積を最後に登録した順(見積が無い案件は一番後ろ)
+  const sortValue = p => sortKey === "created" ? (p.created_at || "") : sortKey === "quote" ? (lastQuoteAt[p.id] || "") : lastTouched(p);
+  filtP.sort((a, b) => (sortValue(a) < sortValue(b) ? 1 : sortValue(a) > sortValue(b) ? -1 : 0));
 
   const tA = filtP.reduce((s, p) => s + (p.amount || 0), 0);
   const tG = filtP.reduce((s, p) => s + (p.gp || 0), 0);
@@ -497,6 +524,14 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
                 {fltActive && <button onClick={clearFlt} style={clearBtn}>クリア</button>}
               </>
             )}
+          </div>
+          <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 6, marginBottom: 6, alignItems: "center" }}>
+            <select value={sortKey} onChange={e => setSortKey(e.target.value)} style={{ padding: "4px 8px", borderRadius: 16, border: "1.5px solid #D1D5DB", fontSize: 11, fontWeight: 700, color: "#374151", background: "#fff", flexShrink: 0 }}>
+              <option value="touched">並び: 更新が新しい順</option>
+              <option value="created">並び: 案件を作った順</option>
+              <option value="quote">並び: 見積を登録した順</option>
+            </select>
+            {["", ...QUOTE_CATEGORIES].map(c => (<button key={c || "all"} onClick={() => setFltCat(c)} style={{ padding: "4px 12px", borderRadius: 16, border: "1.5px solid", whiteSpace: "nowrap", borderColor: fltCat === c ? "#7C3AED" : "#D1D5DB", background: fltCat === c ? "#7C3AED" : "#fff", color: fltCat === c ? "#fff" : "#374151", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>{c === "" ? "🗂 分類: すべて" : c}</button>))}
           </div>
           {!isPC && (
             <div style={{ marginBottom: 8 }}>

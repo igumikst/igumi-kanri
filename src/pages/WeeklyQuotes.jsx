@@ -5,6 +5,7 @@ import { fmt } from "../lib/constants";
 import { computeAdoptTotals } from "../lib/quoteAdopt";
 import { TAX_RATE_PERCENT, TAX_ROUNDING, roundBy } from "../lib/quoteExport/loadQuoteForExport";
 import { describeError } from "../lib/errorMessage";
+import { quoteCategory, QUOTE_CATEGORIES } from "../lib/quoteCategory";
 
 const HEADER_COLOR = "#1A3A5C";
 
@@ -25,6 +26,24 @@ function getWeekRangeJst(now = new Date()) {
   return { startIso: monday.toISOString(), endIso: nextMonday.toISOString(), monday, sunday };
 }
 
+// 期間の選択肢。今週・先週・今月・過去3か月(今月を含む3か月)。日本時間の月初で区切る
+const PERIODS = [["week", "今週"], ["lastweek", "先週"], ["month", "今月"], ["recent3", "過去3か月"]];
+const pad2 = n => String(n).padStart(2, "0");
+function monthStartIso(y, m, offset) {
+  const d = new Date(Date.UTC(y, m - 1 + offset, 1));
+  return new Date(`${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-01T00:00:00+09:00`).toISOString();
+}
+function getRangeJst(period, now = new Date()) {
+  if (period === "week" || period === "lastweek") {
+    const w = getWeekRangeJst(period === "week" ? now : new Date(now.getTime() - 7 * 86400000));
+    return { startIso: w.startIso, endIso: w.endIso, monday: w.monday, sunday: w.sunday };
+  }
+  const [y, m] = now.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" }).split("-").map(Number);
+  const startIso = monthStartIso(y, m, period === "recent3" ? -2 : 0);
+  const endIso = monthStartIso(y, m, 1);
+  return { startIso, endIso, monday: new Date(startIso), sunday: new Date(new Date(endIso).getTime() - 86400000) };
+}
+
 const fmtMd = d => d.toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric" });
 const WEEKDAY_JA = ["日", "月", "火", "水", "木", "金", "土"];
 const fmtCreated = iso => {
@@ -39,10 +58,12 @@ const fmtCreated = iso => {
 const taxIncluded = amount => (Number(amount) || 0) + roundBy(TAX_ROUNDING, (Number(amount) || 0) * TAX_RATE_PERCENT / 100);
 
 export default function WeeklyQuotes({ pjs, cos, cust, isPC, pp, nav, rpOpen, setRpOpen, finFiles, tmplFiles, fishWeather, tileConf, links, tks, SB_W, RP_W, submittedQuotes, wonQuotes, setQuoteProjectId, setOpenQuoteId, setOpenProjectId }) {
-  const week = useMemo(() => getWeekRangeJst(), []);
+  const [period, setPeriod] = useState("week"); // "week" | "lastweek" | "month" | "recent3"
+  const week = useMemo(() => getRangeJst(period), [period]);
+  const periodLabel = (PERIODS.find(x => x[0] === period) || PERIODS[0])[1];
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]); // { quote, project, company, total, gp, provisional }
-  const [tab, setTab] = useState("survey"); // "survey" | "construction"
+  const [tab, setTab] = useState("all"); // "all" | 内装 | 調査 | 工事 | その他(見積書の名前から判断)
   const [sortBy, setSortBy] = useState("new"); // "new" | "amount"
   const [clientFilter, setClientFilter] = useState("");
   const [assigneeNames, setAssigneeNames] = useState([]);
@@ -64,7 +85,8 @@ export default function WeeklyQuotes({ pjs, cos, cust, isPC, pp, nav, rpOpen, se
         .select("id,title,project_id,total_amount,gross_profit,status,construction_type,profit_confirmed,created_by,created_at")
         .gte("created_at", week.startIso)
         .lt("created_at", week.endIso)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(300);
 
       const built = await Promise.all((quotes || []).map(async q => {
         const project = (pjs || []).find(p => p.id === q.project_id) || null;
@@ -86,7 +108,8 @@ export default function WeeklyQuotes({ pjs, cos, cust, isPC, pp, nav, rpOpen, se
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [week.startIso, week.endIso]);
 
-  const isSurvey = r => (r.quote.title || "").includes("調査");
+  const catOf = r => quoteCategory(r.quote.title);
+  const countOf = cat => rows.filter(r => (cat === "all" || catOf(r) === cat) && (!clientFilter || r.company?.name === clientFilter)).length;
   const clientOptions = useMemo(() => {
     const names = new Set(rows.map(r => r.company?.name).filter(Boolean));
     return [...names].sort();
@@ -114,12 +137,10 @@ export default function WeeklyQuotes({ pjs, cos, cust, isPC, pp, nav, rpOpen, se
   };
 
   const filtered = rows
-    .filter(r => (tab === "survey" ? isSurvey(r) : !isSurvey(r)))
+    .filter(r => tab === "all" || catOf(r) === tab)
     .filter(r => !clientFilter || r.company?.name === clientFilter)
     .sort((a, b) => sortBy === "amount" ? b.total - a.total : String(b.quote.created_at).localeCompare(String(a.quote.created_at)));
 
-  const surveyCount = rows.filter(r => isSurvey(r) && (!clientFilter || r.company?.name === clientFilter)).length;
-  const constructionCount = rows.filter(r => !isSurvey(r) && (!clientFilter || r.company?.name === clientFilter)).length;
   const weekTotal = filtered.reduce((s, r) => s + r.total, 0);
   const weekGp = filtered.reduce((s, r) => s + (Number(r.gp) || 0), 0);
 
@@ -138,23 +159,32 @@ export default function WeeklyQuotes({ pjs, cos, cust, isPC, pp, nav, rpOpen, se
           <div style={{ background: HEADER_COLOR, color: "#fff", padding: "14px 16px", display: "flex", alignItems: "center", gap: 10 }}>
             <button onClick={() => nav("home")} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, cursor: "pointer", fontWeight: 700, flexShrink: 0 }}>← 戻る</button>
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 800, fontSize: 16 }}>🗓 今週作成した見積もり</div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>{fmtMd(week.monday)}(月)〜{fmtMd(week.sunday)}(日)</div>
+              <div style={{ fontWeight: 800, fontSize: 16 }}>🗓 {periodLabel}作成した見積もり</div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>{fmtMd(week.monday)}〜{fmtMd(week.sunday)}(新しく作った順)</div>
             </div>
           </div>
 
           <div style={{ padding: "10px 14px 0" }}>
-            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-              {[["survey", "調査", surveyCount], ["construction", "工事", constructionCount]].map(([key, label, count]) => (
+            <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+              {PERIODS.map(([key, label]) => (
+                <button key={key} onClick={() => setPeriod(key)} style={{
+                  flex: 1, padding: "6px 0", borderRadius: 16, border: `1.5px solid ${period === key ? "#E07B39" : "#D1D5DB"}`,
+                  background: period === key ? "#E07B39" : "#fff", color: period === key ? "#fff" : "#374151",
+                  fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+                }}>{label}</button>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+              {[["all", "すべて"], ...QUOTE_CATEGORIES.map(c => [c, c])].map(([key, label]) => { const count = countOf(key); return (
                 <button key={key} onClick={() => setTab(key)} style={{
                   flex: 1, padding: "9px 0", borderRadius: 10, border: `1.5px solid ${tab === key ? HEADER_COLOR : "#E5E7EB"}`,
                   background: tab === key ? HEADER_COLOR : "#fff", color: tab === key ? "#fff" : "#374151",
-                  fontSize: 13, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  fontSize: 12, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 4, flexWrap: "wrap",
                 }}>
                   {label}
-                  <span style={{ background: tab === key ? "rgba(255,255,255,0.25)" : "#F3F4F6", borderRadius: 10, padding: "1px 8px", fontSize: 11 }}>{count}</span>
+                  <span style={{ background: tab === key ? "rgba(255,255,255,0.25)" : "#F3F4F6", borderRadius: 10, padding: "1px 7px", fontSize: 10 }}>{count}</span>
                 </button>
-              ))}
+              ); })}
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fff", borderRadius: 8, padding: "6px 10px", marginBottom: 8, fontSize: 11, color: "#6B7280" }}>
               <span>{filtered.length}件</span>
@@ -180,7 +210,7 @@ export default function WeeklyQuotes({ pjs, cos, cust, isPC, pp, nav, rpOpen, se
           ) : filtered.length === 0 ? (
             <div style={{ textAlign: "center", padding: 40, color: "#9CA3AF" }}>
               <div style={{ fontSize: 36, marginBottom: 10 }}>📭</div>
-              <div>今週作成された見積はまだありません</div>
+              <div>この期間に作成された見積はありません</div>
             </div>
           ) : (
             filtered.map(r => (
