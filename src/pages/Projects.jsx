@@ -46,7 +46,7 @@ export default function Projects({ pjs, wonQuotes, setWonQuotes, submittedQuotes
   const [fltUnconfirmed, setFltUnconfirmed] = useState(false);
   // 並べ替え(更新順・案件を作った順・見積を登録した順)と、見積書の名前から判断する分類の絞り込み
   const [sortKey, setSortKey] = useState("touched"); // "touched" | "created" | "quote"
-  const [fltCat, setFltCat] = useState(""); // "" | 内装 | 調査 | 工事 | その他
+  const [fltCat, setFltCat] = useState(""); // "" | 調査 | 内装 | その他
   const [quoteMeta, setQuoteMeta] = useState(null); // 見積の { project_id, title, created_at } 一覧(必要になったときだけ読む)
   useEffect(() => {
     if (quoteMeta !== null || (sortKey !== "quote" && !fltCat)) return;

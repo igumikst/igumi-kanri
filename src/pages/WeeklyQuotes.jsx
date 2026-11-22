@@ -63,7 +63,7 @@ export default function WeeklyQuotes({ pjs, cos, cust, isPC, pp, nav, rpOpen, se
   const periodLabel = (PERIODS.find(x => x[0] === period) || PERIODS[0])[1];
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]); // { quote, project, company, total, gp, provisional }
-  const [tab, setTab] = useState("all"); // "all" | 内装 | 調査 | 工事 | その他(見積書の名前から判断)
+  const [tab, setTab] = useState("all"); // "all" | 調査 | 内装 | その他(見積書の名前から判断)
   const [sortBy, setSortBy] = useState("new"); // "new" | "amount"
   const [clientFilter, setClientFilter] = useState("");
   const [assigneeNames, setAssigneeNames] = useState([]);
