@@ -133,7 +133,7 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
 #pdf-render-root{position:fixed;left:-10000px;top:0;width:794px;z-index:-1;pointer-events:none}
 .pdf-page{width:794px;height:1123px;padding:36px 44px;background:#fff;box-sizing:border-box;font-family:'Hiragino Mincho ProN','Yu Mincho','MS PMincho',serif;color:#111;overflow:hidden}
 .pdf-page.pdf-cover-page{display:flex;flex-direction:column;padding:48px 56px 40px;position:relative}
-.pdf-cover-logo{position:absolute;top:14px;left:18px;height:56px;width:auto;object-fit:contain;z-index:2}
+.pdf-cover-logo{position:absolute;bottom:44px;left:50%;transform:translateX(-50%);height:100px;width:auto;object-fit:contain;z-index:2}
 .pdf-cover-title{text-align:center;font-size:28px;font-weight:700;letter-spacing:.35em;padding:14px 0;margin:0 auto 48px;border:3px double #111;width:88%}
 .pdf-cover-body{flex:0 0 auto}
 .pdf-cover-row{display:flex;align-items:center;border-bottom:1px solid #333;min-height:48px;margin-bottom:0;font-size:15px}
@@ -743,20 +743,41 @@ async function getCoverLogoDataUrl(){
   return coverLogoDataUrlCache;
 }
 
-// size: ロゴの大きさ(px)。省略すると通常書式の大きさ(200×141)。ユニオン書式は建物名のセル(E6:P8)に
-// かぶらないよう、小さくして渡す(縦横比は同じ 200:141)
-async function embedCoverLogo(ws,wb,size){
+// ロゴを表紙の「下の余白・中央」に置く(2026-11 虎生の希望: 案D・大きめ)。
+// opts: { size:{width,height}(px、縦横比は 200:141), tl:{col,row}(左上の位置。0始まりで、小数はセルの中の位置) }
+async function embedCoverLogo(ws,wb,opts){
   if(!isCoverLogoEnabled())return;
   const base64=await getCoverLogoBase64();
   const imgId=wb.addImage({base64,extension:'jpeg'});
-  // 表紙左上（読みやすいサイズ・タイトルと重ならない）
   ws.addImage(imgId,{
-    tl:{col:0.1,row:0.08},
-    ext:size||{width:200,height:141},
+    tl:opts.tl,
+    ext:opts.size,
     editAs:'oneCell'
   });
 }
-const UNION_COVER_LOGO_SIZE={width:130,height:92};
+// 横の中央に置くための、列の位置(小数)を求める。colPx は各列の幅(px)
+function logoColCenter(colPx,logoW){
+  const total=colPx.reduce((a,b)=>a+b,0);
+  let x=(total-logoW)/2;
+  for(let i=0;i<colPx.length;i++){
+    if(x<colPx[i])return i+x/colPx[i];
+    x-=colPx[i];
+  }
+  return 0;
+}
+// 通常の表紙: 印刷範囲 A1:L28 の下(24〜28行目)の中央。内容欄(22・23行目)があっても重ならない
+function getNormalCoverLogo(){
+  const size={width:170,height:120};
+  const colPx=Object.values(NORMAL_COVER_COLS).map(w=>Math.trunc(w*7+5));
+  // 24行目の高さは13.2pt(=17.6px)。その中で8px下げた位置から置く
+  return {size,tl:{col:logoColCenter(colPx,size.width),row:23+8/17.6}};
+}
+// ユニオン書式: 枠(A1:T49)の下(会社名の下の43〜49行目)の中央
+function getUnionCoverLogo(){
+  const size={width:150,height:106};
+  const colPx=Array(20).fill(Math.trunc(3.8*7+5));
+  return {size,tl:{col:logoColCenter(colPx,size.width),row:43.5}};
+}
 
 function getExportFilename(ext){
   const customFn=document.getElementById('filename').value.trim();
@@ -941,8 +962,8 @@ async function exportPdf(){
       if(i>0)pdf.addPage();
       pdf.addImage(imgData,'JPEG',0,0,210,297,'page'+i,'FAST');
       if(i===0&&logoDataUrl){
-        // 表紙左上（読みやすいサイズ）
-        pdf.addImage(logoDataUrl,'JPEG',6,4,42,30);
+        // 表紙の下の中央(下の余白は12mm)
+        pdf.addImage(logoDataUrl,'JPEG',(210-38)/2,297-12-26.8,38,26.8);
       }
       // メモリ解放を促す
       try{canvas.width=0;canvas.height=0;}catch(_){}
@@ -1145,7 +1166,7 @@ async function buildNormalWorkbook(wb, minchoFont, thin, double) {
 
   const cws=wb.addWorksheet('表紙');
   setupNormalCoverSheet(cws,minchoFont,double);
-  await embedCoverLogo(cws,wb);
+  await embedCoverLogo(cws,wb,getNormalCoverLogo());
 
   NORMAL_COVER_ITEM_ROWS.forEach(({row,label,valueKey})=>{
     fillNormalCoverItemRow(cws,row,label,fieldValues[valueKey],minchoFont,thin,row!==20);
@@ -1207,7 +1228,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   }
 
   cws.properties.defaultRowHeight=20;
-  await embedCoverLogo(cws,wb,UNION_COVER_LOGO_SIZE);
+  await embedCoverLogo(cws,wb,getUnionCoverLogo());
 
   // 建物名称 E6:P8（ゴシック20pt太字・中央）
   cws.mergeCells('E6:P8');
