@@ -51,7 +51,15 @@ function findNumericRecords(dv, len) {
   // 単発の偶然一致(ノイズ)は、前後と間隔が合わないので除く
   if (hits.length <= 1) return hits;
   const stride = hits[1].off - hits[0].off;
-  const kept = hits.filter((h, i) => i === 0 || h.off - hits[i - 1].off === stride);
+  // 間隔は、ちょうど1レコード分(107)だけでなく、整数倍(最大3レコード分)も許す。
+  // 金額が0円の行(「現場在庫品使用」の空き行など)は、数値の条件(金額>0)に合わず見つからないため、
+  // その行をはさむと間隔が2倍になる。以前は、その次の本物の行まで除かれて、明細や大項目が消えていた
+  const kept = [];
+  for (const h of hits) {
+    if (!kept.length) { kept.push(h); continue; }
+    const gap = h.off - kept[kept.length - 1].off;
+    if (gap % stride === 0 && gap / stride <= 3) kept.push(h);
+  }
   return kept.length >= 2 ? kept : hits;
 }
 
@@ -89,7 +97,8 @@ function tryReadRow(buf, start, dec) {
   }
   if (fields[2] !== "") return null; // 3番目(名称と材質寸法の間の未使用項目)は必ず空のはず
   if (fields[4] !== fields[5]) return null; // 単位は2回とも同じ値のはず
-  if (looksNumeric(fields[4])) return null; // 単位が数字だけ、は単位として不自然
+  // 単位が数字だけ、は単位として不自然。ただし、単位が空(「同材料費 ※現場在庫品使用」のように単位なしの行)は正しい行なので通す
+  if (fields[4] !== "" && looksNumeric(fields[4])) return null;
   const hasContent = (fields[0] && !looksNumeric(fields[0])) || (fields[1] && !looksNumeric(fields[1]));
   if (!hasContent) return null; // 名称・材質寸法が両方とも空/数字だけは、実データの行ではない
   return { fields, end: off };
