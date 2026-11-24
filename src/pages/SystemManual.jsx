@@ -107,7 +107,7 @@ export default function SystemManual({ isPC, pp, nav, rpOpen, setRpOpen, SB_W, R
               ["メール", "info@igumi-inc.jp"],
               ["会社住所", "東京都八王子市上柚木428"],
               ["登録番号", "T6021001069892"],
-              ["TEL", "042（718）8848"],
+              ["TEL", "042（718）4484"],
             ].map(([l, v]) => (
               <div key={l} style={s.row}><div style={s.label}>{l}</div><div style={s.value}>{v}</div></div>
             ))}
