@@ -311,6 +311,15 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
     <button class="btn-ex" onclick="genExcel()">📥 Excel出力（表紙＋内訳書）</button>
     <button class="btn-ex" style="margin-top:8px;background:#fff;color:#1A237E;border:2px solid #1A237E" onclick="genPdf()">📄 PDF出力（印刷画面から「PDFで保存」）</button>
   </div>
+  <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #c5cae9;font-size:13px;color:#555;line-height:2">
+    <div style="font-weight:700;color:#1a237e">🔴 印鑑の登録（この端末だけ）</div>
+    <div>角印：<span id="kakuinState"></span>
+      <button style="margin-left:6px;padding:2px 10px" onclick="estPickKakuin()">画像を登録</button>
+      <button style="padding:2px 10px" onclick="estClearKakuin()">消す</button></div>
+    <div>照査・担当の丸い印：<span id="stampState"></span>
+      <button style="margin-left:6px;padding:2px 10px" onclick="estPickStamp()">画像を登録</button>
+      <button style="padding:2px 10px" onclick="estClearStamps()">消す</button></div>
+  </div>
 </div>
 
 </div></div>
@@ -708,7 +717,23 @@ function estPickKakuin(){
   inp.click();
 }
 function estClearKakuin(){try{localStorage.removeItem(EST_KAKUIN_KEY);}catch(e){}estKakuinLabel();}
-function estKakuinLabel(){const el=document.getElementById('kakuinState');if(el)el.textContent=estGetKakuin()?'登録済み(この端末)':'未登録(印なしで出力)';}
+const EST_STAMPS_KEY='igumi_stamps'; // 丸い印(照査・担当)の登録。名前→画像
+function estGetStamps(){try{return JSON.parse(localStorage.getItem(EST_STAMPS_KEY)||'{}')||{};}catch(e){return {};}}
+function estPickStamp(){
+  const inp=document.createElement('input');inp.type='file';inp.accept='image/png,image/jpeg';
+  inp.onchange=()=>{const f=inp.files[0];if(!f)return;
+    const nm=(prompt('この印は、誰の印ですか?(苗字。例: 上村)',f.name.replace(/\.[^.]*$/,''))||'').trim();if(!nm)return;
+    const fr=new FileReader();
+    fr.onload=()=>{try{const m=estGetStamps();m[nm]=fr.result;localStorage.setItem(EST_STAMPS_KEY,JSON.stringify(m));estKakuinLabel();}catch(e){alert('登録できませんでした(画像が大きすぎるかもしれません)');}};
+    fr.readAsDataURL(f);};
+  inp.click();
+}
+function estClearStamps(){try{localStorage.removeItem(EST_STAMPS_KEY);}catch(e){}estKakuinLabel();}
+function estKakuinLabel(){ // 登録の状態を、画面に出す
+  const k=document.getElementById('kakuinState');if(k)k.textContent=estGetKakuin()?'登録済み':'未登録(印なしで出力)';
+  const m=document.getElementById('stampState'),names=Object.keys(estGetStamps());
+  if(m)m.textContent=names.length?'登録済み: '+names.join('・'):'未登録(自動で作った印で出力)';
+}
 const EST_CHECKER='上村'; // 照査の印は上村で固定。担当の印は、画面で選んだ担当者
 const EST_PR=25;          // 内訳書1枚あたりの明細行数(型の7〜31行目)
 const EST_COVER_ROWS=9;   // 表紙の表の行数
@@ -761,16 +786,19 @@ function collectEst(){
   };
 }
 
-// 丸い印(苗字2文字までを縦に並べる)。実印ではなく形だけ。
+// 丸い印。登録した画像があればそれを使い、なければ、サンプルの印と同じ寸法(輪の太さ・文字の大きさ)で作る。実印ではなく形だけ。
 function estStampPng(name){
-  const c=document.createElement('canvas');c.width=c.height=160;
+  const reg=estGetStamps();if(reg[name])return reg[name];
+  const S=500,c=document.createElement('canvas');c.width=c.height=S;
   const x=c.getContext('2d');
-  x.strokeStyle='#D0021B';x.fillStyle='#D0021B';x.lineWidth=7;
-  x.beginPath();x.arc(80,80,70,0,Math.PI*2);x.stroke();
-  const ch=[...String(name||'')].slice(0,2);
-  x.textAlign='center';x.textBaseline='middle';x.font='bold 56px "Hiragino Mincho ProN","Yu Mincho",serif';
-  if(ch.length===1){x.font='bold 84px "Hiragino Mincho ProN","Yu Mincho",serif';x.fillText(ch[0],80,84);}
-  else{x.fillText(ch[0],80,52);x.fillText(ch[1],80,112);}
+  x.fillStyle='#fff';x.fillRect(0,0,S,S);
+  x.strokeStyle='#D00909';x.fillStyle='#D00909';x.lineWidth=10;
+  x.beginPath();x.arc(243.5,243.5,202,0,Math.PI*2);x.stroke();
+  const ch=[...String(name||'')].slice(0,2),bold=name===EST_CHECKER;
+  x.textAlign='center';x.textBaseline='middle';
+  const fam='"Hiragino Sans","Yu Gothic","Noto Sans CJK JP","Meiryo",sans-serif';
+  if(ch.length===1){x.font=`${bold?900:400} 300px ${fam}`;x.fillText(ch[0],246,250);}
+  else{x.font=`${bold?900:400} 185px ${fam}`;x.fillText(ch[0],249,142);x.fillText(ch[1],249,327);}
   return c.toDataURL('image/png');
 }
 
@@ -864,7 +892,7 @@ function estBuildCover(d,body){
     const y=(row,off)=>{let s=0;for(let i=0;i<row;i++)s+=estRowPx(tp.rh[i]);return s+off/9525;};
     return {x0:x(im.from[0],im.from[2]),y0:y(im.from[1],im.from[3]),x1:x(im.to[0],im.to[2]),y1:y(im.to[1],im.to[3])};
   };
-  const sq=im=>{const b=box(im),w=b.x1-b.x0,h=b.y1-b.y0,z=Math.min(w,h);return {x:b.x0+(w-z)/2,y:b.y0+(h-z)/2,w:z,h:z};};
+  const sq=im=>{const b=box(im);return {x:b.x0,y:b.y0,w:b.x1-b.x0,h:b.y1-b.y0};}; // サンプルと同じ枠に合わせる
   sh.stamps=[];
   sh.stamps.push({kind:'chk',name:EST_CHECKER,pos:sq(tp.imgs[1])});
   if(d.tanto)sh.stamps.push({kind:'tan',name:d.tanto,pos:sq(tp.imgs[0])});
@@ -1049,7 +1077,8 @@ function estSheetHtml(sh,r1,r2){
       let ta=s.h&&s.h!=='general'?s.h:((o&&typeof (o.v&&o.v.r!==undefined?o.v.r:o.v)==='number')?'right':'left');
       let st=`border-left:${estBorderCss(s.l)};border-top:${estBorderCss(s.t)};border-right:${estBorderCss(sR.r)};border-bottom:${estBorderCss(sB.bt)};`;
       st+=`font-family:${fam};font-size:${size}pt;${s.b?'font-weight:bold;':''}`;
-      if(ta==='distributed'||ta==='justify')st+='text-align:justify;text-align-last:justify;';else st+=`text-align:${ta};`;
+      if(ta==='distributed'||ta==='justify')st+='text-align:justify;text-align-last:justify;'+(s.in?`padding-left:${s.in*8}px;padding-right:${s.in*8}px;`:'');
+      else st+=`text-align:${ta};`+(s.in&&ta==='left'?`padding-left:${s.in*8}px;`:'')+(s.in&&ta==='right'?`padding-right:${s.in*8}px;`:'');
       st+=`vertical-align:${s.v==='center'?'middle':(s.v||'bottom')};`;
       st+=(s.wr?'white-space:normal;word-break:break-all;':'white-space:nowrap;')+(s.wr||s.sh?'overflow:hidden;':'overflow:visible;');
       if(s.w)st+='color:#fff;';else if(o&&o.red)st+='color:#e00;';
