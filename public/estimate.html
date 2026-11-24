@@ -701,6 +701,17 @@ const EST_ISSUER={
   name:'株式会社ＩＧＵＭＩ',
   lines:['代表取締役　上村　一揮','〒192-0373','東京都八王子市上柚木428','TEL・FAX　042（718）8848','MAIL　igumi.0430@gmail.com','登録番号　T6021001069892']
 };
+const EST_KAKUIN_KEY='igumi_kakuin_png';
+function estGetKakuin(){try{return localStorage.getItem(EST_KAKUIN_KEY)||'';}catch(e){return '';}}
+function estPickKakuin(){
+  const inp=document.createElement('input');inp.type='file';inp.accept='image/png,image/jpeg';
+  inp.onchange=()=>{const f=inp.files[0];if(!f)return;const fr=new FileReader();
+    fr.onload=()=>{try{localStorage.setItem(EST_KAKUIN_KEY,fr.result);estKakuinLabel();alert('角印を、この端末に登録しました');}catch(e){alert('登録できませんでした(画像が大きすぎるかもしれません)');}};
+    fr.readAsDataURL(f);};
+  inp.click();
+}
+function estClearKakuin(){try{localStorage.removeItem(EST_KAKUIN_KEY);}catch(e){}estKakuinLabel();}
+function estKakuinLabel(){const el=document.getElementById('kakuinState');if(el)el.textContent=estGetKakuin()?'登録済み(この端末)':'未登録(印なしで出力)';}
 const EST_CHECKER='上村'; // 照査の印は上村で固定。担当の印は、画面で選んだ担当者
 const EST_MISC_NOTE='法定福利費（社会保険料・福利厚生・損害保険料）を含む';
 const EST_FONT='ＭＳ 明朝', EST_FONT_G='ＭＳ Ｐゴシック';
@@ -751,7 +762,7 @@ function collectEst(){
     issueDate:g('issueDate').value,estNo:g('estNo').value,cc:g('clientContact').value.trim(),
     validUntil:g('validUntil').value,propName:g('propName').value.trim(),
     startDate:g('startDate').value,endDate:g('endDate').value,payment:g('payment').value,
-    notes:g('notes').value.trim(),tanto:selTanto,
+    notes:g('notes').value.trim(),tanto:selTanto,kakuin:estGetKakuin(),
   };
 }
 
@@ -771,9 +782,91 @@ function estStampPng(name){
 function buildEstWorkbook(d,stampFn){
   const wb=new ExcelJS.Workbook();wb.creator='株式会社IGUMI';
   const BLK={argb:'FF000000'};
-  const thin={style:'thin',color:BLK},dbl={style:'double',color:BLK};
+  const thin={style:'thin',color:BLK},dbl={style:'double',color:BLK},med={style:'medium',color:BLK};
   const box=()=>({top:thin,bottom:thin,left:thin,right:thin});
   const ws=wb.addWorksheet('見積書',{views:[{showGridLines:false}]});
+  const w2=wb.addWorksheet('内訳明細',{views:[{showGridLines:false}]});
+  const SH="'内訳明細'!";
+  const nf='#,##0';
+  const fnt=(sz,b)=>({name:EST_FONT_G,size:sz||9,bold:!!b});
+
+  // ===== 内訳明細(見積内訳書): 先に作る(表紙の数式が、ここのセルを見るため) =====
+  w2.properties.defaultRowHeight=15;
+  [5,30,34,8,6,12,14,24].forEach((w,i)=>{w2.getColumn(i+1).width=w;});
+  const cs=(r,c,v,o={})=>{const x=w2.getCell(r,c);x.value=v;x.font=o.font||fnt(9);x.alignment=Object.assign({vertical:'middle'},o.al||{});if(o.numFmt)x.numFmt=o.numFmt;if(o.border)x.border=o.border;return x;};
+  const wk=iso=>{if(!iso)return '';const [y,m,dd]=iso.split('-').map(Number);return `${y}年 ${m}月 ${dd}日`;};
+  let R=1,pageNo=0;
+  // 1ページ(または複数ページ)ぶんを書く。戻り値: 各行の行番号、合計の行番号、明細行の範囲
+  const mkPage=(lines,totalLabel,footerName)=>{
+    const chunks=[];
+    for(let i=0;i<Math.max(1,lines.length);i+=EST_PAGE_ROWS)chunks.push(lines.slice(i,i+EST_PAGE_ROWS));
+    const info={rowOf:[],ranges:[],totalRow:0};
+    chunks.forEach((ch,ci)=>{
+      pageNo++;const top=R;
+      w2.mergeCells(R,1,R,8);cs(R,1,wk(d.issueDate),{font:fnt(8),al:{horizontal:'right'}});R++;
+      w2.getRow(R).height=30;w2.mergeCells(R,1,R,8);cs(R,1,'見積内訳書',{font:fnt(16,true),al:{horizontal:'center'}});R++;
+      ['No.','名称','材質・寸法','数量','単位','単価','金額','備考'].forEach((t,i)=>cs(R,i+1,t,{font:fnt(9),al:{horizontal:'center'},border:box()}));R++;
+      const ds=R;info.ranges.push([ds,ds+EST_PAGE_ROWS-1]);
+      for(let i=0;i<EST_PAGE_ROWS;i++,R++){
+        const l=ch[i];
+        for(let c=1;c<=8;c++)cs(R,c,'',{border:box()});
+        if(!l)continue;
+        info.rowOf[ci*EST_PAGE_ROWS+i]=R;
+        w2.getCell(R,2).value=l.name;w2.getCell(R,2).font=fnt(9,l.bold);
+        if(l.spec)w2.getCell(R,3).value=l.spec;
+        if(l.qty!=null&&l.qty!==''){const q=w2.getCell(R,4);q.value=l.qty;q.alignment={horizontal:'right',vertical:'middle'};q.numFmt='#,##0.##';}
+        if(l.unit)w2.getCell(R,5).value=l.unit;
+        if(l.price!=null&&l.price!==''){const p=w2.getCell(R,6);p.value=l.price;p.numFmt=nf;p.alignment={horizontal:'right',vertical:'middle'};}
+        if(l.amt!=null&&l.amt!==''){
+          const a=w2.getCell(R,7);
+          // 数量×単価の数式(あとで数量や単価を直しても、金額が変わる)。計算結果も一緒に入れる(スマホのプレビュー用)
+          a.value=(l.qty!==''&&l.qty!=null&&l.price!==''&&l.price!=null&&!l.noFormula)?{formula:`D${R}*F${R}`,result:l.amt}:l.amt;
+          a.numFmt=nf;a.alignment={horizontal:'right',vertical:'middle'};
+        }
+        if(l.note)w2.getCell(R,8).value=l.note;
+      }
+      for(let c=1;c<=8;c++)cs(R,c,'',{border:box()});
+      if(ci===chunks.length-1){w2.getCell(R,2).value=totalLabel;w2.getCell(R,2).font=fnt(9);info.totalRow=R;}
+      R++;
+      w2.mergeCells(R,1,R,8);
+      cs(R,1,`${footerName} 0001 - ( ${String(pageNo).padStart(4,'0')} )`,{font:fnt(8),al:{horizontal:'right'}});
+      const bot=R;
+      for(let rr=top;rr<=bot;rr++){
+        const a=w2.getCell(rr,1),z=w2.getCell(rr,8);
+        a.border=Object.assign({},a.border,{left:med});z.border=Object.assign({},z.border,{right:med});
+      }
+      for(let c=1;c<=8;c++){
+        const t=w2.getCell(top,c),b2=w2.getCell(bot,c);
+        t.border=Object.assign({},t.border,{top:med});b2.border=Object.assign({},b2.border,{bottom:med});
+      }
+      w2.getRow(R).addPageBreak();R++;
+    });
+    return info;
+  };
+  // 1枚目: 大項目の一覧(金額・単価は、あとで各大項目の合計を見る数式にする)
+  const sumLines=d.pgBlocks.map(pg=>({name:pg.pgName,spec:pg.pgSpec,qty:pg.pgQty,unit:pg.pgUnit,price:Math.round(pg.pgAmt/(pg.pgQty||1)),amt:pg.pgAmt,noFormula:true}));
+  const sumInfo=mkPage(sumLines,'総合計',d.workName);
+  // 2枚目以降: 大項目ごと
+  const blkInfos=d.pgBlocks.map(pg=>{
+    const lines=[{name:pg.pgName,bold:true},{}].concat(pg.rows.map(r=>({name:r.name,spec:r.spec,qty:r.qty||'',unit:r.qty?r.unit:'',price:r.price||'',amt:r.amt||'',note:r.note})));
+    const inf=mkPage(lines,'合計',pg.pgName);
+    const rng=inf.ranges.map(([a,z])=>`G${a}:G${z}`).join(',');
+    const t=w2.getCell(inf.totalRow,7);t.value={formula:`SUM(${rng})`,result:pg.pgAmt};t.numFmt=nf;t.alignment={horizontal:'right',vertical:'middle'};
+    return inf;
+  });
+  // 一覧の金額 = 各大項目の合計、単価 = 金額÷数量、総合計 = 一覧の金額の合計
+  d.pgBlocks.forEach((pg,i)=>{
+    const r=sumInfo.rowOf[i];if(!r)return;
+    const g=w2.getCell(r,7);g.value={formula:`G${blkInfos[i].totalRow}`,result:pg.pgAmt};
+    const f=w2.getCell(r,6);f.value={formula:`IF(D${r}=0,0,ROUND(G${r}/D${r},0))`,result:Math.round(pg.pgAmt/(pg.pgQty||1))};
+  });
+  {const [a,z]=sumInfo.ranges[0];const t=w2.getCell(sumInfo.totalRow,7);t.value={formula:`SUM(G${a}:G${z})`,result:d.grandSub};t.numFmt=nf;t.alignment={horizontal:'right',vertical:'middle'};}
+  const lastRow=R-1;
+  w2.pageSetup={paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,horizontalCentered:true,
+    margins:{left:0.4,right:0.4,top:0.4,bottom:0.4,header:0.2,footer:0.2}};
+  w2.pageSetup.printArea=`A1:H${lastRow}`;
+
+  // ===== 表紙(見積書) =====
   ws.properties.defaultRowHeight=18;
   [36,8,7,14,16,24,24].forEach((w,i)=>{ws.getColumn(i+1).width=w;});
   const put=(r,c1,c2,v,st={})=>{
@@ -785,22 +878,18 @@ function buildEstWorkbook(d,stampFn){
     for(let c=c1;c<=c2;c++){const x=ws.getCell(r,c);if(st.border)x.border=st.border;if(c>c1)x.font=cell.font;}
     return cell;
   };
-  // 行1: タイトル / NO.
   ws.getRow(1).height=34;
-  put(1,1,5,'見　　　積　　　書',{font:{size:22},al:{horizontal:'center'},border:{bottom:dbl}});
+  put(1,1,5,'見　　　積　　　書',{font:{size:22},al:{horizontal:'center'}});
   for(let c=1;c<=5;c++)ws.getCell(1,c).border={bottom:dbl};
   put(1,6,7,'NO.　'+(d.estNo||''),{font:{size:10},al:{horizontal:'left',vertical:'bottom'},border:{bottom:thin}});
-  // 行2: 日付
   put(2,6,7,estWareki(d.issueDate),{al:{horizontal:'right'}});
-  // 行3: 宛先
   ws.getRow(3).height=28;
   const suffixM=d.clientName.match(/(様|御中)$/);
   const cname=d.clientName.replace(/(様|御中)$/,'')+(d.cc?'　'+d.cc.replace(/(様|御中)$/,''):'');
-  put(3,1,4,cname,{font:{size:14,bold:true},al:{horizontal:'left',vertical:'bottom'},border:{bottom:thin}});
-  put(3,5,5,suffixM?suffixM[1]:'様',{font:{size:14,bold:true},al:{horizontal:'left',vertical:'bottom'},border:{bottom:thin}});
+  put(3,1,4,cname,{font:{size:14,bold:true},al:{horizontal:'left',vertical:'bottom'}});
+  put(3,5,5,suffixM?suffixM[1]:'様',{font:{size:14,bold:true},al:{horizontal:'left',vertical:'bottom'}});
   for(let c=1;c<=5;c++)ws.getCell(3,c).border={bottom:thin};
   ws.getRow(4).height=8;
-  // 行5-9: 受渡期日など / 発行者
   const left=[
     ['受 渡 期 日',d.endDate?estWareki(d.endDate):'令和　　　年　　　月　　　日'],
     ['受 渡 場 所',d.propName||''],
@@ -817,25 +906,29 @@ function buildEstWorkbook(d,stampFn){
   put(5,6,7,EST_ISSUER.name,{font:{name:EST_FONT_G,size:12,bold:true},al:{horizontal:'left'}});
   EST_ISSUER.lines.forEach((t,i)=>{put(6+i,6,7,t,{font:{size:10},al:{horizontal:'left'}});});
   ws.getRow(10).height=18;ws.getRow(11).height=18;
-  // 行12-13: 合計金額 / 担当者 / 照査・担当の印
   ws.getRow(12).height=22;ws.getRow(13).height=54;
-  ws.mergeCells(12,1,13,3);
-  const tc=ws.getCell(12,1);tc.value={richText:[{text:'合 計 金 額　',font:{name:EST_FONT,size:16}},{text:'¥'+d.total.toLocaleString('ja-JP'),font:{name:EST_FONT,size:18,bold:true}}]};
-  tc.alignment={vertical:'bottom',horizontal:'left'};
-  for(let r=12;r<=13;r++)for(let c=1;c<=3;c++)ws.getCell(r,c).border={bottom:r===13?thin:undefined};
-  ws.mergeCells(12,4,13,5);
-  const pc=ws.getCell(12,4);pc.value='担 当 者 ：　'+(d.tanto||'');pc.font={name:EST_FONT,size:11};pc.alignment={vertical:'bottom',horizontal:'center'};
-  for(let r=12;r<=13;r++)for(let c=4;c<=5;c++)ws.getCell(r,c).border={bottom:r===13?thin:undefined};
+  // 合計金額(下の表の合計を見る数式)
+  ws.mergeCells(12,1,13,1);
+  const lb=ws.getCell(12,1);lb.value='合 計 金 額　';lb.font={name:EST_FONT,size:16};lb.alignment={vertical:'bottom',horizontal:'right'};
+  ws.mergeCells(12,2,13,4);
+  const tc=ws.getCell(12,2);tc.alignment={vertical:'bottom',horizontal:'left'};tc.font={name:EST_FONT,size:18,bold:true};tc.numFmt='"¥"#,##0';
+  ws.mergeCells(12,5,13,5);
+  const pc=ws.getCell(12,5);pc.value='担当者：'+(d.tanto||'');pc.font={name:EST_FONT,size:11};pc.alignment={vertical:'bottom',horizontal:'center',shrinkToFit:true};
+  for(let r=12;r<=13;r++)for(let c=1;c<=5;c++)ws.getCell(r,c).border={bottom:r===13?thin:undefined};
   put(12,6,6,'照　　査',{font:{size:9},al:{horizontal:'center'},border:box()});
   put(12,7,7,'担　　当',{font:{size:9},al:{horizontal:'center'},border:box()});
   ws.getCell(13,6).border=box();ws.getCell(13,7).border=box();
   if(stampFn){
-    const add=(name,col)=>{
-      const id=wb.addImage({base64:stampFn(name),extension:'png'});
-      ws.addImage(id,{tl:{col:col+0.35,row:12.06},ext:{width:64,height:64},editAs:'oneCell'});
+    const add=(url,col,row,w,h,dx)=>{
+      const id=wb.addImage({base64:url,extension:/^data:image\/jpe?g/.test(url)?'jpeg':'png'});
+      ws.addImage(id,{tl:{col:col+(dx||0),row},ext:{width:w,height:h},editAs:'oneCell'});
     };
-    add(EST_CHECKER,5);
-    if(d.tanto)add(d.tanto,6);
+    add(stampFn(EST_CHECKER),5,12.06,64,64,0.35);
+    if(d.tanto)add(stampFn(d.tanto),6,12.06,64,64,0.35);
+  }
+  if(d.kakuin){ // 角印(この端末に登録した画像)。発行者の名前の右に重ねる
+    const id=wb.addImage({base64:d.kakuin,extension:/^data:image\/jpe?g/.test(d.kakuin)?'jpeg':'png'});
+    ws.addImage(id,{tl:{col:6.55,row:4.15},ext:{width:78,height:78},editAs:'oneCell'});
   }
   ws.getRow(14).height=8;
   // 表
@@ -844,18 +937,22 @@ function buildEstWorkbook(d,stampFn){
   hd(1,1,'品　　　　　名');hd(2,2,'数量');hd(3,3,'単位');hd(4,4,'単　　価');hd(5,5,'金　　額');hd(6,7,'備　　　　　考');
   for(let c=6;c<=7;c++)ws.getCell(H,c).border=box();
   const nRows=Math.max(9,d.pgBlocks.length);
-  let r=H+1;
-  const numFmt='#,##0';
-  const rowBox=(r)=>{for(let c=1;c<=7;c++)ws.getCell(r,c).border=box();};
+  let r=H+1;const firstItem=r;
+  const rowBox=(rr,plain)=>{for(let c=1;c<=7;c++){
+    const b=box();
+    if(!plain&&(c===2||c===4||c===6))b.left=dbl; // 見本と同じ、列の区切りの二重線
+    ws.getCell(rr,c).border=b;}};
   for(let i=0;i<nRows;i++,r++){
     ws.getRow(r).height=21;
-    const pg=d.pgBlocks[i];
-    if(pg){
-      put(r,1,1,pg.pgName,{al:{horizontal:'left'}});
-      put(r,2,2,pg.pgQty,{al:{horizontal:'center'},numFmt:'#,##0.##'});
-      put(r,3,3,pg.pgUnit,{al:{horizontal:'center'}});
-      put(r,4,4,Math.round(pg.pgAmt/(pg.pgQty||1)),{al:{horizontal:'right'},numFmt});
-      put(r,5,5,pg.pgAmt,{al:{horizontal:'right'},numFmt});
+    const pg=d.pgBlocks[i];const sr=sumInfo.rowOf[i];
+    if(pg&&sr){
+      // 内訳明細の一覧を見る数式(内訳明細を直すと、表紙も変わる)
+      const ref=(col,res,al,fmt)=>put(r,col[0],col[0],{formula:`${SH}${col[1]}${sr}`,result:res},{al:{horizontal:al},numFmt:fmt});
+      put(r,1,1,{formula:`${SH}B${sr}`,result:pg.pgName},{al:{horizontal:'left'}});
+      put(r,2,2,{formula:`${SH}D${sr}`,result:pg.pgQty},{al:{horizontal:'center'},numFmt:'#,##0.##'});
+      put(r,3,3,{formula:`${SH}E${sr}`,result:pg.pgUnit},{al:{horizontal:'center'}});
+      put(r,4,4,{formula:`${SH}F${sr}`,result:Math.round(pg.pgAmt/(pg.pgQty||1))},{al:{horizontal:'right'},numFmt:nf});
+      put(r,5,5,{formula:`${SH}G${sr}`,result:pg.pgAmt},{al:{horizontal:'right'},numFmt:nf});
       put(r,6,7,pg.pgSpec||'',{font:{size:9},al:{horizontal:'left',shrinkToFit:true}});
     }else{
       for(let c=1;c<=5;c++)ws.getCell(r,c).font={name:EST_FONT,size:11};
@@ -863,21 +960,26 @@ function buildEstWorkbook(d,stampFn){
     }
     rowBox(r);
   }
-  const foot=(label,qty,unit,val,fmt,note,big)=>{
+  const lastItem=r-1;
+  const rows={};
+  const foot=(key,label,qty,unit,val,fmt,note,big)=>{
+    rows[key]=r;
     ws.getRow(r).height=big?24:21;
     if(big){put(r,1,4,label,{font:{size:13},al:{horizontal:'center'}});}
-    else put(r,1,1,label,{al:{horizontal:'center'}});
-    if(!big){put(r,2,2,qty,{al:{horizontal:'center'}});put(r,3,3,unit,{al:{horizontal:'center'}});put(r,4,4,'',{});}
+    else{put(r,1,1,label,{al:{horizontal:'center'}});put(r,2,2,qty,{al:{horizontal:'center'}});put(r,3,3,unit,{al:{horizontal:'center'}});put(r,4,4,'',{});}
     put(r,5,5,val,{font:{size:big?13:11,bold:!!big},al:{horizontal:'right'},numFmt:fmt});
     put(r,6,7,note||'',{font:{size:8},al:{horizontal:'left',shrinkToFit:true}});
-    rowBox(r);r++;
+    rowBox(r,big);r++;
   };
-  foot('諸経費',d.miscPct,'%',d.misc,numFmt,EST_MISC_NOTE);
-  foot('値引き','','',d.disc>0?d.disc:'','"▲ "#,##0','');
-  foot('小　計','','',d.ko,numFmt,'');
-  foot(d.taxPct?'消費税':'非課税',d.taxPct||'',d.taxPct?'%':'',d.tax,numFmt,'');
-  foot('合　　　　　計',0,0,d.total,'"¥"#,##0','消費税含む',true);
-  const lastCover=r-1;
+  const itemSum=`SUM(E${firstItem}:E${lastItem})`;
+  // 諸経費・小計・消費税・合計も数式(諸経費の%、消費税の%を直すと、金額が変わる)
+  const rMisc=r,rDisc=r+1,rKo=r+2,rTax=r+3,rTot=r+4;
+  foot('misc','諸経費',d.miscPct,'%',{formula:`ROUND(${itemSum}*B${rMisc}/100,0)`,result:d.misc},nf,EST_MISC_NOTE);
+  foot('disc','値引き','','',d.disc>0?d.disc:'','"▲ "#,##0','');
+  foot('ko','小　計','','',{formula:`${itemSum}+E${rMisc}-N(E${rDisc})`,result:d.ko},nf,'');
+  foot('tax',d.taxPct?'消費税':'非課税',d.taxPct||'',d.taxPct?'%':'',{formula:`ROUND(E${rKo}*N(B${rTax})/100,0)`,result:d.tax},nf,'');
+  foot('tot','合　　　　　計',0,0,{formula:`E${rKo}+E${rTax}`,result:d.total},'"¥"#,##0','消費税含む',true);
+  tc.value={formula:`E${rTot}`,result:d.total};
   if(d.notes){
     r++;
     put(r,1,7,'【備考】',{font:{size:10,bold:true}});r++;
@@ -885,77 +987,10 @@ function buildEstWorkbook(d,stampFn){
     put(r,1,7,d.notes,{font:{size:10},al:{horizontal:'left',vertical:'top',wrapText:true}});
   }
   const coverLast=r;
-  // iOSのプレビューは、書き出されていないセルを描かないので、範囲の全セルに書式を付けておく
   for(let rr=1;rr<=coverLast;rr++)for(let c=1;c<=7;c++){const x=ws.getCell(rr,c);if(!x.font)x.font={name:EST_FONT,size:11};}
   ws.pageSetup={paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:1,
     horizontalCentered:true,margins:{left:0.4,right:0.4,top:0.5,bottom:0.5,header:0.2,footer:0.2}};
   ws.pageSetup.printArea=`A1:G${coverLast}`;
-
-  // ===== 内訳明細(見積内訳書) =====
-  const w2=wb.addWorksheet('内訳明細',{views:[{showGridLines:false}]});
-  w2.properties.defaultRowHeight=15;
-  [5,30,34,8,6,12,14,24].forEach((w,i)=>{w2.getColumn(i+1).width=w;});
-  const fnt=(sz,b)=>({name:EST_FONT_G,size:sz||9,bold:!!b});
-  const cellSet=(r,c,v,o={})=>{const x=w2.getCell(r,c);x.value=v;x.font=o.font||fnt(9);x.alignment=Object.assign({vertical:'middle'},o.al||{});if(o.numFmt)x.numFmt=o.numFmt;if(o.border)x.border=o.border;return x;};
-  let R=1,pageNo=0;
-  const pages=[];
-  const mkPage=(lines,total,totalLabel,footerName)=>{
-    // lines: {name,spec,qty,unit,price,amt,note,bold}。EST_PAGE_ROWS行ごとに1枚
-    const chunks=[];
-    for(let i=0;i<Math.max(1,lines.length);i+=EST_PAGE_ROWS)chunks.push(lines.slice(i,i+EST_PAGE_ROWS));
-    chunks.forEach((ch,ci)=>{
-      pageNo++;
-      const top=R;
-      w2.mergeCells(R,1,R,8);cellSet(R,1,estWarekiShort(d.issueDate),{font:fnt(8),al:{horizontal:'right'}});R++;
-      w2.getRow(R).height=30;w2.mergeCells(R,1,R,8);cellSet(R,1,'見積内訳書',{font:fnt(16,true),al:{horizontal:'center'}});R++;
-      ['No.','名称','材質・寸法','数量','単位','単価','金額','備考'].forEach((t,i)=>cellSet(R,i+1,t,{font:fnt(9),al:{horizontal:'center'},border:box()}));R++;
-      for(let i=0;i<EST_PAGE_ROWS;i++,R++){
-        const l=ch[i];
-        for(let c=1;c<=8;c++)cellSet(R,c,'',{border:box()});
-        if(!l)continue;
-        w2.getCell(R,2).value=l.name;w2.getCell(R,2).font=fnt(9,l.bold);
-        if(l.spec)w2.getCell(R,3).value=l.spec;
-        if(l.qty!=null&&l.qty!==''){const q=w2.getCell(R,4);q.value=l.qty;q.alignment={horizontal:'right',vertical:'middle'};q.numFmt='#,##0.##';}
-        if(l.unit){w2.getCell(R,5).value=l.unit;}
-        if(l.price!=null&&l.price!==''){const p=w2.getCell(R,6);p.value=l.price;p.numFmt='#,##0';p.alignment={horizontal:'right',vertical:'middle'};}
-        if(l.amt!=null&&l.amt!==''){const a=w2.getCell(R,7);a.value=l.amt;a.numFmt='#,##0';a.alignment={horizontal:'right',vertical:'middle'};}
-        if(l.note)w2.getCell(R,8).value=l.note;
-      }
-      const last=ci===chunks.length-1;
-      for(let c=1;c<=8;c++)cellSet(R,c,'',{border:box()});
-      if(last){w2.getCell(R,2).value=totalLabel;w2.getCell(R,2).font=fnt(9);const t=w2.getCell(R,7);t.value=total;t.numFmt='#,##0';t.alignment={horizontal:'right',vertical:'middle'};}
-      R++;
-      w2.mergeCells(R,1,R,8);
-      cellSet(R,1,`${footerName} 0001 - ( ${String(pageNo).padStart(4,'0')} )`,{font:fnt(8),al:{horizontal:'right'}});
-      // ページを囲む外枠
-      const bot=R;
-      for(let rr=top;rr<=bot;rr++){
-        const a=w2.getCell(rr,1),z=w2.getCell(rr,8);
-        a.border=Object.assign({},a.border,{left:{style:'medium',color:BLK}});
-        z.border=Object.assign({},z.border,{right:{style:'medium',color:BLK}});
-      }
-      for(let c=1;c<=8;c++){
-        const t=w2.getCell(top,c),b=w2.getCell(bot,c);
-        t.border=Object.assign({},t.border,{top:{style:'medium',color:BLK}});
-        b.border=Object.assign({},b.border,{bottom:{style:'medium',color:BLK}});
-      }
-      w2.getRow(R).addPageBreak();
-      R++;
-      pages.push({top,bot});
-    });
-  };
-  function estWarekiShort(iso){if(!iso)return '';const [y,m,dd]=iso.split('-').map(Number);return `${y}年 ${m}月 ${dd}日`;}
-  // 1枚目: 大項目の一覧と総合計
-  mkPage(d.pgBlocks.map(pg=>({name:pg.pgName,spec:pg.pgSpec,qty:pg.pgQty,unit:pg.pgUnit,price:Math.round(pg.pgAmt/(pg.pgQty||1)),amt:pg.pgAmt})),d.grandSub,'総合計',d.workName);
-  // 2枚目以降: 大項目ごと
-  d.pgBlocks.forEach(pg=>{
-    const lines=[{name:pg.pgName,bold:true},{}].concat(pg.rows.map(r=>({name:r.name,spec:r.spec,qty:r.qty||'',unit:r.qty?r.unit:'',price:r.price||'',amt:r.amt||'',note:r.note})));
-    mkPage(lines,pg.pgAmt,'合計',pg.pgName);
-  });
-  const lastRow=R-1;
-  w2.pageSetup={paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,horizontalCentered:true,
-    margins:{left:0.4,right:0.4,top:0.4,bottom:0.4,header:0.2,footer:0.2}};
-  w2.pageSetup.printArea=`A1:H${lastRow}`;
   return wb;
 }
 
@@ -992,7 +1027,7 @@ function buildEstPrintHtml(d,stampFn){
     <tr><th>取 引 方 法</th><td>${escH(d.payment)}</td></tr>
     <tr><th>有 効 期 限</th><td>${escH(d.validUntil)}</td></tr>
     <tr><th>工　事　名</th><td class="wn">${escH(d.workName)}</td></tr></table>
-    <div class="is"><b>${EST_ISSUER.name}</b><br>${EST_ISSUER.lines.map(escH).join('<br>')}</div></div>
+    <div class="is">${d.kakuin?`<img class="kk" src="${d.kakuin}">`:''}<b>${EST_ISSUER.name}</b><br>${EST_ISSUER.lines.map(escH).join('<br>')}</div></div>
   <div class="bt"><div class="tot">合 計 金 額　<b>¥${yen(d.total)}</b></div><div class="tn">担 当 者 ：　${escH(d.tanto)}</div>
     <table class="st"><tr><th>照　査</th><th>担　当</th></tr><tr><td>${ss(EST_CHECKER)}</td><td>${ss(d.tanto)}</td></tr></table></div>
   <table class="tb"><tr><th>品　　　　　名</th><th>数量</th><th>単位</th><th>単　　価</th><th>金　　額</th><th>備　　　　考</th></tr>${rows}
@@ -1026,7 +1061,7 @@ function buildEstPrintHtml(d,stampFn){
   .no{width:60mm;text-align:right;font-size:10pt;border-bottom:1px solid #000;position:absolute;right:14mm;top:9mm}.no span{font-size:11pt}
   .to{margin-top:5mm;width:110mm;border-bottom:1px solid #000;display:flex;justify-content:space-between;font-size:15pt;font-weight:bold;padding-bottom:1mm}
   .mid{display:flex;justify-content:space-between;margin-top:4mm}.lf{width:140mm;border-collapse:collapse;font-size:10pt}.lf th{width:34mm;text-align:left;font-weight:normal;border-bottom:1px solid #000;padding:.8mm 0}.lf td{border-bottom:1px solid #000;padding:.8mm 0}.lf td.wn{font-size:9pt}
-  .is{width:85mm;font-size:10pt;line-height:1.55}.is b{font-size:13pt;font-family:'MS PGothic','Hiragino Kaku Gothic ProN',sans-serif}
+  .is{width:85mm;font-size:10pt;line-height:1.55;position:relative}.is .kk{position:absolute;right:0;top:-2mm;width:19mm;height:19mm}.is b{font-size:13pt;font-family:'MS PGothic','Hiragino Kaku Gothic ProN',sans-serif}
   .bt{display:flex;align-items:flex-end;justify-content:space-between;margin-top:3mm}.tot{width:110mm;font-size:17pt;border-bottom:1px solid #000;padding-bottom:1mm}.tot b{font-size:19pt}.tn{width:70mm;font-size:11pt;border-bottom:1px solid #000;text-align:center;padding-bottom:1mm}
   .st{border-collapse:collapse;font-size:8pt}.st th,.st td{border:1px solid #000;width:20mm;text-align:center;font-weight:normal}.st td{height:15mm}
   table.tb{width:100%;border-collapse:collapse;margin-top:3mm;font-size:11pt}.tb th,.tb td{border:1px solid #000;height:6mm;padding:0 1.5mm;font-weight:normal}.tb th{text-align:center}.tb td.c{text-align:center}.tb td.r{text-align:right}.tb td.l{text-align:left}.tb td.s{font-size:7.5pt}
@@ -1039,6 +1074,7 @@ function buildEstPrintHtml(d,stampFn){
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>見積書_${escH(d.clientName)}</title><style>${css}</style></head><body>${body}</body></html>`;
 }
 
+window.addEventListener('load',estKakuinLabel);
 function genPdf(){
   const d=collectEst();if(!d)return;
   const html=buildEstPrintHtml(d,estStampPng);
