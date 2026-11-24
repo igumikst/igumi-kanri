@@ -85,7 +85,9 @@ const contentPatterns = [
   { re: /service_role/i, label: "service_role という文字列", skipFile: f => /^supabase\/migrations\/[^/]+\.sql$/.test(f) },
   { re: /password\s*=/i, label: "password= という文字列" },
   { re: /[A-Za-z]:\\/, label: "パソコンの個人用パス(C:\\ / D:\\ など)" },
-  { re: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/, label: "メールアドレス" },
+  // 見積書の表紙に載る会社の代表アドレス(info@igumi-inc.jp)だけは、虎生の許可済み(2026-11-24)。ほかのメールアドレスは、これまでどおり止める
+  { re: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/, label: "メールアドレス",
+    test: line => (line.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) || []).some(a => a !== "info@igumi-inc.jp") },
 ];
 try {
   const fullDiff = git(["diff", `${BASE_REF}...HEAD`]);
@@ -99,7 +101,7 @@ try {
     if (!line.startsWith("+") || line.startsWith("+++")) continue;
     for (const p of contentPatterns) {
       if (p.skipFile && p.skipFile(currentFile)) continue;
-      if (p.re.test(line)) { fail(`"${currentFile}" の追加行に、${p.label}が見つかりました`); contentOk = false; }
+      if (p.test ? p.test(line) : p.re.test(line)) { fail(`"${currentFile}" の追加行に、${p.label}が見つかりました`); contentOk = false; }
     }
   }
   if (contentOk) console.log("  ✓ 差分の内容に、禁止されたものは見つかりませんでした");
