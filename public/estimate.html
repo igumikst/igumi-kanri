@@ -313,6 +313,8 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
   </div>
   <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #c5cae9;font-size:13px;color:#555;line-height:2">
     <div style="font-weight:700;color:#1a237e">🔴 印鑑の登録（この端末だけ）</div>
+    <input type="file" id="estFileKakuin" accept="image/png,image/jpeg" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none" tabindex="-1" onchange="estOnKakuinFile(this)">
+    <input type="file" id="estFileStamp" accept="image/png,image/jpeg" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none" tabindex="-1" onchange="estOnStampFile(this)">
     <div>角印：<span id="kakuinState"></span>
       <button style="margin-left:6px;padding:2px 10px" onclick="estPickKakuin()">画像を登録</button>
       <button style="padding:2px 10px" onclick="estClearKakuin()">消す</button></div>
@@ -709,28 +711,55 @@ function resetForm(){
 // 流れ: 画面の入力を集める(collectEst)→ 型に値を入れる(estBuildCover / estBuildBody)→ 出す(genExcel / genPdf)。
 const EST_KAKUIN_KEY='igumi_kakuin_png';
 function estGetKakuin(){try{return localStorage.getItem(EST_KAKUIN_KEY)||'';}catch(e){return '';}}
-function estPickKakuin(){
-  const inp=document.createElement('input');inp.type='file';inp.accept='image/png,image/jpeg';
-  inp.onchange=()=>{const f=inp.files[0];if(!f)return;const fr=new FileReader();
-    fr.onload=()=>{try{localStorage.setItem(EST_KAKUIN_KEY,fr.result);estKakuinLabel();alert('角印を、この端末に登録しました');}catch(e){alert('登録できませんでした(画像が大きすぎるかもしれません)');}};
-    fr.readAsDataURL(f);};
-  inp.click();
+// 画像を読み込む。大きすぎる写真は、縮めてから渡す(そのまま保存すると、端末の保存枠(約5MB)を超えて、登録に失敗するため)
+function estReadImage(file,cb,done){
+  const fin=()=>{try{done&&done();}catch(e){}};
+  const fr=new FileReader();
+  fr.onerror=()=>{alert('画像を読み込めませんでした');fin();};
+  fr.onload=()=>{
+    const url=fr.result,im=new Image();
+    im.onerror=()=>{alert('画像を読み込めませんでした(PNGかJPEGの画像を選んでください)');fin();};
+    im.onload=()=>{
+      const M=800,w=im.naturalWidth,h=im.naturalHeight;
+      if(Math.max(w,h)<=M){cb(url);fin();return;}
+      const k=M/Math.max(w,h),cv=document.createElement('canvas');cv.width=Math.round(w*k);cv.height=Math.round(h*k);
+      cv.getContext('2d').drawImage(im,0,0,cv.width,cv.height);
+      cb(cv.toDataURL(/^data:image\/png/.test(url)?'image/png':'image/jpeg',0.92));fin();
+    };
+    im.src=url;
+  };
+  fr.readAsDataURL(file);
+}
+// ファイルを選ぶ入れ物(input)は、画面に置きっぱなしにする。押すたびに作って捨てる形だと、スマホによっては、選んだあとの処理が動かないことがあるため
+function estPickKakuin(){const i=document.getElementById('estFileKakuin');if(i)i.click();}
+function estOnKakuinFile(inp){
+  const f=inp.files&&inp.files[0];if(!f)return;
+  estReadImage(f,url=>{
+    try{localStorage.setItem(EST_KAKUIN_KEY,url);estKakuinLabel();alert('角印を、この端末に登録しました');}
+    catch(e){alert('登録できませんでした(画像が大きすぎるか、この端末で保存が使えない設定かもしれません)');}
+  },()=>{inp.value='';});
 }
 function estClearKakuin(){try{localStorage.removeItem(EST_KAKUIN_KEY);}catch(e){}estKakuinLabel();}
 const EST_STAMPS_KEY='igumi_stamps'; // 丸い印(照査・担当)の登録。名前→画像
 function estGetStamps(){try{return JSON.parse(localStorage.getItem(EST_STAMPS_KEY)||'{}')||{};}catch(e){return {};}}
-function estPickStamp(){
-  const inp=document.createElement('input');inp.type='file';inp.accept='image/png,image/jpeg';
-  inp.onchange=()=>{const f=inp.files[0];if(!f)return;
-    const nm=(prompt('この印は、誰の印ですか?(苗字。例: 上村)',f.name.replace(/\.[^.]*$/,''))||'').trim();if(!nm)return;
-    const fr=new FileReader();
-    fr.onload=()=>{try{const m=estGetStamps();m[nm]=fr.result;localStorage.setItem(EST_STAMPS_KEY,JSON.stringify(m));estKakuinLabel();}catch(e){alert('登録できませんでした(画像が大きすぎるかもしれません)');}};
-    fr.readAsDataURL(f);};
-  inp.click();
+function estPickStamp(){const i=document.getElementById('estFileStamp');if(i)i.click();}
+function estOnStampFile(inp){
+  const f=inp.files&&inp.files[0];if(!f)return;
+  const nm=(prompt('この印は、誰の印ですか?(苗字。例: 上村)',f.name.replace(/\.[^.]*$/,''))||'').trim();
+  if(!nm){inp.value='';return;}
+  estReadImage(f,url=>{
+    try{const m=estGetStamps();m[nm]=url;localStorage.setItem(EST_STAMPS_KEY,JSON.stringify(m));estKakuinLabel();alert(nm+' の印を、この端末に登録しました');}
+    catch(e){alert('登録できませんでした(画像が大きすぎるか、この端末で保存が使えない設定かもしれません)');}
+  },()=>{inp.value='';});
 }
 function estClearStamps(){try{localStorage.removeItem(EST_STAMPS_KEY);}catch(e){}estKakuinLabel();}
 function estKakuinLabel(){ // 登録の状態を、画面に出す
-  const k=document.getElementById('kakuinState');if(k)k.textContent=estGetKakuin()?'登録済み':'未登録(印なしで出力)';
+  const k=document.getElementById('kakuinState');
+  if(k){ // 登録した角印を、小さく見せる(登録できているかが、ひと目で分かるように)
+    const u=estGetKakuin();k.textContent='';
+    if(/^data:image\//.test(u)){const im=document.createElement('img');im.src=u;im.alt='角印';im.style.cssText='height:34px;vertical-align:middle;margin-right:6px;border:1px solid #ddd';k.appendChild(im);k.appendChild(document.createTextNode('登録済み'));}
+    else k.textContent='未登録(印なしで出力)';
+  }
   const m=document.getElementById('stampState'),names=Object.keys(estGetStamps());
   if(m)m.textContent=names.length?'登録済み: '+names.join('・'):'未登録(自動で作った印で出力)';
 }
@@ -1025,8 +1054,16 @@ function buildEstWorkbook(d,stampFn){
   return wb;
 }
 
+// 角印がこの端末に無いまま出力して、あとで気づくのを防ぐ(登録は、端末ごとのため)
+function estConfirmKakuin(){
+  if(estGetKakuin())return true;
+  if(confirm('角印が、この端末に登録されていません。\nこのまま出力すると、角印なしになります。\n\n【OK】角印なしで出力する\n【キャンセル】やめて、下の「印鑑の登録」から登録する'))return true;
+  const s=document.getElementById('kakuinState');if(s&&s.scrollIntoView)s.scrollIntoView({block:'center'});
+  return false;
+}
 async function genExcel(){
   const d=collectEst();if(!d)return;
+  if(!estConfirmKakuin())return;
   const wb=buildEstWorkbook(d,estStampPng);
   const fn=`見積書_${(d.issueDate||'').replace(/-/g,'')}_${d.clientName}.xlsx`;
   const buf=await wb.xlsx.writeBuffer();
@@ -1119,9 +1156,10 @@ function buildEstPrintHtml(d,stampFn){
 window.addEventListener('load',estKakuinLabel);
 function genPdf(){
   const d=collectEst();if(!d)return;
-  const html=buildEstPrintHtml(d,estStampPng);
-  const w=window.open('','_blank');
+  const w=window.open('','_blank'); // 確認の画面を出す前に開く(あとで開くと、スマホで、ポップアップとして止められることがあるため)
   if(!w){alert('ポップアップがブロックされました。許可してからもう一度押してください');return;}
+  if(!estConfirmKakuin()){w.close();return;}
+  const html=buildEstPrintHtml(d,estStampPng);
   w.document.open();w.document.write(html);w.document.close();
   w.onload=()=>setTimeout(()=>w.print(),400);
 }
