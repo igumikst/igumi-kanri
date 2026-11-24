@@ -307,7 +307,8 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
 <div class="card" id="s-out">
   <div class="actions">
     <button class="btn-rst" onclick="resetForm()">🔄 リセット</button>
-    <button class="btn-ex" onclick="genExcel()">📥 Excel出力（表紙＋内訳明細）</button>
+    <button class="btn-ex" onclick="genExcel()">📥 Excel出力（表紙＋内訳書）</button>
+    <button class="btn-ex" style="margin-top:8px;background:#fff;color:#1A237E;border:2px solid #1A237E" onclick="genPdf()">📄 PDF出力（印刷画面から「PDFで保存」）</button>
   </div>
 </div>
 
@@ -693,13 +694,31 @@ function resetForm(){
 }
 
 // ===== Excel出力 =====
-async function genExcel(){
-  const clientName=document.getElementById('clientName').value.trim();
-  const workName=document.getElementById('workName').value.trim();
-  if(!clientName||!workName){alert('会社名・宛先と工事名は必須です');return;}
+// ===== 見積書の出力(Excel / PDF) =====
+// いつもの見積書の形(A4横)に合わせる。表紙1枚 + 見積内訳書(総合計の1枚 + 大項目ごとに1枚)。
+// 画面の入力を集める(collectEst)→ 形を作る(buildEstWorkbook / buildEstPrintHtml)→ 出す(genExcel / genPdf)の3段。
+const EST_ISSUER={
+  name:'株式会社ＩＧＵＭＩ',
+  lines:['代表取締役　上村　一揮','〒192-0373','東京都八王子市上柚木428','TEL・FAX　042（718）8848','MAIL　igumi.0430@gmail.com','登録番号　T6021001069892']
+};
+const EST_CHECKER='上村'; // 照査の印は上村で固定。担当の印は、画面で選んだ担当者
+const EST_MISC_NOTE='法定福利費（社会保険料・福利厚生・損害保険料）を含む';
+const EST_FONT='ＭＳ 明朝', EST_FONT_G='ＭＳ Ｐゴシック';
+const EST_PAGE_ROWS=26; // 内訳書1枚あたりの明細行数
 
-  const pgBlocks=[];
-  let grandSub=0;
+function estWareki(iso){
+  if(!iso)return '令和　　年　　月　　日';
+  const [y,m,d]=iso.split('-').map(Number);
+  return `令和${y-2018}年${m}月${d}日`;
+}
+function estLabel(s){return s.split('').join(' ');}
+
+function collectEst(){
+  const g=id=>document.getElementById(id);
+  const clientName=g('clientName').value.trim();
+  const workName=g('workName').value.trim();
+  if(!clientName||!workName){alert('会社名・宛先と工事名は必須です');return null;}
+  const pgBlocks=[];let grandSub=0;
   document.querySelectorAll('.pg-block').forEach(block=>{
     const pgName=block.querySelector('.pg-name').value.trim()||'（名称未設定）';
     const infoInputs=block.querySelectorAll('.pg-sub-info input');
@@ -720,119 +739,315 @@ async function genExcel(){
     grandSub+=pgAmt;
     if(rows.length>0||pgName!=='（名称未設定）')pgBlocks.push({pgName,pgSpec,pgQty,pgUnit,rows,pgAmt});
   });
-  if(!pgBlocks.length){alert('内訳明細が空です');return;}
+  if(!pgBlocks.length){alert('内訳明細が空です');return null;}
+  const mr=(parseFloat(g('miscRate').value)||0)/100;
+  const misc=Math.round(grandSub*mr),disc=parseFloat(g('discount').value)||0;
+  const ko=grandSub+misc-disc,tRate=parseFloat(g('taxRate').value)||0;
+  const tax=Math.round(ko*tRate);
+  return {
+    clientName,workName,pgBlocks,grandSub,misc,disc,ko,tax,total:ko+tax,
+    miscPct:Math.round((parseFloat(g('miscRate').value)||0)*10)/10,
+    taxPct:Math.round(tRate*100),
+    issueDate:g('issueDate').value,estNo:g('estNo').value,cc:g('clientContact').value.trim(),
+    validUntil:g('validUntil').value,propName:g('propName').value.trim(),
+    startDate:g('startDate').value,endDate:g('endDate').value,payment:g('payment').value,
+    notes:g('notes').value.trim(),tanto:selTanto,
+  };
+}
 
-  const mr2=(parseFloat(document.getElementById('miscRate').value)||0)/100;
-  const misc2=Math.round(grandSub*mr2),disc2=parseFloat(document.getElementById('discount').value)||0;
-  const ko2=grandSub+misc2-disc2,tRate2=parseFloat(document.getElementById('taxRate').value);
-  const tax2=Math.round(ko2*tRate2),total2=ko2+tax2;
-  const mr2pct=Math.round(parseFloat(document.getElementById('miscRate').value)||0);
-  const tPct2=tRate2===0.10?'消費税（10%）':tRate2===0.08?'消費税（8%）':'非課税';
-  const issueDate=document.getElementById('issueDate').value;
-  const estNo=document.getElementById('estNo').value,cc=document.getElementById('clientContact').value.trim();
-  const vu=document.getElementById('validUntil').value,propName=document.getElementById('propName').value.trim();
-  const sd=document.getElementById('startDate').value,ed=document.getElementById('endDate').value,pm=document.getElementById('payment').value;
+// 丸い印(苗字2文字までを縦に並べる)。実印ではなく形だけ。
+function estStampPng(name){
+  const c=document.createElement('canvas');c.width=c.height=160;
+  const x=c.getContext('2d');
+  x.strokeStyle='#D0021B';x.fillStyle='#D0021B';x.lineWidth=7;
+  x.beginPath();x.arc(80,80,70,0,Math.PI*2);x.stroke();
+  const ch=[...String(name||'')].slice(0,2);
+  x.textAlign='center';x.textBaseline='middle';x.font='bold 56px "Hiragino Mincho ProN","Yu Mincho",serif';
+  if(ch.length===1){x.font='bold 84px "Hiragino Mincho ProN","Yu Mincho",serif';x.fillText(ch[0],80,84);}
+  else{x.fillText(ch[0],80,52);x.fillText(ch[1],80,112);}
+  return c.toDataURL('image/png');
+}
 
+function buildEstWorkbook(d,stampFn){
   const wb=new ExcelJS.Workbook();wb.creator='株式会社IGUMI';
-  const NAV='1A237E',NAVL='E8EAF6',WHT='FFFFFF',GRY='F5F5F5',BRD='CCCCCC',TXT='333333';
-  function ab(){return{top:{style:'thin',color:{argb:BRD}},bottom:{style:'thin',color:{argb:BRD}},left:{style:'thin',color:{argb:BRD}},right:{style:'thin',color:{argb:BRD}}};}
-  function sc(ws,r,c,v,st){const cell=ws.getCell(r,c);cell.value=v;if(st)Object.assign(cell,st);}
-  function mg(ws,r1,c1,r2,c2){ws.mergeCells(r1,c1,r2,c2);}
-  const S={
-    navHd:(sz=10)=>({font:{name:'Meiryo',size:sz,bold:true,color:{argb:WHT}},fill:{type:'pattern',pattern:'solid',fgColor:{argb:NAV}},alignment:{horizontal:'center',vertical:'middle',wrapText:true},border:ab()}),
-    navLHd:(sz=10)=>({font:{name:'Meiryo',size:sz,bold:true,color:{argb:NAV}},fill:{type:'pattern',pattern:'solid',fgColor:{argb:NAVL}},alignment:{horizontal:'center',vertical:'middle'},border:ab()}),
-    cell:(align='left',bold=false,bg=WHT,sz=10)=>({font:{name:'Meiryo',size:sz,bold,color:{argb:TXT}},fill:{type:'pattern',pattern:'solid',fgColor:{argb:bg}},alignment:{horizontal:align,vertical:'middle',wrapText:true},border:ab()}),
-    num:(bold=false,bg=WHT)=>({font:{name:'Meiryo',size:10,bold,color:{argb:TXT}},fill:{type:'pattern',pattern:'solid',fgColor:{argb:bg}},alignment:{horizontal:'right',vertical:'middle'},border:ab(),numFmt:'#,##0'}),
-    gray:(align='center')=>({font:{name:'Meiryo',size:10,color:{argb:TXT}},fill:{type:'pattern',pattern:'solid',fgColor:{argb:GRY}},alignment:{horizontal:align,vertical:'middle'},border:ab()}),
+  const BLK={argb:'FF000000'};
+  const thin={style:'thin',color:BLK},dbl={style:'double',color:BLK};
+  const box=()=>({top:thin,bottom:thin,left:thin,right:thin});
+  const ws=wb.addWorksheet('見積書',{views:[{showGridLines:false}]});
+  ws.properties.defaultRowHeight=18;
+  [36,8,7,14,16,24,24].forEach((w,i)=>{ws.getColumn(i+1).width=w;});
+  const put=(r,c1,c2,v,st={})=>{
+    if(c2>c1)ws.mergeCells(r,c1,r,c2);
+    const cell=ws.getCell(r,c1);cell.value=v;
+    cell.font=Object.assign({name:EST_FONT,size:11},st.font||{});
+    cell.alignment=Object.assign({vertical:'middle'},st.al||{});
+    if(st.numFmt)cell.numFmt=st.numFmt;
+    for(let c=c1;c<=c2;c++){const x=ws.getCell(r,c);if(st.border)x.border=st.border;if(c>c1)x.font=cell.font;}
+    return cell;
   };
-
-  // シート1：表紙
-  const ws1=wb.addWorksheet('表紙');
-  [3,14,3,3,3,3,8,8,4,4,12,12,3,3,14,3,3,3,3,3,4,4,3,3].forEach((w,i)=>{ws1.getColumn(i+1).width=w;});
-  let R=1;
-  ws1.getRow(R).height=38;
-  mg(ws1,R,1,R,16);sc(ws1,R,1,'見　　積　　書',{font:{name:'Meiryo',size:22,bold:true,color:{argb:WHT}},fill:{type:'pattern',pattern:'solid',fgColor:{argb:NAV}},alignment:{horizontal:'center',vertical:'middle'}});
-  mg(ws1,R,17,R,20);sc(ws1,R,17,'No.',S.navHd(9));mg(ws1,R,21,R,24);sc(ws1,R,21,estNo,S.cell('center'));R++;
-  ws1.getRow(R).height=22;
-  const cn=clientName+(clientName.endsWith('様')||clientName.endsWith('御中')?'':'　御中');
-  mg(ws1,R,1,R,12);sc(ws1,R,1,'　'+cn,{font:{name:'Meiryo',size:13,bold:true,color:{argb:TXT}},fill:{type:'pattern',pattern:'solid',fgColor:{argb:GRY}},alignment:{horizontal:'left',vertical:'middle'},border:ab()});
-  mg(ws1,R,13,R,16);sc(ws1,R,13,'作　成　日',S.navHd(9));mg(ws1,R,17,R,20);sc(ws1,R,17,'',S.navHd(9));mg(ws1,R,21,R,24);sc(ws1,R,21,issueDate?issueDate.replace(/-/g,'/'):'',S.cell('center'));R++;
-  ws1.getRow(R).height=18;
-  mg(ws1,R,1,R,12);sc(ws1,R,1,'　'+cc,S.gray('left'));mg(ws1,R,13,R,16);sc(ws1,R,13,'有 効 期 限',S.navHd(9));mg(ws1,R,17,R,20);sc(ws1,R,17,'',S.navHd(9));mg(ws1,R,21,R,24);sc(ws1,R,21,vu,S.cell('center'));R++;
-  ws1.getRow(R).height=14;mg(ws1,R,1,R,24);sc(ws1,R,1,'　下記の通り、お見積申し上げます。何卒ご用命のほどよろしくお願い致します。',{font:{name:'Meiryo',size:10,color:{argb:TXT}},alignment:{horizontal:'left',vertical:'middle'},border:ab()});R++;
-  ws1.getRow(R).height=30;
-  mg(ws1,R,1,R,6);sc(ws1,R,1,'御見積金額',S.navLHd(12));
-  mg(ws1,R,7,R,18);sc(ws1,R,7,total2,{font:{name:'Meiryo',size:16,bold:true,color:{argb:NAV}},fill:{type:'pattern',pattern:'solid',fgColor:{argb:WHT}},alignment:{horizontal:'right',vertical:'middle'},border:ab(),numFmt:'#,##0'});
-  mg(ws1,R,19,R,20);sc(ws1,R,19,'円',{font:{name:'Meiryo',size:14,bold:true,color:{argb:NAV}},alignment:{horizontal:'left',vertical:'middle'},border:ab()});
-  mg(ws1,R,21,R,24);sc(ws1,R,21,'株式会社IGUMI',{font:{name:'Meiryo',size:11,bold:true,color:{argb:NAV}},fill:{type:'pattern',pattern:'solid',fgColor:{argb:WHT}},alignment:{horizontal:'center',vertical:'middle'},border:ab()});R++;
-  ws1.getRow(R).height=16;mg(ws1,R,1,R,6);sc(ws1,R,1,'見積代金',S.navLHd(10));mg(ws1,R,7,R,10);sc(ws1,R,7,ko2,S.num());mg(ws1,R,11,R,20);sc(ws1,R,11,'',S.cell());mg(ws1,R,21,R,24);sc(ws1,R,21,'代表取締役　上村　一揮',{font:{name:'Meiryo',size:10,color:{argb:TXT}},alignment:{horizontal:'center',vertical:'middle'},border:ab()});R++;
-  ws1.getRow(R).height=16;mg(ws1,R,1,R,6);sc(ws1,R,1,tPct2,S.navLHd(10));mg(ws1,R,7,R,10);sc(ws1,R,7,tax2,S.num());mg(ws1,R,11,R,20);sc(ws1,R,11,'',S.cell());mg(ws1,R,21,R,24);sc(ws1,R,21,'〒192-0373',S.gray('center'));R++;
-  ws1.getRow(R).height=14;mg(ws1,R,1,R,20);sc(ws1,R,1,'',S.cell());mg(ws1,R,21,R,24);sc(ws1,R,21,'東京都八王子市上柚木428',S.gray('center'));R++;
-  ws1.getRow(R).height=18;mg(ws1,R,1,R,3);sc(ws1,R,1,'工事名',S.navLHd(10));mg(ws1,R,4,R,20);sc(ws1,R,4,workName,S.cell('left',true));mg(ws1,R,21,R,24);sc(ws1,R,21,'TEL 042（718）8848',S.gray('center'));R++;
-  ws1.getRow(R).height=18;mg(ws1,R,1,R,3);sc(ws1,R,1,'工事場所',S.navLHd(10));mg(ws1,R,4,R,20);sc(ws1,R,4,propName,S.cell('left'));mg(ws1,R,21,R,24);sc(ws1,R,21,'登録番号：T6021001069892',S.gray('center'));R++;
-  ws1.getRow(R).height=16;
-  mg(ws1,R,1,R,3);sc(ws1,R,1,'着工日',S.navLHd(9));mg(ws1,R,4,R,8);sc(ws1,R,4,sd?sd.replace(/-/g,'/'):'－',S.cell('center'));
-  mg(ws1,R,9,R,11);sc(ws1,R,9,'完工日',S.navLHd(9));mg(ws1,R,12,R,16);sc(ws1,R,12,ed?ed.replace(/-/g,'/'):'－',S.cell('center'));
-  mg(ws1,R,17,R,18);sc(ws1,R,17,'取引方法',S.navLHd(9));mg(ws1,R,19,R,20);sc(ws1,R,19,pm,S.cell('center'));
-  mg(ws1,R,21,R,22);sc(ws1,R,21,'担当者',S.navLHd(9));mg(ws1,R,23,R,24);sc(ws1,R,23,selTanto,S.cell('center',true));R++;R++;
-  ws1.getRow(R).height=22;
-  sc(ws1,R,1,'No.',S.navHd());mg(ws1,R,2,R,14);sc(ws1,R,2,'工　事　名　称',S.navHd());mg(ws1,R,15,R,16);sc(ws1,R,15,'数量',S.navHd());sc(ws1,R,17,'単位',S.navHd());mg(ws1,R,18,R,20);sc(ws1,R,18,'単　価',S.navHd());mg(ws1,R,21,R,22);sc(ws1,R,21,'金　額',S.navHd());mg(ws1,R,23,R,24);sc(ws1,R,23,'備　考',S.navHd());R++;
-  let tno=1;
-  pgBlocks.forEach(pg=>{
-    ws1.getRow(R).height=20;sc(ws1,R,1,tno++,S.cell('center'));mg(ws1,R,2,R,11);sc(ws1,R,2,pg.pgName,S.cell('left',true));mg(ws1,R,12,R,14);sc(ws1,R,12,pg.pgSpec,S.cell('left'));mg(ws1,R,15,R,16);sc(ws1,R,15,pg.pgQty,S.num());sc(ws1,R,17,pg.pgUnit,S.cell('center'));mg(ws1,R,18,R,20);sc(ws1,R,18,pg.pgAmt,S.num());mg(ws1,R,21,R,22);sc(ws1,R,21,pg.pgAmt,S.num());mg(ws1,R,23,R,24);sc(ws1,R,23,'',S.cell());R++;
+  // 行1: タイトル / NO.
+  ws.getRow(1).height=34;
+  put(1,1,5,'見　　　積　　　書',{font:{size:22},al:{horizontal:'center'},border:{bottom:dbl}});
+  for(let c=1;c<=5;c++)ws.getCell(1,c).border={bottom:dbl};
+  put(1,6,7,'NO.　'+(d.estNo||''),{font:{size:10},al:{horizontal:'left',vertical:'bottom'},border:{bottom:thin}});
+  // 行2: 日付
+  put(2,6,7,estWareki(d.issueDate),{al:{horizontal:'right'}});
+  // 行3: 宛先
+  ws.getRow(3).height=28;
+  const suffixM=d.clientName.match(/(様|御中)$/);
+  const cname=d.clientName.replace(/(様|御中)$/,'')+(d.cc?'　'+d.cc.replace(/(様|御中)$/,''):'');
+  put(3,1,4,cname,{font:{size:14,bold:true},al:{horizontal:'left',vertical:'bottom'},border:{bottom:thin}});
+  put(3,5,5,suffixM?suffixM[1]:'様',{font:{size:14,bold:true},al:{horizontal:'left',vertical:'bottom'},border:{bottom:thin}});
+  for(let c=1;c<=5;c++)ws.getCell(3,c).border={bottom:thin};
+  ws.getRow(4).height=8;
+  // 行5-9: 受渡期日など / 発行者
+  const left=[
+    ['受 渡 期 日',d.endDate?estWareki(d.endDate):'令和　　　年　　　月　　　日'],
+    ['受 渡 場 所',d.propName||''],
+    ['取 引 方 法',d.payment||''],
+    ['有 効 期 限',d.validUntil||''],
+    ['工　事　名',d.workName],
+  ];
+  left.forEach(([k,v],i)=>{
+    const r=5+i;ws.getRow(r).height=19;
+    put(r,1,1,k,{font:{size:10},al:{horizontal:'left'}});
+    put(r,2,5,v,{font:{size:i===4?9:10},al:{horizontal:'left',shrinkToFit:true}});
+    for(let c=1;c<=5;c++)ws.getCell(r,c).border={bottom:thin};
   });
-  for(let i=0;i<3;i++){ws1.getRow(R).height=20;sc(ws1,R,1,'',S.cell());mg(ws1,R,2,R,14);sc(ws1,R,2,'',S.cell());mg(ws1,R,15,R,16);sc(ws1,R,15,'',S.cell());sc(ws1,R,17,'',S.cell());mg(ws1,R,18,R,20);sc(ws1,R,18,'',S.cell());mg(ws1,R,21,R,22);sc(ws1,R,21,'',S.cell());mg(ws1,R,23,R,24);sc(ws1,R,23,'',S.cell());R++;}
-  ws1.getRow(R).height=18;mg(ws1,R,1,R,20);sc(ws1,R,1,`諸　経　費（${mr2pct}%）　法定福利費含む`,S.cell('right'));mg(ws1,R,21,R,22);sc(ws1,R,21,misc2,S.num());mg(ws1,R,23,R,24);sc(ws1,R,23,'',S.cell());R++;
-  if(disc2>0){ws1.getRow(R).height=18;mg(ws1,R,1,R,20);sc(ws1,R,1,'値　引　き',S.cell('right'));mg(ws1,R,21,R,22);sc(ws1,R,21,-disc2,S.num());mg(ws1,R,23,R,24);sc(ws1,R,23,'',S.cell());R++;}
-  ws1.getRow(R).height=20;mg(ws1,R,1,R,20);sc(ws1,R,1,'小　　　計',S.cell('right',true));mg(ws1,R,21,R,22);sc(ws1,R,21,ko2,S.num(true));mg(ws1,R,23,R,24);sc(ws1,R,23,'',S.cell());R++;
-  ws1.getRow(R).height=18;mg(ws1,R,1,R,20);sc(ws1,R,1,tPct2,S.cell('right'));mg(ws1,R,21,R,22);sc(ws1,R,21,tax2,S.num());mg(ws1,R,23,R,24);sc(ws1,R,23,'',S.cell());R++;
-  ws1.getRow(R).height=26;mg(ws1,R,1,R,20);sc(ws1,R,1,'合　　　　　　　　　　計　（消費税含む）',{font:{name:'Meiryo',size:13,bold:true,color:{argb:WHT}},fill:{type:'pattern',pattern:'solid',fgColor:{argb:NAV}},alignment:{horizontal:'right',vertical:'middle'},border:ab()});mg(ws1,R,21,R,22);sc(ws1,R,21,total2,{font:{name:'Meiryo',size:14,bold:true,color:{argb:WHT}},fill:{type:'pattern',pattern:'solid',fgColor:{argb:NAV}},alignment:{horizontal:'right',vertical:'middle'},border:ab(),numFmt:'#,##0'});mg(ws1,R,23,R,24);sc(ws1,R,23,'消費税含む',{font:{name:'Meiryo',size:9,color:{argb:WHT}},fill:{type:'pattern',pattern:'solid',fgColor:{argb:NAV}},alignment:{horizontal:'center',vertical:'middle'},border:ab()});R++;
-  const notes=document.getElementById('notes').value.trim();
-  if(notes){R++;ws1.getRow(R).height=16;mg(ws1,R,1,R,24);sc(ws1,R,1,'【備考】',S.navLHd(10));R++;ws1.getRow(R).height=Math.max(36,notes.split('\n').length*16);mg(ws1,R,1,R,24);sc(ws1,R,1,notes,S.cell('left',false,WHT,10));}
-
-  // シート2：内訳明細
-  const ws2=wb.addWorksheet('内訳明細');
-  [6,4,28,20,8,6,12,12,12].forEach((w,i)=>{ws2.getColumn(i+1).width=w;});
-  function s2ab(){return{top:{style:'thin',color:{argb:BRD}},bottom:{style:'thin',color:{argb:BRD}},left:{style:'thin',color:{argb:BRD}},right:{style:'thin',color:{argb:BRD}}};}
-  function s2(r,c,v,st){const cell=ws2.getCell(r,c);cell.value=v;if(st)Object.assign(cell,st);}
-  function s2mg(r1,c1,r2,c2){ws2.mergeCells(r1,c1,r2,c2);}
-  const S2={
-    ttl:()=>({font:{name:'Meiryo',size:14,bold:true,color:{argb:WHT}},fill:{type:'pattern',pattern:'solid',fgColor:{argb:NAV}},alignment:{horizontal:'center',vertical:'middle'},border:s2ab()}),
-    hd:()=>({font:{name:'Meiryo',size:10,bold:true,color:{argb:WHT}},fill:{type:'pattern',pattern:'solid',fgColor:{argb:NAV}},alignment:{horizontal:'center',vertical:'middle'},border:s2ab()}),
-    pgHd:()=>({font:{name:'Meiryo',size:11,bold:true,color:{argb:NAV}},fill:{type:'pattern',pattern:'solid',fgColor:{argb:NAVL}},alignment:{horizontal:'left',vertical:'middle'},border:s2ab()}),
-    pgAmt:()=>({font:{name:'Meiryo',size:11,bold:true,color:{argb:NAV}},fill:{type:'pattern',pattern:'solid',fgColor:{argb:NAVL}},alignment:{horizontal:'right',vertical:'middle'},border:s2ab(),numFmt:'#,##0'}),
-    subHd:()=>({font:{name:'Meiryo',size:10,bold:true,color:{argb:WHT}},fill:{type:'pattern',pattern:'solid',fgColor:{argb:'3949AB'}},alignment:{horizontal:'center',vertical:'middle'},border:s2ab()}),
-    cell:(align='left',bold=false)=>({font:{name:'Meiryo',size:10,bold,color:{argb:TXT}},fill:{type:'pattern',pattern:'solid',fgColor:{argb:WHT}},alignment:{horizontal:align,vertical:'middle'},border:s2ab()}),
-    num:(bold=false)=>({font:{name:'Meiryo',size:10,bold,color:{argb:TXT}},fill:{type:'pattern',pattern:'solid',fgColor:{argb:WHT}},alignment:{horizontal:'right',vertical:'middle'},border:s2ab(),numFmt:'#,##0'}),
-    tot:()=>({font:{name:'Meiryo',size:11,bold:true,color:{argb:WHT}},fill:{type:'pattern',pattern:'solid',fgColor:{argb:NAV}},alignment:{horizontal:'right',vertical:'middle'},border:s2ab(),numFmt:'#,##0'}),
+  put(5,6,7,EST_ISSUER.name,{font:{name:EST_FONT_G,size:12,bold:true},al:{horizontal:'left'}});
+  EST_ISSUER.lines.forEach((t,i)=>{put(6+i,6,7,t,{font:{size:10},al:{horizontal:'left'}});});
+  ws.getRow(10).height=18;ws.getRow(11).height=18;
+  // 行12-13: 合計金額 / 担当者 / 照査・担当の印
+  ws.getRow(12).height=22;ws.getRow(13).height=54;
+  ws.mergeCells(12,1,13,3);
+  const tc=ws.getCell(12,1);tc.value={richText:[{text:'合 計 金 額　',font:{name:EST_FONT,size:16}},{text:'¥'+d.total.toLocaleString('ja-JP'),font:{name:EST_FONT,size:18,bold:true}}]};
+  tc.alignment={vertical:'bottom',horizontal:'left'};
+  for(let r=12;r<=13;r++)for(let c=1;c<=3;c++)ws.getCell(r,c).border={bottom:r===13?thin:undefined};
+  ws.mergeCells(12,4,13,5);
+  const pc=ws.getCell(12,4);pc.value='担 当 者 ：　'+(d.tanto||'');pc.font={name:EST_FONT,size:11};pc.alignment={vertical:'bottom',horizontal:'center'};
+  for(let r=12;r<=13;r++)for(let c=4;c<=5;c++)ws.getCell(r,c).border={bottom:r===13?thin:undefined};
+  put(12,6,6,'照　　査',{font:{size:9},al:{horizontal:'center'},border:box()});
+  put(12,7,7,'担　　当',{font:{size:9},al:{horizontal:'center'},border:box()});
+  ws.getCell(13,6).border=box();ws.getCell(13,7).border=box();
+  if(stampFn){
+    const add=(name,col)=>{
+      const id=wb.addImage({base64:stampFn(name),extension:'png'});
+      ws.addImage(id,{tl:{col:col+0.35,row:12.06},ext:{width:64,height:64},editAs:'oneCell'});
+    };
+    add(EST_CHECKER,5);
+    if(d.tanto)add(d.tanto,6);
+  }
+  ws.getRow(14).height=8;
+  // 表
+  const H=15;ws.getRow(H).height=22;
+  const hd=(c1,c2,t)=>put(H,c1,c2,t,{font:{size:11},al:{horizontal:'center'},border:box()});
+  hd(1,1,'品　　　　　名');hd(2,2,'数量');hd(3,3,'単位');hd(4,4,'単　　価');hd(5,5,'金　　額');hd(6,7,'備　　　　　考');
+  for(let c=6;c<=7;c++)ws.getCell(H,c).border=box();
+  const nRows=Math.max(9,d.pgBlocks.length);
+  let r=H+1;
+  const numFmt='#,##0';
+  const rowBox=(r)=>{for(let c=1;c<=7;c++)ws.getCell(r,c).border=box();};
+  for(let i=0;i<nRows;i++,r++){
+    ws.getRow(r).height=21;
+    const pg=d.pgBlocks[i];
+    if(pg){
+      put(r,1,1,pg.pgName,{al:{horizontal:'left'}});
+      put(r,2,2,pg.pgQty,{al:{horizontal:'center'},numFmt:'#,##0.##'});
+      put(r,3,3,pg.pgUnit,{al:{horizontal:'center'}});
+      put(r,4,4,Math.round(pg.pgAmt/(pg.pgQty||1)),{al:{horizontal:'right'},numFmt});
+      put(r,5,5,pg.pgAmt,{al:{horizontal:'right'},numFmt});
+      put(r,6,7,pg.pgSpec||'',{font:{size:9},al:{horizontal:'left',shrinkToFit:true}});
+    }else{
+      for(let c=1;c<=5;c++)ws.getCell(r,c).font={name:EST_FONT,size:11};
+      put(r,6,7,'',{});
+    }
+    rowBox(r);
+  }
+  const foot=(label,qty,unit,val,fmt,note,big)=>{
+    ws.getRow(r).height=big?24:21;
+    if(big){put(r,1,4,label,{font:{size:13},al:{horizontal:'center'}});}
+    else put(r,1,1,label,{al:{horizontal:'center'}});
+    if(!big){put(r,2,2,qty,{al:{horizontal:'center'}});put(r,3,3,unit,{al:{horizontal:'center'}});put(r,4,4,'',{});}
+    put(r,5,5,val,{font:{size:big?13:11,bold:!!big},al:{horizontal:'right'},numFmt:fmt});
+    put(r,6,7,note||'',{font:{size:8},al:{horizontal:'left',shrinkToFit:true}});
+    rowBox(r);r++;
   };
-  let R2=1;
-  ws2.getRow(R2).height=14;s2mg(R2,1,R2,9);s2(R2,1,issueDate?issueDate.replace(/-/g,'/'):''  ,{font:{name:'Meiryo',size:10,color:{argb:TXT}},alignment:{horizontal:'right'}});R2++;
-  ws2.getRow(R2).height=28;s2mg(R2,1,R2,9);s2(R2,1,'見　積　内　訳　書',S2.ttl());R2++;
-  ws2.getRow(R2).height=18;s2(R2,1,'No.',S2.hd());s2mg(R2,2,R2,4);s2(R2,2,'工　事　名　称',S2.hd());s2mg(R2,5,R2,6);s2(R2,5,'数量',S2.hd());s2(R2,7,'単価',S2.hd());s2(R2,8,'金　額',S2.hd());s2(R2,9,'備考',S2.hd());R2++;
-  let sno=1;
-  pgBlocks.forEach(pg=>{ws2.getRow(R2).height=20;s2(R2,1,sno++,S2.cell('center'));s2mg(R2,2,R2,3);s2(R2,2,pg.pgName,S2.cell('left',true));s2(R2,4,pg.pgSpec,S2.cell('left'));s2mg(R2,5,R2,6);s2(R2,5,pg.pgQty,S2.num());s2(R2,7,pg.pgAmt,S2.num());s2(R2,8,pg.pgAmt,S2.num(true));s2(R2,9,'',S2.cell());R2++;});
-  for(let i=0;i<2;i++){ws2.getRow(R2).height=20;s2(R2,1,'',S2.cell());s2mg(R2,2,R2,4);s2(R2,2,'',S2.cell());s2mg(R2,5,R2,6);s2(R2,5,'',S2.cell());s2(R2,7,'',S2.cell());s2(R2,8,'',S2.cell());s2(R2,9,'',S2.cell());R2++;}
-  ws2.getRow(R2).height=18;s2mg(R2,1,R2,7);s2(R2,1,`諸　経　費（${mr2pct}%）`,S2.cell('right'));s2(R2,8,misc2,S2.num());s2(R2,9,'',S2.cell());R2++;
-  if(disc2>0){ws2.getRow(R2).height=18;s2mg(R2,1,R2,7);s2(R2,1,'値　引　き',S2.cell('right'));s2(R2,8,-disc2,S2.num());s2(R2,9,'',S2.cell());R2++;}
-  ws2.getRow(R2).height=18;s2mg(R2,1,R2,7);s2(R2,1,'小　　　計',S2.cell('right',true));s2(R2,8,ko2,S2.num(true));s2(R2,9,'',S2.cell());R2++;
-  ws2.getRow(R2).height=18;s2mg(R2,1,R2,7);s2(R2,1,tPct2,S2.cell('right'));s2(R2,8,tax2,S2.num());s2(R2,9,'',S2.cell());R2++;
-  ws2.getRow(R2).height=24;s2mg(R2,1,R2,7);s2(R2,1,'総　　　合　　　計',S2.tot());s2(R2,8,total2,S2.tot());s2(R2,9,'',S2.tot());R2++;R2+=2;
-  let bno=1;
-  pgBlocks.forEach(pg=>{
-    ws2.getRow(R2).height=22;s2mg(R2,1,R2,7);s2(R2,1,`${pg.pgName}　${String(bno).padStart(4,'0')} - ( ${String(bno).padStart(4,'0')} )`,S2.pgHd());s2(R2,8,pg.pgAmt,S2.pgAmt());s2(R2,9,'',{fill:{type:'pattern',pattern:'solid',fgColor:{argb:NAVL}},border:s2ab()});R2++;
-    ws2.getRow(R2).height=18;s2(R2,1,'No.',S2.subHd());s2mg(R2,2,R2,3);s2(R2,2,'名　称',S2.subHd());s2(R2,4,'材質・寸法',S2.subHd());s2mg(R2,5,R2,6);s2(R2,5,'数量',S2.subHd());s2(R2,7,'単価',S2.subHd());s2(R2,8,'金　額',S2.subHd());s2(R2,9,'備考',S2.subHd());R2++;
-    let ino=1;
-    pg.rows.forEach(r=>{ws2.getRow(R2).height=18;s2(R2,1,ino++,S2.cell('center'));s2mg(R2,2,R2,3);s2(R2,2,r.name,S2.cell('left'));s2(R2,4,r.spec,S2.cell('left'));s2mg(R2,5,R2,6);s2(R2,5,r.qty||'',r.qty?S2.num():S2.cell('center'));s2(R2,7,r.price||'',r.price?S2.num():S2.cell('right'));s2(R2,8,r.amt||'',r.amt?S2.num():S2.cell('right'));s2(R2,9,r.note,S2.cell('left'));R2++;});
-    ws2.getRow(R2).height=20;s2mg(R2,1,R2,7);s2(R2,1,'合　　　計',S2.cell('right',true));s2(R2,8,pg.pgAmt,S2.num(true));s2(R2,9,'',S2.cell());R2++;R2+=2;bno++;
-  });
+  foot('諸経費',d.miscPct,'%',d.misc,numFmt,EST_MISC_NOTE);
+  foot('値引き','','',d.disc>0?d.disc:'','"▲ "#,##0','');
+  foot('小　計','','',d.ko,numFmt,'');
+  foot(d.taxPct?'消費税':'非課税',d.taxPct||'',d.taxPct?'%':'',d.tax,numFmt,'');
+  foot('合　　　　　計',0,0,d.total,'"¥"#,##0','消費税含む',true);
+  const lastCover=r-1;
+  if(d.notes){
+    r++;
+    put(r,1,7,'【備考】',{font:{size:10,bold:true}});r++;
+    ws.getRow(r).height=Math.max(36,d.notes.split('\n').length*16);
+    put(r,1,7,d.notes,{font:{size:10},al:{horizontal:'left',vertical:'top',wrapText:true}});
+  }
+  const coverLast=r;
+  // iOSのプレビューは、書き出されていないセルを描かないので、範囲の全セルに書式を付けておく
+  for(let rr=1;rr<=coverLast;rr++)for(let c=1;c<=7;c++){const x=ws.getCell(rr,c);if(!x.font)x.font={name:EST_FONT,size:11};}
+  ws.pageSetup={paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:1,
+    horizontalCentered:true,margins:{left:0.4,right:0.4,top:0.5,bottom:0.5,header:0.2,footer:0.2}};
+  ws.pageSetup.printArea=`A1:G${coverLast}`;
 
-  const dateStr=issueDate.replace(/-/g,'')||'';
-  const fn=`見積書_${dateStr}_${clientName}.xlsx`;
+  // ===== 内訳明細(見積内訳書) =====
+  const w2=wb.addWorksheet('内訳明細',{views:[{showGridLines:false}]});
+  w2.properties.defaultRowHeight=15;
+  [5,30,34,8,6,12,14,24].forEach((w,i)=>{w2.getColumn(i+1).width=w;});
+  const fnt=(sz,b)=>({name:EST_FONT_G,size:sz||9,bold:!!b});
+  const cellSet=(r,c,v,o={})=>{const x=w2.getCell(r,c);x.value=v;x.font=o.font||fnt(9);x.alignment=Object.assign({vertical:'middle'},o.al||{});if(o.numFmt)x.numFmt=o.numFmt;if(o.border)x.border=o.border;return x;};
+  let R=1,pageNo=0;
+  const pages=[];
+  const mkPage=(lines,total,totalLabel,footerName)=>{
+    // lines: {name,spec,qty,unit,price,amt,note,bold}。EST_PAGE_ROWS行ごとに1枚
+    const chunks=[];
+    for(let i=0;i<Math.max(1,lines.length);i+=EST_PAGE_ROWS)chunks.push(lines.slice(i,i+EST_PAGE_ROWS));
+    chunks.forEach((ch,ci)=>{
+      pageNo++;
+      const top=R;
+      w2.mergeCells(R,1,R,8);cellSet(R,1,estWarekiShort(d.issueDate),{font:fnt(8),al:{horizontal:'right'}});R++;
+      w2.getRow(R).height=30;w2.mergeCells(R,1,R,8);cellSet(R,1,'見積内訳書',{font:fnt(16,true),al:{horizontal:'center'}});R++;
+      ['No.','名称','材質・寸法','数量','単位','単価','金額','備考'].forEach((t,i)=>cellSet(R,i+1,t,{font:fnt(9),al:{horizontal:'center'},border:box()}));R++;
+      for(let i=0;i<EST_PAGE_ROWS;i++,R++){
+        const l=ch[i];
+        for(let c=1;c<=8;c++)cellSet(R,c,'',{border:box()});
+        if(!l)continue;
+        w2.getCell(R,2).value=l.name;w2.getCell(R,2).font=fnt(9,l.bold);
+        if(l.spec)w2.getCell(R,3).value=l.spec;
+        if(l.qty!=null&&l.qty!==''){const q=w2.getCell(R,4);q.value=l.qty;q.alignment={horizontal:'right',vertical:'middle'};q.numFmt='#,##0.##';}
+        if(l.unit){w2.getCell(R,5).value=l.unit;}
+        if(l.price!=null&&l.price!==''){const p=w2.getCell(R,6);p.value=l.price;p.numFmt='#,##0';p.alignment={horizontal:'right',vertical:'middle'};}
+        if(l.amt!=null&&l.amt!==''){const a=w2.getCell(R,7);a.value=l.amt;a.numFmt='#,##0';a.alignment={horizontal:'right',vertical:'middle'};}
+        if(l.note)w2.getCell(R,8).value=l.note;
+      }
+      const last=ci===chunks.length-1;
+      for(let c=1;c<=8;c++)cellSet(R,c,'',{border:box()});
+      if(last){w2.getCell(R,2).value=totalLabel;w2.getCell(R,2).font=fnt(9);const t=w2.getCell(R,7);t.value=total;t.numFmt='#,##0';t.alignment={horizontal:'right',vertical:'middle'};}
+      R++;
+      w2.mergeCells(R,1,R,8);
+      cellSet(R,1,`${footerName} 0001 - ( ${String(pageNo).padStart(4,'0')} )`,{font:fnt(8),al:{horizontal:'right'}});
+      // ページを囲む外枠
+      const bot=R;
+      for(let rr=top;rr<=bot;rr++){
+        const a=w2.getCell(rr,1),z=w2.getCell(rr,8);
+        a.border=Object.assign({},a.border,{left:{style:'medium',color:BLK}});
+        z.border=Object.assign({},z.border,{right:{style:'medium',color:BLK}});
+      }
+      for(let c=1;c<=8;c++){
+        const t=w2.getCell(top,c),b=w2.getCell(bot,c);
+        t.border=Object.assign({},t.border,{top:{style:'medium',color:BLK}});
+        b.border=Object.assign({},b.border,{bottom:{style:'medium',color:BLK}});
+      }
+      w2.getRow(R).addPageBreak();
+      R++;
+      pages.push({top,bot});
+    });
+  };
+  function estWarekiShort(iso){if(!iso)return '';const [y,m,dd]=iso.split('-').map(Number);return `${y}年 ${m}月 ${dd}日`;}
+  // 1枚目: 大項目の一覧と総合計
+  mkPage(d.pgBlocks.map(pg=>({name:pg.pgName,spec:pg.pgSpec,qty:pg.pgQty,unit:pg.pgUnit,price:Math.round(pg.pgAmt/(pg.pgQty||1)),amt:pg.pgAmt})),d.grandSub,'総合計',d.workName);
+  // 2枚目以降: 大項目ごと
+  d.pgBlocks.forEach(pg=>{
+    const lines=[{name:pg.pgName,bold:true},{}].concat(pg.rows.map(r=>({name:r.name,spec:r.spec,qty:r.qty||'',unit:r.qty?r.unit:'',price:r.price||'',amt:r.amt||'',note:r.note})));
+    mkPage(lines,pg.pgAmt,'合計',pg.pgName);
+  });
+  const lastRow=R-1;
+  w2.pageSetup={paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,horizontalCentered:true,
+    margins:{left:0.4,right:0.4,top:0.4,bottom:0.4,header:0.2,footer:0.2}};
+  w2.pageSetup.printArea=`A1:H${lastRow}`;
+  return wb;
+}
+
+async function genExcel(){
+  const d=collectEst();if(!d)return;
+  const wb=buildEstWorkbook(d,estStampPng);
+  const fn=`見積書_${(d.issueDate||'').replace(/-/g,'')}_${d.clientName}.xlsx`;
   const buf=await wb.xlsx.writeBuffer();
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=fn;a.click();URL.revokeObjectURL(url);
 }
+
+// ===== PDF(印刷の画面からPDFで保存) =====
+function escH(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function buildEstPrintHtml(d,stampFn){
+  const yen=n=>Number(n).toLocaleString('ja-JP');
+  const ss=(name)=>name?`<img src="${stampFn(name)}" style="width:13mm;height:13mm">`:'';
+  const nRows=Math.max(9,d.pgBlocks.length);
+  const suffixM=d.clientName.match(/(様|御中)$/);
+  const cname=d.clientName.replace(/(様|御中)$/,'')+(d.cc?'　'+d.cc.replace(/(様|御中)$/,''):'');
+  let rows='';
+  for(let i=0;i<nRows;i++){
+    const pg=d.pgBlocks[i];
+    rows+=pg?`<tr><td class="l">${escH(pg.pgName)}</td><td class="c">${pg.pgQty}</td><td class="c">${escH(pg.pgUnit)}</td><td class="r">${yen(Math.round(pg.pgAmt/(pg.pgQty||1)))}</td><td class="r">${yen(pg.pgAmt)}</td><td class="s">${escH(pg.pgSpec)}</td></tr>`
+      :`<tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;
+  }
+  const frow=(l,q,u,v,n)=>`<tr><td class="c">${l}</td><td class="c">${q}</td><td class="c">${u}</td><td></td><td class="r">${v}</td><td class="s">${n||''}</td></tr>`;
+  const cover=`<section class="pg"><div class="cv">
+  <div class="top"><div class="ttl">見　　積　　書</div><div class="no">NO.　${escH(d.estNo)}<br><span>${estWareki(d.issueDate)}</span></div></div>
+  <div class="to"><span class="nm">${escH(cname)}</span><span class="sm">${suffixM?suffixM[1]:'様'}</span></div>
+  <div class="mid"><table class="lf">
+    <tr><th>受 渡 期 日</th><td>${d.endDate?estWareki(d.endDate):'令和　　　年　　　月　　　日'}</td></tr>
+    <tr><th>受 渡 場 所</th><td>${escH(d.propName)}</td></tr>
+    <tr><th>取 引 方 法</th><td>${escH(d.payment)}</td></tr>
+    <tr><th>有 効 期 限</th><td>${escH(d.validUntil)}</td></tr>
+    <tr><th>工　事　名</th><td class="wn">${escH(d.workName)}</td></tr></table>
+    <div class="is"><b>${EST_ISSUER.name}</b><br>${EST_ISSUER.lines.map(escH).join('<br>')}</div></div>
+  <div class="bt"><div class="tot">合 計 金 額　<b>¥${yen(d.total)}</b></div><div class="tn">担 当 者 ：　${escH(d.tanto)}</div>
+    <table class="st"><tr><th>照　査</th><th>担　当</th></tr><tr><td>${ss(EST_CHECKER)}</td><td>${ss(d.tanto)}</td></tr></table></div>
+  <table class="tb"><tr><th>品　　　　　名</th><th>数量</th><th>単位</th><th>単　　価</th><th>金　　額</th><th>備　　　　考</th></tr>${rows}
+  ${frow('諸経費',d.miscPct,'%',yen(d.misc),EST_MISC_NOTE)}${frow('値引き','','',d.disc>0?'▲ '+yen(d.disc):'','')}${frow('小　計','','',yen(d.ko),'')}${frow(d.taxPct?'消費税':'非課税',d.taxPct||'',d.taxPct?'%':'',yen(d.tax),'')}
+  <tr class="gt"><td colspan="4" class="c">合　　　　　計</td><td class="r">¥${yen(d.total)}</td><td class="s">消費税含む</td></tr></table>
+  ${d.notes?`<div class="nt"><b>【備考】</b><br>${escH(d.notes).replace(/\n/g,'<br>')}</div>`:''}
+  </div></section>`;
+  let pageNo=0;
+  const dt=d.issueDate?(()=>{const [y,m,dd]=d.issueDate.split('-').map(Number);return `${y}年 ${m}月 ${dd}日`;})():'';
+  const meisai=(lines,total,tl,fname)=>{
+    let out='';const n=Math.max(1,Math.ceil(lines.length/EST_PAGE_ROWS));
+    for(let p=0;p<n;p++){
+      pageNo++;const ch=lines.slice(p*EST_PAGE_ROWS,(p+1)*EST_PAGE_ROWS);let tr='';
+      for(let i=0;i<EST_PAGE_ROWS;i++){const l=ch[i];
+        tr+=l?`<tr><td></td><td class="l${l.bold?' b':''}">${escH(l.name)}</td><td class="l">${escH(l.spec)}</td><td class="r">${l.qty===''||l.qty==null?'':l.qty}</td><td>${escH(l.unit)}</td><td class="r">${l.price===''||l.price==null?'':yen(l.price)}</td><td class="r">${l.amt===''||l.amt==null?'':yen(l.amt)}</td><td class="l">${escH(l.note)}</td></tr>`
+          :`<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;}
+      const last=p===n-1;
+      out+=`<section class="pg"><div class="mf"><div class="dt">${dt}</div><div class="mt">見積内訳書</div>
+        <table class="mb"><tr><th>No.</th><th>名称</th><th>材質・寸法</th><th>数量</th><th>単位</th><th>単価</th><th>金額</th><th>備考</th></tr>${tr}
+        <tr><td></td><td class="l">${last?tl:''}</td><td></td><td></td><td></td><td></td><td class="r">${last?yen(total):''}</td><td></td></tr></table>
+        <div class="ft">${escH(fname)} 0001 - ( ${String(pageNo).padStart(4,'0')} )</div></div></section>`;
+    }
+    return out;
+  };
+  let body=cover;
+  body+=meisai(d.pgBlocks.map(pg=>({name:pg.pgName,spec:pg.pgSpec,qty:pg.pgQty,unit:pg.pgUnit,price:Math.round(pg.pgAmt/(pg.pgQty||1)),amt:pg.pgAmt})),d.grandSub,'総合計',d.workName);
+  d.pgBlocks.forEach(pg=>{body+=meisai([{name:pg.pgName,bold:true},{}].concat(pg.rows.map(r=>({name:r.name,spec:r.spec,qty:r.qty||'',unit:r.qty?r.unit:'',price:r.price||'',amt:r.amt||'',note:r.note}))),pg.pgAmt,'合計',pg.pgName);});
+  const css=`@page{size:A4 landscape;margin:0}*{box-sizing:border-box}body{margin:0;font-family:'MS Mincho','ＭＳ 明朝','Hiragino Mincho ProN','Yu Mincho',serif;color:#000}
+  .pg{width:297mm;height:209mm;padding:9mm 14mm;page-break-after:always;overflow:hidden}.pg:last-child{page-break-after:auto}
+  .top{display:flex;justify-content:space-between;align-items:flex-end}.ttl{flex:1;font-size:24pt;text-align:center;letter-spacing:.2em;border-bottom:3px double #000;margin:0 70mm 0 60mm;padding-bottom:1mm}
+  .no{width:60mm;text-align:right;font-size:10pt;border-bottom:1px solid #000;position:absolute;right:14mm;top:9mm}.no span{font-size:11pt}
+  .to{margin-top:5mm;width:110mm;border-bottom:1px solid #000;display:flex;justify-content:space-between;font-size:15pt;font-weight:bold;padding-bottom:1mm}
+  .mid{display:flex;justify-content:space-between;margin-top:4mm}.lf{width:140mm;border-collapse:collapse;font-size:10pt}.lf th{width:34mm;text-align:left;font-weight:normal;border-bottom:1px solid #000;padding:.8mm 0}.lf td{border-bottom:1px solid #000;padding:.8mm 0}.lf td.wn{font-size:9pt}
+  .is{width:85mm;font-size:10pt;line-height:1.55}.is b{font-size:13pt;font-family:'MS PGothic','Hiragino Kaku Gothic ProN',sans-serif}
+  .bt{display:flex;align-items:flex-end;justify-content:space-between;margin-top:3mm}.tot{width:110mm;font-size:17pt;border-bottom:1px solid #000;padding-bottom:1mm}.tot b{font-size:19pt}.tn{width:70mm;font-size:11pt;border-bottom:1px solid #000;text-align:center;padding-bottom:1mm}
+  .st{border-collapse:collapse;font-size:8pt}.st th,.st td{border:1px solid #000;width:20mm;text-align:center;font-weight:normal}.st td{height:15mm}
+  table.tb{width:100%;border-collapse:collapse;margin-top:3mm;font-size:11pt}.tb th,.tb td{border:1px solid #000;height:6mm;padding:0 1.5mm;font-weight:normal}.tb th{text-align:center}.tb td.c{text-align:center}.tb td.r{text-align:right}.tb td.l{text-align:left}.tb td.s{font-size:7.5pt}
+  .tb th:nth-child(1){width:32%}.tb th:nth-child(2){width:6%}.tb th:nth-child(3){width:6%}.tb th:nth-child(4){width:13%}.tb th:nth-child(5){width:15%}.tb tr.gt td{font-size:13pt;height:7.5mm}.tb tr.gt td.r{font-weight:bold}
+  .nt{margin-top:3mm;font-size:9pt}
+  .mf{border:2px solid #000;height:100%;padding:3mm 3mm 1mm;font-family:'MS PGothic','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif}.dt{text-align:right;font-size:8pt}.mt{text-align:center;font-size:17pt;font-weight:bold;margin:1mm 0 3mm}
+  .mb{width:100%;border-collapse:collapse;font-size:8.5pt}.mb th,.mb td{border:1px solid #000;height:5.7mm;padding:0 1mm;font-weight:normal}.mb td.l{text-align:left}.mb td.r{text-align:right}.mb td.b{font-weight:bold}.mb td{text-align:center}
+  .mb th:nth-child(1){width:4%}.mb th:nth-child(2){width:22%}.mb th:nth-child(3){width:26%}.mb th:nth-child(4){width:6%}.mb th:nth-child(5){width:5%}.mb th:nth-child(6){width:10%}.mb th:nth-child(7){width:11%}
+  .ft{text-align:right;font-size:8pt;margin-top:1mm}`;
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>見積書_${escH(d.clientName)}</title><style>${css}</style></head><body>${body}</body></html>`;
+}
+
+function genPdf(){
+  const d=collectEst();if(!d)return;
+  const html=buildEstPrintHtml(d,estStampPng);
+  const w=window.open('','_blank');
+  if(!w){alert('ポップアップがブロックされました。許可してからもう一度押してください');return;}
+  w.document.open();w.document.write(html);w.document.close();
+  w.onload=()=>setTimeout(()=>w.print(),400);
+}
+
 </script>
 </body>
 </html>
