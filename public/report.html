@@ -776,10 +776,15 @@ function getExportFilename(ext){
     // 多摩仕様のファイル名は「20261116　物件名　何号室漏水調査　報告書」の形(虎生の指示 2026-11-25)
     fileName=[datePart,safe(propName),safe(workName),'報告書'].filter(s=>s).join('　')+`.${ext}`;
   }else if(reportType==='union'){
-    // ユニオンは「報告書　案件名102　11月12日漏水調査」の形(日付はM月D日で件名の前。虎生の指示 2026-11-25)
+    // ユニオンは「報告書　ビューパレー新宿新都心102号室　11月12日漏水調査」の形(虎生の指示 2026-11-25)
+    // 工事名称の頭の号室(102号室、101・201号室など)は、建物名の後ろに移す。日付は作業実施日をM月D日にして件名の前に付ける
     let dateJp='';
-    if(workDate){const[,m,d]=workDate.split('-');dateJp=`${Number(m)}月${Number(d)}日`;}
-    fileName=['報告書',safe(propName),dateJp+safe(workName)].filter(s=>s).join('　')+`.${ext}`;
+    if(workDate){const dp=workDate.split('-');dateJp=`${Number(dp[1])}月${Number(dp[2])}日`;}
+    const wn=safe(workName).trim();
+    const roomMatch=wn.match(/^([0-9０-９]+(?:[・、,][0-9０-９]+)*号室)[ 　]*/);
+    const room=roomMatch?roomMatch[1]:'';
+    const rest=roomMatch?wn.slice(roomMatch[0].length):wn;
+    fileName=['報告書',safe(propName)+room,dateJp+rest].filter(s=>s).join('　')+`.${ext}`;
   }else{
     // 通常は「報告書　物件名　件名　日付」(区切りはすべて全角スペース。虎生の指示 2026-11-25)
     fileName=['報告書',safe(propName),safe(workName),datePart].filter(s=>s).join('　')+`.${ext}`;
