@@ -6,6 +6,7 @@
 <title>見積書作成 - 株式会社IGUMI</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
 <script src="estimate-tpl.js?v=3"></script>
+<script src="estimate-base.js?v=1"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f2f5;color:#333;min-height:100vh;font-size:16px}
@@ -42,57 +43,39 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
 .tanto-badge{display:inline-block;padding:8px 18px;border-radius:24px;border:2px solid #c5cae9;font-size:14px;font-weight:600;cursor:pointer;color:#1a237e;background:white;transition:all .15s;user-select:none}
 .tanto-badge.sel{background:#1a237e;color:white;border-color:#1a237e}
 
-/* ===== 内訳エディタ ===== */
+/* ===== 内訳エディタ（段の木。ESTの 大項目 > まとまり > 項目 と同じ段） ===== */
 .meisai-area{display:flex;flex-direction:column;gap:12px}
-
-/* 大項目ブロック */
-.pg-block{border:2px solid #e8eaf6;border-radius:12px;overflow:hidden;background:white}
-
-/* 大項目ヘッダー */
-.pg-head-wrap{display:flex;align-items:stretch;background:#e8eaf6}
-.pg-head{display:flex;align-items:center;gap:8px;padding:14px 16px;cursor:pointer;user-select:none;min-height:54px;flex:1}
-.pg-toggle{font-size:16px;color:#1a237e;width:22px;text-align:center;transition:transform .2s;flex-shrink:0}
-.pg-toggle.closed{transform:rotate(-90deg)}
-.pg-name{flex:1;font-size:15px;font-weight:700;color:#1a237e;border:none;background:transparent;font-family:inherit;min-width:0;padding:4px 6px;border-radius:6px}
-.pg-name:focus{outline:none;background:white;border:1.5px solid #c5cae9}
-.pg-subtotal{font-size:14px;font-weight:700;color:#1a237e;white-space:nowrap;min-width:80px;text-align:right;flex-shrink:0}
-.pg-del{background:none;border:none;color:#e53935;font-size:22px;cursor:pointer;padding:0 16px;line-height:1;flex-shrink:0;display:flex;align-items:center;border-left:1px solid #c5cae9;min-width:52px;justify-content:center}
-.pg-del:active{background:#ffebee}
-
-/* 大項目サブ情報（材質・数量） */
-.pg-sub-info{padding:8px 14px;background:#f0f3ff;border-bottom:1px solid #e0e4f8}
-.pg-sub-info-row{display:flex;gap:8px;align-items:flex-end}
-.pg-info-field{display:flex;flex-direction:column;gap:3px;flex:2}
-.pg-info-field label{font-size:10px;font-weight:600;color:#7986cb}
-.pg-info-field input{padding:7px 10px;border:1.5px solid #c5cae9;border-radius:8px;font-size:14px;font-family:inherit;background:white;-webkit-appearance:none}
-.pg-info-field input:focus{outline:none;border-color:#1a237e}
-.pg-info-num{flex:1}
-.pg-info-unit{flex:0.8}
-
-/* 細項目リスト */
-.pg-body{padding:10px 12px 14px}
-
-/* 細項目カード（スマホ対応） */
-.sub-card{background:#f8f9ff;border:1.5px solid #e8eaf6;border-radius:10px;padding:12px 14px;margin-bottom:8px;position:relative}
-.sub-card-row{display:flex;gap:8px;margin-bottom:8px;align-items:flex-start}
-.sub-card-row:last-child{margin-bottom:0}
-.sub-field{display:flex;flex-direction:column;gap:4px;flex:1}
-.sub-field label{font-size:11px;font-weight:600;color:#888}
-.sub-field input{width:100%;padding:9px 11px;border:1.5px solid #ddd;border-radius:8px;font-size:15px;font-family:inherit;background:white;-webkit-appearance:none}
-.sub-field input:focus{outline:none;border-color:#1a237e}
-.sub-field input[type=number]{text-align:right}
-.sub-amt-row{display:flex;align-items:center;justify-content:space-between;margin-top:4px;padding-top:8px;border-top:1px solid #e8eaf6}
-.sub-amt-label{font-size:12px;color:#888}
-.sub-amt-val{font-size:16px;font-weight:700;color:#1a237e}
-.sub-card-del{position:absolute;top:8px;right:8px;background:none;border:none;color:#ccc;font-size:20px;cursor:pointer;padding:2px 6px;border-radius:6px;line-height:1}
-.sub-card-del:hover{color:#e53935;background:#ffebee}
-
-/* 細項目追加ボタン */
-.sub-add-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
-.sub-add-btn{flex:1;min-width:140px;background:white;color:#555;border:1.5px solid #ddd;padding:12px 16px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;text-align:center}
-.sub-add-btn:active{background:#f5f5f5}
-.sub-pick-btn{flex:1;min-width:140px;background:#1a237e;color:white;border:none;padding:12px 16px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;text-align:center}
-.sub-pick-btn:active{opacity:.85}
+.meisai-hint{font-size:12px;color:#666;line-height:1.7;margin:-6px 0 12px}
+.tg{border:2px solid #e8eaf6;border-radius:12px;background:white;overflow:hidden}
+.tg .tg{margin:8px 0 0;border-width:1.5px}
+.tg.d1{border-color:#dde6f5}.tg.d2{border-color:#e6e0f2}.tg.d3{border-color:#e8e8e8}
+.tg-head{display:flex;align-items:center;gap:8px;padding:0 0 0 12px;min-height:54px;cursor:pointer;user-select:none;background:#e8eaf6}
+.tg.d1>.tg-head{background:#eef3fb}.tg.d2>.tg-head{background:#f1eef8}.tg.d3>.tg-head{background:#f3f3f3}
+.tg-arr{font-size:13px;color:#1a237e;width:18px;text-align:center;transition:transform .2s;flex-shrink:0}
+.tg-arr.closed{transform:rotate(-90deg)}
+.tg-name{flex:1;min-width:0;font-size:15px;font-weight:700;color:#1a237e;display:flex;flex-direction:column;line-height:1.35}
+.tg-name small{font-size:11px;font-weight:500;color:#667;margin-top:1px}
+.tg-name i{font-weight:500;color:#999}
+.tg.top>.tg-head .tg-name{font-size:16px}
+.tg-sub{font-size:14px;font-weight:700;color:#1a237e;white-space:nowrap;flex-shrink:0}
+.tg-more{background:none;border:none;border-left:1px solid #c5cae9;color:#1a237e;font-size:22px;line-height:1;min-width:52px;align-self:stretch;cursor:pointer;font-family:inherit}
+.tg-more:active{background:#d6daf0}
+.tg-body{padding:8px 10px 12px}
+.tg-empty{font-size:13px;color:#999;text-align:center;padding:14px 8px}
+.tg-empty.big{padding:26px 8px}
+.ti{background:#f8f9ff;border:1.5px solid #e8eaf6;border-radius:10px;padding:10px 12px;margin-top:6px;cursor:pointer}
+.ti:first-child{margin-top:0}
+.ti:active{background:#eceffc}
+.ti-top{display:flex;gap:8px;align-items:baseline;justify-content:space-between}
+.ti-name{font-size:14px;font-weight:700;color:#333;min-width:0;word-break:break-all}
+.ti-amt{font-size:14px;font-weight:700;color:#1a237e;white-space:nowrap;flex-shrink:0}
+.ti-spec{font-size:12px;color:#777;margin-top:2px}
+.ti-calc{font-size:12px;color:#888;margin-top:3px}
+.ti-note{margin-left:8px;color:#a66}
+.tg-add{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.tg-add button{flex:1;min-width:80px;white-space:nowrap;background:white;color:#555;border:1.5px dashed #c5cae9;padding:11px 8px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+.tg-add button.pk{background:#1a237e;color:white;border:1.5px solid #1a237e}
+.tg-add button:active{opacity:.8}
 
 /* 大項目追加 */
 .pg-add-area{display:flex;flex-direction:column;gap:10px;margin-top:10px}
@@ -140,55 +123,59 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
 .btn-add-sel:active{opacity:.9}
 .btn-cancel{background:#f5f5f5;color:#555;border:1.5px solid #ddd;padding:13px 20px;border-radius:10px;font-size:15px;cursor:pointer;font-family:inherit}
 
-/* 大項目モーダル：ボタングリッド */
-.pg-modal-grid{display:flex;flex-direction:column;gap:2px;padding:8px}
-.pg-modal-item{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-radius:10px;background:white;border:1.5px solid #e8eaf6;cursor:pointer;font-size:15px;font-weight:600;color:#1a237e;transition:all .12s}
-.pg-modal-item:active{background:#e8eaf6}
-.pg-modal-cnt{font-size:12px;color:#aaa;font-weight:400}
+/* 入力シート（下から出る） */
+.ed-body{padding:12px 16px 4px}
+.ed-f{margin-bottom:12px;position:relative;flex:1;min-width:0}
+.ed-f label{display:block;font-size:12px;font-weight:600;color:#666;margin-bottom:4px}
+.ed-f input{width:100%;padding:12px 12px;border:1.5px solid #ddd;border-radius:10px;font-size:16px;font-family:inherit;background:#fafafa;-webkit-appearance:none}
+.ed-f input:focus{outline:none;border-color:#1a237e;background:white}
+.ed-f input[type=number]{text-align:right}
+.ed-row{display:flex;gap:8px}
+.ed-amt{display:flex;justify-content:space-between;align-items:center;background:#f0f3ff;border-radius:10px;padding:12px 14px;margin:2px 0 12px;font-size:13px;color:#555}
+.ed-amt b{font-size:19px;color:#1a237e}
+.ed-sg{position:absolute;top:100%;left:0;right:0;margin-top:2px;background:white;border:1.5px solid #c5cae9;border-radius:10px;max-height:240px;overflow-y:auto;z-index:20;box-shadow:0 6px 16px rgba(0,0,0,.15)}
+.ed-sg:empty{display:none}
+.ed-sg-item{padding:11px 12px;border-bottom:1px solid #f0f0f0;display:flex;gap:8px;align-items:center;justify-content:space-between;font-size:14px;font-weight:600;color:#1a237e;cursor:pointer;min-height:48px}
+.ed-sg-item:active{background:#e8eaf6}
+.ed-sg-item small{display:block;font-size:11px;color:#888;font-weight:400}
+.ed-sg-item .p{font-size:13px;color:#333;white-space:nowrap;flex-shrink:0}
+.ed-tools{display:flex;gap:6px;padding:4px 0 12px}
+.ed-tools button{flex:1;background:#f5f5f5;border:1.5px solid #ddd;border-radius:10px;padding:11px 4px;font-size:13px;font-weight:600;color:#555;cursor:pointer;font-family:inherit}
+.ed-tools button.del{color:#e53935;border-color:#f3c4c4;background:#fff5f5}
+.ed-tools button:active{opacity:.7}
 
-/* 細項目モーダル：大項目アコーディオン */
-.acc-pg{border-bottom:1px solid #eee}
-.acc-pg-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;cursor:pointer;background:white;user-select:none}
-.acc-pg-name{font-size:15px;font-weight:700;color:#1a237e;flex:1}
-.acc-pg-cnt{font-size:12px;color:#aaa;margin-right:8px}
-.acc-pg-arr{font-size:14px;color:#aaa;transition:transform .2s;flex-shrink:0}
-.acc-pg-arr.open{transform:rotate(90deg)}
-.acc-pg-body{display:none;background:#f8f9ff;padding:8px}
-.acc-pg-body.open{display:block}
-
-/* 検索バー */
-.modal-search{width:100%;padding:12px 16px;border:1.5px solid #ddd;border-radius:10px;font-size:15px;font-family:inherit;background:#fafafa;-webkit-appearance:none;margin-bottom:2px}
-.modal-search:focus{outline:none;border-color:#1a237e}
-.search-wrap{padding:12px 12px 4px}
-
-/* 細項目カード（モーダル内） */
-.m-item{display:flex;align-items:center;gap:10px;padding:13px 14px;border:1.5px solid #eee;border-radius:10px;cursor:pointer;background:white;margin-bottom:6px;transition:all .12s}
-.m-item:active{background:#f0f3ff}
-.m-item.checked{border-color:#1a237e;background:#e8eaf6}
-.m-chk{width:22px;height:22px;border:2px solid #c5cae9;border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;color:#1a237e;font-weight:700;transition:all .12s}
-.m-item.checked .m-chk{background:#1a237e;border-color:#1a237e;color:white}
-.m-info{flex:1;min-width:0}
-.m-name{font-size:14px;font-weight:600;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.m-item.checked .m-name{color:#1a237e}
-.m-spec{font-size:12px;color:#888;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.m-price{font-size:14px;font-weight:700;color:#333;white-space:nowrap;text-align:right;flex-shrink:0}
-.m-unit{font-size:11px;color:#888;display:block;text-align:right}
-
-/* サジェスト（スマホ用大き目） */
-.sg-wrap{position:relative}
-.sg-list{position:absolute;top:100%;left:0;right:0;background:white;border:1.5px solid #c5cae9;border-radius:0 0 10px 10px;max-height:220px;overflow-y:auto;z-index:200;box-shadow:0 6px 16px rgba(0,0,0,.15);display:none}
-.sg-list.show{display:block}
-.sg-item{padding:12px 14px;cursor:pointer;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:8px;min-height:50px}
-.sg-item:active{background:#e8eaf6}
-.sg-name{font-weight:600;color:#1a237e;flex:1;font-size:14px}
-.sg-spec{color:#888;font-size:12px;white-space:nowrap;overflow:hidden;max-width:80px;text-overflow:ellipsis;flex-shrink:0}
-.sg-price{color:#333;font-weight:700;white-space:nowrap;font-size:13px;flex-shrink:0}
+/* 見積りベースから選ぶ */
+.modal-search{width:100%;padding:12px 16px;border:1.5px solid #ddd;border-radius:10px;font-size:16px;font-family:inherit;background:#fafafa;-webkit-appearance:none;appearance:none}
+.modal-search:focus{outline:none;border-color:#1a237e;background:white}
+.pk-top{padding:10px 12px 6px;border-bottom:1px solid #eee;flex-shrink:0}
+.pk-target{font-size:12px;color:#667;margin-bottom:6px}
+.pk-rate{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:#555}
+.pk-rate button{padding:6px 12px;border:1.5px solid #c5cae9;background:white;color:#1a237e;border-radius:18px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+.pk-rate button.on{background:#1a237e;color:white;border-color:#1a237e}
+.pk-crumb{padding:8px 12px;font-size:13px;color:#667;display:flex;flex-wrap:wrap;gap:2px 4px;align-items:center;border-bottom:1px solid #f0f0f0;flex-shrink:0;line-height:1.9}
+.pk-crumb button{background:#eef0fa;border:none;color:#1a237e;padding:3px 9px;border-radius:12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+.pk-hint{font-size:12px;color:#667}
+.pk-list{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px 10px;min-height:200px}
+.pk-row{display:flex;align-items:center;gap:10px;padding:11px 10px;border:1.5px solid #eee;border-radius:10px;background:white;margin-bottom:6px;cursor:pointer}
+.pk-row:active{background:#f0f3ff}
+.pk-row.sel{border-color:#1a237e;background:#e8eaf6}
+.pk-chk{width:28px;height:28px;border:2px solid #c5cae9;border-radius:7px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:16px;color:white;font-weight:700;background:white}
+.pk-row.sel .pk-chk{background:#1a237e;border-color:#1a237e}
+.pk-main{flex:1;min-width:0}
+.pk-name{font-size:14px;font-weight:700;color:#333;word-break:break-all}
+.pk-row[data-g="1"] .pk-name{color:#1a237e}
+.pk-spec{font-size:12px;color:#888;margin-top:1px}
+.pk-trail{font-size:11px;color:#9a9ab5;margin-top:2px}
+.pk-right{display:flex;align-items:center;gap:6px;flex-shrink:0;text-align:right}
+.pk-price{font-size:14px;font-weight:700;color:#333}
+.pk-unit{font-size:11px;color:#888}
+.pk-cnt{font-size:12px;color:#889}
+.pk-go{font-size:14px;color:#1a237e}
 
 /* PC専用調整 */
 @media(min-width:721px){
   .modal-bg{align-items:center}
   .modal{border-radius:16px;max-width:680px;max-height:88vh}
-  .pg-modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:12px}
   .actions{flex-direction:row;justify-content:center}
   .btn-ex{width:auto;padding:14px 36px}
   .btn-rst{width:auto;padding:14px 24px}
@@ -265,10 +252,11 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
 
 <div class="card" id="s-meisai">
   <div class="card-title">内訳明細</div>
+  <div class="meisai-hint">ESTと同じ段で入れられます（大項目 ▶ まとまり ▶ 項目）。タップで直せます。出力は、まとまりごとに別ページになります。</div>
   <div class="meisai-area" id="meisaiArea"></div>
   <div class="pg-add-area">
-    <button class="pg-add-btn" onclick="addPg()">＋ 大項目を追加（手書き）</button>
-    <button class="pg-pick-btn" onclick="openPgModal()">📦 見積りベースから選択</button>
+    <button class="pg-add-btn" onclick="estAddNode(null,'grp')">＋ 大項目を追加（手書き）</button>
+    <button class="pg-pick-btn" onclick="estOpenPicker(null)">📦 見積りベースから選択</button>
   </div>
   <div class="calc-area">
     <div class="misc-row">
@@ -326,49 +314,61 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
 
 </div></div>
 
-<!-- 大項目選択モーダル -->
-<div class="modal-bg" id="pgModalBg" onclick="if(event.target===this)closePgModal()">
+<!-- 入力シート（項目・まとまりの編集） -->
+<div class="modal-bg" id="edBg" onclick="if(event.target===this)estCloseEditor()">
   <div class="modal">
     <div class="modal-head">
-      <h2>📦 大項目を選択</h2>
-      <button class="modal-close" onclick="closePgModal()">✕</button>
+      <h2 id="edTitle">項目を編集</h2>
+      <button class="modal-close" onclick="estCloseEditor()">✕</button>
     </div>
-    <div class="modal-body">
-      <div class="pg-modal-grid" id="pgModalList"></div>
+    <div class="modal-body ed-body">
+      <div class="ed-f"><label>名称</label><input type="text" id="edName" placeholder="品名を入力（ベースの候補が出ます）" autocomplete="off" oninput="estEdInput(true)"/><div class="ed-sg" id="edSg"></div></div>
+      <div class="ed-f"><label>材質・寸法</label><input type="text" id="edSpec" placeholder="例：25mm HIVPパイプ" autocomplete="off" oninput="estEdInput()"/></div>
+      <div class="ed-row">
+        <div class="ed-f"><label>数量</label><input type="number" id="edQty" inputmode="decimal" step="any" min="0" oninput="estEdInput()"/></div>
+        <div class="ed-f"><label>単位</label><input type="text" id="edUnit" placeholder="式" oninput="estEdInput()"/></div>
+        <div class="ed-f" id="edPriceWrap"><label>単価（円）</label><input type="number" id="edPrice" inputmode="numeric" step="1" min="0" placeholder="0" oninput="estEdInput()"/></div>
+      </div>
+      <div class="ed-f" id="edNoteWrap"><label>備考</label><input type="text" id="edNote" placeholder="備考（任意）" autocomplete="off" oninput="estEdInput()"/></div>
+      <div class="ed-amt"><span id="edAmtLbl">金額</span><b id="edAmt">¥0</b></div>
+      <div class="ed-tools">
+        <button onclick="estEdMove(-1)">▲ 上へ</button>
+        <button onclick="estEdMove(1)">▼ 下へ</button>
+        <button onclick="estEdDup()">複製</button>
+        <button class="del" onclick="estEdDel()">削除</button>
+      </div>
     </div>
     <div class="modal-foot">
-      <span></span>
-      <button class="btn-cancel" onclick="closePgModal()">閉じる</button>
+      <button class="btn-add-sel" onclick="estCloseEditor()">✓ 完了</button>
     </div>
   </div>
 </div>
 
-<!-- 細項目選択モーダル（アコーディオン式） -->
-<div class="modal-bg" id="subModalBg" onclick="if(event.target===this)closeSubModal()">
+<!-- 見積りベースから選ぶ（段をたどる・検索・まとまりごと） -->
+<div class="modal-bg" id="pkBg" onclick="if(event.target===this)estClosePicker()">
   <div class="modal">
     <div class="modal-head">
-      <h2>📦 細項目を選択</h2>
-      <button class="modal-close" onclick="closeSubModal()">✕</button>
+      <h2>📦 見積りベースから選ぶ</h2>
+      <button class="modal-close" onclick="estClosePicker()">✕</button>
     </div>
-    <div class="modal-body">
-      <div class="search-wrap">
-        <input class="modal-search" type="text" id="subSearch" placeholder="🔍 名称・材質で検索..." oninput="filterSubModal()"/>
-      </div>
-      <div id="subAccordion"></div>
+    <div class="pk-top">
+      <div class="pk-target" id="pkTarget"></div>
+      <input class="modal-search" type="search" id="pkSearch" placeholder="🔍 名称・材質で検索..." oninput="estPkSearch()" autocomplete="off"/>
+      <div class="pk-rate">単価：<button id="rate130" onclick="estSetRate(130)">130%</button><button id="rate100" onclick="estSetRate(100)">100%（原価）</button></div>
     </div>
+    <div class="pk-crumb" id="pkCrumb"></div>
+    <div class="pk-list" id="pkList"></div>
     <div class="modal-foot">
-      <span class="sel-count" id="subSelCount">0件 選択中</span>
-      <div style="display:flex;gap:8px">
-        <button class="btn-cancel" onclick="closeSubModal()">キャンセル</button>
-        <button class="btn-add-sel" onclick="applySubSel()">追加する</button>
+      <span class="sel-count" id="pkCount">0件 選択中</span>
+      <div style="display:flex;gap:8px;flex:1;justify-content:flex-end">
+        <button class="btn-cancel" onclick="estClosePicker()">キャンセル</button>
+        <button class="btn-add-sel" style="flex:none" onclick="estPkApply()">追加する</button>
       </div>
     </div>
   </div>
 </div>
 
 <script>
-const GROUPS = [{"parent": "養生費", "children": [{"n": "養生費", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "作業部養生費", "s": "ブルーシート・マスカー共", "q": 1.0, "u": "式", "p": 8000, "note": ""}, {"n": "共用部養生費", "s": "資材仮置きの為", "q": 1.0, "u": "式", "p": 5000, "note": ""}, {"n": "共用部養生費", "s": "エレベーター養生費・材工共", "q": 1.0, "u": "式", "p": 12000, "note": ""}, {"n": "粉塵養生費", "s": "材工共", "q": 1.0, "u": "式", "p": 8000, "note": ""}, {"n": "火気養生費", "s": "防火マット材", "q": 1.0, "u": "式", "p": 5000, "note": ""}]}, {"parent": "開口工事費", "children": [{"n": "開口工事費", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "壁開口工事費", "s": "下地補強・仮復旧共", "q": 1.0, "u": "式", "p": 10000, "note": ""}, {"n": "床開口工事費", "s": "下地補強・仮復旧共", "q": 1.0, "u": "式", "p": 14000, "note": ""}, {"n": "壁開口工事費", "s": "点検口造作工事・材工共", "q": 2.0, "u": "式", "p": 16000, "note": ""}, {"n": "床開口工事費", "s": "点検口造作工事費・材工共", "q": 1.0, "u": "式", "p": 20000, "note": ""}, {"n": "天井開口工事費", "s": "下地補強・仮復旧共", "q": 1.0, "u": "式", "p": 11000, "note": ""}, {"n": "天井開口工事費", "s": "点検口造作工事費・材工共", "q": 1.0, "u": "式", "p": 18000, "note": ""}]}, {"parent": "脱着　移動", "children": [{"n": "脱着　移動", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "荷物移動費", "s": "冷蔵庫", "q": 1.0, "u": "式", "p": 6000, "note": ""}, {"n": "洗濯パン脱着作業費", "s": "洗濯機移動・施工保証料共", "q": 1.0, "u": "式", "p": 15000, "note": ""}, {"n": "化粧台脱着作業費", "s": "雑材・施工保証料共", "q": 1.0, "u": "式", "p": 23000, "note": ""}, {"n": "トイレ脱着作業費", "s": "雑材・施工保証料共", "q": 1.0, "u": "式", "p": 18000, "note": ""}]}, {"parent": "穴あけ", "children": [{"n": "穴あけ", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "穿孔工事費", "s": "機械損料共(ホルソー)", "q": 4.0, "u": "発", "p": 3800, "note": ""}, {"n": "穿孔工事費", "s": "機械損料共(コア機)", "q": 1.0, "u": "発", "p": 12000, "note": ""}, {"n": "貫通部シール処理費", "s": "編成シリコン材共", "q": 1.0, "u": "式", "p": 5000, "note": ""}]}, {"parent": "諸経費", "children": [{"n": "諸経費", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "現場管理費", "s": "現場管理費・報告書作成費共", "q": 1.0, "u": "日", "p": 18000, "note": ""}, {"n": "資材運搬費", "s": "車両＋運搬費＋購入労務費", "q": 1.0, "u": "式", "p": 16000, "note": ""}, {"n": "交通費", "s": "高速費・コインパーキング共", "q": 1.0, "u": "台", "p": 10000, "note": ""}, {"n": "資材運搬費", "s": "車両＋運搬費＋処分費", "q": 1.0, "u": "式", "p": 23500, "note": ""}]}, {"parent": "施工（配管・はつり系）", "children": [{"n": "施工", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "新規配管施工費", "s": "技術料・施工保証料共", "q": 1.0, "u": "式", "p": 0, "note": ""}, {"n": "埋設部はつり工事費", "s": "機械損料共(斫り機)", "q": 1.0, "u": "式", "p": 16000, "note": ""}, {"n": "壁ブロック解体工事費", "s": "機械損料共(斫り機)", "q": 2.0, "u": "式", "p": 12000, "note": "上下階共"}, {"n": "貫通部はつり工事費", "s": "機械損料共(斫り機)", "q": 1.0, "u": "式", "p": 18000, "note": ""}, {"n": "埋設配管はつり工事費", "s": "機械損料共(ブレイカー)", "q": 1.0, "u": "式", "p": 26000, "note": ""}, {"n": "モルタル補修費", "s": "速乾モルタル・材工共", "q": 1.0, "u": "式", "p": 12000, "note": ""}, {"n": "配管モール施工費", "s": "技術料・保証料共", "q": 1.0, "u": "式", "p": 23000, "note": ""}, {"n": "新規ラッキング施工費", "s": "技術料・保証料共", "q": 1.0, "u": "式", "p": 25000, "note": ""}, {"n": "保温材施工費", "s": "材工共", "q": 1.0, "u": "式", "p": 8000, "note": ""}, {"n": "保温材施工費", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "掘削作業費", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "水抜き作業費", "s": "排水作業・通水作業共", "q": 1.0, "u": "式", "p": 12000, "note": ""}, {"n": "既存配管撤去工事費", "s": "発生材処分費共", "q": 1.0, "u": "式", "p": 18500, "note": ""}, {"n": "既存配管切断工事費", "s": "機械損料共(レシプロソー)", "q": 1.0, "u": "式", "p": 12000, "note": ""}, {"n": "保温材施工費", "s": "材工共", "q": 1.0, "u": "式", "p": 12000, "note": ""}, {"n": "新規水栓取り付け工事費", "s": "技術料・保証料共", "q": 1.0, "u": "式", "p": 23000, "note": ""}, {"n": "電気温水器脱着作業費", "s": "技術料・保証料共", "q": 1.0, "u": "式", "p": 46000, "note": ""}, {"n": "排水不良解消作業費", "s": "機械損料共(高圧洗浄機)", "q": 1.0, "u": "式", "p": 60000, "note": ""}, {"n": "ファイバースコープ調査費", "s": "機械損料共(ファイバースコープ)", "q": 1.0, "u": "式", "p": 42000, "note": ""}, {"n": "雑材及び消耗品費", "s": "", "q": 1.0, "u": "式", "p": 8000, "note": ""}, {"n": "諸経費", "s": "", "q": 1.0, "u": "式", "p": 20000, "note": ""}, {"n": "部分足場設置工事費", "s": "安全対策費共", "q": 1.0, "u": "式", "p": 70000, "note": ""}]}, {"parent": "施工（防水・内装系）", "children": [{"n": "既存コーキング除去作業費", "s": "ウレタン系", "q": 1.0, "u": "式", "p": 40000, "note": ""}, {"n": "既存防水シート撤去工事費", "s": "発生材処分費共", "q": 1.0, "u": "式", "p": 75000, "note": ""}, {"n": "ウレタン塗膜防水工事費", "s": "材工・施工保証料共", "q": 1.0, "u": "式", "p": 160000, "note": "通気緩衝工法"}, {"n": "防水下地カチオン塗布工事費", "s": "下地調整費・材工共", "q": 1.0, "u": "式", "p": 42000, "note": ""}, {"n": "排水口設置工事費", "s": "技術料・保証料共", "q": 1.0, "u": "式", "p": 20000, "note": ""}, {"n": "部分足場撤去工事費", "s": "安全対策費共", "q": 1.0, "u": "式", "p": 80000, "note": ""}, {"n": "電気温水器脱着作業費", "s": "技術料・施工保証料共", "q": 1.0, "u": "式", "p": 52000, "note": ""}, {"n": "作業部養生費", "s": "ブルーシート・マスカー共", "q": 1.0, "u": "式", "p": 3000, "note": ""}, {"n": "洗濯機・洗濯パン脱着作業費", "s": "技術料・施工保証料共", "q": 1.0, "u": "式", "p": 15000, "note": ""}, {"n": "既存トイレ撤去工事費", "s": "発生材処分費共", "q": 1.0, "u": "式", "p": 15500, "note": ""}, {"n": "新規トイレ取り付け工事費", "s": "技術料・施工保証料共", "q": 1.0, "u": "式", "p": 26000, "note": ""}, {"n": "シール処理費", "s": "変成シリコン・材工共", "q": 1.0, "u": "式", "p": 8000, "note": ""}, {"n": "安全対策費", "s": "人員配置", "q": 1.0, "u": "式", "p": 18000, "note": ""}, {"n": "作業部養生費", "s": "ブルーシート・マスカー共", "q": 1.0, "u": "式", "p": 8000, "note": ""}, {"n": "インバート補修工事費", "s": "技術料・施工保証料共", "q": 1.0, "u": "箇所", "p": 16000, "note": ""}, {"n": "桝外周部モルタル補修費", "s": "技術料・施工保証料共", "q": 1.0, "u": "式", "p": 10000, "note": ""}, {"n": "桝内部はつり工事費", "s": "機械損料共(斫り機)", "q": 1.0, "u": "式", "p": 26000, "note": "全戸断水"}, {"n": "内部土入れ作業費", "s": "", "q": 1.0, "u": "式", "p": 12000, "note": ""}, {"n": "新規インバート施工費", "s": "技術料・材工共", "q": 1.0, "u": "式", "p": 36000, "note": ""}, {"n": "天井解体工事費", "s": "技術料・施工保証料共", "q": 1.0, "u": "式", "p": 26000, "note": ""}, {"n": "天井仮復旧費", "s": "下地補強・仮復旧共", "q": 1.0, "u": "式", "p": 18000, "note": ""}, {"n": "天井仮復旧費", "s": "プラベニヤ材工共", "q": 1.0, "u": "式", "p": 18000, "note": ""}, {"n": "ラッキング施工費", "s": "技術料・保証料共", "q": 1.0, "u": "式", "p": 23000, "note": ""}, {"n": "浴室解体工事費", "s": "技術料・保証料共", "q": 1.0, "u": "式", "p": 52000, "note": ""}, {"n": "埋設配管はつり工事費", "s": "機械損料共(ブレイカー)", "q": 1.0, "u": "式", "p": 26000, "note": ""}]}, {"parent": "管材料・部品（全品目）", "children": [{"n": "材料　給水　給湯　排水", "s": "", "q": 1, "u": "式", "p": 0, "note": "", "sub": "材料　給水　給湯　排水"}, {"n": "耐火VPパイプ　継手", "s": "", "q": 1.0, "u": "式", "p": 231460, "note": "", "sub": "排水"}, {"n": "フネンパイプ", "s": "", "q": 1.0, "u": "式", "p": 305200, "note": "", "sub": "排水"}, {"n": "VPパイプ", "s": "", "q": 1.0, "u": "式", "p": 122247, "note": "", "sub": "排水"}, {"n": "HTVP　パイプ・DV継手　【耐熱　排水管】", "s": "お湯　排水用", "q": 1.0, "u": "式", "p": 19290, "note": "", "sub": "排水"}, {"n": "ストラブカップリング", "s": "", "q": 1.0, "u": "式", "p": 106550, "note": "", "sub": "排水"}, {"n": "MDジョイント　フランジセット", "s": "", "q": 1.0, "u": "式", "p": 628500, "note": "", "sub": "排水"}, {"n": "カラーパイプ", "s": "", "q": 1.0, "u": "式", "p": 3410, "note": "", "sub": "排水"}, {"n": "アキレスジョイント", "s": "", "q": 1.0, "u": "式", "p": 12700, "note": "", "sub": "排水"}, {"n": "HIVP　パイプ・継手　【耐衝撃給水管】", "s": "水", "q": 1.0, "u": "式", "p": 41700, "note": "", "sub": "給水・給湯"}, {"n": "HTVP　パイプ・継手　【耐熱　給湯管】", "s": "湯", "q": 1.0, "u": "式", "p": 10910, "note": "", "sub": "給水・給湯"}, {"n": "オンダ・架橋ポリエチレン管", "s": "", "q": 1.0, "u": "式", "p": 76279, "note": "", "sub": "給水・給湯"}, {"n": "未来工業【配管モール関係】", "s": "", "q": 1.0, "u": "式", "p": 4800, "note": "", "sub": "給水・給湯"}, {"n": "HILAカップリング継手", "s": "", "q": 1.0, "u": "式", "p": 13800, "note": "", "sub": "給水・給湯"}, {"n": "雑ネジ", "s": "", "q": 1.0, "u": "式", "p": 39880, "note": "", "sub": "給水・給湯"}, {"n": "バルブ　【ゲートバルブ・ボールバルブ】", "s": "", "q": 1.0, "u": "式", "p": 48000, "note": "", "sub": "給水・給湯"}, {"n": "FMバルブ・チャッキ・ボールタップ　等", "s": "", "q": 1.0, "u": "式", "p": 21400, "note": "", "sub": "給水・給湯"}, {"n": "銅変換継手", "s": "", "q": 1.0, "u": "式", "p": 2275, "note": "", "sub": "給水・給湯"}, {"n": "フロアバンド", "s": "", "q": 1.0, "u": "式", "p": 15950, "note": "", "sub": "雑材"}, {"n": "耐火材", "s": "", "q": 1.0, "u": "式", "p": 18670, "note": "", "sub": "雑材"}, {"n": "キッチン水栓", "s": "", "q": 1.0, "u": "式", "p": 33660, "note": "", "sub": "雑材"}, {"n": "ボード類", "s": "", "q": 1.0, "u": "式", "p": 3500, "note": "", "sub": "材料　給水　給湯　排水"}, {"n": "トイレボールタップ", "s": "", "q": 1.0, "u": "式", "p": 4800, "note": "", "sub": "材料　給水　給湯　排水"}, {"n": "グラスウール　ALGC", "s": "", "q": 1.0, "u": "式", "p": 9150, "note": "", "sub": "材料　給水　給湯　排水"}, {"n": "耐火VPパイプ　継手", "s": "", "q": 1, "u": "式", "p": 0, "note": "", "sub": "耐火VPパイプ　継手"}, {"n": "40㎜　耐火VPパイプ", "s": "", "q": 1.0, "u": "本", "p": 3900, "note": "", "sub": "耐火VPパイプ"}, {"n": "50㎜　耐火VPパイプ", "s": "", "q": 1.0, "u": "本", "p": 4800, "note": "", "sub": "耐火VPパイプ"}, {"n": "65㎜　耐火VPパイプ", "s": "", "q": 1.0, "u": "本", "p": 6600, "note": "", "sub": "耐火VPパイプ"}, {"n": "75㎜　耐火VPパイプ", "s": "", "q": 1.0, "u": "本", "p": 7900, "note": "", "sub": "耐火VPパイプ"}, {"n": "100㎜　耐火VPパイプ", "s": "", "q": 1.0, "u": "本", "p": 11500, "note": "", "sub": "耐火VPパイプ"}, {"n": "125㎜　耐火VPパイプ", "s": "", "q": 1.0, "u": "本", "p": 16200, "note": "", "sub": "耐火VPパイプ"}, {"n": "150㎜　耐火VPパイプ", "s": "", "q": 1.0, "u": "本", "p": 21300, "note": "", "sub": "耐火VPパイプ"}, {"n": "200㎜　耐火VPパイプ", "s": "", "q": 1.0, "u": "本", "p": 38300, "note": "", "sub": "耐火VPパイプ"}, {"n": "40㎜　耐火VP　エルボ", "s": "", "q": 1.0, "u": "個", "p": 600, "note": "", "sub": "エルボ【L】"}, {"n": "50㎜　耐火VP　エルボ", "s": "", "q": 1.0, "u": "個", "p": 760, "note": "", "sub": "エルボ【L】"}, {"n": "65mm　耐火VP　エルボ", "s": "", "q": 1.0, "u": "個", "p": 910, "note": "", "sub": "エルボ【L】"}, {"n": "75mm　耐火VP　エルボ", "s": "", "q": 1.0, "u": "個", "p": 1060, "note": "", "sub": "エルボ【L】"}, {"n": "100mm  耐火VP　エルボ", "s": "", "q": 1.0, "u": "個", "p": 1530, "note": "", "sub": "エルボ【L】"}, {"n": "125㎜　耐火VP　エルボ", "s": "", "q": 1.0, "u": "個", "p": 2300, "note": "", "sub": "エルボ【L】"}, {"n": "150mm  耐火VP　エルボ", "s": "", "q": 1.0, "u": "個", "p": 3600, "note": "", "sub": "エルボ【L】"}, {"n": "40㎜　耐火VP　45°エルボ", "s": "", "q": 1.0, "u": "個", "p": 560, "note": "", "sub": "45°エルボ【45°L】"}, {"n": "50㎜　耐火VP　45°エルボ", "s": "", "q": 1.0, "u": "個", "p": 690, "note": "", "sub": "45°エルボ【45°L】"}, {"n": "65mm　耐火VP　45°エルボ", "s": "", "q": 1.0, "u": "個", "p": 850, "note": "", "sub": "45°エルボ【45°L】"}, {"n": "75mm　耐火VP　45°エルボ", "s": "", "q": 1.0, "u": "個", "p": 950, "note": "", "sub": "45°エルボ【45°L】"}, {"n": "100mm  耐火VP　45°エルボ", "s": "", "q": 1.0, "u": "個", "p": 1320, "note": "", "sub": "45°エルボ【45°L】"}, {"n": "125㎜　耐火VP　45°エルボ", "s": "", "q": 1.0, "u": "個", "p": 2060, "note": "", "sub": "耐火VPパイプ　継手"}, {"n": "150mm  耐火VP　45°エルボ", "s": "", "q": 1.0, "u": "個", "p": 2900, "note": "", "sub": "耐火VPパイプ　継手"}, {"n": "40㎜　耐火VP　大曲エルボ", "s": "", "q": 1.0, "u": "個", "p": 970, "note": "", "sub": "大曲エルボ【LL】"}, {"n": "50㎜　耐火VP　大曲エルボ", "s": "", "q": 1.0, "u": "個", "p": 1100, "note": "", "sub": "大曲エルボ【LL】"}, {"n": "65㎜　耐火VP　大曲エルボ", "s": "", "q": 1.0, "u": "個", "p": 1300, "note": "", "sub": "大曲エルボ【LL】"}, {"n": "75㎜　耐火VP　大曲エルボ", "s": "", "q": 1.0, "u": "個", "p": 1530, "note": "", "sub": "大曲エルボ【LL】"}, {"n": "100㎜　耐火VP　大曲エルボ", "s": "", "q": 1.0, "u": "個", "p": 2200, "note": "", "sub": "大曲エルボ【LL】"}, {"n": "120㎜　耐火VP　大曲エルボ", "s": "", "q": 1.0, "u": "個", "p": 3100, "note": "", "sub": "大曲エルボ【LL】"}, {"n": "150㎜　耐火VP　大曲エルボ", "s": "", "q": 1.0, "u": "個", "p": 4800, "note": "", "sub": "大曲エルボ【LL】"}, {"n": "40㎜　耐火VP　ソケット", "s": "", "q": 1.0, "u": "個", "p": 460, "note": "", "sub": "ソケット【S】"}, {"n": "50㎜　耐火VP　ソケット", "s": "", "q": 1.0, "u": "個", "p": 530, "note": "", "sub": "ソケット【S】"}, {"n": "65㎜　耐火VP　ソケット", "s": "", "q": 1.0, "u": "個", "p": 630, "note": "", "sub": "ソケット【S】"}, {"n": "75㎜　耐火VP　ソケット", "s": "", "q": 1.0, "u": "個", "p": 700, "note": "", "sub": "ソケット【S】"}, {"n": "100㎜　耐火VP　ソケット", "s": "", "q": 1.0, "u": "個", "p": 950, "note": "", "sub": "ソケット【S】"}, {"n": "125㎜　耐火VP　ソケット", "s": "", "q": 1.0, "u": "個", "p": 1450, "note": "", "sub": "ソケット【S】"}, {"n": "150㎜　耐火VP　ソケット", "s": "", "q": 1.0, "u": "個", "p": 2200, "note": "", "sub": "ソケット【S】"}, {"n": "40mm　LT", "s": "", "q": 1.0, "u": "個", "p": 950, "note": "", "sub": "LTチーズ【LT】"}, {"n": "50㎜　LT", "s": "", "q": 1.0, "u": "個", "p": 1100, "note": "", "sub": "LTチーズ【LT】"}, {"n": "65mm　LT", "s": "", "q": 1.0, "u": "個", "p": 1400, "note": "", "sub": "LTチーズ【LT】"}, {"n": "65×50mm　LT", "s": "", "q": 1.0, "u": "個", "p": 1300, "note": "", "sub": "LTチーズ【LT】"}, {"n": "75mm　LT", "s": "", "q": 1.0, "u": "個", "p": 1650, "note": "", "sub": "LTチーズ【LT】"}, {"n": "100mm　LT", "s": "", "q": 1.0, "u": "個", "p": 2500, "note": "", "sub": "LTチーズ【LT】"}, {"n": "125mm　LT", "s": "", "q": 1.0, "u": "個", "p": 2900, "note": "", "sub": "耐火VPパイプ　継手"}, {"n": "150mm　LT", "s": "", "q": 1.0, "u": "個", "p": 6600, "note": "", "sub": "耐火VPパイプ　継手"}, {"n": "100×50mm　LT", "s": "", "q": 1.0, "u": "個", "p": 1900, "note": "", "sub": "耐火VPパイプ　継手"}, {"n": "100×75㎜　LT", "s": "", "q": 1.0, "u": "個", "p": 2200, "note": "", "sub": "耐火VPパイプ　継手"}, {"n": "40㎜　耐火VP　DT", "s": "", "q": 1.0, "u": "個", "p": 560, "note": "", "sub": "DTチーズ【DT】"}, {"n": "50㎜　耐火VP　DT", "s": "", "q": 1.0, "u": "個", "p": 950, "note": "", "sub": "DTチーズ【DT】"}, {"n": "50×40㎜　耐火VP　DT", "s": "", "q": 1.0, "u": "個", "p": 910, "note": "", "sub": "DTチーズ【DT】"}, {"n": "65㎜　耐火VP　DT", "s": "", "q": 1.0, "u": "個", "p": 1250, "note": "", "sub": "DTチーズ【DT】"}, {"n": "65×50㎜　耐火VP　DT", "s": "", "q": 1.0, "u": "個", "p": 1200, "note": "", "sub": "DTチーズ【DT】"}, {"n": "65×40㎜　耐火VP　DT", "s": "", "q": 1.0, "u": "個", "p": 1000, "note": "", "sub": "DTチーズ【DT】"}, {"n": "75㎜　耐火VP　DT", "s": "", "q": 1.0, "u": "個", "p": 1500, "note": "", "sub": "DTチーズ【DT】"}, {"n": "75×50㎜　耐火VP　DT", "s": "", "q": 1.0, "u": "個", "p": 1300, "note": "", "sub": "DTチーズ【DT】"}, {"n": "75×65㎜　耐火VP　DT", "s": "", "q": 1.0, "u": "個", "p": 1400, "note": "", "sub": "DTチーズ【DT】"}, {"n": "100㎜　耐火VP　DT", "s": "", "q": 1.0, "u": "個", "p": 2250, "note": "", "sub": "DTチーズ【DT】"}, {"n": "100×50㎜　耐火VP　DT", "s": "", "q": 1.0, "u": "個", "p": 1700, "note": "", "sub": "DTチーズ【DT】"}, {"n": "100×65㎜　耐火VP　DT", "s": "", "q": 1.0, "u": "個", "p": 1900, "note": "", "sub": "DTチーズ【DT】"}, {"n": "100×75㎜　耐火VP　DT", "s": "", "q": 1.0, "u": "個", "p": 2000, "note": "", "sub": "DTチーズ【DT】"}, {"n": "125㎜　耐火VP　DT", "s": "", "q": 1.0, "u": "個", "p": 3500, "note": "", "sub": "DTチーズ【DT】"}, {"n": "150㎜　耐火VP　DT", "s": "", "q": 1.0, "u": "個", "p": 5700, "note": "", "sub": "DTチーズ【DT】"}, {"n": "40mm  耐火VP　Y", "s": "", "q": 1.0, "u": "個", "p": 910, "note": "", "sub": "Yチーズ【Y】"}, {"n": "50mm  耐火VP　Y", "s": "", "q": 1.0, "u": "個", "p": 1000, "note": "", "sub": "Yチーズ【Y】"}, {"n": "65mm  耐火VP　Y", "s": "", "q": 1.0, "u": "個", "p": 1300, "note": "", "sub": "Yチーズ【Y】"}, {"n": "75mm  耐火VP　Y", "s": "", "q": 1.0, "u": "個", "p": 1500, "note": "", "sub": "Yチーズ【Y】"}, {"n": "100mm  耐火VP　Y", "s": "", "q": 1.0, "u": "個", "p": 2300, "note": "", "sub": "耐火VPパイプ　継手"}, {"n": "125mm  耐火VP　Y", "s": "", "q": 1.0, "u": "個", "p": 3800, "note": "", "sub": "耐火VPパイプ　継手"}, {"n": "150mm  耐火VP　Y", "s": "", "q": 1.0, "u": "個", "p": 6500, "note": "", "sub": "耐火VPパイプ　継手"}, {"n": "50×40mm　耐火VP　IN", "s": "", "q": 1.0, "u": "個", "p": 510, "note": "", "sub": "インクリーザ【IN】"}, {"n": "65×50mm　耐火VP　IN", "s": "", "q": 1.0, "u": "個", "p": 580, "note": "", "sub": "インクリーザ【IN】"}, {"n": "75×50mm　耐火VP　IN", "s": "", "q": 1.0, "u": "個", "p": 650, "note": "", "sub": "インクリーザ【IN】"}, {"n": "75×65mm　耐火VP　IN", "s": "", "q": 1.0, "u": "個", "p": 700, "note": "", "sub": "インクリーザ【IN】"}, {"n": "100×50mm　耐火VP　IN", "s": "", "q": 1.0, "u": "個", "p": 750, "note": "", "sub": "インクリーザ【IN】"}, {"n": "100×65mm　耐火VP　IN", "s": "", "q": 1.0, "u": "個", "p": 830, "note": "", "sub": "インクリーザ【IN】"}, {"n": "100×75mm　耐火VP　IN", "s": "", "q": 1.0, "u": "個", "p": 900, "note": "", "sub": "インクリーザ【IN】"}, {"n": "40㎜　耐火VP　掃除口", "s": "", "q": 1.0, "u": "個", "p": 580, "note": "", "sub": "掃除口【COS】"}, {"n": "50㎜　耐火VP　掃除口", "s": "", "q": 1.0, "u": "個", "p": 600, "note": "", "sub": "掃除口【COS】"}, {"n": "65㎜　耐火VP　掃除口", "s": "", "q": 1.0, "u": "個", "p": 700, "note": "", "sub": "掃除口【COS】"}, {"n": "75㎜　耐火VP　掃除口", "s": "", "q": 1.0, "u": "個", "p": 800, "note": "", "sub": "掃除口【COS】"}, {"n": "100mm  耐火VP　掃除口", "s": "", "q": 1.0, "u": "個", "p": 1200, "note": "", "sub": "掃除口【COS】"}, {"n": "40mm　耐火VP　バルブソケット", "s": "", "q": 1.0, "u": "個", "p": 420, "note": "", "sub": "バルブソケット【VS】"}, {"n": "50mm　耐火VP　バルブソケット", "s": "", "q": 1.0, "u": "個", "p": 520, "note": "", "sub": "バルブソケット【VS】"}, {"n": "65mm　耐火VP　バルブソケット", "s": "", "q": 1.0, "u": "個", "p": 580, "note": "", "sub": "バルブソケット【VS】"}, {"n": "75mm　耐火VP　バルブソケット", "s": "", "q": 1.0, "u": "個", "p": 700, "note": "", "sub": "バルブソケット【VS】"}, {"n": "100mm　耐火VP　バルブソケット", "s": "", "q": 1.0, "u": "個", "p": 1000, "note": "", "sub": "バルブソケット【VS】"}, {"n": "フネンパイプ", "s": "", "q": 1, "u": "式", "p": 0, "note": "", "sub": "フネンパイプ"}, {"n": "40㎜　フネンVPパイプ", "s": "", "q": 1.0, "u": "本", "p": 3700, "note": "", "sub": "フネンVPパイプ"}, {"n": "50㎜　フネンVPパイプ", "s": "", "q": 1.0, "u": "本", "p": 4500, "note": "", "sub": "フネンVPパイプ"}, {"n": "65㎜　フネンVPパイプ", "s": "", "q": 1.0, "u": "本", "p": 5900, "note": "", "sub": "フネンVPパイプ"}, {"n": "75㎜　フネンVPパイプ", "s": "", "q": 1.0, "u": "本", "p": 7300, "note": "", "sub": "フネンVPパイプ"}, {"n": "100㎜　フネンVPパイプ", "s": "", "q": 1.0, "u": "本", "p": 10500, "note": "", "sub": "フネンVPパイプ"}, {"n": "125㎜　フネンVPパイプ", "s": "", "q": 1.0, "u": "本", "p": 14600, "note": "", "sub": "フネンVPパイプ"}, {"n": "150㎜　フネンVPパイプ", "s": "", "q": 1.0, "u": "本", "p": 19300, "note": "", "sub": "フネンVPパイプ"}, {"n": "40㎜　フネンVP　エルボ", "s": "", "q": 1.0, "u": "個", "p": 1500, "note": "", "sub": "フネンエルボ【L】"}, {"n": "50㎜　フネンVP　エルボ", "s": "", "q": 1.0, "u": "個", "p": 1800, "note": "", "sub": "フネンエルボ【L】"}, {"n": "65mm　フネンVP　エルボ", "s": "", "q": 1.0, "u": "個", "p": 2200, "note": "", "sub": "フネンエルボ【L】"}, {"n": "75mm　フネンVP　エルボ", "s": "", "q": 1.0, "u": "個", "p": 2600, "note": "", "sub": "フネンエルボ【L】"}, {"n": "100mm  フネンVP　エルボ", "s": "", "q": 1.0, "u": "個", "p": 3800, "note": "", "sub": "フネンエルボ【L】"}, {"n": "125㎜　フネンVP　エルボ", "s": "", "q": 1.0, "u": "個", "p": 5800, "note": "", "sub": "フネンエルボ【L】"}, {"n": "150mm  フネンVP　エルボ", "s": "", "q": 1.0, "u": "個", "p": 8700, "note": "", "sub": "フネンエルボ【L】"}, {"n": "40㎜　フネンVP　45°エルボ", "s": "", "q": 1.0, "u": "個", "p": 1500, "note": "", "sub": "フネン45°エルボ【45°L】"}, {"n": "50㎜　フネンVP　45°エルボ", "s": "", "q": 1.0, "u": "個", "p": 1600, "note": "", "sub": "フネン45°エルボ【45°L】"}, {"n": "65mm　フネンVP　45°エルボ", "s": "", "q": 1.0, "u": "個", "p": 2100, "note": "", "sub": "フネン45°エルボ【45°L】"}, {"n": "75mm　フネンVP　45°エルボ", "s": "", "q": 1.0, "u": "個", "p": 2300, "note": "", "sub": "フネン45°エルボ【45°L】"}, {"n": "100mm  フネンVP　45°エルボ", "s": "", "q": 1.0, "u": "個", "p": 3200, "note": "", "sub": "フネン45°エルボ【45°L】"}, {"n": "125㎜　フネンVP　45°エルボ", "s": "", "q": 1.0, "u": "個", "p": 4800, "note": "", "sub": "フネン45°エルボ【45°L】"}, {"n": "150mm  フネンVP　45°エルボ", "s": "", "q": 1.0, "u": "個", "p": 6900, "note": "", "sub": "フネンパイプ"}, {"n": "40㎜　フネンVP　大曲エルボ", "s": "", "q": 1.0, "u": "個", "p": 2300, "note": "", "sub": "フネン大曲エルボ【LL】"}, {"n": "50㎜　フネンVP　大曲エルボ", "s": "", "q": 1.0, "u": "個", "p": 2600, "note": "", "sub": "フネン大曲エルボ【LL】"}, {"n": "65㎜　フネンVP　大曲エルボ", "s": "", "q": 1.0, "u": "個", "p": 3200, "note": "", "sub": "フネン大曲エルボ【LL】"}, {"n": "75㎜　フネンVP　大曲エルボ", "s": "", "q": 1.0, "u": "個", "p": 3800, "note": "", "sub": "フネン大曲エルボ【LL】"}, {"n": "100㎜　フネンVP　大曲エルボ", "s": "", "q": 1.0, "u": "個", "p": 5300, "note": "", "sub": "フネン大曲エルボ【LL】"}, {"n": "120㎜　フネンVP　大曲エルボ", "s": "", "q": 1.0, "u": "個", "p": 7700, "note": "", "sub": "フネン大曲エルボ【LL】"}, {"n": "150㎜　フネンVP　大曲エルボ", "s": "", "q": 1.0, "u": "個", "p": 12000, "note": "", "sub": "フネン大曲エルボ【LL】"}, {"n": "100×75㎜　フネンVP　大曲エルボ", "s": "", "q": 1.0, "u": "個", "p": 7700, "note": "", "sub": "フネン大曲エルボ【LL】"}, {"n": "40㎜　フネンVP　ソケット", "s": "", "q": 1.0, "u": "個", "p": 1100, "note": "", "sub": "フネンソケット【S】"}, {"n": "50㎜　フネンVP　ソケット", "s": "", "q": 1.0, "u": "個", "p": 1200, "note": "", "sub": "フネンソケット【S】"}, {"n": "65㎜　フネンVP　ソケット", "s": "", "q": 1.0, "u": "個", "p": 1500, "note": "", "sub": "フネンソケット【S】"}, {"n": "75㎜　フネンVP　ソケット", "s": "", "q": 1.0, "u": "個", "p": 1700, "note": "", "sub": "フネンソケット【S】"}, {"n": "100㎜　フネンVP　ソケット", "s": "", "q": 1.0, "u": "個", "p": 2300, "note": "", "sub": "フネンソケット【S】"}, {"n": "125㎜　フネンVP　ソケット", "s": "", "q": 1.0, "u": "個", "p": 3700, "note": "", "sub": "フネンソケット【S】"}, {"n": "150㎜　フネンVP　ソケット", "s": "", "q": 1.0, "u": "個", "p": 5200, "note": "", "sub": "フネンソケット【S】"}, {"n": "40㎜　フネンVP　DT", "s": "", "q": 1.0, "u": "個", "p": 2000, "note": "", "sub": "フネンDTチーズ【DT】"}, {"n": "50㎜　フネンVP　DT", "s": "", "q": 1.0, "u": "個", "p": 2300, "note": "", "sub": "フネンDTチーズ【DT】"}, {"n": "50×40㎜　フネンVP　DT", "s": "", "q": 1.0, "u": "個", "p": 2300, "note": "", "sub": "フネンDTチーズ【DT】"}, {"n": "65㎜　フネンVP　DT", "s": "", "q": 1.0, "u": "個", "p": 3000, "note": "", "sub": "フネンDTチーズ【DT】"}, {"n": "65×40㎜　フネンVP　DT", "s": "", "q": 1.0, "u": "個", "p": 2700, "note": "", "sub": "フネンDTチーズ【DT】"}, {"n": "65×50㎜　フネンVP　DT", "s": "", "q": 1.0, "u": "個", "p": 2900, "note": "", "sub": "フネンDTチーズ【DT】"}, {"n": "75㎜　フネンVP　DT", "s": "", "q": 1.0, "u": "個", "p": 3600, "note": "", "sub": "フネンパイプ"}, {"n": "75×50㎜　フネンVP　DT", "s": "", "q": 1.0, "u": "個", "p": 3100, "note": "", "sub": "フネンパイプ"}, {"n": "75×65㎜　フネンVP　DT", "s": "", "q": 1.0, "u": "個", "p": 3400, "note": "", "sub": "フネンパイプ"}, {"n": "100㎜　フネンVP　DT", "s": "", "q": 1.0, "u": "個", "p": 5500, "note": "", "sub": "フネンパイプ"}, {"n": "100×50㎜　フネンVP　DT", "s": "", "q": 1.0, "u": "個", "p": 4200, "note": "", "sub": "フネンパイプ"}, {"n": "100×65㎜　フネンVP　DT", "s": "", "q": 1.0, "u": "個", "p": 4500, "note": "", "sub": "フネンパイプ"}, {"n": "100×75㎜　フネンVP　DT", "s": "", "q": 1.0, "u": "個", "p": 4800, "note": "", "sub": "フネンパイプ"}, {"n": "125㎜　フネンVP　DT", "s": "", "q": 1.0, "u": "個", "p": 8500, "note": "", "sub": "フネンパイプ"}, {"n": "150㎜　フネンVP　DT", "s": "", "q": 1.0, "u": "個", "p": 14000, "note": "", "sub": "フネンパイプ"}, {"n": "40mm  フネンY", "s": "", "q": 1.0, "u": "個", "p": 2100, "note": "", "sub": "フネンYチーズ【Y】"}, {"n": "50mm  フネンY", "s": "", "q": 1.0, "u": "個", "p": 2400, "note": "", "sub": "フネンYチーズ【Y】"}, {"n": "65mm  フネンY", "s": "", "q": 1.0, "u": "個", "p": 3100, "note": "", "sub": "フネンYチーズ【Y】"}, {"n": "75mm  フネンY", "s": "", "q": 1.0, "u": "個", "p": 3700, "note": "", "sub": "フネンYチーズ【Y】"}, {"n": "100mm フネン Y", "s": "", "q": 1.0, "u": "個", "p": 5700, "note": "", "sub": "フネンYチーズ【Y】"}, {"n": "125mm  フネンY", "s": "", "q": 1.0, "u": "個", "p": 8700, "note": "", "sub": "フネンYチーズ【Y】"}, {"n": "150mm  フネンY", "s": "", "q": 1.0, "u": "個", "p": 16500, "note": "", "sub": "フネンYチーズ【Y】"}, {"n": "50×40mm　フネンIN", "s": "", "q": 1.0, "u": "個", "p": 1200, "note": "", "sub": "フネンインクリーザ【IN】"}, {"n": "65×50mm　フネンIN", "s": "", "q": 1.0, "u": "個", "p": 1400, "note": "", "sub": "フネンインクリーザ【IN】"}, {"n": "75×50mm　フネンIN", "s": "", "q": 1.0, "u": "個", "p": 1600, "note": "", "sub": "フネンインクリーザ【IN】"}, {"n": "75×65mm　フネンIN", "s": "", "q": 1.0, "u": "個", "p": 1600, "note": "", "sub": "フネンインクリーザ【IN】"}, {"n": "100×50mm　フネンIN", "s": "", "q": 1.0, "u": "個", "p": 2300, "note": "", "sub": "フネンインクリーザ【IN】"}, {"n": "100×65mm　フネンIN", "s": "", "q": 1.0, "u": "個", "p": 2300, "note": "", "sub": "フネンインクリーザ【IN】"}, {"n": "100×75mm　フネンIN", "s": "", "q": 1.0, "u": "個", "p": 2300, "note": "", "sub": "フネンインクリーザ【IN】"}, {"n": "40㎜　フネン掃除口", "s": "", "q": 1.0, "u": "個", "p": 1000, "note": "", "sub": "フネン掃除口【COS】"}, {"n": "50㎜　フネン掃除口", "s": "", "q": 1.0, "u": "個", "p": 1300, "note": "", "sub": "フネン掃除口【COS】"}, {"n": "65㎜　フネン掃除口", "s": "", "q": 1.0, "u": "個", "p": 1500, "note": "", "sub": "フネン掃除口【COS】"}, {"n": "75㎜　フネン掃除口", "s": "", "q": 1.0, "u": "個", "p": 1800, "note": "", "sub": "フネン掃除口【COS】"}, {"n": "100mm  フネン掃除口", "s": "", "q": 1.0, "u": "個", "p": 2000, "note": "", "sub": "フネン掃除口【COS】"}, {"n": "VPパイプ", "s": "", "q": 1, "u": "式", "p": 0, "note": "", "sub": "VPパイプ"}, {"n": "40㎜　VPパイプ", "s": "", "q": 1.0, "u": "本", "p": 2229, "note": "", "sub": "VPパイプ"}, {"n": "50㎜　VPパイプ", "s": "", "q": 1.0, "u": "本", "p": 3146, "note": "", "sub": "VPパイプ"}, {"n": "65㎜　VPパイプ", "s": "", "q": 1.0, "u": "本", "p": 4012, "note": "", "sub": "VPパイプ"}, {"n": "75㎜　VPパイプ", "s": "", "q": 1.0, "u": "本", "p": 6155, "note": "", "sub": "VPパイプ"}, {"n": "100㎜　VPパイプ", "s": "", "q": 1.0, "u": "本", "p": 9048, "note": "", "sub": "VPパイプ"}, {"n": "125㎜　VPパイプ", "s": "", "q": 1.0, "u": "本", "p": 11614, "note": "", "sub": "VPパイプ"}, {"n": "150㎜　VPパイプ", "s": "", "q": 1.0, "u": "本", "p": 17426, "note": "", "sub": "VPパイプ"}, {"n": "40㎜　VP　エルボ", "s": "", "q": 1.0, "u": "個", "p": 80, "note": "", "sub": "エルボ【L】"}, {"n": "50㎜　VP　エルボ", "s": "", "q": 1.0, "u": "個", "p": 102, "note": "", "sub": "エルボ【L】"}, {"n": "65mm　VP　エルボ", "s": "", "q": 1.0, "u": "個", "p": 167, "note": "", "sub": "エルボ【L】"}, {"n": "75mm　VP　エルボ", "s": "", "q": 1.0, "u": "個", "p": 393, "note": "", "sub": "エルボ【L】"}, {"n": "100mm  VP　エルボ", "s": "", "q": 1.0, "u": "個", "p": 787, "note": "", "sub": "エルボ【L】"}, {"n": "125㎜　VP　エルボ", "s": "", "q": 1.0, "u": "個", "p": 1665, "note": "", "sub": "エルボ【L】"}, {"n": "150mm  VP　エルボ", "s": "", "q": 1.0, "u": "個", "p": 2857, "note": "", "sub": "エルボ【L】"}, {"n": "40㎜　VP　45°エルボ", "s": "", "q": 1.0, "u": "個", "p": 99, "note": "", "sub": "45°エルボ【45°L】"}, {"n": "50㎜　VP　45°エルボ", "s": "", "q": 1.0, "u": "個", "p": 150, "note": "", "sub": "45°エルボ【45°L】"}, {"n": "65mm　VP　45°エルボ", "s": "", "q": 1.0, "u": "個", "p": 183, "note": "", "sub": "45°エルボ【45°L】"}, {"n": "75mm　VP　45°エルボ", "s": "", "q": 1.0, "u": "個", "p": 166, "note": "", "sub": "45°エルボ【45°L】"}, {"n": "100mm  VP　45°エルボ", "s": "", "q": 1.0, "u": "個", "p": 664, "note": "", "sub": "45°エルボ【45°L】"}, {"n": "125㎜　VP　45°エルボ", "s": "", "q": 1.0, "u": "個", "p": 1414, "note": "", "sub": "45°エルボ【45°L】"}, {"n": "150mm  VP　45°エルボ", "s": "", "q": 1.0, "u": "個", "p": 2321, "note": "", "sub": "VPパイプ"}, {"n": "40㎜　VP　大曲エルボ", "s": "", "q": 1.0, "u": "個", "p": 180, "note": "", "sub": "大曲エルボ【LL】"}, {"n": "50㎜　VP　大曲エルボ", "s": "", "q": 1.0, "u": "個", "p": 280, "note": "", "sub": "大曲エルボ【LL】"}, {"n": "65㎜　VP　大曲エルボ", "s": "", "q": 1.0, "u": "個", "p": 466, "note": "", "sub": "大曲エルボ【LL】"}, {"n": "75㎜　VP　大曲エルボ", "s": "", "q": 1.0, "u": "個", "p": 651, "note": "", "sub": "大曲エルボ【LL】"}, {"n": "100㎜　VP　大曲エルボ", "s": "", "q": 1.0, "u": "個", "p": 1283, "note": "", "sub": "大曲エルボ【LL】"}, {"n": "120㎜　VP　大曲エルボ", "s": "", "q": 1.0, "u": "個", "p": 2263, "note": "", "sub": "大曲エルボ【LL】"}, {"n": "150㎜　VP　大曲エルボ", "s": "", "q": 1.0, "u": "個", "p": 3423, "note": "", "sub": "大曲エルボ【LL】"}, {"n": "40㎜　VP　ソケット", "s": "", "q": 1.0, "u": "個", "p": 72, "note": "", "sub": "ソケット【S】"}, {"n": "50㎜　VP　ソケット", "s": "", "q": 1.0, "u": "個", "p": 98, "note": "", "sub": "ソケット【S】"}, {"n": "65㎜　VP　ソケット", "s": "", "q": 1.0, "u": "個", "p": 150, "note": "", "sub": "ソケット【S】"}, {"n": "75㎜　VP　ソケット", "s": "", "q": 1.0, "u": "個", "p": 244, "note": "", "sub": "ソケット【S】"}, {"n": "100㎜　VP　ソケット", "s": "", "q": 1.0, "u": "個", "p": 466, "note": "", "sub": "ソケット【S】"}, {"n": "125㎜　VP　ソケット", "s": "", "q": 1.0, "u": "個", "p": 924, "note": "", "sub": "ソケット【S】"}, {"n": "150㎜　VP　ソケット", "s": "", "q": 1.0, "u": "個", "p": 1585, "note": "", "sub": "ソケット【S】"}, {"n": "40mm　LT", "s": "", "q": 1.0, "u": "個", "p": 267, "note": "", "sub": "LTチーズ【LT】"}, {"n": "50㎜　LT", "s": "", "q": 1.0, "u": "個", "p": 351, "note": "", "sub": "LTチーズ【LT】"}, {"n": "65mm　LT", "s": "", "q": 1.0, "u": "個", "p": 616, "note": "", "sub": "LTチーズ【LT】"}, {"n": "75mm　LT", "s": "", "q": 1.0, "u": "個", "p": 885, "note": "", "sub": "LTチーズ【LT】"}, {"n": "100mm　LT", "s": "", "q": 1.0, "u": "個", "p": 1743, "note": "", "sub": "LTチーズ【LT】"}, {"n": "125mm　LT", "s": "", "q": 1.0, "u": "個", "p": 2854, "note": "", "sub": "LTチーズ【LT】"}, {"n": "150mm　LT", "s": "", "q": 1.0, "u": "個", "p": 5939, "note": "", "sub": "LTチーズ【LT】"}, {"n": "100×50mm　LT", "s": "", "q": 1.0, "u": "個", "p": 1272, "note": "", "sub": "VPパイプ"}, {"n": "100×75㎜　LT", "s": "", "q": 1.0, "u": "個", "p": 1272, "note": "", "sub": "VPパイプ"}, {"n": "40㎜　VP　DT", "s": "", "q": 1.0, "u": "個", "p": 159, "note": "", "sub": "DTチーズ【DT】"}, {"n": "50㎜　VP　DT", "s": "", "q": 1.0, "u": "個", "p": 254, "note": "", "sub": "DTチーズ【DT】"}, {"n": "50×40㎜　VP　DT", "s": "", "q": 1.0, "u": "個", "p": 182, "note": "", "sub": "DTチーズ【DT】"}, {"n": "65㎜　VP　DT", "s": "", "q": 1.0, "u": "個", "p": 420, "note": "", "sub": "DTチーズ【DT】"}, {"n": "65×50㎜　VP　DT", "s": "", "q": 1.0, "u": "個", "p": 331, "note": "", "sub": "DTチーズ【DT】"}, {"n": "65×40㎜　VP　DT", "s": "", "q": 1.0, "u": "個", "p": 331, "note": "", "sub": "DTチーズ【DT】"}, {"n": "75㎜　VP　DT", "s": "", "q": 1.0, "u": "個", "p": 572, "note": "", "sub": "DTチーズ【DT】"}, {"n": "75×50㎜　VP　DT", "s": "", "q": 1.0, "u": "個", "p": 462, "note": "", "sub": "DTチーズ【DT】"}, {"n": "75×65㎜　VP　DT", "s": "", "q": 1.0, "u": "個", "p": 462, "note": "", "sub": "DTチーズ【DT】"}, {"n": "100㎜　VP　DT", "s": "", "q": 1.0, "u": "個", "p": 1183, "note": "", "sub": "DTチーズ【DT】"}, {"n": "100×50㎜　VP　DT", "s": "", "q": 1.0, "u": "個", "p": 892, "note": "", "sub": "DTチーズ【DT】"}, {"n": "100×65㎜　VP　DT", "s": "", "q": 1.0, "u": "個", "p": 892, "note": "", "sub": "DTチーズ【DT】"}, {"n": "100×75㎜　VP　DT", "s": "", "q": 1.0, "u": "個", "p": 892, "note": "", "sub": "DTチーズ【DT】"}, {"n": "125㎜　VP　DT", "s": "", "q": 1.0, "u": "個", "p": 2170, "note": "", "sub": "DTチーズ【DT】"}, {"n": "150㎜　VP　DT", "s": "", "q": 1.0, "u": "個", "p": 3900, "note": "", "sub": "DTチーズ【DT】"}, {"n": "40mm  Y", "s": "", "q": 1.0, "u": "個", "p": 225, "note": "", "sub": "Yチーズ【Y】"}, {"n": "50mm  Y", "s": "", "q": 1.0, "u": "個", "p": 325, "note": "", "sub": "Yチーズ【Y】"}, {"n": "65mm  Y", "s": "", "q": 1.0, "u": "個", "p": 532, "note": "", "sub": "Yチーズ【Y】"}, {"n": "75mm  Y", "s": "", "q": 1.0, "u": "個", "p": 777, "note": "", "sub": "Yチーズ【Y】"}, {"n": "100mm  Y", "s": "", "q": 1.0, "u": "個", "p": 1630, "note": "", "sub": "Yチーズ【Y】"}, {"n": "125mm  Y", "s": "", "q": 1.0, "u": "個", "p": 2978, "note": "", "sub": "Yチーズ【Y】"}, {"n": "150mm  Y", "s": "", "q": 1.0, "u": "個", "p": 6737, "note": "", "sub": "VPパイプ"}, {"n": "50×40mm　IN", "s": "", "q": 1.0, "u": "個", "p": 99, "note": "", "sub": "インクリーザ【IN】"}, {"n": "65×50mm　IN", "s": "", "q": 1.0, "u": "個", "p": 191, "note": "", "sub": "インクリーザ【IN】"}, {"n": "75×50mm　IN", "s": "", "q": 1.0, "u": "個", "p": 273, "note": "", "sub": "インクリーザ【IN】"}, {"n": "75×65mm　IN", "s": "", "q": 1.0, "u": "個", "p": 273, "note": "", "sub": "インクリーザ【IN】"}, {"n": "100×50mm　IN", "s": "", "q": 1.0, "u": "個", "p": 382, "note": "", "sub": "インクリーザ【IN】"}, {"n": "100×65mm　IN", "s": "", "q": 1.0, "u": "個", "p": 400, "note": "", "sub": "インクリーザ【IN】"}, {"n": "100×75mm　IN", "s": "", "q": 1.0, "u": "個", "p": 440, "note": "", "sub": "インクリーザ【IN】"}, {"n": "40㎜　掃除口", "s": "", "q": 1.0, "u": "個", "p": 191, "note": "", "sub": "掃除口【COS】"}, {"n": "50㎜　掃除口", "s": "", "q": 1.0, "u": "個", "p": 221, "note": "", "sub": "掃除口【COS】"}, {"n": "65㎜　掃除口", "s": "", "q": 1.0, "u": "個", "p": 372, "note": "", "sub": "掃除口【COS】"}, {"n": "75㎜　掃除口", "s": "", "q": 1.0, "u": "個", "p": 462, "note": "", "sub": "掃除口【COS】"}, {"n": "100mm  掃除口", "s": "", "q": 1.0, "u": "個", "p": 675, "note": "", "sub": "掃除口【COS】"}, {"n": "HTVP　パイプ・DV継手　【耐熱　排水管】", "s": "", "q": 1, "u": "式", "p": 0, "note": "", "sub": "HTVP　パイプ・DV継手　【耐熱　排水管】"}, {"n": "40㎜　HTVPパイプ", "s": "", "q": 1.0, "u": "本", "p": 4900, "note": "", "sub": "HTVP　パイプ"}, {"n": "50㎜　HTVPパイプ", "s": "", "q": 1.0, "u": "本", "p": 7500, "note": "", "sub": "HTVP　パイプ"}, {"n": "40mm　HTDVエルボ", "s": "", "q": 1.0, "u": "個", "p": 180, "note": "", "sub": "エルボ"}, {"n": "50mm　HTDVエルボ", "s": "", "q": 1.0, "u": "個", "p": 210, "note": "", "sub": "エルボ"}, {"n": "40mm　HTDV45°エルボ", "s": "", "q": 1.0, "u": "個", "p": 180, "note": "", "sub": "45°エルボ"}, {"n": "50mm　HTDV45°エルボ", "s": "", "q": 1.0, "u": "個", "p": 200, "note": "", "sub": "45°エルボ"}, {"n": "40mm　HIDVソケット", "s": "", "q": 1.0, "u": "個", "p": 130, "note": "", "sub": "ソケット"}, {"n": "50mm　HIDVソケット", "s": "", "q": 1.0, "u": "個", "p": 140, "note": "", "sub": "ソケット"}, {"n": "40mm　HTDVチーズ", "s": "", "q": 1.0, "u": "個", "p": 310, "note": "", "sub": "チーズ"}, {"n": "50mm　HTDVチーズ", "s": "", "q": 1.0, "u": "個", "p": 350, "note": "", "sub": "チーズ"}, {"n": "40mm　HTDV排水バルブソケット", "s": "", "q": 1.0, "u": "個", "p": 130, "note": "", "sub": "バルブソケット"}, {"n": "50mm　HTDV排水バルブソケット", "s": "", "q": 1.0, "u": "個", "p": 250, "note": "", "sub": "バルブソケット"}, {"n": "40mm　HIDV掃除口", "s": "", "q": 1.0, "u": "個", "p": 360, "note": "", "sub": "掃除口"}, {"n": "50mm　HIDV掃除口", "s": "", "q": 1.0, "u": "個", "p": 370, "note": "", "sub": "掃除口"}, {"n": "50×20㎜　HT504　食器洗浄機用チーズ", "s": "", "q": 1.0, "u": "個", "p": 400, "note": "", "sub": "食洗チーズ"}, {"n": "50×40mm　HTDV　IN", "s": "", "q": 1.0, "u": "個", "p": 350, "note": "", "sub": "インクリーザ"}, {"n": "50㎜　HTVP　耐熱トラップ", "s": "", "q": 1.0, "u": "個", "p": 3330, "note": "", "sub": "排水トラップ"}, {"n": "ストラブカップリング", "s": "", "q": 1, "u": "式", "p": 0, "note": "", "sub": "ストラブカップリング"}, {"n": "15㎜　ストラブカップリング接手", "s": "", "q": 1.0, "u": "個", "p": 6200, "note": "", "sub": "GXタイプ【鋼管用】"}, {"n": "20㎜　ストラブカップリング接手", "s": "", "q": 1.0, "u": "個", "p": 6500, "note": "", "sub": "GXタイプ【鋼管用】"}, {"n": "25㎜　ストラブカップリング接手", "s": "", "q": 1.0, "u": "個", "p": 6550, "note": "", "sub": "GXタイプ【鋼管用】"}, {"n": "32㎜　ストラブカップリング接手", "s": "", "q": 1.0, "u": "個", "p": 6800, "note": "", "sub": "GXタイプ【鋼管用】"}, {"n": "40㎜　ストラブカップリング接手", "s": "", "q": 1.0, "u": "個", "p": 7000, "note": "", "sub": "GXタイプ【鋼管用】"}, {"n": "50㎜　ストラブカップリング接手", "s": "", "q": 1.0, "u": "個", "p": 7300, "note": "", "sub": "GXタイプ【鋼管用】"}, {"n": "65㎜　ストラブカップリング接手", "s": "", "q": 1.0, "u": "個", "p": 9600, "note": "", "sub": "GXタイプ【鋼管用】"}, {"n": "80㎜　ストラブカップリング接手", "s": "", "q": 1.0, "u": "個", "p": 10500, "note": "", "sub": "GXタイプ【鋼管用】"}, {"n": "100㎜　ストラブカップリング接手", "s": "", "q": 1.0, "u": "個", "p": 11500, "note": "", "sub": "GXタイプ【鋼管用】"}, {"n": "125㎜　ストラブカップリング接手", "s": "", "q": 1.0, "u": "個", "p": 17000, "note": "", "sub": "GXタイプ【鋼管用】"}, {"n": "80㎜　FCVストラブカップリング接手", "s": "", "q": 1.0, "u": "個", "p": 7500, "note": "", "sub": "FCVタイプ【鋳鉄管×VP管(鋼管)】"}, {"n": "100㎜　FCVストラブカップリング接手", "s": "", "q": 1.0, "u": "個", "p": 10100, "note": "", "sub": "FCVタイプ【鋳鉄管×VP管(鋼管)】"}, {"n": "MDジョイント　フランジセット", "s": "", "q": 1, "u": "式", "p": 0, "note": "", "sub": "MDジョイント　フランジセット"}, {"n": "40㎜　MD-U", "s": "", "q": 1.0, "u": "個", "p": 5000, "note": "", "sub": "MD　ユニオン【MD-U】"}, {"n": "50㎜　MD-U", "s": "", "q": 1.0, "u": "個", "p": 5400, "note": "", "sub": "MD　ユニオン【MD-U】"}, {"n": "65㎜　MD-U", "s": "", "q": 1.0, "u": "個", "p": 7600, "note": "", "sub": "MD　ユニオン【MD-U】"}, {"n": "75㎜　MD-U", "s": "", "q": 1.0, "u": "個", "p": 10600, "note": "", "sub": "MD　ユニオン【MD-U】"}, {"n": "100㎜　MD-U", "s": "", "q": 1.0, "u": "個", "p": 14500, "note": "", "sub": "MD　ユニオン【MD-U】"}, {"n": "125㎜　MD-U", "s": "", "q": 1.0, "u": "個", "p": 21500, "note": "", "sub": "MD　ユニオン【MD-U】"}, {"n": "150㎜　MD-U", "s": "", "q": 1.0, "u": "個", "p": 26500, "note": "", "sub": "MD　ユニオン【MD-U】"}, {"n": "40㎜　MD-ST", "s": "", "q": 1.0, "u": "個", "p": 4800, "note": "", "sub": "MD　チーズ【MD-ST】"}, {"n": "50㎜　MD-ST", "s": "", "q": 1.0, "u": "個", "p": 6400, "note": "", "sub": "MD　チーズ【MD-ST】"}, {"n": "65㎜　MD-ST", "s": "", "q": 1.0, "u": "個", "p": 8900, "note": "", "sub": "MD　チーズ【MD-ST】"}, {"n": "75㎜　MD-ST", "s": "", "q": 1.0, "u": "個", "p": 12000, "note": "", "sub": "MD　チーズ【MD-ST】"}, {"n": "100㎜　MD-ST", "s": "", "q": 1.0, "u": "個", "p": 16000, "note": "", "sub": "MD　チーズ【MD-ST】"}, {"n": "125㎜　MD-ST", "s": "", "q": 1.0, "u": "個", "p": 29500, "note": "", "sub": "MD　チーズ【MD-ST】"}, {"n": "150㎜　MD-ST", "s": "", "q": 1.0, "u": "個", "p": 39000, "note": "", "sub": "MD　チーズ【MD-ST】"}, {"n": "40㎜　MD-TY", "s": "", "q": 1.0, "u": "個", "p": 5400, "note": "", "sub": "MD　大曲チーズ【MD-TY】"}, {"n": "50㎜　MD-TY", "s": "", "q": 1.0, "u": "個", "p": 7000, "note": "", "sub": "MD　大曲チーズ【MD-TY】"}, {"n": "65㎜　MD-TY", "s": "", "q": 1.0, "u": "個", "p": 9700, "note": "", "sub": "MD　大曲チーズ【MD-TY】"}, {"n": "75㎜　MD-TY", "s": "", "q": 1.0, "u": "個", "p": 13500, "note": "", "sub": "MD　大曲チーズ【MD-TY】"}, {"n": "100㎜　MD-TY", "s": "", "q": 1.0, "u": "個", "p": 18000, "note": "", "sub": "MD　大曲チーズ【MD-TY】"}, {"n": "125㎜　MD-TY", "s": "", "q": 1.0, "u": "個", "p": 35000, "note": "", "sub": "MD　大曲チーズ【MD-TY】"}, {"n": "150㎜　MD-TY", "s": "", "q": 1.0, "u": "個", "p": 48000, "note": "", "sub": "MDジョイント　フランジセット"}, {"n": "40㎜　MD-45°Y", "s": "", "q": 1.0, "u": "個", "p": 5100, "note": "", "sub": "MD　Yチーズ【MD-45°Y】"}, {"n": "50㎜　MD-45°Y", "s": "", "q": 1.0, "u": "個", "p": 6700, "note": "", "sub": "MD　Yチーズ【MD-45°Y】"}, {"n": "65㎜　MD-45°Y", "s": "", "q": 1.0, "u": "個", "p": 9500, "note": "", "sub": "MD　Yチーズ【MD-45°Y】"}, {"n": "75㎜　MD-45°Y", "s": "", "q": 1.0, "u": "個", "p": 13000, "note": "", "sub": "MD　Yチーズ【MD-45°Y】"}, {"n": "100㎜　MD-45°Y", "s": "", "q": 1.0, "u": "個", "p": 16500, "note": "", "sub": "MD　Yチーズ【MD-45°Y】"}, {"n": "125㎜　MD-45°Y", "s": "", "q": 1.0, "u": "個", "p": 32000, "note": "", "sub": "MD　Yチーズ【MD-45°Y】"}, {"n": "150㎜　MD-45°Y", "s": "", "q": 1.0, "u": "個", "p": 42000, "note": "", "sub": "MD　Yチーズ【MD-45°Y】"}, {"n": "40㎜　MD-L", "s": "", "q": 1.0, "u": "個", "p": 3300, "note": "", "sub": "MD　エルボ【MD-L】"}, {"n": "50㎜　MD-L", "s": "", "q": 1.0, "u": "個", "p": 4200, "note": "", "sub": "MD　エルボ【MD-L】"}, {"n": "65㎜　MD-L", "s": "", "q": 1.0, "u": "個", "p": 5600, "note": "", "sub": "MD　エルボ【MD-L】"}, {"n": "75㎜　MD-L", "s": "", "q": 1.0, "u": "個", "p": 8300, "note": "", "sub": "MD　エルボ【MD-L】"}, {"n": "100㎜　MD-L", "s": "", "q": 1.0, "u": "個", "p": 11000, "note": "", "sub": "MD　エルボ【MD-L】"}, {"n": "125㎜　MD-L", "s": "", "q": 1.0, "u": "個", "p": 19000, "note": "", "sub": "MD　エルボ【MD-L】"}, {"n": "150㎜　MD-L", "s": "", "q": 1.0, "u": "個", "p": 25000, "note": "", "sub": "MD　エルボ【MD-L】"}, {"n": "40㎜　MD-LL", "s": "", "q": 1.0, "u": "個", "p": 3400, "note": "", "sub": "MD　大曲エルボ【MD-LL】"}, {"n": "50㎜　MD-LL", "s": "", "q": 1.0, "u": "個", "p": 4500, "note": "", "sub": "MD　大曲エルボ【MD-LL】"}, {"n": "65㎜　MD-LL", "s": "", "q": 1.0, "u": "個", "p": 6500, "note": "", "sub": "MD　大曲エルボ【MD-LL】"}, {"n": "75㎜　MD-LL", "s": "", "q": 1.0, "u": "個", "p": 8600, "note": "", "sub": "MD　大曲エルボ【MD-LL】"}, {"n": "100㎜　MD-LL", "s": "", "q": 1.0, "u": "個", "p": 11500, "note": "", "sub": "MD　大曲エルボ【MD-LL】"}, {"n": "125㎜　MD-LL", "s": "", "q": 1.0, "u": "個", "p": 20500, "note": "", "sub": "MD　大曲エルボ【MD-LL】"}, {"n": "150㎜　MD-LL", "s": "", "q": 1.0, "u": "個", "p": 28000, "note": "", "sub": "MD　大曲エルボ【MD-LL】"}, {"n": "カラーパイプ", "s": "", "q": 1, "u": "式", "p": 0, "note": "", "sub": "カラーパイプ"}, {"n": "50㎜　カラーパイプ", "s": "", "q": 1.0, "u": "本", "p": 3410, "note": "", "sub": "カラーパイプ"}, {"n": "アキレスジョイント", "s": "", "q": 1, "u": "式", "p": 0, "note": "", "sub": "アキレスジョイント"}, {"n": "50㎜　アキレスジョイント", "s": "", "q": 1.0, "u": "本", "p": 2800, "note": "", "sub": "アキレスジョイント"}, {"n": "75㎜　アキレスジョイント", "s": "", "q": 1.0, "u": "本", "p": 3600, "note": "", "sub": "アキレスジョイント"}, {"n": "アキレスジョイント用　貫通部カバー", "s": "", "q": 1.0, "u": "枚", "p": 800, "note": "", "sub": "アキレスジョイント"}, {"n": "松栄ゴム　SG-50AL　200mm", "s": "", "q": 1.0, "u": "個", "p": 5500, "note": "", "sub": "アキレスジョイント"}, {"n": "HIVP　パイプ・継手　【耐衝撃給水管】", "s": "", "q": 1, "u": "式", "p": 0, "note": "", "sub": "HIVP　パイプ・継手　【耐衝撃給水管】"}, {"n": "13㎜　HIVPパイプ", "s": "", "q": 1.0, "u": "本", "p": 720, "note": "", "sub": "HIVP　パイプ"}, {"n": "20㎜　HIVPパイプ", "s": "", "q": 1.0, "u": "本", "p": 1230, "note": "", "sub": "HIVP　パイプ"}, {"n": "25㎜　HIVPパイプ", "s": "", "q": 1.0, "u": "本", "p": 1960, "note": "", "sub": "HIVP　パイプ"}, {"n": "30㎜　HIVPパイプ", "s": "", "q": 1.0, "u": "本", "p": 2370, "note": "", "sub": "HIVP　パイプ"}, {"n": "40㎜　HIVPパイプ", "s": "", "q": 1.0, "u": "本", "p": 3240, "note": "", "sub": "HIVP　パイプ"}, {"n": "50㎜　HIVPパイプ", "s": "", "q": 1.0, "u": "本", "p": 4310, "note": "", "sub": "HIVP　パイプ"}, {"n": "65㎜　HIVPパイプ", "s": "", "q": 1.0, "u": "本", "p": 5990, "note": "", "sub": "HIVP　パイプ"}, {"n": "75㎜　HIVPパイプ", "s": "", "q": 1.0, "u": "本", "p": 8880, "note": "", "sub": "HIVP　パイプ"}, {"n": "100㎜　HIVPパイプ", "s": "", "q": 1.0, "u": "本", "p": 13000, "note": "", "sub": "HIVP　パイプ"}, {"n": "13mm　HIVPエルボ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "エルボ"}, {"n": "20mm　HIVPエルボ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "エルボ"}, {"n": "25mm　HIVPエルボ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "エルボ"}, {"n": "30mm　HIVPエルボ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "エルボ"}, {"n": "40mm　HIVPエルボ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "エルボ"}, {"n": "50mm　HIVPエルボ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "エルボ"}, {"n": "65mm　HIVPエルボ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "エルボ"}, {"n": "75mm　HIVPエルボ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "エルボ"}, {"n": "100mm　HIVPエルボ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "エルボ"}, {"n": "13mm　HIVPソケット", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "ソケット"}, {"n": "20mm　HIVPソケット", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "ソケット"}, {"n": "25mm　HIVPソケット", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "HIVP　パイプ・継手　【耐衝撃給水管】"}, {"n": "30mm　HIVPソケット", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "HIVP　パイプ・継手　【耐衝撃給水管】"}, {"n": "40mm　HIVPソケット", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "HIVP　パイプ・継手　【耐衝撃給水管】"}, {"n": "50mm　HIVPソケット", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "HIVP　パイプ・継手　【耐衝撃給水管】"}, {"n": "65mm　HIVPソケット", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "HIVP　パイプ・継手　【耐衝撃給水管】"}, {"n": "75mm　HIVPソケット", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "HIVP　パイプ・継手　【耐衝撃給水管】"}, {"n": "100mm　HIVPソケット", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "HIVP　パイプ・継手　【耐衝撃給水管】"}, {"n": "13mm　HIVPチーズ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "チーズ"}, {"n": "20mm　HIVPチーズ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "チーズ"}, {"n": "25mm　HIVPチーズ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "チーズ"}, {"n": "30mm　HIVPチーズ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "チーズ"}, {"n": "40mm　HIVPチーズ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "チーズ"}, {"n": "50mm　HIVPチーズ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "チーズ"}, {"n": "65mm　HIVPチーズ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "チーズ"}, {"n": "75mm　HIVPチーズ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "チーズ"}, {"n": "100mm　HIVPチーズ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "チーズ"}, {"n": "13mm　HIVP水栓エルボ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "水栓エルボ"}, {"n": "20mm　HIVP水栓エルボ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "水栓エルボ"}, {"n": "25mm　HIVP水栓エルボ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "水栓エルボ"}, {"n": "30mm　HIVP水栓エルボ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "水栓エルボ"}, {"n": "40mm　HIVP水栓エルボ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "水栓エルボ"}, {"n": "50mm　HIVP水栓エルボ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "水栓エルボ"}, {"n": "65mm　HIVP水栓エルボ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "水栓エルボ"}, {"n": "75mm　HIVP水栓エルボ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "HIVP　パイプ・継手　【耐衝撃給水管】"}, {"n": "100mm　HIVP水栓エルボ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "HIVP　パイプ・継手　【耐衝撃給水管】"}, {"n": "13mm　HIVP水栓ソケット", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "水栓ソケット"}, {"n": "20mm　HIVP水栓ソケット", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "水栓ソケット"}, {"n": "25mm　HIVP水栓ソケット", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "水栓ソケット"}, {"n": "30mm　HIVP水栓ソケット", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "水栓ソケット"}, {"n": "40mm　HIVP水栓ソケット", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "水栓ソケット"}, {"n": "50mm　HIVP水栓ソケット", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "水栓ソケット"}, {"n": "65mm　HIVP水栓ソケット", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "水栓ソケット"}, {"n": "75mm　HIVP水栓ソケット", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "水栓ソケット"}, {"n": "100mm　HIVP水栓ソケット", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "水栓ソケット"}, {"n": "13mm　HIVPキャップ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "キャップ"}, {"n": "20mm　HIVPキャップ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "キャップ"}, {"n": "25mm　HIVPキャップ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "キャップ"}, {"n": "30mm　HIVPキャップ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "キャップ"}, {"n": "40mm　HIVPキャップ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "キャップ"}, {"n": "50mm　HIVPキャップ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "キャップ"}, {"n": "65mm　HIVPキャップ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "キャップ"}, {"n": "75mm　HIVPキャップ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "キャップ"}, {"n": "100mm　HIVPキャップ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "キャップ"}, {"n": "HTVP　パイプ・継手　【耐熱　給湯管】", "s": "", "q": 1, "u": "式", "p": 0, "note": "", "sub": "HTVP　パイプ・継手　【耐熱　給湯管】"}, {"n": "13㎜　HIVPパイプ", "s": "", "q": 1.0, "u": "本", "p": 1050, "note": "", "sub": "HTVP　パイプ"}, {"n": "20㎜　HIVPパイプ", "s": "", "q": 1.0, "u": "本", "p": 1600, "note": "", "sub": "HTVP　パイプ"}, {"n": "13mm　HIVPエルボ", "s": "", "q": 1.0, "u": "個", "p": 150, "note": "", "sub": "エルボ"}, {"n": "20mm　HIVPエルボ", "s": "", "q": 1.0, "u": "個", "p": 280, "note": "", "sub": "エルボ"}, {"n": "13mm　HIVPソケット", "s": "", "q": 1.0, "u": "個", "p": 100, "note": "", "sub": "ソケット"}, {"n": "20mm　HIVPソケット", "s": "", "q": 1.0, "u": "個", "p": 240, "note": "", "sub": "ソケット"}, {"n": "13mm　HIVPチーズ", "s": "", "q": 1.0, "u": "個", "p": 180, "note": "", "sub": "チーズ"}, {"n": "20mm　HIVPチーズ", "s": "", "q": 1.0, "u": "個", "p": 390, "note": "", "sub": "チーズ"}, {"n": "13mm　HIVP水栓エルボ", "s": "", "q": 1.0, "u": "個", "p": 610, "note": "", "sub": "水栓エルボ"}, {"n": "20mm　HIVP水栓エルボ", "s": "", "q": 1.0, "u": "個", "p": 1000, "note": "", "sub": "水栓エルボ"}, {"n": "13mm　HIVP水栓ソケット", "s": "", "q": 1.0, "u": "個", "p": 500, "note": "", "sub": "水栓ソケット"}, {"n": "20mm　HIVP水栓ソケット", "s": "", "q": 1.0, "u": "個", "p": 850, "note": "", "sub": "水栓ソケット"}, {"n": "20×13mm　HIVP水栓ソケット", "s": "", "q": 1.0, "u": "個", "p": 850, "note": "", "sub": "水栓ソケット"}, {"n": "13mm　HIVPキャップ", "s": "", "q": 1.0, "u": "個", "p": 100, "note": "", "sub": "キャップ"}, {"n": "20mm　HIVPキャップ", "s": "", "q": 1.0, "u": "個", "p": 160, "note": "", "sub": "キャップ"}, {"n": "13mm　HTVPバルブソケット", "s": "", "q": 1.0, "u": "個", "p": 1050, "note": "", "sub": "HTVP　パイプ・継手　【耐熱　給湯管】"}, {"n": "20mm　HTVPバルブソケット", "s": "", "q": 1.0, "u": "個", "p": 1800, "note": "", "sub": "HTVP　パイプ・継手　【耐熱　給湯管】"}, {"n": "オンダ・架橋ポリエチレン管", "s": "", "q": 1, "u": "式", "p": 0, "note": "", "sub": "オンダ・架橋ポリエチレン管"}, {"n": "10㎜　ペア架橋ポリ管", "s": "", "q": 1.0, "u": "巻", "p": 16000, "note": "", "sub": "ポリエチレン管"}, {"n": "13㎜　架橋ポリ管", "s": "", "q": 1.0, "u": "巻", "p": 19310, "note": "", "sub": "ポリエチレン管"}, {"n": "オンダ　13㎜ソケット", "s": "", "q": 1.0, "u": "個", "p": 1215, "note": "", "sub": "ポリ管継手"}, {"n": "オンダ　13㎜　エルボ", "s": "", "q": 1.0, "u": "個", "p": 1295, "note": "", "sub": "ポリ管継手"}, {"n": "オンダ　13㎜　回転エルボ", "s": "", "q": 1.0, "u": "個", "p": 2625, "note": "", "sub": "ポリ管継手"}, {"n": "オンダ　13㎜　チーズ", "s": "", "q": 1.0, "u": "個", "p": 1820, "note": "", "sub": "ポリ管継手"}, {"n": "20×13㎜　ユニオン接手", "s": "", "q": 1.0, "u": "個", "p": 2080, "note": "", "sub": "ポリ管継手"}, {"n": "架橋バルブ", "s": "", "q": 1.0, "u": "個", "p": 3300, "note": "", "sub": "バルブ"}, {"n": "20×13㎜　給湯機バルブ", "s": "", "q": 1.0, "u": "個", "p": 3900, "note": "", "sub": "バルブ"}, {"n": "13㎜　給湯機バルブ", "s": "", "q": 1.0, "u": "個", "p": 3500, "note": "", "sub": "バルブ"}, {"n": "13㎜　床出しソケット", "s": "", "q": 1.0, "u": "個", "p": 1956, "note": "", "sub": "ネジ変換"}, {"n": "13㎜　座付き水栓エルボ", "s": "", "q": 1.0, "u": "個", "p": 2431, "note": "", "sub": "ネジ変換"}, {"n": "13㎜　貫通金物", "s": "", "q": 1.0, "u": "個", "p": 3412, "note": "", "sub": "ネジ変換"}, {"n": "13㎜　オスアダプター", "s": "", "q": 1.0, "u": "個", "p": 1365, "note": "", "sub": "ネジ変換"}, {"n": "20×13㎜　ユニオン", "s": "", "q": 1.0, "u": "個", "p": 2340, "note": "", "sub": "ネジ変換"}, {"n": "13㎜　ユニオン", "s": "", "q": 1.0, "u": "個", "p": 2002, "note": "", "sub": "ネジ変換"}, {"n": "13m　HIVP変換アダプターソケット", "s": "", "q": 1.0, "u": "個", "p": 1514, "note": "", "sub": "HIポリ変換"}, {"n": "20×13㎜　HIVP変換アダプターソケット", "s": "", "q": 1.0, "u": "個", "p": 2119, "note": "", "sub": "HIポリ変換"}, {"n": "13㎜　HIVP変換アダプターエルボ", "s": "", "q": 1.0, "u": "個", "p": 1742, "note": "", "sub": "オンダ・架橋ポリエチレン管"}, {"n": "20×13㎜　HIVP変換アダプターエルボ", "s": "", "q": 1.0, "u": "個", "p": 2353, "note": "", "sub": "オンダ・架橋ポリエチレン管"}, {"n": "未来工業【配管モール関係】", "s": "", "q": 1, "u": "式", "p": 0, "note": "", "sub": "未来工業【配管モール関係】"}, {"n": "未来工業・配管モール", "s": "", "q": 1.0, "u": "本", "p": 2600, "note": "", "sub": "未来工業【配管モール関係】"}, {"n": "同接手材", "s": "", "q": 1.0, "u": "式", "p": 2200, "note": "", "sub": "未来工業【配管モール関係】"}, {"n": "HILAカップリング継手", "s": "", "q": 1, "u": "式", "p": 0, "note": "", "sub": "HILAカップリング継手"}, {"n": "20㎜　HILA", "s": "", "q": 1.0, "u": "個", "p": 2800, "note": "", "sub": "HILAカップリング継手"}, {"n": "25㎜　HILA", "s": "", "q": 1.0, "u": "個", "p": 4500, "note": "", "sub": "HILAカップリング継手"}, {"n": "32㎜　HILA", "s": "", "q": 1.0, "u": "個", "p": 6500, "note": "", "sub": "HILAカップリング継手"}, {"n": "雑ネジ", "s": "", "q": 1, "u": "式", "p": 0, "note": "", "sub": "雑ネジ"}, {"n": "13㎜　ユニオン接手", "s": "", "q": 1.0, "u": "個", "p": 1730, "note": "", "sub": "雑ネジ"}, {"n": "13㎜　架橋バルブ", "s": "", "q": 2.0, "u": "個", "p": 2960, "note": "", "sub": "雑ネジ"}, {"n": "20×13㎜　オスアダプター", "s": "", "q": 1.0, "u": "個", "p": 1520, "note": "", "sub": "雑ネジ"}, {"n": "20×13㎜　銅変換継手", "s": "", "q": 1.0, "u": "個", "p": 2450, "note": "", "sub": "雑ネジ"}, {"n": "13㎜　ストリートエルボ", "s": "", "q": 1.0, "u": "個", "p": 2800, "note": "", "sub": "雑ネジ"}, {"n": "13×100㎜　単ニップル", "s": "", "q": 1.0, "u": "個", "p": 1200, "note": "", "sub": "雑ネジ"}, {"n": "13㎜　砲金持ち出し", "s": "", "q": 1.0, "u": "個", "p": 600, "note": "", "sub": "雑ネジ"}, {"n": "13㎜　メーターシモク　メネジ", "s": "", "q": 1.0, "u": "個", "p": 2220, "note": "", "sub": "雑ネジ"}, {"n": "20㎜　メーターシモク　メネジ", "s": "", "q": 1.0, "u": "個", "p": 3500, "note": "", "sub": "雑ネジ"}, {"n": "13㎜　ユニオン継手", "s": "", "q": 1.0, "u": "個", "p": 1730, "note": "", "sub": "雑ネジ"}, {"n": "20㎜　単ニップル", "s": "", "q": 2.0, "u": "個", "p": 1100, "note": "", "sub": "雑ネジ"}, {"n": "20㎜　cコアエルボ", "s": "", "q": 1.0, "u": "個", "p": 450, "note": "", "sub": "雑ネジ"}, {"n": "20㎜　メーター伸縮ソケット", "s": "", "q": 1.0, "u": "個", "p": 6850, "note": "", "sub": "雑ネジ"}, {"n": "13㎜　貫通金物", "s": "", "q": 1.0, "u": "個", "p": 3500, "note": "", "sub": "雑ネジ"}, {"n": "20㎜　メーターソケット　メネジ", "s": "", "q": 1.0, "u": "個", "p": 3210, "note": "", "sub": "雑ネジ"}, {"n": "バルブ　【ゲートバルブ・ボールバルブ】", "s": "", "q": 1, "u": "式", "p": 0, "note": "", "sub": "バルブ　【ゲートバルブ・ボールバルブ】"}, {"n": "20A　10K　LNゲートバルブ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "LNゲートバルブ　【10K】"}, {"n": "25A　10K　LNゲートバルブ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "LNゲートバルブ　【10K】"}, {"n": "32A　10K　LNゲートバルブ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "LNゲートバルブ　【10K】"}, {"n": "40A　10K　LNゲートバルブ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "LNゲートバルブ　【10K】"}, {"n": "50A　10K　LNゲートバルブ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "LNゲートバルブ　【10K】"}, {"n": "20A　10K　LNWゲートバルブ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "LNWゲートバルブ　【10K】"}, {"n": "25A　10K　LNWゲートバルブ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "LNWゲートバルブ　【10K】"}, {"n": "32A　10K　LNWゲートバルブ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "LNWゲートバルブ　【10K】"}, {"n": "40A　10K　LNWゲートバルブ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "LNWゲートバルブ　【10K】"}, {"n": "50A　10K　LNWゲートバルブ", "s": "", "q": 1.0, "u": "個", "p": 48000, "note": "", "sub": "LNWゲートバルブ　【10K】"}, {"n": "20A　10K　Mゲートバルブ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "MNゲートバルブ　　【10K】"}, {"n": "25A　10K　Mゲートバルブ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "MNゲートバルブ　　【10K】"}, {"n": "32A　10K　Mゲートバルブ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "MNゲートバルブ　　【10K】"}, {"n": "40A　10K　Mゲートバルブ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "MNゲートバルブ　　【10K】"}, {"n": "50A　10K　Mゲートバルブ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "MNゲートバルブ　　【10K】"}, {"n": "50A　16K　Mゲートバルブ", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "Mゲートバルブ　　【16K】"}, {"n": "FMバルブ・チャッキ・ボールタップ　等", "s": "", "q": 1, "u": "式", "p": 0, "note": "", "sub": "FMバルブ・チャッキ・ボールタップ　等"}, {"n": "チャッキ弁　ONH-20A", "s": "", "q": 1.0, "u": "個", "p": 12000, "note": "", "sub": "FMバルブ・チャッキ・ボールタップ　等"}, {"n": "定流量弁　FD-6N", "s": "", "q": 1.0, "u": "個", "p": 9400, "note": "", "sub": "FMバルブ・チャッキ・ボールタップ　等"}, {"n": "銅変換継手", "s": "", "q": 1, "u": "式", "p": 0, "note": "", "sub": "銅変換継手"}, {"n": "20×13㎜　銅変換継手", "s": "", "q": 1.0, "u": "個", "p": 2275, "note": "", "sub": "オンダ"}, {"n": "13㎜　銅変換継手", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "オンダ"}, {"n": "13×10㎜　銅変換継手", "s": "", "q": 1.0, "u": "個", "p": 0, "note": "", "sub": "オンダ"}, {"n": "フロアバンド", "s": "", "q": 1, "u": "式", "p": 0, "note": "", "sub": "フロアバンド"}, {"n": "50A　H150 フロアバンド", "s": "", "q": 1.0, "u": "個", "p": 570, "note": "", "sub": "150mmフロアバンド"}, {"n": "65A　H150 フロアバンド", "s": "", "q": 1.0, "u": "個", "p": 570, "note": "", "sub": "150mmフロアバンド"}, {"n": "80A　H150 フロアバンド", "s": "", "q": 1.0, "u": "個", "p": 620, "note": "", "sub": "150mmフロアバンド"}, {"n": "100A　H150 フロアバンド", "s": "", "q": 1.0, "u": "個", "p": 690, "note": "", "sub": "150mmフロアバンド"}, {"n": "50A　H150 フロアバンド", "s": "", "q": 1.0, "u": "個", "p": 3800, "note": "", "sub": "屋外　TNフロアバンド【フネン】"}, {"n": "65A　H150 フロアバンド", "s": "", "q": 1.0, "u": "個", "p": 4100, "note": "", "sub": "屋外　TNフロアバンド【フネン】"}, {"n": "100A　H150 フロアバンド", "s": "", "q": 1.0, "u": "個", "p": 5600, "note": "", "sub": "屋外　TNフロアバンド【フネン】"}, {"n": "耐火材", "s": "", "q": 1, "u": "式", "p": 0, "note": "", "sub": "耐火材"}, {"n": "耐火テープ　IRTV-N", "s": "", "q": 1.0, "u": "個", "p": 16270, "note": "", "sub": "耐火材"}, {"n": "タフパッド", "s": "", "q": 1.0, "u": "枚", "p": 950, "note": "", "sub": "耐火材"}, {"n": "Aパッド", "s": "", "q": 1.0, "u": "枚", "p": 1450, "note": "", "sub": "耐火材"}, {"n": "キッチン水栓", "s": "", "q": 1, "u": "式", "p": 0, "note": "", "sub": "キッチン水栓"}, {"n": "KM6001EC2", "s": "", "q": 1.0, "u": "個", "p": 33660, "note": "", "sub": "キッチン水栓"}, {"n": "ボード類", "s": "", "q": 1, "u": "式", "p": 0, "note": "", "sub": "ボード類"}, {"n": "ケイカル板", "s": "1800×900", "q": 1.0, "u": "枚", "p": 3500, "note": "", "sub": "ボード類"}, {"n": "トイレボールタップ", "s": "", "q": 1, "u": "式", "p": 0, "note": "", "sub": "トイレボールタップ"}, {"n": "V56-5X-13", "s": "", "q": 1.0, "u": "個", "p": 4800, "note": "", "sub": "トイレボールタップ"}, {"n": "グラスウール　ALGC", "s": "", "q": 1, "u": "式", "p": 0, "note": "", "sub": "グラスウール　ALGC"}, {"n": "20㎜　ALGCグラスウール", "s": "", "q": 1.0, "u": "本", "p": 900, "note": "", "sub": "グラスウール　ALGC"}, {"n": "40㎜　ALGCグラスウール", "s": "", "q": 1.0, "u": "本", "p": 1150, "note": "", "sub": "グラスウール　ALGC"}, {"n": "50㎜　ALGCグラスウール", "s": "", "q": 1.0, "u": "本", "p": 1250, "note": "", "sub": "グラスウール　ALGC"}, {"n": "65㎜　ALGCグラスウール", "s": "", "q": 1.0, "u": "本", "p": 1450, "note": "", "sub": "グラスウール　ALGC"}, {"n": "80㎜　ALGCグラスウール", "s": "", "q": 1.0, "u": "本", "p": 1600, "note": "", "sub": "グラスウール　ALGC"}, {"n": "100㎜　ALGCグラスウール", "s": "", "q": 1.0, "u": "本", "p": 2800, "note": "", "sub": "グラスウール　ALGC"}]}, {"parent": "浴室交換", "children": [{"n": "浴室交換", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "作業部養生費", "s": "ブルーシート・マスカー共", "q": 1.0, "u": "式", "p": 10000, "note": ""}, {"n": "共用部養生費", "s": "", "q": 1.0, "u": "式", "p": 12000, "note": ""}, {"n": "エレベーター養生費", "s": "プラベニヤ材共", "q": 1.0, "u": "式", "p": 8000, "note": ""}, {"n": "既存ユニットバス解体工事費", "s": "搬出費共", "q": 1.0, "u": "式", "p": 65000, "note": ""}, {"n": "発生材処分費", "s": "車両＋運搬費＋処分費", "q": 1.0, "u": "式", "p": 78000, "note": ""}, {"n": "給排水切り回し工事費", "s": "材工共", "q": 1.0, "u": "式", "p": 80000, "note": ""}, {"n": "入口造作工事費", "s": "大工工事・補修費共", "q": 1.0, "u": "式", "p": 40000, "note": ""}, {"n": "額縁取付工事費", "s": "材料費・加工費共", "q": 1.0, "u": "式", "p": 33000, "note": ""}, {"n": "浴室組み立て工事費", "s": "技術料・保証料共", "q": 1.0, "u": "式", "p": 100000, "note": ""}, {"n": "給排水接続工事費", "s": "技術料・保証料共", "q": 1.0, "u": "式", "p": 35000, "note": ""}, {"n": "電気配線接続工事費", "s": "材工共", "q": 1.0, "u": "式", "p": 25000, "note": ""}, {"n": "同材料費", "s": "LIXIL BLCW-1116", "q": 1.0, "u": "個", "p": 573100, "note": ""}, {"n": "一般管理費", "s": "清掃費・美装費共", "q": 2.0, "u": "日", "p": 15000, "note": ""}, {"n": "資材運搬費", "s": "車両＋運搬費＋購入労務費", "q": 1.0, "u": "式", "p": 16000, "note": ""}, {"n": "交通費", "s": "高速費・コインパーキング共", "q": 4.0, "u": "台", "p": 6600, "note": ""}]}, {"parent": "給湯器交換", "children": [{"n": "給湯器交換", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "作業部養生費", "s": "ブルーシート・マスカー共", "q": 1.0, "u": "式", "p": 5000, "note": ""}, {"n": "外壁アンカー打設工事費", "s": "安全帯設置用・材工共", "q": 1.0, "u": "式", "p": 18000, "note": ""}, {"n": "安全対策費", "s": "作業箇所直下・人員配置", "q": 1.0, "u": "式", "p": 20000, "note": ""}, {"n": "既存給湯器撤去工事費", "s": "発生材処分費共", "q": 1.0, "u": "式", "p": 12000, "note": ""}, {"n": "新規取り付け工事費", "s": "技術料・施工保証料共", "q": 1.0, "u": "式", "p": 35000, "note": "加工費共"}, {"n": "ガス管脱着作業費", "s": "技術料・保証料共", "q": 1.0, "u": "式", "p": 10000, "note": ""}, {"n": "リモコン交換工事費", "s": "技術料・保証料共", "q": 1.0, "u": "式", "p": 5000, "note": ""}, {"n": "新規保温材施工費", "s": "材工共", "q": 1.0, "u": "式", "p": 6000, "note": ""}, {"n": "外壁補修工事費", "s": "アンカー打設部・変成シリコン", "q": 1.0, "u": "式", "p": 4500, "note": ""}, {"n": "同材料費", "s": "リンナイ・RUF-E2008", "q": 1.0, "u": "個", "p": 112470, "note": ""}, {"n": "リモコン　MBC-240V", "s": "", "q": 1.0, "u": "個", "p": 22560, "note": ""}, {"n": "フレキシブル管", "s": "", "q": 1.0, "u": "式", "p": 3500, "note": ""}]}, {"parent": "ポリブデン管引き換え", "children": [{"n": "ポリブデン管引き換え", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "既存配管撤去工事費", "s": "水抜き作業・処分費共", "q": 1.0, "u": "式", "p": 8000, "note": ""}, {"n": "新規配管施工費", "s": "技術料・保証料共", "q": 2.0, "u": "人工", "p": 23000, "note": ""}, {"n": "同材料費", "s": "16㎜　ポリブデン管", "q": 1.0, "u": "巻", "p": 13500, "note": ""}, {"n": "16㎜　接手", "s": "", "q": 1.0, "u": "式", "p": 4800, "note": ""}]}, {"parent": "空気抜き弁交換工事", "children": [{"n": "空気抜き弁交換工事", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "作業部養生費", "s": "資材仮置きの為", "q": 1.0, "u": "式", "p": 3000, "note": ""}, {"n": "既存撤去作業費", "s": "発生材処分費共", "q": 1.0, "u": "式", "p": 5000, "note": ""}, {"n": "新規取り付け作業費", "s": "技術料・施工保証料共", "q": 1.0, "u": "式", "p": 20000, "note": ""}, {"n": "保温材施工", "s": "グラスウール・アルミテープ材共", "q": 1.0, "u": "式", "p": 6000, "note": ""}, {"n": "同材料費", "s": "空気抜き本体　AF6N-F", "q": 1.0, "u": "個", "p": 15000, "note": ""}, {"n": "一般管理費", "s": "清掃費・美装費共", "q": 1.0, "u": "日", "p": 5000, "note": ""}, {"n": "資材運搬費", "s": "車両＋運搬費＋購入労務費", "q": 1.0, "u": "式", "p": 8000, "note": ""}, {"n": "交通費", "s": "高速費・コインパーキング共", "q": 1.0, "u": "台", "p": 7600, "note": ""}]}, {"parent": "小型温水器交換工事", "children": [{"n": "小型温水器交換工事", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "既存撤去工事費", "s": "発生材処分費共", "q": 1.0, "u": "式", "p": 8800, "note": "温水器・水栓器具"}, {"n": "水栓取り付け工事費", "s": "技術料・施工保証料共", "q": 1.0, "u": "式", "p": 12000, "note": ""}, {"n": "小型温水器取り付け工事費", "s": "技術料・施工保証料共", "q": 1.0, "u": "式", "p": 18000, "note": ""}, {"n": "同材料費", "s": "水栓本体　KVK KM5011", "q": 1.0, "u": "個", "p": 23000, "note": ""}, {"n": "温水器　ESN20BRN", "s": "", "q": 1.0, "u": "個", "p": 130200, "note": ""}, {"n": "トラップ　BCH-5K", "s": "", "q": 1.0, "u": "式", "p": 13000, "note": ""}, {"n": "逃しホースセット", "s": "", "q": 1.0, "u": "式", "p": 3500, "note": ""}, {"n": "雑材", "s": "", "q": 1.0, "u": "式", "p": 3000, "note": ""}, {"n": "一般管理費", "s": "清掃費・美装費共", "q": 1.0, "u": "日", "p": 5000, "note": ""}, {"n": "資材運搬費", "s": "車両＋運搬費＋購入労務費", "q": 1.0, "u": "式", "p": 12000, "note": ""}, {"n": "交通費", "s": "高速費・コインパーキング共", "q": 1.0, "u": "台", "p": 6600, "note": ""}]}, {"parent": "電温脱着排水管更新工事", "children": [{"n": "電温脱着排水管更新工事", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "作業部養生費", "s": "ブルーシート・マスカー共", "q": 1.0, "u": "式", "p": 12000, "note": ""}, {"n": "天井開口工事費", "s": "下地補強・仮復旧共", "q": 1.0, "u": "式", "p": 10000, "note": ""}, {"n": "電気温水器取り外し作業費", "s": "同水抜き作業・配管撤去工事費共", "q": 1.0, "u": "式", "p": 46000, "note": ""}, {"n": "貫通部はつり工事費", "s": "機械損料共(斫り機)", "q": 1.0, "u": "式", "p": 16000, "note": ""}, {"n": "既存配管撤去工事費", "s": "発生材処分費共", "q": 1.0, "u": "式", "p": 18500, "note": ""}, {"n": "新規配管施工費", "s": "技術料・施工保証料共", "q": 1.0, "u": "式", "p": 67000, "note": ""}, {"n": "モルタル補修費", "s": "速乾モルタル・材工共", "q": 1.0, "u": "式", "p": 12000, "note": ""}, {"n": "電気温水器復旧工事費", "s": "同配管施工費共", "q": 1.0, "u": "式", "p": 56000, "note": ""}, {"n": "同材料費", "s": "50㎜　HTVPパイプ", "q": 1.0, "u": "本", "p": 7110, "note": ""}, {"n": "50㎜　HTVP　エルボ", "s": "", "q": 6.0, "u": "個", "p": 1280, "note": ""}, {"n": "50㎜　HTVP　ソケット", "s": "", "q": 2.0, "u": "個", "p": 880, "note": ""}, {"n": "50㎜　HTVP　耐熱トラップ", "s": "", "q": 1.0, "u": "個", "p": 3330, "note": ""}, {"n": "50㎜　MDジョイント", "s": "", "q": 1.0, "u": "個", "p": 4680, "note": ""}, {"n": "13㎜　HTVPパイプ", "s": "", "q": 1.0, "u": "本", "p": 995, "note": ""}, {"n": "20㎜　HTVPパイプ", "s": "", "q": 1.0, "u": "本", "p": 1780, "note": ""}, {"n": "20㎜　HIVPパイプ", "s": "", "q": 1.0, "u": "本", "p": 1230, "note": ""}, {"n": "20㎜　HTVP　バルソケ", "s": "", "q": 2.0, "u": "個", "p": 1490, "note": ""}, {"n": "13㎜　HTVP　バルソケ", "s": "", "q": 1.0, "u": "個", "p": 865, "note": ""}, {"n": "20㎜　HIVP　バルソケ", "s": "", "q": 1.0, "u": "個", "p": 1370, "note": ""}, {"n": "同接手材", "s": "", "q": 1.0, "u": "式", "p": 2800, "note": ""}, {"n": "Aパッド", "s": "", "q": 1.0, "u": "枚", "p": 1450, "note": ""}]}, {"parent": "戸建て　外部給水管工事", "children": [{"n": "戸建て　外部給水管工事", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "作業部養生費", "s": "ブルーシート・マスカー共", "q": 1.0, "u": "式", "p": 8000, "note": ""}, {"n": "カッター作業費", "s": "土間・コンクリートサンダー", "q": 1.0, "u": "式", "p": 12000, "note": ""}, {"n": "埋設部はつり工事費", "s": "機械損料共(斫り機)", "q": 1.0, "u": "式", "p": 26000, "note": ""}, {"n": "同掘削作業費", "s": "", "q": 1.0, "u": "式", "p": 16000, "note": ""}, {"n": "新規配管施工費", "s": "技術料・保証料共", "q": 1.0, "u": "式", "p": 52000, "note": ""}, {"n": "立水栓交換工事費", "s": "レジコン製・材工共", "q": 1.0, "u": "式", "p": 18000, "note": ""}, {"n": "同材料費", "s": "20㎜　HIVPパイプ", "q": 1.0, "u": "本", "p": 1230, "note": ""}, {"n": "同接手材", "s": "", "q": 1.0, "u": "式", "p": 4200, "note": ""}, {"n": "20㎜　HILA", "s": "", "q": 2.0, "u": "個", "p": 2800, "note": ""}, {"n": "メーター自在管", "s": "", "q": 1.0, "u": "個", "p": 19275, "note": ""}, {"n": "一般管理費", "s": "清掃費・美装費共", "q": 1.0, "u": "日", "p": 12000, "note": ""}, {"n": "資材運搬費", "s": "車両＋運搬費＋購入労務費", "q": 1.0, "u": "式", "p": 10000, "note": ""}, {"n": "交通費", "s": "高速費・コインパーキング共", "q": 1.0, "u": "台", "p": 8200, "note": ""}]}, {"parent": "UB交換工事", "children": [{"n": "UB交換工事", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "作業部養生費", "s": "作業箇所導線・共用部養生費共", "q": 1.0, "u": "式", "p": 22000, "note": ""}, {"n": "既存UB解体工事費", "s": "技術料・保証料共", "q": 1.0, "u": "式", "p": 66000, "note": ""}, {"n": "産廃処分費", "s": "運搬費共", "q": 1.0, "u": "式", "p": 75000, "note": ""}, {"n": "給排水切り回し工事費", "s": "材工・施工保証料共", "q": 1.0, "u": "式", "p": 95000, "note": ""}, {"n": "ドア周り木工事", "s": "大工工事費・材工共", "q": 1.0, "u": "式", "p": 45000, "note": ""}, {"n": "ドア枠額縁取付工事費", "s": "加工費・材工共", "q": 1.0, "u": "式", "p": 36000, "note": ""}, {"n": "UB組み立て工事費", "s": "梁加工・施工保証料共", "q": 1.0, "u": "式", "p": 110000, "note": ""}, {"n": "給排水接続工事費", "s": "技術料・保証料共", "q": 1.0, "u": "式", "p": 33000, "note": ""}, {"n": "電気工事費", "s": "換気扇・各種結線", "q": 1.0, "u": "式", "p": 23000, "note": ""}, {"n": "同材料費", "s": "LIXIL BLCW1216LBD", "q": 1.0, "u": "式", "p": 579350, "note": ""}, {"n": "一般管理費", "s": "清掃費・美装費共", "q": 4.0, "u": "日", "p": 18000, "note": ""}, {"n": "現場配送費", "s": "", "q": 1.0, "u": "式", "p": 18000, "note": ""}, {"n": "交通費", "s": "高速費・コインパーキング共", "q": 10.0, "u": "台", "p": 6600, "note": ""}, {"n": "諸経費", "s": "", "q": 1.0, "u": "式", "p": 65000, "note": ""}]}, {"parent": "マンホール交換工事", "children": [{"n": "マンホール交換工事", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "安全対策費", "s": "カラーコーン設置・区画養生費・人員配置", "q": 1.0, "u": "式", "p": 23000, "note": ""}, {"n": "アスファルトカッター作業費", "s": "機械損料共(サンダー)", "q": 1.0, "u": "式", "p": 12000, "note": ""}, {"n": "はつり工事費", "s": "機械損料共(斫り機)", "q": 1.0, "u": "式", "p": 16000, "note": ""}, {"n": "既存蓋撤去作業費", "s": "新規取り付け工事費共", "q": 1.0, "u": "箇所", "p": 5000, "note": ""}, {"n": "モルタル補修費", "s": "材工共(50kg)", "q": 1.0, "u": "式", "p": 33000, "note": ""}, {"n": "レミファルト補修費", "s": "材工共(40kg)", "q": 1.0, "u": "式", "p": 37000, "note": ""}, {"n": "雑材", "s": "コンパネ等", "q": 1.0, "u": "式", "p": 4200, "note": ""}, {"n": "一般管理費", "s": "清掃費・美装費共", "q": 1.0, "u": "日", "p": 15000, "note": "予備日共"}, {"n": "資材運搬費", "s": "車両＋運搬費＋購入労務費・発生材処分費共", "q": 1.0, "u": "式", "p": 23500, "note": ""}, {"n": "交通費", "s": "高速費・コインパーキング共", "q": 1.0, "u": "台", "p": 10000, "note": ""}]}, {"parent": "給湯管部分修繕工事", "children": [{"n": "給湯管部分修繕工事", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "既存配管撤去工事費", "s": "同水抜き作業費共", "q": 1.0, "u": "式", "p": 8000, "note": ""}, {"n": "底板穴あけ加工費", "s": "機械損料共(ホルソー)", "q": 1.0, "u": "発", "p": 2500, "note": ""}, {"n": "新規配管施工費", "s": "技術料・施工保証料共", "q": 1.0, "u": "式", "p": 35000, "note": ""}, {"n": "同材料費", "s": "13㎜　架橋ポリ管", "q": 1.0, "u": "式", "p": 1500, "note": ""}, {"n": "20×13㎜　銅変換継手", "s": "", "q": 1.0, "u": "個", "p": 2275, "note": ""}, {"n": "13㎜　架橋バルブ", "s": "", "q": 1.0, "u": "個", "p": 2960, "note": ""}, {"n": "一般管理費", "s": "清掃費・美装費共", "q": 1.0, "u": "日", "p": 3000, "note": ""}, {"n": "資材運搬費", "s": "車両＋運搬費＋発生材処分費", "q": 1.0, "u": "式", "p": 6000, "note": ""}, {"n": "交通費", "s": "高速費・コインパーキング共", "q": 1.0, "u": "台", "p": 8200, "note": ""}]}, {"parent": "防水工事", "children": [{"n": "防水工事", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "バルコニー防水工事", "s": "", "q": 1.0, "u": "式", "p": 227000, "note": ""}, {"n": "防火水槽　防水工事", "s": "", "q": 1.0, "u": "式", "p": 430500, "note": ""}]}, {"parent": "バルコニー防水工事", "children": [{"n": "バルコニー防水工事", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "作業部養生費", "s": "ブルーシート・マスカー共", "q": 1.0, "u": "式", "p": 10000, "note": ""}, {"n": "防水下地洗浄作業費", "s": "鳩フン除去・デッキブラシ水洗い", "q": 1.0, "u": "式", "p": 35000, "note": ""}, {"n": "下塗りプライマー施工費", "s": "ウレタン樹脂シーラー材", "q": 1.0, "u": "式", "p": 30000, "note": ""}, {"n": "中塗り・上塗りウレタン施工費", "s": "技術料・保証料共", "q": 1.0, "u": "式", "p": 130000, "note": "※立ち上がり防水含む"}, {"n": "手摺根本シーリング施工費", "s": "変成シリコン三角シーリング", "q": 1.0, "u": "式", "p": 14000, "note": ""}, {"n": "壁面ビス穴補修費", "s": "変成シリコンシーリング充填", "q": 1.0, "u": "式", "p": 8000, "note": ""}]}, {"parent": "防火水槽　防水工事", "children": [{"n": "防火水槽　防水工事", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "既存塗膜撤去工事費", "s": "ケレン作業", "q": 1.0, "u": "式", "p": 8000, "note": ""}, {"n": "高圧洗浄費", "s": "機械運搬搬入費", "q": 1.0, "u": "式", "p": 12000, "note": ""}, {"n": "同作業費(高圧洗浄作業費)", "s": "", "q": 1.0, "u": "式", "p": 25000, "note": ""}, {"n": "下地調整費", "s": "モルタル・レベル調整共", "q": 1.0, "u": "式", "p": 35500, "note": ""}, {"n": "下地調整費", "s": "樹脂モルタル平滑処理", "q": 1.0, "u": "式", "p": 28000, "note": ""}, {"n": "ウレタン施工", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "ウレタン塗膜防水工事費", "s": "田島ルーフィング　Go-Jin仕様", "q": 1.0, "u": "式", "p": 160000, "note": ""}, {"n": "ウレタン防水工事費", "s": "プライマー施工費・材工共", "q": 1.0, "u": "式", "p": 60000, "note": ""}, {"n": "同作業費(中塗り・上塗り)", "s": "", "q": 1.0, "u": "式", "p": 90000, "note": ""}, {"n": "入隅シーリング施工費", "s": "編成シリコン・材工共", "q": 1.0, "u": "式", "p": 12000, "note": ""}]}, {"parent": "足場工事", "children": [{"n": "足場工事", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "ローリング足場組み立て工事費", "s": "枠足場ローリング仮設工事費", "q": 1.0, "u": "式", "p": 220000, "note": ""}, {"n": "運搬・搬入作業費", "s": "車両＋運搬費＋搬入作業費共", "q": 1.0, "u": "式", "p": 50000, "note": ""}, {"n": "外部足場組み立て工事費", "s": "クサビ式足場", "q": 1.0, "u": "式", "p": 180000, "note": ""}]}, {"parent": "足場掛け払い工事", "children": [{"n": "共用部養生費", "s": "資材仮置きの為", "q": 1.0, "u": "式", "p": 8000, "note": ""}, {"n": "外部足場組立工事費", "s": "4段　ビケ足場　技術料・施工保証料共", "q": 1.0, "u": "式", "p": 280000, "note": ""}, {"n": "飛散防止養生費", "s": "メッシュシート", "q": 1.0, "u": "式", "p": 23000, "note": ""}, {"n": "壁繋ぎアウトリガー補強費", "s": "転倒防止措置　技術料・施工保証料共", "q": 1.0, "u": "式", "p": 20000, "note": ""}, {"n": "足場材運搬費", "s": "車両＋運搬費", "q": 2.0, "u": "台", "p": 18000, "note": ""}]}, {"parent": "外構工事", "children": [{"n": "外構工事", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "ハッチ交換", "s": "", "q": 1.0, "u": "式", "p": 283000, "note": ""}, {"n": "アスファルト　解体・舗装", "s": "", "q": 1.0, "u": "式", "p": 209600, "note": ""}, {"n": "マンホール交換", "s": "", "q": 1.0, "u": "式", "p": 168000, "note": ""}, {"n": "斫り・土間タイル復旧工事費", "s": "コンクリート・タイル復旧", "q": 1.0, "u": "式", "p": 480000, "note": ""}]}, {"parent": "ハッチ交換", "children": [{"n": "ハッチ交換", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "共用部・作業部養生費", "s": "動線確保・粉塵対策含む", "q": 1.0, "u": "式", "p": 20000, "note": ""}, {"n": "既存ハッチ撤去工事費", "s": "既存枠・蓋撤去　搬出処分費共", "q": 1.0, "u": "箇所", "p": 45000, "note": ""}, {"n": "新規床ハッチ取り付け工事費", "s": "取付固定・レベル調整", "q": 1.0, "u": "箇所", "p": 90000, "note": ""}, {"n": "同材料費", "s": "フロアーハッチ　600角", "q": 1.0, "u": "個", "p": 50000, "note": ""}, {"n": "蓋タイル復旧費", "s": "600角内　磁器タイル", "q": 1.0, "u": "箇所", "p": 50000, "note": "※既存類似品"}, {"n": "周囲タイル補修費", "s": "既存タイル欠損部補修・目地調整", "q": 1.0, "u": "箇所", "p": 28000, "note": ""}]}, {"parent": "アスファルト　解体・舗装", "children": [{"n": "アスファルト　解体・舗装", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "切削箇所墨出し作業費", "s": "施工ライン出し", "q": 1.0, "u": "ｍ", "p": 2600, "note": ""}, {"n": "舗装版切削施工費", "s": "アスファルトカッター　機械損料共", "q": 1.0, "u": "ｍ", "p": 3000, "note": ""}, {"n": "アスファルト斫り撤去工事費", "s": "機械損料共", "q": 1.0, "u": "㎡", "p": 25000, "note": ""}, {"n": "掘削工事費", "s": "残土仮置き養生含む", "q": 1.0, "u": "式", "p": 60000, "note": ""}, {"n": "砕石埋め戻し作業費", "s": "敷均し・転圧作業共", "q": 1.0, "u": "式", "p": 65000, "note": ""}, {"n": "アスファルト舗装費", "s": "転圧・材工共　H-150", "q": 1.0, "u": "㎡", "p": 25000, "note": ""}, {"n": "産業廃棄物処分費", "s": "アスファルト・コンクリートガラ", "q": 1.0, "u": "立米", "p": 29000, "note": ""}]}, {"parent": "マンホール交換", "children": [{"n": "マンホール交換", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "コンクリート切削工事費", "s": "コンクリートカッター", "q": 1.0, "u": "箇所", "p": 16000, "note": ""}, {"n": "コンクリート斫り工事費", "s": "機械損料共(斫り機)", "q": 1.0, "u": "箇所", "p": 18000, "note": ""}, {"n": "産業廃棄物処分費", "s": "アスファルト・コンクリートガラ", "q": 1.0, "u": "式", "p": 60000, "note": ""}, {"n": "桝蓋交換工事費", "s": "施工費・レベル調整費共", "q": 1.0, "u": "箇所", "p": 18000, "note": ""}, {"n": "同材料費", "s": "ダイドレ　OMH-1-450", "q": 1.0, "u": "個", "p": 32000, "note": ""}, {"n": "埋め戻し作業費", "s": "敷き均し・転圧作業共", "q": 1.0, "u": "箇所", "p": 10000, "note": ""}, {"n": "コンクリート復旧工事費", "s": "技術料・材工共", "q": 1.0, "u": "箇所", "p": 14000, "note": ""}]}, {"parent": "斫り・土間タイル復旧工事費", "children": [{"n": "斫り・土間タイル復旧工事費", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "共用部・作業部養生費", "s": "動線確保・粉塵対策含む", "q": 1.0, "u": "式", "p": 20000, "note": ""}, {"n": "土間切削施工費", "s": "アスファルトカッター　機械損料共", "q": 20.0, "u": "ｍ", "p": 1500, "note": ""}, {"n": "コンクリート斫り工事費", "s": "機械損料共(斫り機)", "q": 1.0, "u": "式", "p": 26000, "note": ""}, {"n": "埋め戻し作業費", "s": "敷き均し・転圧作業共", "q": 1.0, "u": "式", "p": 18000, "note": ""}, {"n": "コンクリート復旧作業費", "s": "技術料・材工共", "q": 1.0, "u": "式", "p": 24000, "note": ""}, {"n": "下地調整費", "s": "レベル調整・材工共", "q": 1.0, "u": "式", "p": 80000, "note": ""}, {"n": "タイル復旧作業費", "s": "技術料・加工費含む", "q": 1.0, "u": "式", "p": 180000, "note": ""}, {"n": "同材料費", "s": "磁器タイル", "q": 3.0, "u": "箱", "p": 16000, "note": ""}, {"n": "タイル目地入れ作業費", "s": "材工共", "q": 1.0, "u": "式", "p": 22000, "note": ""}, {"n": "産業廃棄物処分費", "s": "タイル・コンクリートガラ", "q": 1.0, "u": "式", "p": 32000, "note": ""}]}, {"parent": "内装復旧", "children": [{"n": "内装復旧", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "内装復旧工事費", "s": "ボード、クロス貼替・ベースライト交換", "q": 1.0, "u": "式", "p": 251400, "note": ""}, {"n": "一般管理費", "s": "清掃費・美装費共", "q": 1.0, "u": "式", "p": 149070, "note": ""}]}, {"parent": "内装復旧工事費", "children": [{"n": "内装復旧工事費", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "資材仮置き・作業部養生費", "s": "ブルーシート・マスカー共", "q": 1.0, "u": "式", "p": 18000, "note": ""}, {"n": "既存天井ボード解体作業費", "s": "技術料・保証料共", "q": 1.0, "u": "式", "p": 48000, "note": ""}, {"n": "新規天井復旧作業費", "s": "技術料・施工保証料共", "q": 1.0, "u": "式", "p": 52000, "note": ""}, {"n": "同材料費", "s": "耐火ボード　9.5mm　3×6", "q": 9.0, "u": "枚", "p": 1100, "note": ""}, {"n": "クロス下地調整作業費", "s": "パテ処理　材工共", "q": 1.0, "u": "式", "p": 22000, "note": ""}, {"n": "新規クロス貼り作業費", "s": "類似品選定　施工費・材工共", "q": 1.0, "u": "式", "p": 45000, "note": ""}, {"n": "ベースライト交換作業費", "s": "技術料・保証料共", "q": 1.0, "u": "式", "p": 15000, "note": ""}, {"n": "同材料費", "s": "ｵｰﾃﾞﾘｯｸ　XL 501 002R5B", "q": 1.0, "u": "台", "p": 9500, "note": ""}, {"n": "発生材処分費", "s": "車両＋運搬＋廃材費共", "q": 1.0, "u": "立米", "p": 32000, "note": ""}]}, {"parent": "一般管理費", "children": [{"n": "一般管理費", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "現場管理費", "s": "現場管理費・報告書作成費共", "q": 3.0, "u": "日", "p": 18000, "note": ""}, {"n": "資材運搬費", "s": "車両＋運搬費＋購入労務費", "q": 1.0, "u": "式", "p": 16000, "note": ""}, {"n": "交通費", "s": "高速費・コインパーキング共", "q": 6.0, "u": "台", "p": 10000, "note": ""}, {"n": "法定福利費", "s": "", "q": 1.0, "u": "式", "p": 19070, "note": ""}]}, {"parent": "天井復旧＋塗装＋照明＋感知器交換", "children": [{"n": "天井復旧＋塗装＋照明＋感知器交換", "s": "", "q": 1, "u": "式", "p": 0, "note": ""}, {"n": "作業部養生費", "s": "ブルーシート・マスカー共", "q": 1.0, "u": "式", "p": 12000, "note": ""}, {"n": "既存天井材解体工事費", "s": "機械損料共", "q": 1.0, "u": "式", "p": 24000, "note": ""}, {"n": "天井復旧作業費", "s": "ケイカル板　加工費・材工共", "q": 1.0, "u": "式", "p": 75000, "note": ""}, {"n": "既存塗装ケレン作業費", "s": "ケレン作業", "q": 1.0, "u": "式", "p": 12000, "note": ""}, {"n": "天井・梁下地調整費", "s": "パテ処理・材工共", "q": 1.0, "u": "式", "p": 18000, "note": ""}, {"n": "天井・梁塗装作業費", "s": "類似色・調色作業・材工共", "q": 1.0, "u": "式", "p": 70000, "note": ""}, {"n": "照明交換作業費", "s": "配線穴あけ作業・下地取り付け共", "q": 1.0, "u": "式", "p": 25000, "note": "電気工事士手配"}, {"n": "同材料費", "s": "オーデリック　OL 251 750R", "q": 2.0, "u": "個", "p": 6000, "note": ""}, {"n": "感知器交換作業費", "s": "ニッタン・CK2B-016　材工共", "q": 1.0, "u": "式", "p": 25000, "note": "消防設備士手配"}, {"n": "産業廃棄物処分費", "s": "車両＋運搬費＋処分費", "q": 1.0, "u": "式", "p": 32000, "note": ""}]}];
-const ALL_ITEMS = GROUPS.flatMap(g => g.children.map(c => ({...c, _pg: g.parent})));
 const TANTOS = ['﨑岡','後藤','赤岡','上村','綱嶋','伊藤'];
 let selTanto = '';
 
@@ -396,314 +396,270 @@ window.onload=()=>{
   document.getElementById('payment').value='定時御支払';
 };
 
-// ===== 大項目 =====
-let pgId=0;
-function addPg(name=''){
-  const id=pgId++;
-  const area=document.getElementById('meisaiArea');
-  const block=document.createElement('div');
-  block.className='pg-block';block.id=`pg-${id}`;
-  block.innerHTML=`
-    <div class="pg-head-wrap">
-      <div class="pg-head" id="pghead-${id}">
-        <span class="pg-toggle" id="tgl-${id}">▼</span>
-        <input class="pg-name" type="text" value="${esc(name)}" placeholder="大項目名を入力" oninput="calcAll()"/>
-        <span class="pg-subtotal" id="pgsub-${id}">¥0</span>
-      </div>
-      <button class="pg-del" id="pgdel-${id}">×</button>
-    </div>
-    <div class="pg-collapsible" id="pgcol-${id}">
-      <div class="pg-sub-info">
-        <div class="pg-sub-info-row">
-          <div class="pg-info-field">
-            <label>材質・寸法</label>
-            <input type="text" placeholder="例：25mm HIVPパイプ"/>
-          </div>
-          <div class="pg-info-field pg-info-num">
-            <label>数量</label>
-            <input type="number" min="0" step="0.01" placeholder="1" style="text-align:right"/>
-          </div>
-          <div class="pg-info-field pg-info-unit">
-            <label>単位</label>
-            <input type="text" placeholder="式"/>
-          </div>
-        </div>
-      </div>
-      <div class="pg-body" id="pgbody-${id}">
-        <div class="sub-cards" id="subcards-${id}"></div>
-        <div class="sub-add-row">
-          <button class="sub-add-btn" onclick="addSub(${id})">＋ 手書きで追加</button>
-          <button class="sub-pick-btn" onclick="openSubModal(${id})">📦 一覧から選択</button>
-        </div>
-      </div>
-    </div>`;
-  area.appendChild(block);
-  // トグル（pg-head クリックで開閉）
-  document.getElementById(`pghead-${id}`).addEventListener('click', e=>{
-    if(e.target.classList.contains('pg-name'))return;
-    const col=document.getElementById(`pgcol-${id}`);
-    const tgl=document.getElementById(`tgl-${id}`);
-    const isOpen=col.style.display!=='none';
-    col.style.display=isOpen?'none':'block';
-    tgl.classList.toggle('closed',isOpen);
-  });
-  // 削除ボタン（独立してるので競合なし）
-  document.getElementById(`pgdel-${id}`).addEventListener('click', ()=>{
-    if(!confirm('この大項目を削除しますか？'))return;
-    block.remove();calcAll();
-  });
-  calcAll();
-  // スクロール
-  setTimeout(()=>block.scrollIntoView({behavior:'smooth',block:'nearest'}),100);
-}
+// ===== 見積りベース(EST)と、見積の明細(段の木) =====
+// 見積りベース: estimate-base.js の EST_BASE(ESTの「見積りベース」と同じ段の木。最大4段)。単価は「100%」の値で持つ。
+// 見積の明細: EST_TREE(大項目 > まとまり > 項目 …。段の数に決まりは無い)。出力(Excel・PDF)は、まとまりごとに1ページ。
+const EST_ROOTS=(window.EST_BASE&&window.EST_BASE.roots)||[];
+const EST_LEAVES=[]; // 名前から探す(入力の候補)用に、項目(いちばん下の段)だけを平らに並べたもの
+(function flat(list,trail){list.forEach(c=>{if(c.c)flat(c.c,trail.concat(c.n||c.s||''));else EST_LEAVES.push({n:c.n||'',s:c.s||'',q:c.q||1,u:c.u||'式',p:c.p||0,b:c.b||'',trail:trail.join(' › ')});});})(EST_ROOTS,[]);
 
-function delPg(e, id){
-  e.stopPropagation();
-  if(!confirm('この大項目を削除しますか？'))return;
-  document.getElementById(`pg-${id}`)?.remove();calcAll();
-}
+// 単価の掛け率: 見積りベースから入れるとき「100%の単価 × 掛け率」を、単価として入れる(ESTの掛率と同じ。標準は130%)
+const EST_RATE_KEY='igumi_est_rate';
+let estRate=130;
+try{const v=parseInt(localStorage.getItem(EST_RATE_KEY),10);if(v===100||v===130)estRate=v;}catch(e){}
+const estPrice=p=>p?Math.round(p*estRate/100):0;
 
-// ===== 細項目カード =====
-let subId=0;
-function addSub(pgid, it=null){
-  const cards=document.getElementById(`subcards-${pgid}`);if(!cards)return;
-  const sid=subId++;
-  const n=it?esc(it.n):'',s=it?esc(it.s||''):'';
-  const q=it?it.q:1,u=it?esc(it.u||'式'):'式',p=it&&it.p?it.p:'',nt=it?esc(it.note||''):'';
-  const amt=(it&&it.p&&it.q)?(it.p*it.q):0;
-  const card=document.createElement('div');
-  card.className='sub-card';card.id=`sc-${sid}`;
-  card.innerHTML=`
-    <button class="sub-card-del" onclick="document.getElementById('sc-${sid}').remove();calcAll()">×</button>
-    <div class="sub-card-row">
-      <div class="sub-field" style="flex:2">
-        <label>名称</label>
-        <div class="sg-wrap">
-          <input type="text" value="${n}" placeholder="品名を入力または検索"
-            oninput="onSg(this,${sid})" onblur="hideSg(${sid})" autocomplete="off"/>
-          <div class="sg-list" id="sg-${sid}"></div>
-        </div>
-      </div>
-      <div class="sub-field" style="flex:1.5">
-        <label>材質・寸法</label>
-        <input type="text" value="${s}" placeholder="例：25mm HIVPパイプ"/>
-      </div>
-    </div>
-    <div class="sub-card-row">
-      <div class="sub-field">
-        <label>数量</label>
-        <input type="number" value="${q}" min="0" step="0.01" oninput="calcCard(${sid})"/>
-      </div>
-      <div class="sub-field">
-        <label>単位</label>
-        <input type="text" value="${u}" placeholder="式"/>
-      </div>
-      <div class="sub-field">
-        <label>単価（円）</label>
-        <input type="number" value="${p}" min="0" step="1" placeholder="0" oninput="calcCard(${sid})"/>
-      </div>
-    </div>
-    <div class="sub-field" style="margin-bottom:8px">
-      <label>備考</label>
-      <input type="text" value="${nt}" placeholder="備考（任意）"/>
-    </div>
-    <div class="sub-amt-row">
-      <span class="sub-amt-label">金額</span>
-      <span class="sub-amt-val" id="samt-${sid}">${amt?'¥'+amt.toLocaleString('ja-JP'):'¥0'}</span>
-    </div>`;
-  cards.appendChild(card);
-  calcAll();
-  setTimeout(()=>card.scrollIntoView({behavior:'smooth',block:'nearest'}),50);
-}
-
-function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-
-function calcCard(sid){
-  const card=document.getElementById(`sc-${sid}`);if(!card)return;
-  const nums=card.querySelectorAll('input[type=number]');
-  const qty=parseFloat(nums[0]?.value)||0,price=parseFloat(nums[1]?.value)||0;
-  const amt=qty*price;
-  const el=document.getElementById(`samt-${sid}`);
-  if(el)el.textContent='¥'+Math.round(amt).toLocaleString('ja-JP');
-  calcAll();
-}
-
-// サジェスト
-function onSg(el,sid){
-  const q=el.value.trim();const sl=document.getElementById(`sg-${sid}`);
-  if(!q){sl.classList.remove('show');return;}
-  const res=ALL_ITEMS.filter(it=>it.n.includes(q)||(it.s||'').includes(q)).slice(0,8);
-  if(!res.length){sl.classList.remove('show');return;}
-  sl.innerHTML=res.map(it=>`
-    <div class="sg-item" onmousedown="fillSg(event,${sid},${ALL_ITEMS.indexOf(it)})">
-      <span class="sg-name">${it.n}</span>
-      <span class="sg-spec">${it.s||''}</span>
-      <span class="sg-price">${it.p?'¥'+it.p.toLocaleString():''}</span>
-    </div>`).join('');
-  sl.classList.add('show');
-}
-function hideSg(sid){setTimeout(()=>{const s=document.getElementById(`sg-${sid}`);if(s)s.classList.remove('show');},200);}
-function fillSg(e,sid,idx){
-  e.preventDefault();const it=ALL_ITEMS[idx];
-  const card=document.getElementById(`sc-${sid}`);if(!card)return;
-  const txts=card.querySelectorAll('input[type=text]');
-  const nums=card.querySelectorAll('input[type=number]');
-  txts[0].value=it.n;txts[1].value=it.s||'';txts[2].value=it.u||'式';txts[3].value=it.note||'';
-  nums[0].value=it.q||1;nums[1].value=it.p||'';
-  document.getElementById(`sg-${sid}`).classList.remove('show');
-  calcCard(sid);
-}
-
-// 計算
+function esc(s){return(s==null?'':String(s)).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function getN(el){return parseFloat(el?.value)||0;}
 function fmtY(n){return'¥'+Math.round(n).toLocaleString('ja-JP');}
-function calcAll(){
-  let total=0;
-  document.querySelectorAll('.pg-block').forEach(block=>{
-    const id=block.id.replace('pg-','');
-    let pgSum=0;
-    block.querySelectorAll('.sub-card').forEach(card=>{
-      const nums=card.querySelectorAll('input[type=number]');
-      const qty=getN(nums[0]),price=getN(nums[1]),amt=qty*price;
-      pgSum+=amt;
-      const sid=card.id.replace('sc-','');
-      const el=document.getElementById(`samt-${sid}`);
-      if(el)el.textContent=fmtY(amt);
-    });
-    total+=pgSum;
-    const ps=document.getElementById(`pgsub-${id}`);
-    if(ps)ps.textContent=fmtY(pgSum);
-  });
-  const mr=getN(document.getElementById('miscRate'))/100;
-  const misc=Math.round(total*mr),disc=getN(document.getElementById('discount'));
-  const ko=total+misc-disc,tr2=parseFloat(document.getElementById('taxRate').value);
-  const tax=Math.round(ko*tr2),grand=ko+tax;
-  const mrP=Math.round(getN(document.getElementById('miscRate')));
-  const tS=tr2===0.10?'10%':tr2===0.08?'8%':'0%';
-  document.getElementById('d-sub').textContent=fmtY(total);
-  document.getElementById('d-misc-lbl').textContent=`諸経費（${mrP}%）`;
-  document.getElementById('d-misc').textContent=fmtY(misc);
-  document.getElementById('d-disc').textContent=`- ${fmtY(disc)}`;
-  document.getElementById('d-ko').textContent=fmtY(ko);
-  document.getElementById('d-tax-lbl').textContent=`消費税（${tS}）`;
-  document.getElementById('d-tax').textContent=fmtY(tax);
-  document.getElementById('d-total').textContent=fmtY(grand);
+const estQty=q=>String(Math.round((parseFloat(q)||0)*1000)/1000);
+
+let EST_TREE=[],estUid=1;
+const mkItem=o=>Object.assign({id:estUid++,kind:'item',name:'',spec:'',qty:1,unit:'式',price:0,note:''},o||{});
+const mkGroup=o=>Object.assign({id:estUid++,kind:'grp',name:'',spec:'',qty:1,unit:'式',open:true,kids:[]},o||{});
+function estLoc(id,list=EST_TREE,parent=null){ // idの場所を探す: {node,list,idx,parent}
+  for(let i=0;i<list.length;i++){
+    const n=list[i];if(n.id===id)return{node:n,list,idx:i,parent};
+    if(n.kind==='grp'){const r=estLoc(id,n.kids,n);if(r)return r;}
+  }
+  return null;
+}
+const estAmt=n=>n.kind==='grp'?n.kids.reduce((s,k)=>s+estAmt(k),0):(parseFloat(n.qty)||0)*(parseFloat(n.price)||0);
+function estClone(n){
+  const c=Object.assign({},n,{id:estUid++});
+  if(n.kind==='grp')c.kids=n.kids.map(estClone);
+  return c;
+}
+function estFromBase(c,open){ // 見積りベースの1つ(まとまり or 項目)を、見積の明細にして返す。中のまとまりは、たたんだ状態(open=trueは、いちばん外側だけ)
+  if(c.c)return mkGroup({name:c.n||'',spec:c.s||'',qty:c.q||1,unit:c.u||'式',open:!!open,kids:c.c.map(x=>estFromBase(x,false))});
+  return mkItem({name:c.n||'',spec:c.s||'',qty:c.q||1,unit:c.u||'式',price:estPrice(c.p),note:c.b||''});
 }
 
-// ===== 大項目モーダル =====
-function openPgModal(){
-  const pgList = document.getElementById('pgModalList');
-  pgList.innerHTML = GROUPS.map((g,i) => `
-    <div class="pg-modal-item" data-pgidx="${i}">
-      <span>${g.parent}</span>
-      <span class="pg-modal-cnt">${g.children.length}件</span>
-    </div>`).join('');
-  pgList.querySelectorAll('.pg-modal-item').forEach(el => {
-    el.addEventListener('click', () => {
-      const idx = parseInt(el.dataset.pgidx);
-      addPg(GROUPS[idx].parent);
-      closePgModal();
-    });
-  });
-  document.getElementById('pgModalBg').classList.add('show');
-  document.body.style.overflow='hidden';
-}
-function closePgModal(){document.getElementById('pgModalBg').classList.remove('show');document.body.style.overflow='';}
-
-// ===== 細項目モーダル（アコーディオン） =====
-let subModalTargetPg=-1;
-let subSelSet=new Set();
-
-function openSubModal(pgid){
-  subModalTargetPg=pgid;
-  subSelSet=new Set();
-  document.getElementById('subSearch').value='';
-  document.getElementById('subSelCount').textContent='0件 選択中';
-  buildAccordion(GROUPS);
-  document.getElementById('subModalBg').classList.add('show');
-  document.body.style.overflow='hidden';
-}
-function closeSubModal(){document.getElementById('subModalBg').classList.remove('show');document.body.style.overflow='';}
-
-function buildAccordion(filteredGroups, openFirst=false){
-  const acc=document.getElementById('subAccordion');
-  acc.innerHTML=filteredGroups.map((g,gi)=>{
-    const realIdx=GROUPS.indexOf(g);
-    const isOpen=openFirst&&gi===0;
-    return `<div class="acc-pg">
-      <div class="acc-pg-head" data-accgi="${gi}">
-        <span class="acc-pg-name">${g.parent}</span>
-        <span class="acc-pg-cnt">${g.children.length}件</span>
-        <span class="acc-pg-arr${isOpen?' open':''}">▶</span>
+// ---------- 明細の表示(1項目=1枚のカード。タップすると、下から入力欄) ----------
+function estRenderNode(n,depth){
+  if(n.kind==='grp'){
+    const kids=n.kids.map(k=>estRenderNode(k,depth+1)).join('');
+    return `<div class="tg d${depth%4}${depth===0?' top':''}">
+      <div class="tg-head" data-act="toggle" data-id="${n.id}">
+        <span class="tg-arr${n.open?'':' closed'}">▼</span>
+        <span class="tg-name">${n.name?esc(n.name):'<i>（名称未設定）</i>'}${n.spec?`<small>${esc(n.spec)}</small>`:''}</span>
+        <span class="tg-sub">${fmtY(estAmt(n))}</span>
+        <button class="tg-more" data-act="edit" data-id="${n.id}" aria-label="編集">⋯</button>
       </div>
-      <div class="acc-pg-body${isOpen?' open':''}">
-        ${g.children.map((it,ci)=>{
-          const key=`${realIdx}__${ci}`;
-          const chk=subSelSet.has(key);
-          return `<div class="m-item${chk?' checked':''}" data-key="${key}">
-            <div class="m-chk">${chk?'✓':''}</div>
-            <div class="m-info">
-              <div class="m-name">${it.n}</div>
-              ${it.s?`<div class="m-spec">${it.s}</div>`:''}
-            </div>
-            <div>
-              <span class="m-price">${it.p?'¥'+it.p.toLocaleString():'未設定'}</span>
-              <span class="m-unit">${it.u?'/ '+it.u:''}</span>
-            </div>
-          </div>`;
-        }).join('')}
+      <div class="tg-body"${n.open?'':' style="display:none"'}>
+        ${kids||'<div class="tg-empty">まだ何も入っていません</div>'}
+        <div class="tg-add">
+          <button data-act="addItem" data-id="${n.id}">＋ 項目</button>
+          <button data-act="addGroup" data-id="${n.id}">＋ まとまり</button>
+          <button class="pk" data-act="pick" data-id="${n.id}">📦 ベース</button>
+        </div>
       </div>
     </div>`;
-  }).join('');
-  // アコーディオン開閉イベント
-  acc.querySelectorAll('.acc-pg-head').forEach(head => {
-    head.addEventListener('click', () => toggleAcc(head));
-  });
-  // 品目チェックイベント
-  acc.querySelectorAll('.m-item').forEach(el => {
-    el.addEventListener('click', () => toggleSubItem(el.dataset.key, el));
-  });
+  }
+  const title=n.name||n.spec||'（名称未設定）';
+  return `<div class="ti" data-act="edit" data-id="${n.id}">
+    <div class="ti-top"><span class="ti-name">${esc(title)}</span><span class="ti-amt">${fmtY(estAmt(n))}</span></div>
+    ${(n.name&&n.spec)?`<div class="ti-spec">${esc(n.spec)}</div>`:''}
+    <div class="ti-calc">${estQty(n.qty)} ${esc(n.unit)} × ${fmtY(parseFloat(n.price)||0)}${n.note?`<span class="ti-note">${esc(n.note)}</span>`:''}</div>
+  </div>`;
+}
+function estRender(){
+  const area=document.getElementById('meisaiArea');
+  area.innerHTML=EST_TREE.length?EST_TREE.map(g=>estRenderNode(g,0)).join(''):'<div class="tg-empty big">まだ大項目がありません。下のボタンから追加してね</div>';
+  calcAll();
+}
+document.getElementById('meisaiArea').addEventListener('click',e=>{
+  const t=e.target.closest('[data-act]');if(!t)return;
+  const id=parseInt(t.dataset.id,10),act=t.dataset.act;
+  if(act==='toggle'){const L=estLoc(id);if(L){L.node.open=!L.node.open;estRender();}}
+  else if(act==='edit'){estOpenEditor(id,false);}
+  else if(act==='addItem'){estAddNode(id,'item');}
+  else if(act==='addGroup'){estAddNode(id,'grp');}
+  else if(act==='pick'){estOpenPicker(id);}
+});
+function estAddNode(parentId,kind){ // parentId が null なら、最上位(大項目)に足す
+  const node=kind==='grp'?mkGroup():mkItem();
+  if(parentId==null){EST_TREE.push(node);}
+  else{const L=estLoc(parentId);if(!L)return;L.node.kids.push(node);L.node.open=true;}
+  estRender();estOpenEditor(node.id,true);
 }
 
-function toggleAcc(head){
-  const body=head.nextElementSibling;
-  const arr=head.querySelector('.acc-pg-arr');
-  const isOpen=body.classList.contains('open');
-  body.classList.toggle('open',!isOpen);
-  arr.classList.toggle('open',!isOpen);
+// ---------- 入力欄(下から出るシート) ----------
+let ed=null; // {id,isNew}
+const $=id=>document.getElementById(id);
+function estOpenEditor(id,isNew){
+  const L=estLoc(id);if(!L)return;
+  const n=L.node,g=n.kind==='grp';
+  ed={id,isNew:!!isNew};
+  $('edTitle').textContent=g?(L.parent?'まとまりを編集':'大項目を編集'):'項目を編集';
+  $('edName').value=n.name;$('edSpec').value=n.spec;$('edQty').value=n.qty;$('edUnit').value=n.unit;
+  $('edPrice').value=g?'':(n.price||'');$('edNote').value=g?'':(n.note||'');
+  $('edPriceWrap').style.display=g?'none':'';$('edNoteWrap').style.display=g?'none':'';
+  $('edAmtLbl').textContent=g?'小計(中身の合計)':'金額';
+  $('edSg').innerHTML='';
+  estEdAmt();
+  $('edBg').classList.add('show');document.body.style.overflow='hidden';
+  if(isNew)setTimeout(()=>$('edName').focus(),200);
+}
+function estEdNode(){const L=ed&&estLoc(ed.id);return L?L.node:null;}
+function estEdAmt(){const n=estEdNode();if(n)$('edAmt').textContent=fmtY(estAmt(n));}
+function estEdInput(fromName){
+  const n=estEdNode();if(!n)return;
+  n.name=$('edName').value;n.spec=$('edSpec').value;n.qty=parseFloat($('edQty').value)||0;n.unit=$('edUnit').value;
+  if(n.kind==='item'){n.price=parseFloat($('edPrice').value)||0;n.note=$('edNote').value;}
+  estEdAmt();calcAll();
+  if(fromName&&n.kind==='item')estSuggest($('edName').value.trim());
+}
+function estSuggest(q){ // 名前を打つと、見積りベースの項目が候補に出る(タップで、規格・単位・単価も入る)
+  const box=$('edSg');
+  if(!q){box.innerHTML='';return;}
+  const res=[];
+  for(let i=0;i<EST_LEAVES.length&&res.length<8;i++){const x=EST_LEAVES[i];if((x.n+x.s).includes(q))res.push(i);}
+  box.innerHTML=res.map(i=>{const x=EST_LEAVES[i];
+    return `<div class="ed-sg-item" data-k="${i}"><div>${esc(x.n||x.s)}${(x.n&&x.s)?`<small>${esc(x.s)}</small>`:''}</div><span class="p">${x.p?fmtY(estPrice(x.p)):'未設定'}</span></div>`;}).join('');
+}
+$('edSg').addEventListener('click',e=>{
+  const it=e.target.closest('.ed-sg-item');if(!it)return;
+  const x=EST_LEAVES[parseInt(it.dataset.k,10)],n=estEdNode();if(!x||!n)return;
+  n.name=x.n||x.s;n.spec=x.n?x.s:'';n.qty=x.q||1;n.unit=x.u||'式';n.price=estPrice(x.p);n.note=x.b||'';
+  const keepNew=ed.isNew;estOpenEditor(ed.id,false);ed.isNew=keepNew;
+  calcAll();
+});
+function estCloseEditor(){
+  const n=estEdNode();
+  if(ed&&ed.isNew&&n&&!String(n.name).trim()&&!String(n.spec).trim()&&!(parseFloat(n.price)||0)&&(n.kind==='item'||!n.kids.length)){
+    const L=estLoc(n.id);if(L)L.list.splice(L.idx,1); // 何も入れずに閉じたら、足した空の枠は消す
+  }
+  ed=null;$('edBg').classList.remove('show');document.body.style.overflow='';estRender();
+}
+function estEdMove(dir){
+  const L=ed&&estLoc(ed.id);if(!L)return;
+  const j=L.idx+dir;if(j<0||j>=L.list.length)return;
+  const t=L.list[L.idx];L.list[L.idx]=L.list[j];L.list[j]=t;estRender();
+}
+function estEdDup(){
+  const L=ed&&estLoc(ed.id);if(!L)return;
+  L.list.splice(L.idx+1,0,estClone(L.node));ed.isNew=false;estCloseEditor();
+}
+function estEdDel(){
+  const L=ed&&estLoc(ed.id);if(!L)return;
+  const g=L.node.kind==='grp'&&L.node.kids.length;
+  if(!confirm(g?`「${L.node.name||'（名称未設定）'}」を、中身ごと削除しますか?`:'この項目を削除しますか?'))return;
+  L.list.splice(L.idx,1);ed=null;estCloseEditor();
 }
 
-function filterSubModal(){
-  const q=document.getElementById('subSearch').value.trim();
-  if(!q){buildAccordion(GROUPS);return;}
-  const filtered=GROUPS.map(g=>({...g,children:g.children.filter(c=>c.n.includes(q)||(c.s||'').includes(q))})).filter(g=>g.children.length>0);
-  buildAccordion(filtered, true);
+// ---------- 見積りベースから選ぶ(段をたどる/検索/まとまりごと) ----------
+let pk={target:null,path:[],sel:new Set(),q:''};
+const leafCount=c=>c.c?(c._lc||(c._lc=c.c.reduce((s,x)=>s+leafCount(x),0))):1;
+function estBaseAt(path){let list=EST_ROOTS,node=null;for(const i of path){node=list[i];list=node.c||[];}return{node,list};}
+const pkCmp=(a,b)=>{for(let i=0;i<Math.min(a.length,b.length);i++)if(a[i]!==b[i])return a[i]-b[i];return a.length-b.length;};
+function estOpenPicker(targetId){
+  pk={target:targetId,path:[],sel:new Set(),q:''};
+  const L=targetId==null?null:estLoc(targetId);
+  $('pkTarget').textContent=L?`追加先: 「${L.node.name||'（名称未設定）'}」の中`:'追加先: 大項目';
+  $('pkSearch').value='';
+  estRateUi();estPkRender();
+  $('pkBg').classList.add('show');document.body.style.overflow='hidden';
+}
+function estClosePicker(){$('pkBg').classList.remove('show');document.body.style.overflow='';}
+function estSetRate(v){estRate=v;try{localStorage.setItem(EST_RATE_KEY,String(v));}catch(e){}estRateUi();estPkRender();}
+function estRateUi(){$('rate130').classList.toggle('on',estRate===130);$('rate100').classList.toggle('on',estRate===100);}
+function estPkSearch(){pk.q=$('pkSearch').value.trim();estPkRender();$('pkList').scrollTop=0;}
+function pkRow(c,p,trail){
+  const key=p.join('.'),g=!!c.c,sel=pk.sel.has(key),title=c.n||c.s||'（名称なし）';
+  return `<div class="pk-row${sel?' sel':''}" data-key="${key}" data-g="${g?1:0}">
+    <div class="pk-chk" data-chk="1">${sel?'✓':''}</div>
+    <div class="pk-main"><div class="pk-name">${esc(title)}</div>${(c.n&&c.s)?`<div class="pk-spec">${esc(c.s)}</div>`:''}${trail?`<div class="pk-trail">${esc(trail)}</div>`:''}</div>
+    <div class="pk-right">${g?`<span class="pk-cnt">${leafCount(c)}件</span>${pk.q?'':'<span class="pk-go">▶</span>'}`:`<span class="pk-price">${c.p?fmtY(estPrice(c.p)):'未設定'}</span><span class="pk-unit">/ ${esc(c.u||'式')}</span>`}</div>
+  </div>`;
+}
+function estPkRender(){
+  const box=$('pkList'),crumb=$('pkCrumb');
+  if(pk.q){
+    const res=[];
+    (function walk(list,path,trail){list.forEach((c,i)=>{
+      const p=path.concat(i);
+      if(((c.n||'')+(c.s||'')).includes(pk.q))res.push({c,p,trail:trail.join(' › ')});
+      if(c.c)walk(c.c,p,trail.concat(c.n||c.s||''));
+    });})(EST_ROOTS,[],[]);
+    crumb.innerHTML=`<span class="pk-hint">「${esc(pk.q)}」 ${res.length}件${res.length>80?'(先頭80件を表示)':''}</span>`;
+    box.innerHTML=res.slice(0,80).map(r=>pkRow(r.c,r.p,r.trail)).join('')||'<div class="tg-empty">見つかりませんでした</div>';
+  }else{
+    let html='<button data-d="0">見積りベース</button>',list=EST_ROOTS;
+    pk.path.forEach((i,d)=>{const c=list[i];html+=` <span>›</span> <button data-d="${d+1}">${esc(c.n||c.s||'')}</button>`;list=c.c||[];});
+    crumb.innerHTML=html;
+    box.innerHTML=list.map((c,i)=>pkRow(c,pk.path.concat(i),'')).join('');
+  }
+  estPkCount();
+}
+function estPkCount(){const n=pk.sel.size;$('pkCount').textContent=`${n}件 選択中`;}
+$('pkCrumb').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-d]');if(!b)return;
+  pk.path=pk.path.slice(0,parseInt(b.dataset.d,10));estPkRender();$('pkList').scrollTop=0;
+});
+$('pkList').addEventListener('click',e=>{
+  const row=e.target.closest('.pk-row');if(!row)return;
+  const key=row.dataset.key,isG=row.dataset.g==='1',onChk=!!e.target.closest('[data-chk]');
+  if(isG&&!onChk&&!pk.q){pk.path=key.split('.').map(Number);estPkRender();$('pkList').scrollTop=0;return;} // まとまりは、中へ入る
+  if(pk.sel.has(key)){pk.sel.delete(key);row.classList.remove('sel');row.querySelector('.pk-chk').textContent='';}
+  else{pk.sel.add(key);row.classList.add('sel');row.querySelector('.pk-chk').textContent='✓';}
+  estPkCount();
+});
+function estPkApply(){
+  if(!pk.sel.size){alert('追加するものを選んでね');return;}
+  const paths=[...pk.sel].map(k=>k.split('.').map(Number)).sort(pkCmp);
+  const keep=paths.filter(p=>!paths.some(q=>q!==p&&q.length<p.length&&q.every((v,i)=>p[i]===v))); // 親が選ばれている子は、二重にしない
+  if(pk.target==null){
+    // 最上位は大項目(まとまり)。項目だけを選んだときは、元のまとまりの名前で大項目を作って、その中に入れる
+    const wrap=new Map();
+    keep.forEach(p=>{
+      const node=estBaseAt(p).node;
+      if(node.c){
+        // 「一例」の見積(中身がぜんぶまとまり)は、中のまとまりを、それぞれ大項目として入れる
+        if(/例/.test(node.s||'')&&node.c.every(x=>x.c))node.c.forEach(x=>EST_TREE.push(estFromBase(x,true)));
+        else EST_TREE.push(estFromBase(node,true));
+      }else{
+        const pp=p.slice(0,-1).join('.');let g=wrap.get(pp);
+        if(!g){const par=estBaseAt(p.slice(0,-1)).node;g=mkGroup({name:par?(par.n||par.s||''):'その他'});wrap.set(pp,g);EST_TREE.push(g);}
+        g.kids.push(estFromBase(node));
+      }
+    });
+  }else{
+    const L=estLoc(pk.target);if(!L){estClosePicker();return;}
+    keep.forEach(p=>L.node.kids.push(estFromBase(estBaseAt(p).node)));
+    L.node.open=true;
+  }
+  estClosePicker();estRender();
 }
 
-function toggleSubItem(key,el){
-  if(subSelSet.has(key)){subSelSet.delete(key);el.classList.remove('checked');el.querySelector('.m-chk').textContent='';}
-  else{subSelSet.add(key);el.classList.add('checked');el.querySelector('.m-chk').textContent='✓';}
-  document.getElementById('subSelCount').textContent=`${subSelSet.size}件 選択中`;
-}
-
-function applySubSel(){
-  if(!subSelSet.size){alert('品目を選択してください');return;}
-  subSelSet.forEach(key=>{
-    const [gi,ci]=key.split('__').map(Number);
-    const it=GROUPS[gi]?.children[ci];
-    if(it)addSub(subModalTargetPg,it);
-  });
-  closeSubModal();
+// ---------- 合計 ----------
+function calcAll(){
+  const total=EST_TREE.reduce((s,g)=>s+estAmt(g),0);
+  const mr=getN($('miscRate'))/100;
+  const misc=Math.round(total*mr),disc=getN($('discount'));
+  const ko=total+misc-disc,tr2=parseFloat($('taxRate').value);
+  const tax=Math.round(ko*tr2),grand=ko+tax;
+  const mrP=Math.round(getN($('miscRate')));
+  const tS=tr2===0.10?'10%':tr2===0.08?'8%':'0%';
+  $('d-sub').textContent=fmtY(total);
+  $('d-misc-lbl').textContent=`諸経費（${mrP}%）`;
+  $('d-misc').textContent=fmtY(misc);
+  $('d-disc').textContent=`- ${fmtY(disc)}`;
+  $('d-ko').textContent=fmtY(ko);
+  $('d-tax-lbl').textContent=`消費税（${tS}）`;
+  $('d-tax').textContent=fmtY(tax);
+  $('d-total').textContent=fmtY(grand);
 }
 
 // リセット
 function resetForm(){
   if(!confirm('入力内容をリセットしますか？'))return;
-  pgId=0;subId=0;
-  document.getElementById('meisaiArea').innerHTML='';
+  EST_TREE=[];estUid=1;
   selTanto='';document.querySelectorAll('.tanto-badge').forEach(b=>b.classList.remove('sel'));
-  window.onload();
+  window.onload();estRender();
 }
+estRender();
+
 
 // ===== 見積書の出力(Excel / PDF) =====
 // 完成サンプル(ヒルズ西馬込101)の「型」(estimate-tpl.js: 列幅・行の高さ・罫線・フォントを1セルずつ写したもの)を土台に、
@@ -778,34 +734,39 @@ function collectEst(){
   const clientName=g('clientName').value.trim();
   const workName=g('workName').value.trim();
   if(!clientName||!workName){alert('会社名・宛先と工事名は必須です');return null;}
-  const pgBlocks=[];let grandSub=0;
-  document.querySelectorAll('.pg-block').forEach(block=>{
-    const pgName=block.querySelector('.pg-name').value.trim()||'（名称未設定）';
-    const infoInputs=block.querySelectorAll('.pg-sub-info input');
-    const pgSpec=infoInputs[0]?.value.trim()||'';
-    const pgQty=parseFloat(infoInputs[1]?.value)||1;
-    const pgUnit=infoInputs[2]?.value.trim()||'式';
-    const rows=[];
-    block.querySelectorAll('.sub-card').forEach(card=>{
-      const txts=card.querySelectorAll('input[type=text]');
-      const nums=card.querySelectorAll('input[type=number]');
-      const name=txts[0]?.value.trim(),spec=txts[1]?.value.trim();
-      const qty=parseFloat(nums[0]?.value)||0,unit=txts[2]?.value.trim();
-      const price=parseFloat(nums[1]?.value)||0,note=txts[3]?.value.trim();
-      if(!name&&qty===0&&price===0)return;
-      rows.push({name:name||'',spec:spec||'',qty,unit:unit||'式',price,note:note||'',amt:qty*price});
+  // 段の木(EST_TREE)を、出力用に並べ直す: blocks=まとまりごとのページ(親→子の順)、pgBlocks=いちばん上の大項目だけ(表紙・総合計用)
+  const blocks=[];
+  const walk=(grp,depth)=>{
+    const b={pgName:(grp.name||'').trim()||'（名称未設定）',pgSpec:(grp.spec||'').trim(),pgQty:parseFloat(grp.qty)||1,pgUnit:(grp.unit||'').trim()||'式',rows:[],pgAmt:0,depth,gi:blocks.length};
+    blocks.push(b);
+    grp.kids.forEach(k=>{
+      if(k.kind==='grp'){
+        const empty=!(k.name||'').trim()&&!(k.spec||'').trim()&&!k.kids.length;
+        if(empty)return;
+        const cb=walk(k,depth+1);
+        b.rows.push({kind:'sub',gi:cb.gi,name:cb.pgName,spec:cb.pgSpec,qty:cb.pgQty,unit:cb.pgUnit,price:0,note:'',amt:cb.pgAmt});
+      }else{
+        const name=(k.name||'').trim(),spec=(k.spec||'').trim(),qty=parseFloat(k.qty)||0,price=parseFloat(k.price)||0;
+        if(!name&&qty===0&&price===0)return;
+        b.rows.push({kind:'item',name,spec,qty,unit:(k.unit||'').trim()||'式',price,note:(k.note||'').trim(),amt:qty*price});
+      }
     });
-    const pgAmt=rows.reduce((s,r)=>s+r.amt,0);
-    grandSub+=pgAmt;
-    if(rows.length>0||pgName!=='（名称未設定）')pgBlocks.push({pgName,pgSpec,pgQty,pgUnit,rows,pgAmt});
+    b.pgAmt=b.rows.reduce((s,r)=>s+r.amt,0);
+    return b;
+  };
+  EST_TREE.forEach(gr=>{
+    if(!(gr.name||'').trim()&&!(gr.spec||'').trim()&&!gr.kids.length)return;
+    walk(gr,0);
   });
+  const pgBlocks=blocks.filter(b=>b.depth===0);
+  const grandSub=pgBlocks.reduce((s,b)=>s+b.pgAmt,0);
   if(!pgBlocks.length){alert('内訳明細が空です');return null;}
   const mr=(parseFloat(g('miscRate').value)||0)/100;
   const misc=Math.round(grandSub*mr),disc=parseFloat(g('discount').value)||0;
   const ko=grandSub+misc-disc,tRate=parseFloat(g('taxRate').value)||0;
   const tax=Math.round(ko*tRate);
   return {
-    clientName,workName,pgBlocks,grandSub,misc,disc,ko,tax,total:ko+tax,
+    clientName,workName,pgBlocks,blocks,grandSub,misc,disc,ko,tax,total:ko+tax,
     miscPct:Math.round((parseFloat(g('miscRate').value)||0)*10)/10,
     taxPct:Math.round(tRate*100),
     issueDate:g('issueDate').value,estNo:g('estNo').value,cc:g('clientContact').value.trim(),
@@ -930,16 +891,16 @@ function estBuildCover(d,body){
 }
 
 // ---------- 見積内訳書(内訳明細シート) ----------
-// 1枚目: 大項目の一覧(総合計)/ 2枚目以降: 大項目ごと(名前の行・空行・明細・合計)
+// 1枚目: 大項目の一覧(総合計)/ 2枚目以降: まとまりごと(名前の行・空行・明細・合計)。まとまりの中にまとまりがあるときは、親のページに「1式+小計」の行を出し、中身は次のページに出す
 function estPlanBody(d){
   const chunks=lines=>{const out=[];for(let i=0;i<Math.max(1,lines.length);i+=EST_PR)out.push(lines.slice(i,i+EST_PR));return out;};
-  const sumLines=d.pgBlocks.map((pg,i)=>({kind:'sum',i,name:pg.pgName,spec:pg.pgSpec,qty:pg.pgQty,unit:pg.pgUnit}));
+  const sumLines=d.pgBlocks.map((pg,i)=>({kind:'sum',i,gi:pg.gi,name:pg.pgName,spec:pg.pgSpec,qty:pg.pgQty,unit:pg.pgUnit}));
   const noteLines=d.notes?[{},{name:'【備考】'}].concat(d.notes.split('\n').map(t=>({name:t}))):[];
   const plan=[];
   chunks(sumLines.concat(noteLines)).forEach((ch,k,all)=>plan.push({grp:'sum',lines:ch,last:k===all.length-1,label:'総合計',foot:d.workName}));
-  d.pgBlocks.forEach((pg,i)=>{
-    const lines=[{name:pg.pgName},{}].concat(pg.rows.map(r=>Object.assign({kind:'item'},r)));
-    chunks(lines).forEach((ch,k,all)=>plan.push({grp:'blk',i,lines:ch,last:k===all.length-1,label:'合計',foot:pg.pgName}));
+  d.blocks.forEach((pg,gi)=>{ // まとまりごとに1ページ(親のページ → その中のまとまりのページ …の順)
+    const lines=[{name:pg.pgName},{}].concat(pg.rows.map(r=>Object.assign({},r)));
+    chunks(lines).forEach((ch,k,all)=>plan.push({grp:'blk',gi,lines:ch,last:k===all.length-1,label:'合計',foot:pg.pgName}));
   });
   return plan;
 }
@@ -952,7 +913,7 @@ function estBuildBody(d){
   const totalRow={},ranges={};
   plan.forEach((pl,p)=>{
     const base=p*tp.pageRows;
-    if(pl.grp==='blk'){(ranges[pl.i]=ranges[pl.i]||[]).push(`I${base+7}:I${base+6+EST_PR}`);if(pl.last)totalRow[pl.i]=base+tp.pageRows-1;}
+    if(pl.grp==='blk'){(ranges[pl.gi]=ranges[pl.gi]||[]).push(`I${base+7}:I${base+6+EST_PR}`);if(pl.last)totalRow[pl.gi]=base+tp.pageRows-1;}
   });
   const sumRanges=[];let sumTotalRow=0;
   plan.forEach((pl,p)=>{if(pl.grp==='sum'){const b=p*tp.pageRows;sumRanges.push(`I${b+7}:I${b+6+EST_PR}`);if(pl.last)sumTotalRow=b+tp.pageRows-1;}});
@@ -966,12 +927,12 @@ function estBuildBody(d){
     pl.lines.forEach((l,i)=>{
       const r=b+7+i;
       if(l.name)sh.set(r,4,l.name);
-      if(l.kind==='sum'){
-        const pg=d.pgBlocks[l.i],amt=pg.pgAmt;sumRow[l.i]=r;
+      if(l.kind==='sum'||l.kind==='sub'){ // 大項目の一覧の行 / まとまりの中のまとまりの行(どちらも「数量+単価+金額(中身の合計)」)
+        const amt=d.blocks[l.gi].pgAmt;if(l.kind==='sum')sumRow[l.i]=r;
         if(l.spec)sh.set(r,5,l.spec);
         sh.set(r,6,l.qty);sh.set(r,7,l.unit);
         sh.set(r,8,{f:`IF(F${r}=0,0,ROUND(I${r}/F${r},0))`,r:Math.round(amt/(l.qty||1))});
-        sh.set(r,9,{f:`I${totalRow[l.i]}`,r:amt});
+        sh.set(r,9,{f:`I${totalRow[l.gi]}`,r:amt});
       }else if(l.kind==='item'){
         if(l.spec)sh.set(r,5,l.spec);
         if(l.qty){sh.set(r,6,l.qty);sh.set(r,7,l.unit);}
@@ -984,7 +945,7 @@ function estBuildBody(d){
       const r=b+tp.pageRows-1;
       sh.set(r,4,pl.label);
       if(pl.grp==='sum')sh.set(r,9,{f:`SUM(${sumRanges.join(',')})`,r:d.grandSub},{h:'right',v:'center',n:NF_NUM});
-      else sh.set(r,9,{f:`SUM(${ranges[pl.i].join(',')})`,r:d.pgBlocks[pl.i].pgAmt},{h:'right',v:'center',n:NF_NUM});
+      else sh.set(r,9,{f:`SUM(${ranges[pl.gi].join(',')})`,r:d.blocks[pl.gi].pgAmt},{h:'right',v:'center',n:NF_NUM});
       sh.set(r,4,pl.label,{h:'left',v:'center'});
     }
     sh.set(b+tp.pageRows,3,`${pl.foot} 0001 - ( ${String(p+1).padStart(4,'0')} )`);
