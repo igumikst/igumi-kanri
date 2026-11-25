@@ -28,7 +28,7 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
 .nav-item.active .nav-dot{background:#1a237e}
 
 /* カード */
-.card{background:white;border-radius:14px;padding:20px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.card{background:white;border-radius:14px;padding:20px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);scroll-margin-top:64px}
 .card-title{font-size:14px;font-weight:700;color:#1a237e;border-left:4px solid #1a237e;padding-left:10px;margin-bottom:18px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
@@ -199,6 +199,11 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
 .opt-row input{width:22px;height:22px;accent-color:#1a237e;flex-shrink:0}
 .opt-row small{display:block;font-size:11px;font-weight:500;color:#667}
 
+.smp-btn{margin-left:auto;background:#f5f5f5;border:1.5px solid #ddd;border-radius:18px;padding:7px 14px;font-size:13px;font-weight:700;color:#555;cursor:pointer;font-family:inherit}
+.smp-btn:active{background:#eee}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:rgba(26,35,126,.96);color:#fff;padding:12px 20px;border-radius:24px;font-size:14px;font-weight:700;z-index:400;opacity:0;pointer-events:none;transition:opacity .25s;max-width:90vw;text-align:center}
+.toast.show{opacity:1}
+
 /* PC専用調整 */
 @media(min-width:721px){
   .modal-bg{align-items:center}
@@ -281,7 +286,7 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
 </div>
 
 <div class="card" id="s-meisai">
-  <div class="card-title">内訳明細</div>
+  <div class="card-title has-ctl"><span>内訳明細</span><button class="smp-btn" onclick="estLoadSample()">🧪 サンプル読込</button></div>
   <div class="meisai-hint">ESTと同じ段で入れられます（大項目 ▶ まとまり ▶ 項目）。タップで直せます。右の ▲▼ で並べ替えできます。出力は、まとまりごとに別ページになります。</div>
   <div class="meisai-area" id="meisaiArea"></div>
   <div class="pg-add-area">
@@ -728,6 +733,55 @@ function calcAll(){
   $('d-tax-lbl').textContent=`消費税（${tS}）`;
   $('d-tax').textContent=fmtY(tax);
   $('d-total').textContent=fmtY(grand);
+}
+
+// ===== サンプル(🧪 サンプル読込)。見積ソフト(EST)で作ったサンプル(〇〇マンション共用排水管一部更新工事サンプル)と同じ中身。名前は架空(公開リポジトリのため、実在の物件・会社は入れない)=====
+// 項目: [名称, 材質・寸法, 数量, 単位, 単価, 備考]。名称が空の行は、前の行(同材料費)のつづき
+const EST_SAMPLE={
+  clientName:"〇〇管理株式会社",workName:"〇〇マンション共用排水管一部更新工事サンプル",propName:"〇〇マンション",
+  groups:[
+    {name:"共用排水管一部更新工事費",spec:"100mm　耐火VPパイプ",qty:1,unit:"式",items:[
+      ["作業部養生費","エコフル・ブルーシート・マスカー共",1,"式",10000,""],
+      ["共用部養生費","資材仮置きの為",1,"式",5000,""],
+      ["壁開口工事費","下地補強・仮復旧共",1,"式",10000,""],
+      ["天井開口工事費","下地補強・仮復旧共",1,"式",10000,""],
+      ["既存配管撤去工事費","発生材処分費共",1,"式",10000,""],
+      ["貫通部はつり工事費","機械損料共(斫り機)",1,"式",10000,""],
+      ["モルタル補修費","速乾モルタル・材工共",1,"式",10000,""],
+      ["新規配管施工費","技術料・施工保証料共",1,"式",20000,""],
+      ["同材料費","100㎜　耐火VPパイプ",1,"本",10000,"定価17610円"],
+      ["","50㎜　耐火VPパイプ",1,"本",5000,"定価7280円"],
+      ["","100×50mm　LT",1,"個",1000,"定価2900円"],
+      ["","100㎜　耐火VP　ソケット",2,"個",1000,"定価1420円"],
+      ["","100㎜　ストラブカップリング接手",1,"個",10000,"定価16100円"],
+      ["","50㎜　ストラブカップリング接手",1,"個",5000,"定価10400円"],
+      ["雑材消耗品費","",1,"式",2000,""]
+    ]},
+    {name:"一般管理費",spec:"清掃費・美装費共",qty:1,unit:"式",items:[
+      ["現場管理費","現場管理費・報告書作成費共",1,"日",10000,""],
+      ["資材運搬費","車両＋運搬費＋購入労務費",1,"式",10000,""],
+      ["交通費","高速費・燃料費共",1,"台",10000,""],
+      ["法定福利費","社会保険料・福利厚生・損害保険料共",1,"式",10000,""]
+    ]}
+  ]
+};
+function estToast(msg){
+  let t=document.getElementById('estToast');
+  if(!t){t=document.createElement('div');t.id='estToast';t.className='toast';document.body.appendChild(t);}
+  t.textContent=msg;t.classList.add('show');
+  clearTimeout(estToast._t);estToast._t=setTimeout(()=>t.classList.remove('show'),2600);
+}
+// サンプルを入れる(報告書の「サンプル読込」と同じ使い方)。宛先・工事名・内訳を、サンプルで上書きする。諸経費は0%(ファイルの総額 ¥176,000 に合わせる)
+function estLoadSample(){
+  const g=id=>document.getElementById(id),S=EST_SAMPLE;
+  if((EST_TREE.length||g('workName').value.trim()||g('clientName').value.trim())&&!confirm('入力内容を上書きします。よろしいですか？'))return;
+  g('clientName').value=S.clientName;g('sfxSama').checked=false;g('sfxOnchu').checked=true;
+  g('workName').value=S.workName;g('propName').value=S.propName;g('notes').value='';
+  g('miscRate').value='0';g('discount').value='0';g('taxRate').value='0.10';
+  EST_TREE=S.groups.map(gr=>mkGroup({name:gr.name,spec:gr.spec,qty:gr.qty,unit:gr.unit,open:true,
+    kids:gr.items.map(i=>mkItem({name:i[0],spec:i[1],qty:i[2],unit:i[3],price:i[4],note:i[5]}))}));
+  estRender();goTo('s-meisai');
+  estToast('🧪 サンプルを読み込みました');
 }
 
 // リセット
