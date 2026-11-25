@@ -3,7 +3,7 @@ import { supabase } from "./lib/supabase";
 import { DEFAULT_LINKS, DEFAULT_TILE_CONF, DEFAULT_CUST } from "./lib/constants";
 import { Modal, Inp } from "./components/UI";
 import { PCSidebar, PCRightPanel, FloatLauncher } from "./components/Layout";
-import { consumeResumePage } from "./lib/androidResume";
+import { consumeResumePage, rememberCurrentPage } from "./lib/androidResume";
 import Home from "./pages/Home";
 import Projects from "./pages/Projects";
 import Companies from "./pages/Companies";
@@ -117,6 +117,7 @@ export default function App() {
   }, []);
 
   useEffect(() => { if (SOLO_TOOL !== "zairyo") loadAll(); }, []);
+  useEffect(() => { rememberCurrentPage(page); }, [page]); // 自動の再読み込みのあとも、見積書作成の画面に戻れるように、いまの画面を覚える
 
   useEffect(() => {
     if (page !== "fishing" || fishWeather) return;

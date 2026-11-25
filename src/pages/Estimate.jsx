@@ -71,6 +71,14 @@ export default function Estimate({ nav }) {
     return () => window.removeEventListener('message', onMessage);
   }, []);
 
+  // 入力途中の下書き(estimate.html が、再読み込みに備えて、ブラウザの一時保存に置いている)は、
+  // 自分で別の画面へ移ったときだけ消す。再読み込みでは消えないので、戻ってきたとき、続きから使える
+  useEffect(() => () => {
+    setTimeout(() => {
+      try { sessionStorage.removeItem('igumi_est_draft'); } catch { /* ignore */ }
+    }, 100);
+  }, []);
+
   return (
     <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column' }}>
       <div style={{ background: '#1A3A5C', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
