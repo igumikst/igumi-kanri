@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <title>見積書作成 - 株式会社IGUMI</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="estimate-tpl.js?v=3"></script>
 <script src="estimate-base.js?v=1"></script>
 <style>
@@ -225,7 +226,7 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
 <div class="card" id="s-client">
   <div class="card-title">宛先</div>
   <div class="grid2">
-    <div class="field"><label>会社名・宛先 <span class="req">*</span></label><input type="text" id="clientName" placeholder="例：○○管理株式会社"/></div>
+    <div class="field"><label>会社名・宛先 <span style="font-weight:400;color:#999">（なくても作れます）</span></label><input type="text" id="clientName" placeholder="例：○○管理株式会社"/></div>
     <div class="field"><label>担当者名</label><input type="text" id="clientContact" placeholder="例：山田 太郎 様"/></div>
   </div>
 </div>
@@ -300,12 +301,13 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
     <button class="btn-ex" style="margin-top:8px;background:#fff;color:#1A237E;border:2px solid #1A237E" onclick="genPdf()">📄 PDF出力（印刷画面から「PDFで保存」）</button>
   </div>
   <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #c5cae9;font-size:13px;color:#555;line-height:2">
-    <div style="font-weight:700;color:#1a237e">🔴 印鑑の登録（この端末だけ）</div>
+    <div style="font-weight:700;color:#1a237e">🔴 印鑑</div>
+    <div style="font-size:12px;color:#777;line-height:1.7">角印：会社共通で1回登録すれば、どの端末でも自動で押されます。照査の印は上村で固定、担当の印は、上で選んだ担当者(標準は﨑岡)。</div>
     <input type="file" id="estFileKakuin" accept="image/png,image/jpeg" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none" tabindex="-1" onchange="estOnKakuinFile(this)">
     <input type="file" id="estFileStamp" accept="image/png,image/jpeg" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none" tabindex="-1" onchange="estOnStampFile(this)">
     <div>角印：<span id="kakuinState"></span>
-      <button style="margin-left:6px;padding:2px 10px" onclick="estPickKakuin()">画像を登録</button>
-      <button style="padding:2px 10px" onclick="estClearKakuin()">消す</button></div>
+      <button id="kakuinRegBtn" style="margin-left:6px;padding:2px 10px" onclick="estPickKakuin()">画像を登録</button>
+      <button style="padding:2px 10px" onclick="estClearKakuin()">この端末の登録を消す</button></div>
     <div>照査・担当の丸い印：<span id="stampState"></span>
       <button style="margin-left:6px;padding:2px 10px" onclick="estPickStamp()">画像を登録</button>
       <button style="padding:2px 10px" onclick="estClearStamps()">消す</button></div>
@@ -354,7 +356,7 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
     <div class="pk-top">
       <div class="pk-target" id="pkTarget"></div>
       <input class="modal-search" type="search" id="pkSearch" placeholder="🔍 名称・材質で検索..." oninput="estPkSearch()" autocomplete="off"/>
-      <div class="pk-rate">単価：<button id="rate130" onclick="estSetRate(130)">130%</button><button id="rate100" onclick="estSetRate(100)">100%（原価）</button></div>
+      <div class="pk-rate">単価の掛け率：<button id="rate100" onclick="estSetRate(100)">100%（標準）</button><button id="rate130" onclick="estSetRate(130)">130%</button></div>
     </div>
     <div class="pk-crumb" id="pkCrumb"></div>
     <div class="pk-list" id="pkList"></div>
@@ -370,7 +372,8 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
 
 <script>
 const TANTOS = ['﨑岡','後藤','赤岡','上村','綱嶋','伊藤'];
-let selTanto = '';
+const EST_DEFAULT_TANTO='﨑岡'; // 担当の標準(照査は上村で固定)
+let selTanto = EST_DEFAULT_TANTO;
 
 function goTo(id){
   document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'});
@@ -382,7 +385,7 @@ function goTo(id){
 (()=>{
   const w=document.getElementById('tantoWrap');
   TANTOS.forEach(t=>{
-    const b=document.createElement('span');b.className='tanto-badge';b.textContent=t;
+    const b=document.createElement('span');b.className='tanto-badge'+(t===selTanto?' sel':'');b.textContent=t;
     b.onclick=()=>{selTanto=(selTanto===t?'':t);document.querySelectorAll('.tanto-badge').forEach(x=>x.classList.remove('sel'));if(selTanto)b.classList.add('sel');};
     w.appendChild(b);
   });
@@ -403,10 +406,8 @@ const EST_ROOTS=(window.EST_BASE&&window.EST_BASE.roots)||[];
 const EST_LEAVES=[]; // 名前から探す(入力の候補)用に、項目(いちばん下の段)だけを平らに並べたもの
 (function flat(list,trail){list.forEach(c=>{if(c.c)flat(c.c,trail.concat(c.n||c.s||''));else EST_LEAVES.push({n:c.n||'',s:c.s||'',q:c.q||1,u:c.u||'式',p:c.p||0,b:c.b||'',trail:trail.join(' › ')});});})(EST_ROOTS,[]);
 
-// 単価の掛け率: 見積りベースから入れるとき「100%の単価 × 掛け率」を、単価として入れる(ESTの掛率と同じ。標準は130%)
-const EST_RATE_KEY='igumi_est_rate';
-let estRate=130;
-try{const v=parseInt(localStorage.getItem(EST_RATE_KEY),10);if(v===100||v===130)estRate=v;}catch(e){}
+// 単価の掛け率: 見積りベースから入れるとき「100%の単価 × 掛け率」を、単価として入れる。標準は100%(開くたびに100%に戻る。130%は、選ぶ画面で切り替える)
+let estRate=100;
 const estPrice=p=>p?Math.round(p*estRate/100):0;
 
 function esc(s){return(s==null?'':String(s)).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -562,7 +563,7 @@ function estOpenPicker(targetId){
   $('pkBg').classList.add('show');document.body.style.overflow='hidden';
 }
 function estClosePicker(){$('pkBg').classList.remove('show');document.body.style.overflow='';}
-function estSetRate(v){estRate=v;try{localStorage.setItem(EST_RATE_KEY,String(v));}catch(e){}estRateUi();estPkRender();}
+function estSetRate(v){estRate=v;estRateUi();estPkRender();}
 function estRateUi(){$('rate130').classList.toggle('on',estRate===130);$('rate100').classList.toggle('on',estRate===100);}
 function estPkSearch(){pk.q=$('pkSearch').value.trim();estPkRender();$('pkList').scrollTop=0;}
 function pkRow(c,p,trail){
@@ -655,7 +656,7 @@ function calcAll(){
 function resetForm(){
   if(!confirm('入力内容をリセットしますか？'))return;
   EST_TREE=[];estUid=1;
-  selTanto='';document.querySelectorAll('.tanto-badge').forEach(b=>b.classList.remove('sel'));
+  selTanto=EST_DEFAULT_TANTO;document.querySelectorAll('.tanto-badge').forEach(b=>b.classList.toggle('sel',b.textContent===selTanto));
   window.onload();estRender();
 }
 estRender();
@@ -666,7 +667,32 @@ estRender();
 // 表紙(見積書シート)+見積内訳書(1ページ33行の繰り返し)を作る。ExcelもPDFも同じ型から作るので、形はそろう。
 // 流れ: 画面の入力を集める(collectEst)→ 型に値を入れる(estBuildCover / estBuildBody)→ 出す(genExcel / genPdf)。
 const EST_KAKUIN_KEY='igumi_kakuin_png';
-function estGetKakuin(){try{return localStorage.getItem(EST_KAKUIN_KEY)||'';}catch(e){return '';}}
+// 角印は、会社共通のもの(非公開Storageに1回だけ登録)を、いつも使う。親の画面(Estimate.jsx)がStorageから読んで、ここに渡してくれる。
+// 読めないとき・単独で開いたときは、この端末に登録したものを使う
+let estSharedKakuin='',estSharedMsg='',estKakuinSettled=false,estKakuinResolve=null,estPendingKakuin='',estSaveTimer=null;
+const EST_IN_APP=(()=>{try{return !!window.parent&&window.parent!==window;}catch(e){return false;}})();
+const estKakuinReady=EST_IN_APP?new Promise(r=>{estKakuinResolve=()=>{estKakuinSettled=true;r();};setTimeout(estKakuinResolve,5000);}):(estKakuinSettled=true,Promise.resolve());
+function estGetLocalKakuin(){try{return localStorage.getItem(EST_KAKUIN_KEY)||'';}catch(e){return '';}}
+function estGetKakuin(){return estSharedKakuin||estGetLocalKakuin();}
+window.addEventListener('message',e=>{
+  if(e.origin!==location.origin||e.source!==window.parent)return;
+  const m=e.data||{};
+  if(m.type==='est-kakuin'){ // 会社共通の角印が届いた(なければ dataUrl は空)
+    if(/^data:image\/(png|jpeg);base64,/.test(m.dataUrl||''))estSharedKakuin=m.dataUrl;
+    estSharedMsg=m.error?String(m.error):'';
+    estKakuinResolve&&estKakuinResolve();estKakuinLabel();
+  }else if(m.type==='est-kakuin-saved'){ // 登録の結果
+    clearTimeout(estSaveTimer);
+    if(m.ok&&/^data:image\//.test(m.dataUrl||'')){estSharedKakuin=m.dataUrl;estSharedMsg='';estKakuinLabel();alert('角印を、会社共通に登録しました。これからは、どの端末でも、自動で押されます');}
+    else estSaveFailed(m.error||'');
+  }
+});
+function estSaveFailed(why){ // 会社共通に登録できなかったときは、この端末にだけ登録する
+  try{if(estPendingKakuin)localStorage.setItem(EST_KAKUIN_KEY,estPendingKakuin);}catch(e){}
+  estKakuinLabel();
+  alert('会社共通への登録に失敗しました'+(why?'('+why+')':'')+'。この端末にだけ登録しました');
+}
+if(EST_IN_APP)try{window.parent.postMessage({type:'est-need-kakuin'},location.origin);}catch(e){}
 // 画像を読み込む。大きすぎる写真は、縮めてから渡す(そのまま保存すると、端末の保存枠(約5MB)を超えて、登録に失敗するため)
 function estReadImage(file,cb,done){
   const fin=()=>{try{done&&done();}catch(e){}};
@@ -691,11 +717,20 @@ function estPickKakuin(){const i=document.getElementById('estFileKakuin');if(i)i
 function estOnKakuinFile(inp){
   const f=inp.files&&inp.files[0];if(!f)return;
   estReadImage(f,url=>{
+    if(EST_IN_APP){ // 会社共通に登録する(どの端末でも押されるようになる)
+      estPendingKakuin=url;
+      try{
+        window.parent.postMessage({type:'est-save-kakuin',dataUrl:url},location.origin);
+        const k=document.getElementById('kakuinState');if(k)k.textContent='会社共通に登録中…';
+        clearTimeout(estSaveTimer);estSaveTimer=setTimeout(()=>estSaveFailed('返事がありませんでした'),20000);
+      }catch(e){estSaveFailed(String(e&&e.message||e));}
+      return;
+    }
     try{localStorage.setItem(EST_KAKUIN_KEY,url);estKakuinLabel();alert('角印を、この端末に登録しました');}
     catch(e){alert('登録できませんでした(画像が大きすぎるか、この端末で保存が使えない設定かもしれません)');}
   },()=>{inp.value='';});
 }
-function estClearKakuin(){try{localStorage.removeItem(EST_KAKUIN_KEY);}catch(e){}estKakuinLabel();}
+function estClearKakuin(){try{localStorage.removeItem(EST_KAKUIN_KEY);}catch(e){}estKakuinLabel();} // この端末の登録だけを消す(会社共通のものは消えない)
 const EST_STAMPS_KEY='igumi_stamps'; // 丸い印(照査・担当)の登録。名前→画像
 function estGetStamps(){try{return JSON.parse(localStorage.getItem(EST_STAMPS_KEY)||'{}')||{};}catch(e){return {};}}
 function estPickStamp(){const i=document.getElementById('estFileStamp');if(i)i.click();}
@@ -713,9 +748,13 @@ function estKakuinLabel(){ // 登録の状態を、画面に出す
   const k=document.getElementById('kakuinState');
   if(k){ // 登録した角印を、小さく見せる(登録できているかが、ひと目で分かるように)
     const u=estGetKakuin();k.textContent='';
-    if(/^data:image\//.test(u)){const im=document.createElement('img');im.src=u;im.alt='角印';im.style.cssText='height:34px;vertical-align:middle;margin-right:6px;border:1px solid #ddd';k.appendChild(im);k.appendChild(document.createTextNode('登録済み'));}
-    else k.textContent='未登録(印なしで出力)';
+    if(/^data:image\//.test(u)){
+      const im=document.createElement('img');im.src=u;im.alt='角印';im.style.cssText='height:34px;vertical-align:middle;margin-right:6px;border:1px solid #ddd';k.appendChild(im);
+      k.appendChild(document.createTextNode(estSharedKakuin?'会社共通で登録済み(どの端末でも、自動で押されます)':(EST_IN_APP?'この端末だけに登録済み(会社共通は、まだ未登録)':'登録済み')));
+    }else k.textContent=EST_IN_APP?'未登録(印なしで出力)。「画像を登録」で、会社共通に1回登録すると、どの端末でも押されます':'未登録(印なしで出力)';
+    if(estSharedMsg){const s=document.createElement('div');s.style.cssText='font-size:12px;color:#c62828';s.textContent='会社共通の角印を読めませんでした: '+estSharedMsg;k.appendChild(s);}
   }
+  const rb=document.getElementById('kakuinRegBtn');if(rb)rb.textContent=EST_IN_APP?'画像を登録(全端末に反映)':'画像を登録';
   const m=document.getElementById('stampState'),names=Object.keys(estGetStamps());
   if(m)m.textContent=names.length?'登録済み: '+names.join('・'):'未登録(自動で作った印で出力)';
 }
@@ -733,7 +772,7 @@ function collectEst(){
   const g=id=>document.getElementById(id);
   const clientName=g('clientName').value.trim();
   const workName=g('workName').value.trim();
-  if(!clientName||!workName){alert('会社名・宛先と工事名は必須です');return null;}
+  if(!workName){alert('工事名は必須です');return null;}
   // 段の木(EST_TREE)を、出力用に並べ直す: blocks=まとまりごとのページ(親→子の順)、pgBlocks=いちばん上の大項目だけ(表紙・総合計用)
   const blocks=[];
   const walk=(grp,depth)=>{
@@ -842,8 +881,8 @@ function estBuildCover(d,body){
   sh.set(1,20,d.estNo||'',{sh:1});
   sh.set(2,13,estWareki(d.issueDate));
   const sm=d.clientName.match(/(様|御中)$/);
-  const cname=d.clientName.replace(/(様|御中)$/,'')+(d.cc?'　'+d.cc.replace(/(様|御中)$/,''):'');
-  sh.set(4,1,cname,{sh:1});sh.set(4,8,sm?sm[1]:'様');
+  const cname=[d.clientName.replace(/(様|御中)$/,''),d.cc.replace(/(様|御中)$/,'')].filter(Boolean).join('　');
+  sh.set(4,1,cname,{sh:1});sh.set(4,8,cname?(sm?sm[1]:'様'):''); // 宛先が空のときは、「様」も出さない
   sh.set(7,3,d.endDate?estWareki(d.endDate):tp.vals['7,3']);
   sh.set(8,3,d.propName||'',{sh:1});
   if(d.payment)sh.set(9,3,d.payment,{sh:1});
@@ -992,18 +1031,42 @@ function estWriteSheet(wb,ws,sh,opt){
     const url=st.url||opt.stampFn(st.name);
     const id=wb.addImage({base64:url,extension:/^data:image\/jpe?g/.test(url)?'jpeg':'png'});
     // px の位置 → (列, 列の中のずれ)(行, 行の中のずれ)
-    let x=st.pos.x,col=0;while(col<tp.cw.length-1&&x>=estColPx(tp.cw[col])){x-=estColPx(tp.cw[col]);col++;}
-    let y=st.pos.y,row=0;while(row<sh.R-1&&y>=estRowPx(sh.rh(row+1))){y-=estRowPx(sh.rh(row+1));row++;}
-    ws.addImage(id,{tl:{nativeCol:col,nativeColOff:Math.round(x*9525),nativeRow:row,nativeRowOff:Math.round(y*9525)},ext:{width:st.pos.w,height:st.pos.h},editAs:'oneCell'});
+    const loc=(px,py)=>{
+      let x=px,col=0;while(col<tp.cw.length-1&&x>=estColPx(tp.cw[col])){x-=estColPx(tp.cw[col]);col++;}
+      let y=py,row=0;while(row<sh.R-1&&y>=estRowPx(sh.rh(row+1))){y-=estRowPx(sh.rh(row+1));row++;}
+      return {nativeCol:col,nativeColOff:Math.round(x*9525),nativeRow:row,nativeRowOff:Math.round(y*9525)};
+    };
+    // 左上と右下の2点で指定する(Excel自身が書く形。1点+大きさの指定だと、iPhoneのプレビューで、画像が出ないことがあるため)
+    ws.addImage(id,{tl:loc(st.pos.x,st.pos.y),br:loc(st.pos.x+st.pos.w,st.pos.y+st.pos.h),editAs:'oneCell'});
+    if(opt.imgLog)opt.imgLog.push({ws:ws.name,x:st.pos.x,y:st.pos.y,w:st.pos.w,h:st.pos.h});
   });
 }
 
+// ExcelJSが書く画像の指定には、中の大きさが「0×0」と入っている。ExcelやLibreOfficeは気にしないが、iPhoneのプレビュー(Numbersの仕組み)では、
+// 大きさ0として画像が出ないことがある。そこで、書き出したあとに、本当の位置と大きさに書き換える。JSZipが読めないときは、そのまま出す
+async function estFixDrawings(buf,log){
+  if(typeof JSZip==='undefined'||!log||!log.length)return buf;
+  try{
+    const sheets=[];log.forEach(l=>{let g=sheets.find(s=>s.ws===l.ws);if(!g){g={ws:l.ws,items:[]};sheets.push(g);}g.items.push(l);});
+    const zip=await JSZip.loadAsync(buf);
+    for(let i=0;i<sheets.length;i++){
+      const name=`xl/drawings/drawing${i+1}.xml`,f=zip.file(name);if(!f)continue;
+      let n=0;const xml=(await f.async('string')).replace(/<a:xfrm><a:off x="0" y="0"\/><a:ext cx="0" cy="0"\/><\/a:xfrm>/g,m=>{
+        const it=sheets[i].items[n++];if(!it)return m;
+        return `<a:xfrm><a:off x="${Math.round(it.x*9525)}" y="${Math.round(it.y*9525)}"/><a:ext cx="${Math.round(it.w*9525)}" cy="${Math.round(it.h*9525)}"/></a:xfrm>`;
+      });
+      zip.file(name,xml);
+    }
+    return await zip.generateAsync({type:'uint8array',compression:'DEFLATE'});
+  }catch(e){return buf;}
+}
 function buildEstWorkbook(d,stampFn){
   const wb=new ExcelJS.Workbook();wb.creator='株式会社IGUMI';
   const body=estBuildBody(d),cover=estBuildCover(d,body);
   const ws=wb.addWorksheet('見積書'),w2=wb.addWorksheet('内訳明細');
-  estWriteSheet(wb,ws,cover,{stampFn});
-  estWriteSheet(wb,w2,body,{stampFn});
+  wb.estImgLog=[];
+  estWriteSheet(wb,ws,cover,{stampFn,imgLog:wb.estImgLog});
+  estWriteSheet(wb,w2,body,{stampFn,imgLog:wb.estImgLog});
   const cm=EST_TPL.cover.margins,bm=EST_TPL.body.margins;
   ws.pageSetup={paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:1,horizontalCentered:true,verticalCentered:true,
     margins:{left:cm[0],right:cm[1],top:cm[2],bottom:Math.max(cm[3],0.3),header:0.3,footer:0.3}};
@@ -1018,16 +1081,17 @@ function buildEstWorkbook(d,stampFn){
 // 角印がこの端末に無いまま出力して、あとで気づくのを防ぐ(登録は、端末ごとのため)
 function estConfirmKakuin(){
   if(estGetKakuin())return true;
-  if(confirm('角印が、この端末に登録されていません。\nこのまま出力すると、角印なしになります。\n\n【OK】角印なしで出力する\n【キャンセル】やめて、下の「印鑑の登録」から登録する'))return true;
+  if(confirm('角印が、まだ登録されていません。\nこのまま出力すると、角印なしになります。\n\n【OK】角印なしで出力する\n【キャンセル】やめて、下の「印鑑」から登録する(会社共通に1回登録すると、どの端末でも押されます)'))return true;
   const s=document.getElementById('kakuinState');if(s&&s.scrollIntoView)s.scrollIntoView({block:'center'});
   return false;
 }
 async function genExcel(){
+  await estKakuinReady; // 会社共通の角印が届くのを待つ(届いたあとは、すぐ進む)
   const d=collectEst();if(!d)return;
   if(!estConfirmKakuin())return;
   const wb=buildEstWorkbook(d,estStampPng);
-  const fn=`見積書_${(d.issueDate||'').replace(/-/g,'')}_${d.clientName}.xlsx`;
-  const buf=await wb.xlsx.writeBuffer();
+  const fn=`見積書_${(d.issueDate||'').replace(/-/g,'')}_${d.clientName||d.workName}.xlsx`;
+  const buf=await estFixDrawings(await wb.xlsx.writeBuffer(),wb.estImgLog);
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=fn;a.click();URL.revokeObjectURL(url);
 }
@@ -1111,14 +1175,16 @@ function buildEstPrintHtml(d,stampFn){
   .pg{position:relative;width:297mm;height:210mm;overflow:hidden;page-break-after:always;break-after:page}.pg:last-child{page-break-after:auto;break-after:auto}
   .sheet{position:absolute;transform-origin:0 0}table td{padding:0 2px;line-height:1.15;color:inherit}
   @media screen{body{background:#888}.pg{background:#fff;margin:8px auto}}`;
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>見積書_${escH(d.clientName)}</title><style>${css}</style></head><body>${out}</body></html>`;
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>見積書_${escH(d.clientName||d.workName)}</title><style>${css}</style></head><body>${out}</body></html>`;
 }
 
-window.addEventListener('load',estKakuinLabel);
-function genPdf(){
-  const d=collectEst();if(!d)return;
-  const w=window.open('','_blank'); // 確認の画面を出す前に開く(あとで開くと、スマホで、ポップアップとして止められることがあるため)
-  if(!w){alert('ポップアップがブロックされました。許可してからもう一度押してください');return;}
+window.addEventListener('load',()=>{estKakuinLabel();if(EST_IN_APP&&!estKakuinSettled)try{window.parent.postMessage({type:'est-need-kakuin'},location.origin);}catch(e){}}); // 念のため、読み込みが終わったときにも、角印を頼む
+async function genPdf(){
+  let w=null;
+  const open=()=>{const x=window.open('','_blank');if(!x)alert('ポップアップがブロックされました。許可してからもう一度押してください');return x;}; // 確認の画面を出す前に開く(あとで開くと、スマホで、ポップアップとして止められることがあるため)
+  if(!estKakuinSettled){w=open();if(!w)return;await estKakuinReady;} // 角印が届く前は、先に開いてから待つ
+  const d=collectEst();if(!d){if(w)w.close();return;}
+  if(!w){w=open();if(!w)return;}
   if(!estConfirmKakuin()){w.close();return;}
   const html=buildEstPrintHtml(d,estStampPng);
   w.document.open();w.document.write(html);w.document.close();
