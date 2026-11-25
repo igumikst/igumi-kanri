@@ -771,8 +771,14 @@ function getExportFilename(ext){
   const workName=reportType==='union'?document.getElementById('u-workname').value.trim():document.getElementById('work-name').value.trim();
   const workDate=reportType==='union'?document.getElementById('u-date').value:document.getElementById('work-date').value;
   const datePart=workDate?workDate.replace(/-/g,''):'';
-  const prefix=reportType==='union'?'調査報告書':reportType==='tama'?'報告書_多摩':'報告書';
-  let fileName=`${prefix}_${safe(propName)}_${safe(workName)}_${datePart}.${ext}`;
+  let fileName;
+  if(reportType==='tama'){
+    // 多摩仕様のファイル名は「20261116　物件名　何号室漏水調査　報告書」の形(虎生の指示 2026-11-25)
+    fileName=[datePart,safe(propName),safe(workName),'報告書'].filter(s=>s).join('　')+`.${ext}`;
+  }else{
+    const prefix=reportType==='union'?'調査報告書':'報告書';
+    fileName=`${prefix}_${safe(propName)}_${safe(workName)}_${datePart}.${ext}`;
+  }
   fileName=fileName.normalize('NFD').normalize('NFC').replace(/ /g,'　');
   return fileName;
 }
