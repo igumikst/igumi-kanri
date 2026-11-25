@@ -394,7 +394,7 @@ function goTo(id){
 window.onload=()=>{
   const t=new Date(),y=t.getFullYear(),m=String(t.getMonth()+1).padStart(2,'0'),d=String(t.getDate()).padStart(2,'0');
   document.getElementById('issueDate').value=`${y}-${m}-${d}`;
-  document.getElementById('estNo').value=`EST-${y}${m}${d}-001`;
+  document.getElementById('estNo').value=`${String(y).slice(2)}${m}${d}-01`; // 見積番号の標準: 年月日(6けた)-通し番号(2けた)。例 261125-01(表紙の枠に収まる短さ)
   document.getElementById('validUntil').value='発行日より60日以内';
   document.getElementById('payment').value='定時御支払';
 };
@@ -910,11 +910,11 @@ function estBuildCover(d,body){
   const lastItem=26;
   sh.set(27,7,d.miscPct);
   sh.set(27,10,{f:`ROUND(SUM(J18:J${lastItem})*G27/100,0)`,r:d.misc});
-  if(d.disc>0)sh.set(28,10,-d.disc);
+  if(d.disc>0)sh.set(28,10,-d.disc,{n:'#,##0_);"▲ "#,##0_)'}); // 右に、ほかの金額と同じ空き(_))を付けて、金額の列の右端をそろえる
   sh.set(29,10,{f:'SUM(J18:J28)',r:d.ko});
   if(d.taxPct){sh.set(30,7,d.taxPct);}else{sh.set(30,1,'非課税');sh.set(30,7,'');sh.set(30,8,'');}
   sh.set(30,10,{f:'ROUND(J29*G30/100,0)',r:d.tax});
-  sh.set(31,10,{f:'J29+J30',r:d.total});
+  sh.set(31,10,{f:'J29+J30',r:d.total},{n:'\\¥#,##0_);"¥-"#,##0_)'}); // 合計も、ほかの金額と同じ右端にそろえる(サンプルでは、この行だけ、右の空きが無かった)
   // 印の位置(型のとおり。丸い印は、枠の中に収まる正方形にして中央に置く)
   const box=im=>{ // 画像の置き場所(px)
     const x=(col,off)=>{let s=0;for(let i=0;i<col;i++)s+=estColPx(tp.cw[i]);return s+off/9525;};
