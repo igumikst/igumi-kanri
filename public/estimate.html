@@ -198,6 +198,11 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
 .opt-row{display:flex;align-items:center;gap:10px;padding:12px 14px;margin-bottom:14px;border:1.5px solid #c5cae9;border-radius:12px;background:#f8f9ff;font-size:15px;font-weight:700;color:#1a237e;cursor:pointer}
 .opt-row input{width:22px;height:22px;accent-color:#1a237e;flex-shrink:0}
 .opt-row small{display:block;font-size:11px;font-weight:500;color:#667}
+.misc-out{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;margin-bottom:14px;border:1.5px solid #c5cae9;border-radius:12px;background:#f8f9ff;font-size:15px;font-weight:700;color:#1a237e}
+.misc-out input{width:84px;padding:9px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:16px;text-align:right;font-family:inherit;background:white;-webkit-appearance:none}
+.misc-out input:focus{outline:none;border-color:#1a237e}
+.misc-out .misc-amt{color:#333;font-weight:700}
+.misc-out small{flex-basis:100%;font-size:11px;font-weight:500;color:#667}
 
 .smp-btn{margin-left:auto;background:#f5f5f5;border:1.5px solid #ddd;border-radius:18px;padding:7px 14px;font-size:13px;font-weight:700;color:#555;cursor:pointer;font-family:inherit}
 .smp-btn:active{background:#eee}
@@ -296,7 +301,7 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
   <div class="calc-area">
     <div class="misc-row">
       <label>諸経費：</label>
-      <input type="number" id="miscRate" value="5" min="0" max="100" step="0.1" oninput="calcAll()"/>
+      <input type="number" id="miscRate" value="5" min="0" max="100" step="0.1" oninput="estMiscSync(this)"/>
       <span>%（法定福利費含む）</span>
     </div>
     <div class="misc-row">
@@ -330,6 +335,12 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
 
 <div class="card" id="s-out">
   <label class="opt-row"><input type="checkbox" id="noCover" onchange="estCoverUi()"/><span>表紙なし<small>チェックすると、表紙をつけずに、内訳書だけを出力します</small></span></label>
+  <div class="misc-out" id="miscOutRow">
+    <label for="miscRate2">諸経費</label>
+    <input type="number" id="miscRate2" value="5" min="0" max="100" step="0.1" inputmode="decimal" oninput="estMiscSync(this)"/>
+    <span>%</span><span class="misc-amt" id="miscAmt2"></span>
+    <small>表紙の「諸経費」の行です(法定福利費を含む)。内訳明細の下の「諸経費」と同じ値です</small>
+  </div>
   <div class="actions">
     <button class="btn-rst" onclick="resetForm()">🔄 リセット</button>
     <button class="btn-ex" id="btnExcel" onclick="genExcel()">📥 Excel出力（表紙＋内訳書）</button>
@@ -717,6 +728,12 @@ function estPkApply(){
 }
 
 // ---------- 合計 ----------
+// 諸経費は、内訳明細の下と、出力のカード(表紙が付くときだけ表示)の、2か所で変えられる。同じ値にそろえる
+function estMiscSync(el){
+  const o=document.getElementById(el.id==='miscRate'?'miscRate2':'miscRate');
+  if(o)o.value=el.value;
+  calcAll();
+}
 function calcAll(){
   const total=EST_TREE.reduce((s,g)=>s+estAmt(g),0);
   const mr=getN($('miscRate'))/100;
@@ -728,6 +745,7 @@ function calcAll(){
   $('d-sub').textContent=fmtY(total);
   $('d-misc-lbl').textContent=`諸経費（${mrP}%）`;
   $('d-misc').textContent=fmtY(misc);
+  $('miscAmt2').textContent='＝ '+fmtY(misc);
   $('d-disc').textContent=`- ${fmtY(disc)}`;
   $('d-ko').textContent=fmtY(ko);
   $('d-tax-lbl').textContent=`消費税（${tS}）`;
@@ -777,7 +795,7 @@ function estLoadSample(){
   if((EST_TREE.length||g('workName').value.trim()||g('clientName').value.trim())&&!confirm('入力内容を上書きします。よろしいですか？'))return;
   g('clientName').value=S.clientName;g('sfxSama').checked=false;g('sfxOnchu').checked=true;
   g('workName').value=S.workName;g('propName').value=S.propName;g('notes').value='';
-  g('miscRate').value='0';g('discount').value='0';g('taxRate').value='0.10';
+  g('miscRate').value='0';g('miscRate2').value='0';g('discount').value='0';g('taxRate').value='0.10';
   EST_TREE=S.groups.map(gr=>mkGroup({name:gr.name,spec:gr.spec,qty:gr.qty,unit:gr.unit,open:true,
     kids:gr.items.map(i=>mkItem({name:i[0],spec:i[1],qty:i[2],unit:i[3],price:i[4],note:i[5]}))}));
   estRender();goTo('s-meisai');
@@ -981,7 +999,10 @@ function estDisp(v,fmt){
   if(f.indexOf('¥')>=0)s='¥'+Math.round(a).toLocaleString('ja-JP');
   else if(f.indexOf('#,##0')>=0)s=(Number.isInteger(a)?a:Math.round(a*100)/100).toLocaleString('ja-JP');
   else s=String(Math.round(a*100)/100);
-  if(neg)return f.indexOf('RED')>=0?{txt:'('+s+')',red:true}:{txt:'-'+s,red:false};
+  if(neg){
+    if(f.indexOf('▲')>=0)return {txt:'▲ '+s,red:false};
+    return f.indexOf('RED')>=0?{txt:'('+s+')',red:true}:{txt:'-'+s,red:false};
+  }
   return {txt:s,red:false};
 }
 
@@ -1044,7 +1065,7 @@ function estBuildCover(d,body){
   const lastItem=26;
   sh.set(27,7,d.miscPct);
   sh.set(27,10,{f:`ROUND(SUM(J18:J${lastItem})*G27/100,0)`,r:d.misc});
-  if(d.disc>0)sh.set(28,10,-d.disc,{n:'#,##0_);"▲ "#,##0_)'}); // 右に、ほかの金額と同じ空き(_))を付けて、金額の列の右端をそろえる
+  sh.set(28,10,d.disc>0?-d.disc:undefined,{n:'#,##0_);"▲ "#,##0_)'}); // 右に、ほかの金額と同じ空き(_))を付けて、金額の列の右端をそろえる。値引きが0(空欄)のときも、この書式にしておく(あとでExcelに値引きを打っても、右端がずれない)
   sh.set(29,10,{f:'SUM(J18:J28)',r:d.ko});
   if(d.taxPct){sh.set(30,7,d.taxPct);}else{sh.set(30,1,'非課税');sh.set(30,7,'');sh.set(30,8,'');}
   sh.set(30,10,{f:'ROUND(J29*G30/100,0)',r:d.tax});
@@ -1229,6 +1250,7 @@ function estCoverUi(){
   document.getElementById('btnExcel').textContent=nc?'📥 Excel出力（内訳書のみ）':'📥 Excel出力（表紙＋内訳書）';
   document.getElementById('btnPdf').textContent=nc?'📄 PDF出力（内訳書のみ・印刷画面から保存）':'📄 PDF出力（印刷画面から「PDFで保存」）';
   const sb=document.getElementById('stampBox');if(sb)sb.style.opacity=nc?'.45':'';
+  const mo=document.getElementById('miscOutRow');if(mo)mo.style.display=nc?'none':''; // 諸経費は表紙にしか出ないので、表紙なしのときは隠す
 }
 async function genExcel(){
   const nc=estNoCover();
