@@ -28,7 +28,7 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
 .nav-item.active .nav-dot{background:#1a237e}
 
 /* カード */
-.card{background:white;border-radius:14px;padding:20px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.card{background:white;border-radius:14px;padding:20px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);scroll-margin-top:64px}
 .card-title{font-size:14px;font-weight:700;color:#1a237e;border-left:4px solid #1a237e;padding-left:10px;margin-bottom:18px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
@@ -50,7 +50,7 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
 .tg{border:2px solid #e8eaf6;border-radius:12px;background:white;overflow:hidden}
 .tg .tg{margin:8px 0 0;border-width:1.5px}
 .tg.d1{border-color:#dde6f5}.tg.d2{border-color:#e6e0f2}.tg.d3{border-color:#e8e8e8}
-.tg-head{display:flex;align-items:center;gap:8px;padding:0 0 0 12px;min-height:54px;cursor:pointer;user-select:none;background:#e8eaf6}
+.tg-head{display:flex;align-items:center;gap:8px;padding:0 0 0 12px;min-height:68px;cursor:pointer;user-select:none;background:#e8eaf6}
 .tg.d1>.tg-head{background:#eef3fb}.tg.d2>.tg-head{background:#f1eef8}.tg.d3>.tg-head{background:#f3f3f3}
 .tg-arr{font-size:13px;color:#1a237e;width:18px;text-align:center;transition:transform .2s;flex-shrink:0}
 .tg-arr.closed{transform:rotate(-90deg)}
@@ -58,14 +58,23 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
 .tg-name small{font-size:11px;font-weight:500;color:#667;margin-top:1px}
 .tg-name i{font-weight:500;color:#999}
 .tg.top>.tg-head .tg-name{font-size:16px}
-.tg-sub{font-size:14px;font-weight:700;color:#1a237e;white-space:nowrap;flex-shrink:0}
+.tg-name .tg-sub{font-size:13px;font-weight:700;color:#1a237e;margin-top:2px;white-space:nowrap}
 .tg-more{background:none;border:none;border-left:1px solid #c5cae9;color:#1a237e;font-size:22px;line-height:1;min-width:52px;align-self:stretch;cursor:pointer;font-family:inherit}
 .tg-more:active{background:#d6daf0}
 .tg-body{padding:8px 10px 12px}
 .tg-empty{font-size:13px;color:#999;text-align:center;padding:14px 8px}
 .tg-empty.big{padding:26px 8px}
-.ti{background:#f8f9ff;border:1.5px solid #e8eaf6;border-radius:10px;padding:10px 12px;margin-top:6px;cursor:pointer}
+.ti{display:flex;align-items:stretch;min-height:68px;background:#f8f9ff;border:1.5px solid #e8eaf6;border-radius:10px;margin-top:6px;cursor:pointer;overflow:hidden}
 .ti:first-child{margin-top:0}
+.ti-in{flex:1;min-width:0;padding:10px 12px}
+/* 上下の矢印(カードにも、まとまりの見出しにも、最初から出す) */
+.mv{display:flex;flex-direction:column;align-self:stretch;flex-shrink:0;width:46px;border-left:1px solid #d4d9f0}
+.mv-b{flex:1;min-height:34px;background:none;border:none;color:#1a237e;font-size:15px;font-family:inherit;cursor:pointer;padding:0}
+.mv-b+.mv-b{border-top:1px solid #d4d9f0}
+.mv-b.off{color:#c9cde0;cursor:default}
+.mv-b:not(.off):active{background:#d6daf0}
+.flash{animation:flash .7s ease-out}
+@keyframes flash{0%{outline:3px solid #E07B39;outline-offset:-3px}100%{outline:3px solid rgba(224,123,57,0);outline-offset:-3px}}
 .ti:active{background:#eceffc}
 .ti-top{display:flex;gap:8px;align-items:baseline;justify-content:space-between}
 .ti-name{font-size:14px;font-weight:700;color:#333;min-width:0;word-break:break-all}
@@ -160,7 +169,7 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
 .pk-row{display:flex;align-items:center;gap:10px;padding:11px 10px;border:1.5px solid #eee;border-radius:10px;background:white;margin-bottom:6px;cursor:pointer}
 .pk-row:active{background:#f0f3ff}
 .pk-row.sel{border-color:#1a237e;background:#e8eaf6}
-.pk-chk{width:28px;height:28px;border:2px solid #c5cae9;border-radius:7px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:16px;color:white;font-weight:700;background:white}
+.pk-chk{width:28px;height:28px;border:2px solid #c5cae9;border-radius:7px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;color:white;font-weight:700;background:white}
 .pk-row.sel .pk-chk{background:#1a237e;border-color:#1a237e}
 .pk-main{flex:1;min-width:0}
 .pk-name{font-size:14px;font-weight:700;color:#333;word-break:break-all}
@@ -172,6 +181,28 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
 .pk-unit{font-size:11px;color:#888}
 .pk-cnt{font-size:12px;color:#889}
 .pk-go{font-size:14px;color:#1a237e}
+
+/* 基本情報(たたみ/ひらき)・宛先の様/御中・出力の表紙なし */
+.card-title.cl{cursor:pointer;user-select:none;margin-bottom:0}
+.card-title.cl.open{margin-bottom:18px}
+.cl-row{display:flex;align-items:center;gap:8px}
+.cl-arr{font-size:13px;width:16px;text-align:center;transition:transform .2s}
+.cl-arr.closed{transform:rotate(-90deg)}
+.cl-hint{margin-left:auto;font-size:12px;font-weight:600;color:#667;padding:4px 4px 4px 12px}
+.cl-sum{font-size:12px;font-weight:500;color:#667;margin-top:4px;line-height:1.6;word-break:break-all}
+.card-title.cl.open .cl-sum{display:none}
+.card-title.has-ctl{display:flex;align-items:center;gap:14px;min-height:36px}
+.sfx{display:flex;gap:8px}
+.sfx label{display:inline-flex;align-items:center;gap:6px;font-size:15px;font-weight:700;color:#1a237e;padding:6px 12px;border:1.5px solid #c5cae9;border-radius:20px;cursor:pointer;background:white}
+.sfx input{width:20px;height:20px;accent-color:#1a237e}
+.opt-row{display:flex;align-items:center;gap:10px;padding:12px 14px;margin-bottom:14px;border:1.5px solid #c5cae9;border-radius:12px;background:#f8f9ff;font-size:15px;font-weight:700;color:#1a237e;cursor:pointer}
+.opt-row input{width:22px;height:22px;accent-color:#1a237e;flex-shrink:0}
+.opt-row small{display:block;font-size:11px;font-weight:500;color:#667}
+
+.smp-btn{margin-left:auto;background:#f5f5f5;border:1.5px solid #ddd;border-radius:18px;padding:7px 14px;font-size:13px;font-weight:700;color:#555;cursor:pointer;font-family:inherit}
+.smp-btn:active{background:#eee}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:rgba(26,35,126,.96);color:#fff;padding:12px 20px;border-radius:24px;font-size:14px;font-weight:700;z-index:400;opacity:0;pointer-events:none;transition:opacity .25s;max-width:90vw;text-align:center}
+.toast.show{opacity:1}
 
 /* PC専用調整 */
 @media(min-width:721px){
@@ -215,20 +246,25 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
 <div class="main-col">
 
 <div class="card" id="s-basic">
-  <div class="card-title">基本情報</div>
-  <div class="grid3">
-    <div class="field"><label>見積番号</label><input type="text" id="estNo"/></div>
-    <div class="field"><label>作成日</label><input type="date" id="issueDate"/></div>
-    <div class="field"><label>有効期限</label><input type="text" id="validUntil"/></div>
+  <div class="card-title cl" id="basicHead" onclick="estToggleBasic()" role="button" aria-expanded="false">
+    <div class="cl-row"><span class="cl-arr closed" id="basicArr">▼</span><span>基本情報</span><span class="cl-hint" id="basicHint">開く</span></div>
+    <div class="cl-sum" id="basicSum"></div>
+  </div>
+  <div id="basicBody" style="display:none">
+    <div class="grid3">
+      <div class="field"><label>見積番号</label><input type="text" id="estNo" oninput="estBasicSum()"/></div>
+      <div class="field"><label>作成日</label><input type="date" id="issueDate" oninput="estBasicSum()" onchange="estBasicSum()"/></div>
+      <div class="field"><label>有効期限</label><input type="text" id="validUntil" oninput="estBasicSum()"/></div>
+    </div>
   </div>
 </div>
 
 <div class="card" id="s-client">
-  <div class="card-title">宛先</div>
-  <div class="grid2">
-    <div class="field"><label>会社名・宛先 <span style="font-weight:400;color:#999">（なくても作れます）</span></label><input type="text" id="clientName" placeholder="例：○○管理株式会社"/></div>
-    <div class="field"><label>担当者名</label><input type="text" id="clientContact" placeholder="例：山田 太郎 様"/></div>
+  <div class="card-title has-ctl">
+    <span>宛先</span>
+    <span class="sfx"><label><input type="checkbox" id="sfxSama" onchange="estSfx('sama')"/>様</label><label><input type="checkbox" id="sfxOnchu" checked onchange="estSfx('onchu')"/>御中</label></span>
   </div>
+  <div class="field"><label>会社名・宛先 <span style="font-weight:400;color:#999">（なくても作れます）</span></label><input type="text" id="clientName" placeholder="例：○○管理株式会社"/></div>
 </div>
 
 <div class="card" id="s-work">
@@ -237,9 +273,7 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
     <div class="field"><label>工事名 <span class="req">*</span></label><input type="text" id="workName" placeholder="例：給水管一部更新工事"/></div>
     <div class="field"><label>工事場所・物件名</label><input type="text" id="propName" placeholder="例：TMフラッツ 〇〇号室"/></div>
   </div>
-  <div class="grid3" style="margin-top:12px">
-    <div class="field"><label>着工日</label><input type="date" id="startDate"/></div>
-    <div class="field"><label>完工日</label><input type="date" id="endDate"/></div>
+  <div class="grid2" style="margin-top:12px">
     <div class="field"><label>取引方法</label><input type="text" id="payment"/></div>
   </div>
 </div>
@@ -252,8 +286,8 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
 </div>
 
 <div class="card" id="s-meisai">
-  <div class="card-title">内訳明細</div>
-  <div class="meisai-hint">ESTと同じ段で入れられます（大項目 ▶ まとまり ▶ 項目）。タップで直せます。出力は、まとまりごとに別ページになります。</div>
+  <div class="card-title has-ctl"><span>内訳明細</span><button class="smp-btn" onclick="estLoadSample()">🧪 サンプル読込</button></div>
+  <div class="meisai-hint">ESTと同じ段で入れられます（大項目 ▶ まとまり ▶ 項目）。タップで直せます。右の ▲▼ で並べ替えできます。出力は、まとまりごとに別ページになります。</div>
   <div class="meisai-area" id="meisaiArea"></div>
   <div class="pg-add-area">
     <button class="pg-add-btn" onclick="estAddNode(null,'grp')">＋ 大項目を追加（手書き）</button>
@@ -295,12 +329,13 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
 </div>
 
 <div class="card" id="s-out">
+  <label class="opt-row"><input type="checkbox" id="noCover" onchange="estCoverUi()"/><span>表紙なし<small>チェックすると、表紙をつけずに、内訳書だけを出力します</small></span></label>
   <div class="actions">
     <button class="btn-rst" onclick="resetForm()">🔄 リセット</button>
-    <button class="btn-ex" onclick="genExcel()">📥 Excel出力（表紙＋内訳書）</button>
-    <button class="btn-ex" style="margin-top:8px;background:#fff;color:#1A237E;border:2px solid #1A237E" onclick="genPdf()">📄 PDF出力（印刷画面から「PDFで保存」）</button>
+    <button class="btn-ex" id="btnExcel" onclick="genExcel()">📥 Excel出力（表紙＋内訳書）</button>
+    <button class="btn-ex" id="btnPdf" style="margin-top:8px;background:#fff;color:#1A237E;border:2px solid #1A237E" onclick="genPdf()">📄 PDF出力（印刷画面から「PDFで保存」）</button>
   </div>
-  <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #c5cae9;font-size:13px;color:#555;line-height:2">
+  <div id="stampBox" style="margin-top:14px;padding-top:12px;border-top:1px dashed #c5cae9;font-size:13px;color:#555;line-height:2">
     <div style="font-weight:700;color:#1a237e">🔴 印鑑</div>
     <div style="font-size:12px;color:#777;line-height:1.7">角印：会社共通で1回登録すれば、どの端末でも自動で押されます。照査の印は上村で固定、担当の印は、上で選んだ担当者(標準は﨑岡)。</div>
     <input type="file" id="estFileKakuin" accept="image/png,image/jpeg" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none" tabindex="-1" onchange="estOnKakuinFile(this)">
@@ -355,6 +390,7 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
     </div>
     <div class="pk-top">
       <div class="pk-target" id="pkTarget"></div>
+      <div class="pk-target" style="color:#1a237e;font-weight:700">🔢 選んだ順に、上から入ります（チェックの数字が、入る順番）</div>
       <input class="modal-search" type="search" id="pkSearch" placeholder="🔍 名称・材質で検索..." oninput="estPkSearch()" autocomplete="off"/>
       <div class="pk-rate">単価の掛け率：<button id="rate100" onclick="estSetRate(100)">100%（標準）</button><button id="rate130" onclick="estSetRate(130)">130%</button></div>
     </div>
@@ -376,9 +412,34 @@ const EST_DEFAULT_TANTO='﨑岡'; // 担当の標準(照査は上村で固定)
 let selTanto = EST_DEFAULT_TANTO;
 
 function goTo(id){
+  if(id==='s-basic')estToggleBasic(true); // たたんであるときは、ひらいてから移る
   document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'});
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.querySelector(`.nav-item[onclick="goTo('${id}')"]`)?.classList.add('active');
+}
+
+// 基本情報は、標準でたたんでおく(スマホで、内訳明細まで、スクロールが長くならないように)。たたんでいる間は、見積番号などを1行で見せる
+function estToggleBasic(force){
+  const body=document.getElementById('basicBody'),head=document.getElementById('basicHead');
+  const open=typeof force==='boolean'?force:body.style.display==='none';
+  body.style.display=open?'':'none';
+  head.classList.toggle('open',open);
+  document.getElementById('basicArr').classList.toggle('closed',!open);
+  document.getElementById('basicHint').textContent=open?'閉じる':'開く';
+  head.setAttribute('aria-expanded',open?'true':'false');
+}
+function estBasicSum(){
+  const v=id=>(document.getElementById(id).value||'').trim(),a=[];
+  if(v('estNo'))a.push('No.'+v('estNo'));
+  if(v('issueDate'))a.push(v('issueDate').replace(/-/g,'/'));
+  if(v('validUntil'))a.push(v('validUntil'));
+  document.getElementById('basicSum').textContent=a.join(' ・ ')||'（未入力）';
+}
+// 宛先の「様」「御中」は、どちらか1つ(両方はずすと、何もつけない)
+function estSfx(w){
+  const a=document.getElementById('sfxSama'),b=document.getElementById('sfxOnchu');
+  if(w==='sama'&&a.checked)b.checked=false;
+  if(w==='onchu'&&b.checked)a.checked=false;
 }
 
 // 担当者
@@ -397,6 +458,7 @@ window.onload=()=>{
   document.getElementById('estNo').value=`${String(y).slice(2)}${m}${d}-01`; // 見積番号の標準: 年月日(6けた)-通し番号(2けた)。例 261125-01(表紙の枠に収まる短さ)
   document.getElementById('validUntil').value='発行日より60日以内';
   document.getElementById('payment').value='定時御支払';
+  estBasicSum();
 };
 
 // ===== 見積りベース(EST)と、見積の明細(段の木) =====
@@ -437,14 +499,15 @@ function estFromBase(c,open){ // 見積りベースの1つ(まとまり or 項�
 }
 
 // ---------- 明細の表示(1項目=1枚のカード。タップすると、下から入力欄) ----------
-function estRenderNode(n,depth){
+const estMv=(id,idx,len)=>`<span class="mv"><button class="mv-b${idx<=0?' off':''}" data-act="up" data-id="${id}" aria-label="上へ">▲</button><button class="mv-b${idx>=len-1?' off':''}" data-act="down" data-id="${id}" aria-label="下へ">▼</button></span>`;
+function estRenderNode(n,depth,idx,len){
   if(n.kind==='grp'){
-    const kids=n.kids.map(k=>estRenderNode(k,depth+1)).join('');
-    return `<div class="tg d${depth%4}${depth===0?' top':''}">
+    const kids=n.kids.map((k,i)=>estRenderNode(k,depth+1,i,n.kids.length)).join('');
+    return `<div class="tg d${depth%4}${depth===0?' top':''}" data-nid="${n.id}">
       <div class="tg-head" data-act="toggle" data-id="${n.id}">
         <span class="tg-arr${n.open?'':' closed'}">▼</span>
-        <span class="tg-name">${n.name?esc(n.name):'<i>（名称未設定）</i>'}${n.spec?`<small>${esc(n.spec)}</small>`:''}</span>
-        <span class="tg-sub">${fmtY(estAmt(n))}</span>
+        <span class="tg-name">${n.name?esc(n.name):'<i>（名称未設定）</i>'}${n.spec?`<small>${esc(n.spec)}</small>`:''}<span class="tg-sub">${fmtY(estAmt(n))}</span></span>
+        ${estMv(n.id,idx,len)}
         <button class="tg-more" data-act="edit" data-id="${n.id}" aria-label="編集">⋯</button>
       </div>
       <div class="tg-body"${n.open?'':' style="display:none"'}>
@@ -458,26 +521,44 @@ function estRenderNode(n,depth){
     </div>`;
   }
   const title=n.name||n.spec||'（名称未設定）';
-  return `<div class="ti" data-act="edit" data-id="${n.id}">
-    <div class="ti-top"><span class="ti-name">${esc(title)}</span><span class="ti-amt">${fmtY(estAmt(n))}</span></div>
-    ${(n.name&&n.spec)?`<div class="ti-spec">${esc(n.spec)}</div>`:''}
-    <div class="ti-calc">${estQty(n.qty)} ${esc(n.unit)} × ${fmtY(parseFloat(n.price)||0)}${n.note?`<span class="ti-note">${esc(n.note)}</span>`:''}</div>
+  return `<div class="ti" data-act="edit" data-id="${n.id}" data-nid="${n.id}">
+    <div class="ti-in">
+      <div class="ti-top"><span class="ti-name">${esc(title)}</span><span class="ti-amt">${fmtY(estAmt(n))}</span></div>
+      ${(n.name&&n.spec)?`<div class="ti-spec">${esc(n.spec)}</div>`:''}
+      <div class="ti-calc">${estQty(n.qty)} ${esc(n.unit)} × ${fmtY(parseFloat(n.price)||0)}${n.note?`<span class="ti-note">${esc(n.note)}</span>`:''}</div>
+    </div>
+    ${estMv(n.id,idx,len)}
   </div>`;
 }
 function estRender(){
   const area=document.getElementById('meisaiArea');
-  area.innerHTML=EST_TREE.length?EST_TREE.map(g=>estRenderNode(g,0)).join(''):'<div class="tg-empty big">まだ大項目がありません。下のボタンから追加してね</div>';
+  area.innerHTML=EST_TREE.length?EST_TREE.map((g,i)=>estRenderNode(g,0,i,EST_TREE.length)).join(''):'<div class="tg-empty big">まだ大項目がありません。下のボタンから追加してね</div>';
   calcAll();
 }
 document.getElementById('meisaiArea').addEventListener('click',e=>{
   const t=e.target.closest('[data-act]');if(!t)return;
   const id=parseInt(t.dataset.id,10),act=t.dataset.act;
+  if(act==='up'||act==='down'){if(!t.classList.contains('off'))estMove(id,act==='up'?-1:1);return;} // いちばん上・下のときは、何もしない(開閉や編集にも、つなげない)
   if(act==='toggle'){const L=estLoc(id);if(L){L.node.open=!L.node.open;estRender();}}
   else if(act==='edit'){estOpenEditor(id,false);}
   else if(act==='addItem'){estAddNode(id,'item');}
   else if(act==='addGroup'){estAddNode(id,'grp');}
   else if(act==='pick'){estOpenPicker(id);}
 });
+// 矢印で1つ上・下へ。動かしたものが、画面の同じ場所に残るように、スクロールを合わせる(続けて押しやすい)
+function estMove(id,dir){
+  const L=estLoc(id);if(!L)return;
+  const j=L.idx+dir;if(j<0||j>=L.list.length)return;
+  const q=()=>document.querySelector(`#meisaiArea [data-nid="${id}"]`);
+  const e0=q(),y0=e0?e0.getBoundingClientRect().top:null;
+  const t=L.list[L.idx];L.list[L.idx]=L.list[j];L.list[j]=t;
+  estRender();
+  const e1=q();
+  if(e1){
+    if(y0!==null){const dy=e1.getBoundingClientRect().top-y0;if(dy)window.scrollBy(0,dy);}
+    e1.classList.add('flash');
+  }
+}
 function estAddNode(parentId,kind){ // parentId が null なら、最上位(大項目)に足す
   const node=kind==='grp'?mkGroup():mkItem();
   if(parentId==null){EST_TREE.push(node);}
@@ -553,7 +634,6 @@ function estEdDel(){
 let pk={target:null,path:[],sel:new Set(),q:''};
 const leafCount=c=>c.c?(c._lc||(c._lc=c.c.reduce((s,x)=>s+leafCount(x),0))):1;
 function estBaseAt(path){let list=EST_ROOTS,node=null;for(const i of path){node=list[i];list=node.c||[];}return{node,list};}
-const pkCmp=(a,b)=>{for(let i=0;i<Math.min(a.length,b.length);i++)if(a[i]!==b[i])return a[i]-b[i];return a.length-b.length;};
 function estOpenPicker(targetId){
   pk={target:targetId,path:[],sel:new Set(),q:''};
   const L=targetId==null?null:estLoc(targetId);
@@ -569,7 +649,7 @@ function estPkSearch(){pk.q=$('pkSearch').value.trim();estPkRender();$('pkList')
 function pkRow(c,p,trail){
   const key=p.join('.'),g=!!c.c,sel=pk.sel.has(key),title=c.n||c.s||'（名称なし）';
   return `<div class="pk-row${sel?' sel':''}" data-key="${key}" data-g="${g?1:0}">
-    <div class="pk-chk" data-chk="1">${sel?'✓':''}</div>
+    <div class="pk-chk" data-chk="1">${sel?[...pk.sel].indexOf(key)+1:''}</div>
     <div class="pk-main"><div class="pk-name">${esc(title)}</div>${(c.n&&c.s)?`<div class="pk-spec">${esc(c.s)}</div>`:''}${trail?`<div class="pk-trail">${esc(trail)}</div>`:''}</div>
     <div class="pk-right">${g?`<span class="pk-cnt">${leafCount(c)}件</span>${pk.q?'':'<span class="pk-go">▶</span>'}`:`<span class="pk-price">${c.p?fmtY(estPrice(c.p)):'未設定'}</span><span class="pk-unit">/ ${esc(c.u||'式')}</span>`}</div>
   </div>`;
@@ -594,6 +674,10 @@ function estPkRender(){
   estPkCount();
 }
 function estPkCount(){const n=pk.sel.size;$('pkCount').textContent=`${n}件 選択中`;}
+function estPkNums(){ // 選んだ順の番号を、いま見えている行に付け直す(外した行より後ろの番号は、1つずつ繰り上がる)
+  const order=[...pk.sel];
+  document.querySelectorAll('#pkList .pk-row').forEach(r=>{const i=order.indexOf(r.dataset.key);r.classList.toggle('sel',i>=0);const c=r.querySelector('.pk-chk');if(c)c.textContent=i>=0?String(i+1):'';});
+}
 $('pkCrumb').addEventListener('click',e=>{
   const b=e.target.closest('button[data-d]');if(!b)return;
   pk.path=pk.path.slice(0,parseInt(b.dataset.d,10));estPkRender();$('pkList').scrollTop=0;
@@ -602,13 +686,12 @@ $('pkList').addEventListener('click',e=>{
   const row=e.target.closest('.pk-row');if(!row)return;
   const key=row.dataset.key,isG=row.dataset.g==='1',onChk=!!e.target.closest('[data-chk]');
   if(isG&&!onChk&&!pk.q){pk.path=key.split('.').map(Number);estPkRender();$('pkList').scrollTop=0;return;} // まとまりは、中へ入る
-  if(pk.sel.has(key)){pk.sel.delete(key);row.classList.remove('sel');row.querySelector('.pk-chk').textContent='';}
-  else{pk.sel.add(key);row.classList.add('sel');row.querySelector('.pk-chk').textContent='✓';}
-  estPkCount();
+  if(pk.sel.has(key))pk.sel.delete(key);else pk.sel.add(key);
+  estPkNums();estPkCount();
 });
 function estPkApply(){
   if(!pk.sel.size){alert('追加するものを選んでね');return;}
-  const paths=[...pk.sel].map(k=>k.split('.').map(Number)).sort(pkCmp);
+  const paths=[...pk.sel].map(k=>k.split('.').map(Number)); // 選んだ順のまま(並べ替えない)
   const keep=paths.filter(p=>!paths.some(q=>q!==p&&q.length<p.length&&q.every((v,i)=>p[i]===v))); // 親が選ばれている子は、二重にしない
   if(pk.target==null){
     // 最上位は大項目(まとまり)。項目だけを選んだときは、元のまとまりの名前で大項目を作って、その中に入れる
@@ -652,11 +735,61 @@ function calcAll(){
   $('d-total').textContent=fmtY(grand);
 }
 
+// ===== サンプル(🧪 サンプル読込)。見積ソフト(EST)で作ったサンプル(〇〇マンション共用排水管一部更新工事サンプル)と同じ中身。名前は架空(公開リポジトリのため、実在の物件・会社は入れない)=====
+// 項目: [名称, 材質・寸法, 数量, 単位, 単価, 備考]。名称が空の行は、前の行(同材料費)のつづき
+const EST_SAMPLE={
+  clientName:"〇〇管理株式会社",workName:"〇〇マンション共用排水管一部更新工事サンプル",propName:"〇〇マンション",
+  groups:[
+    {name:"共用排水管一部更新工事費",spec:"100mm　耐火VPパイプ",qty:1,unit:"式",items:[
+      ["作業部養生費","エコフル・ブルーシート・マスカー共",1,"式",10000,""],
+      ["共用部養生費","資材仮置きの為",1,"式",5000,""],
+      ["壁開口工事費","下地補強・仮復旧共",1,"式",10000,""],
+      ["天井開口工事費","下地補強・仮復旧共",1,"式",10000,""],
+      ["既存配管撤去工事費","発生材処分費共",1,"式",10000,""],
+      ["貫通部はつり工事費","機械損料共(斫り機)",1,"式",10000,""],
+      ["モルタル補修費","速乾モルタル・材工共",1,"式",10000,""],
+      ["新規配管施工費","技術料・施工保証料共",1,"式",20000,""],
+      ["同材料費","100㎜　耐火VPパイプ",1,"本",10000,"定価17610円"],
+      ["","50㎜　耐火VPパイプ",1,"本",5000,"定価7280円"],
+      ["","100×50mm　LT",1,"個",1000,"定価2900円"],
+      ["","100㎜　耐火VP　ソケット",2,"個",1000,"定価1420円"],
+      ["","100㎜　ストラブカップリング接手",1,"個",10000,"定価16100円"],
+      ["","50㎜　ストラブカップリング接手",1,"個",5000,"定価10400円"],
+      ["雑材消耗品費","",1,"式",2000,""]
+    ]},
+    {name:"一般管理費",spec:"清掃費・美装費共",qty:1,unit:"式",items:[
+      ["現場管理費","現場管理費・報告書作成費共",1,"日",10000,""],
+      ["資材運搬費","車両＋運搬費＋購入労務費",1,"式",10000,""],
+      ["交通費","高速費・燃料費共",1,"台",10000,""],
+      ["法定福利費","社会保険料・福利厚生・損害保険料共",1,"式",10000,""]
+    ]}
+  ]
+};
+function estToast(msg){
+  let t=document.getElementById('estToast');
+  if(!t){t=document.createElement('div');t.id='estToast';t.className='toast';document.body.appendChild(t);}
+  t.textContent=msg;t.classList.add('show');
+  clearTimeout(estToast._t);estToast._t=setTimeout(()=>t.classList.remove('show'),2600);
+}
+// サンプルを入れる(報告書の「サンプル読込」と同じ使い方)。宛先・工事名・内訳を、サンプルで上書きする。諸経費は0%(ファイルの総額 ¥176,000 に合わせる)
+function estLoadSample(){
+  const g=id=>document.getElementById(id),S=EST_SAMPLE;
+  if((EST_TREE.length||g('workName').value.trim()||g('clientName').value.trim())&&!confirm('入力内容を上書きします。よろしいですか？'))return;
+  g('clientName').value=S.clientName;g('sfxSama').checked=false;g('sfxOnchu').checked=true;
+  g('workName').value=S.workName;g('propName').value=S.propName;g('notes').value='';
+  g('miscRate').value='0';g('discount').value='0';g('taxRate').value='0.10';
+  EST_TREE=S.groups.map(gr=>mkGroup({name:gr.name,spec:gr.spec,qty:gr.qty,unit:gr.unit,open:true,
+    kids:gr.items.map(i=>mkItem({name:i[0],spec:i[1],qty:i[2],unit:i[3],price:i[4],note:i[5]}))}));
+  estRender();goTo('s-meisai');
+  estToast('🧪 サンプルを読み込みました');
+}
+
 // リセット
 function resetForm(){
   if(!confirm('入力内容をリセットしますか？'))return;
   EST_TREE=[];estUid=1;
   selTanto=EST_DEFAULT_TANTO;document.querySelectorAll('.tanto-badge').forEach(b=>b.classList.toggle('sel',b.textContent===selTanto));
+  $('noCover').checked=false;estCoverUi();
   window.onload();estRender();
 }
 estRender();
@@ -770,7 +903,11 @@ function estWareki(iso){
 
 function collectEst(){
   const g=id=>document.getElementById(id);
-  const clientName=g('clientName').value.trim();
+  // 宛先: 入力の終わりに「様」「御中」を打っていたら、それを使う。なければ、上のチェック(様/御中/なし)
+  let clientName=g('clientName').value.trim(),suffix='';
+  const sm=clientName.match(/(様|御中)$/);
+  if(sm){clientName=clientName.replace(/(様|御中)$/,'').trim();suffix=sm[1];}
+  else suffix=g('sfxSama').checked?'様':(g('sfxOnchu').checked?'御中':'');
   const workName=g('workName').value.trim();
   if(!workName){alert('工事名は必須です');return null;}
   // 段の木(EST_TREE)を、出力用に並べ直す: blocks=まとまりごとのページ(親→子の順)、pgBlocks=いちばん上の大項目だけ(表紙・総合計用)
@@ -805,12 +942,11 @@ function collectEst(){
   const ko=grandSub+misc-disc,tRate=parseFloat(g('taxRate').value)||0;
   const tax=Math.round(ko*tRate);
   return {
-    clientName,workName,pgBlocks,blocks,grandSub,misc,disc,ko,tax,total:ko+tax,
+    clientName,suffix,workName,pgBlocks,blocks,noCover:estNoCover(),grandSub,misc,disc,ko,tax,total:ko+tax,
     miscPct:Math.round((parseFloat(g('miscRate').value)||0)*10)/10,
     taxPct:Math.round(tRate*100),
-    issueDate:g('issueDate').value,estNo:g('estNo').value,cc:g('clientContact').value.trim(),
-    validUntil:g('validUntil').value,propName:g('propName').value.trim(),
-    startDate:g('startDate').value,endDate:g('endDate').value,payment:g('payment').value,
+    issueDate:g('issueDate').value,estNo:g('estNo').value,
+    validUntil:g('validUntil').value,propName:g('propName').value.trim(),payment:g('payment').value,
     notes:g('notes').value.trim(),tanto:selTanto,kakuin:estGetKakuin(),
   };
 }
@@ -880,10 +1016,8 @@ function estBuildCover(d,body){
   const SH="'内訳明細'!";
   sh.set(1,20,d.estNo||'',{sh:1});
   sh.set(2,13,estWareki(d.issueDate));
-  const sm=d.clientName.match(/(様|御中)$/);
-  const cname=[d.clientName.replace(/(様|御中)$/,''),d.cc.replace(/(様|御中)$/,'')].filter(Boolean).join('　');
-  sh.set(4,1,cname,{sh:1});sh.set(4,8,cname?(sm?sm[1]:'様'):''); // 宛先が空のときは、「様」も出さない
-  sh.set(7,3,d.endDate?estWareki(d.endDate):tp.vals['7,3']);
+  const cname=d.clientName;
+  sh.set(4,1,cname,{sh:1});sh.set(4,8,cname?d.suffix:''); // 宛先が空のときは、「様」「御中」も出さない(受渡期日は、型のまま。手書き用)
   sh.set(8,3,d.propName||'',{sh:1});
   if(d.payment)sh.set(9,3,d.payment,{sh:1});
   if(d.validUntil)sh.set(10,3,d.validUntil,{sh:1});
@@ -1062,15 +1196,18 @@ async function estFixDrawings(buf,log){
 }
 function buildEstWorkbook(d,stampFn){
   const wb=new ExcelJS.Workbook();wb.creator='株式会社IGUMI';
-  const body=estBuildBody(d),cover=estBuildCover(d,body);
-  const ws=wb.addWorksheet('見積書'),w2=wb.addWorksheet('内訳明細');
+  const body=estBuildBody(d);
   wb.estImgLog=[];
-  estWriteSheet(wb,ws,cover,{stampFn,imgLog:wb.estImgLog});
+  if(!d.noCover){ // 表紙なしのときは、「見積書」(表紙)のシートを作らない(内訳明細だけ)
+    const cover=estBuildCover(d,body),cm=EST_TPL.cover.margins;
+    const ws=wb.addWorksheet('見積書');
+    estWriteSheet(wb,ws,cover,{stampFn,imgLog:wb.estImgLog});
+    ws.pageSetup={paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:1,horizontalCentered:true,verticalCentered:true,
+      margins:{left:cm[0],right:cm[1],top:cm[2],bottom:Math.max(cm[3],0.3),header:0.3,footer:0.3}};
+    ws.pageSetup.printArea=`A1:U${cover.R}`;
+  }
+  const w2=wb.addWorksheet('内訳明細'),bm=EST_TPL.body.margins;
   estWriteSheet(wb,w2,body,{stampFn,imgLog:wb.estImgLog});
-  const cm=EST_TPL.cover.margins,bm=EST_TPL.body.margins;
-  ws.pageSetup={paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:1,horizontalCentered:true,verticalCentered:true,
-    margins:{left:cm[0],right:cm[1],top:cm[2],bottom:Math.max(cm[3],0.3),header:0.3,footer:0.3}};
-  ws.pageSetup.printArea=`A1:U${cover.R}`;
   w2.pageSetup={paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,horizontalCentered:true,
     margins:{left:bm[0],right:bm[1],top:bm[2],bottom:Math.max(bm[3],0.4),header:0.3,footer:0.3}};
   w2.pageSetup.printArea=`A1:L${body.R}`;
@@ -1085,12 +1222,21 @@ function estConfirmKakuin(){
   const s=document.getElementById('kakuinState');if(s&&s.scrollIntoView)s.scrollIntoView({block:'center'});
   return false;
 }
+// 出力の「表紙なし」(内訳書だけ)。表紙がないときは、印(角印・照査・担当)も出ないので、角印の確認や待ちは、しない
+const estNoCover=()=>{const e=document.getElementById('noCover');return !!(e&&e.checked);};
+function estCoverUi(){
+  const nc=estNoCover();
+  document.getElementById('btnExcel').textContent=nc?'📥 Excel出力（内訳書のみ）':'📥 Excel出力（表紙＋内訳書）';
+  document.getElementById('btnPdf').textContent=nc?'📄 PDF出力（内訳書のみ・印刷画面から保存）':'📄 PDF出力（印刷画面から「PDFで保存」）';
+  const sb=document.getElementById('stampBox');if(sb)sb.style.opacity=nc?'.45':'';
+}
 async function genExcel(){
-  await estKakuinReady; // 会社共通の角印が届くのを待つ(届いたあとは、すぐ進む)
+  const nc=estNoCover();
+  if(!nc)await estKakuinReady; // 会社共通の角印が届くのを待つ(届いたあとは、すぐ進む)
   const d=collectEst();if(!d)return;
-  if(!estConfirmKakuin())return;
+  if(!nc&&!estConfirmKakuin())return;
   const wb=buildEstWorkbook(d,estStampPng);
-  const fn=`見積書_${(d.issueDate||'').replace(/-/g,'')}_${d.clientName||d.workName}.xlsx`;
+  const fn=`${nc?'見積内訳書':'見積書'}_${(d.issueDate||'').replace(/-/g,'')}_${d.clientName||d.workName}.xlsx`;
   const buf=await estFixDrawings(await wb.xlsx.writeBuffer(),wb.estImgLog);
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=fn;a.click();URL.revokeObjectURL(url);
@@ -1161,11 +1307,14 @@ function estPageHtml(inner,w,h,mar,center,stamps,stampFn,maxScale){
   return `<section class="pg"><div class="sheet" style="left:0;top:0;width:${w}px;height:${h}px;transform:translate(${left}px,${top}px) scale(${k})">${inner}${imgs}</div></section>`;
 }
 function buildEstPrintHtml(d,stampFn){
-  const body=estBuildBody(d),cover=estBuildCover(d,body);
-  const cm=EST_TPL.cover.margins,bm=EST_TPL.body.margins;
+  const body=estBuildBody(d);
+  const bm=EST_TPL.body.margins;
   let out='';
-  const c=estSheetHtml(cover,1,cover.R);
-  out+=estPageHtml(c.html,c.w,c.h,cm,true,cover.stamps,stampFn,1.1);
+  if(!d.noCover){ // 表紙なしのときは、表紙のページを出さない
+    const cover=estBuildCover(d,body),cm=EST_TPL.cover.margins;
+    const c=estSheetHtml(cover,1,cover.R);
+    out+=estPageHtml(c.html,c.w,c.h,cm,true,cover.stamps,stampFn,1.1);
+  }
   const PR=EST_TPL.body.pageRows;
   for(let p=0;p<body.pages;p++){
     const b=estSheetHtml(body,p*PR+1,(p+1)*PR);
@@ -1175,17 +1324,18 @@ function buildEstPrintHtml(d,stampFn){
   .pg{position:relative;width:297mm;height:210mm;overflow:hidden;page-break-after:always;break-after:page}.pg:last-child{page-break-after:auto;break-after:auto}
   .sheet{position:absolute;transform-origin:0 0}table td{padding:0 2px;line-height:1.15;color:inherit}
   @media screen{body{background:#888}.pg{background:#fff;margin:8px auto}}`;
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>見積書_${escH(d.clientName||d.workName)}</title><style>${css}</style></head><body>${out}</body></html>`;
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>${d.noCover?'見積内訳書':'見積書'}_${escH(d.clientName||d.workName)}</title><style>${css}</style></head><body>${out}</body></html>`;
 }
 
 window.addEventListener('load',()=>{estKakuinLabel();if(EST_IN_APP&&!estKakuinSettled)try{window.parent.postMessage({type:'est-need-kakuin'},location.origin);}catch(e){}}); // 念のため、読み込みが終わったときにも、角印を頼む
 async function genPdf(){
   let w=null;
   const open=()=>{const x=window.open('','_blank');if(!x)alert('ポップアップがブロックされました。許可してからもう一度押してください');return x;}; // 確認の画面を出す前に開く(あとで開くと、スマホで、ポップアップとして止められることがあるため)
-  if(!estKakuinSettled){w=open();if(!w)return;await estKakuinReady;} // 角印が届く前は、先に開いてから待つ
+  const nc=estNoCover();
+  if(!nc&&!estKakuinSettled){w=open();if(!w)return;await estKakuinReady;} // 角印が届く前は、先に開いてから待つ(表紙なしのときは、角印を使わないので、待たない)
   const d=collectEst();if(!d){if(w)w.close();return;}
   if(!w){w=open();if(!w)return;}
-  if(!estConfirmKakuin()){w.close();return;}
+  if(!nc&&!estConfirmKakuin()){w.close();return;}
   const html=buildEstPrintHtml(d,estStampPng);
   w.document.open();w.document.write(html);w.document.close();
   w.onload=()=>setTimeout(()=>w.print(),400);
