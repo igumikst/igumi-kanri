@@ -115,6 +115,8 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
 .filename-note{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.7}
 .filename-note .example{font-weight:700;color:var(--text)}
 .filename-note .caution{color:var(--orange);font-weight:700;margin-top:4px;display:block}
+.filename-note .sp-mark{color:var(--orange);font-weight:900;background:#FEF3C7;border-radius:3px;padding:0 1px}
+.filename-note .hint{display:block;margin-top:3px}
 .check-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:10px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent}
 .check-row input[type="checkbox"]{
   width:18px;height:18px;min-width:18px;margin:0;padding:0;
@@ -276,10 +278,11 @@ body.ext-mode .ext-hide{display:none!important}
     <div class="field">
       <label>ファイル名</label>
       <input type="text" id="filename" placeholder="">
-      <!-- ファイル名の例文（選んだ報告書タイプに合わせて切り替わる） -->
+      <!-- ファイル名の例文（選んだ報告書タイプに合わせて切り替わる。␣は全角スペースの目印） -->
       <div class="filename-note">
-        <span class="example" id="filename-example">例）報告書　ビューパレー新宿新都心102　11月12日漏水調査</span>
-        <span class="caution">⚠ スペースは全て全角、号室の間は全角の【・】で記載してください</span>
+        <span class="example" id="filename-example">例）報告書<span class="sp-mark">␣</span>ビューパレー新宿新都心102<span class="sp-mark">␣</span>11月12日漏水調査</span>
+        <span class="caution">⚠ ␣のところは全角スペース、号室の間は全角の【・】で記載してください</span>
+        <span class="hint">※ ファイル名が空欄のままなら、入力した内容からこの形の名前が自動で付きます</span>
       </div>
     </div>
     <div class="field" style="margin-top:2px">
@@ -411,10 +414,10 @@ function setType(type) {
   document.getElementById('basic-card').style.display = type==='union' ? 'none' : 'block';
   document.getElementById('content-field').style.display = type==='tama' ? 'block' : 'none';
   // ファイル名の例文を、選んだタイプの形に合わせて切り替える
-  const fnExample = type==='tama' ? '例）20261112　ビューパレー新宿新都心　102号室漏水調査　報告書'
-    : type==='union' ? '例）若葉台パークヒルズB棟303号室給湯管復旧工事'
-    : '例）報告書　ビューパレー新宿新都心102　11月12日漏水調査';
-  document.getElementById('filename-example').textContent = fnExample;
+  const fnExample = type==='tama' ? '例）20261112<span class="sp-mark">␣</span>ビューパレー新宿新都心<span class="sp-mark">␣</span>102号室漏水調査<span class="sp-mark">␣</span>報告書'
+    : type==='union' ? '例）若葉台パークヒルズB棟303号室給湯管復旧工事（スペース無しで続けて書く）'
+    : '例）報告書<span class="sp-mark">␣</span>ビューパレー新宿新都心102<span class="sp-mark">␣</span>11月12日漏水調査';
+  document.getElementById('filename-example').innerHTML = fnExample;
 }
 
 function setQ(q,btn) { quality=q; document.querySelectorAll('.q-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); }
