@@ -786,8 +786,15 @@ function getExportFilename(ext){
     const rest=roomMatch?wn.slice(roomMatch[0].length):wn;
     fileName=['報告書',safe(propName)+room,dateJp+rest].filter(s=>s).join('　')+`.${ext}`;
   }else{
-    // 通常は「報告書　物件名　件名　日付」(区切りはすべて全角スペース。虎生の指示 2026-11-25)
-    fileName=['報告書',safe(propName),safe(workName),datePart].filter(s=>s).join('　')+`.${ext}`;
+    // 通常は「報告書　ビューパレー新宿新都心102　11月12日漏水調査」の形(虎生の指示 2026-11-25)
+    // 件名の頭の号室は、数字だけ(「号室」の文字なし)を建物名の後ろに付ける。日付は作業日をM月D日にして件名の前へ
+    let dateJp='';
+    if(workDate){const dp=workDate.split('-');dateJp=`${Number(dp[1])}月${Number(dp[2])}日`;}
+    const wn=safe(workName).trim();
+    const roomMatch=wn.match(/^([0-9０-９]+(?:[・、,][0-9０-９]+)*)号室[ 　]*/);
+    const room=roomMatch?roomMatch[1]:'';
+    const rest=roomMatch?wn.slice(roomMatch[0].length):wn;
+    fileName=['報告書',safe(propName)+room,dateJp+rest].filter(s=>s).join('　')+`.${ext}`;
   }
   fileName=fileName.normalize('NFD').normalize('NFC').replace(/ /g,'　');
   return fileName;
