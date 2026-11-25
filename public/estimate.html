@@ -1026,6 +1026,10 @@ function estStampPng(name){
 // ---------- 型(EST_TPL)の読み取り ----------
 const estColPx=w=>Math.round(w*7+5);   // 列幅(文字数)→ 画面のpx
 const estRowPx=pt=>pt*4/3;             // 行の高さ(pt)→ px
+// PDF用の、列の幅・行の高さのものさし。虎生のExcelで印刷したPDFと同じ形になるように、Excelの数え方に合わせる
+// (列は 1文字=8px(整数に丸める。表紙だけは、列ごとに+1px)。内訳の行は、測った高さ)。Excelに入れる印の位置(estColPx・estRowPx)は、変えない
+const estColPxP=(w,cover)=>cover?w*8+1:Math.round(w*8);
+const estRowPxP=(pt,cover)=>cover?pt*4/3:pt*4/3*0.9736; // 内訳の行は、Excelの印刷で測った高さ(1行=約20.25px)
 const NF_NUM='[$-409]#,##0_);[RED]\\(#,##0\\)';
 
 // 表示用の文字(PDF用)。Excelの表示形式のうち、使うものだけ再現する
@@ -1115,10 +1119,16 @@ function estBuildCover(d,body){
     return {x0:x(im.from[0],im.from[2]),y0:y(im.from[1],im.from[3]),x1:x(im.to[0],im.to[2]),y1:y(im.to[1],im.to[3])};
   };
   const sq=im=>{const b=box(im);return {x:b.x0,y:b.y0,w:b.x1-b.x0,h:b.y1-b.y0};}; // サンプルと同じ枠に合わせる
+  const sqP=im=>{ // PDF用(列幅のものさしが、Excelの印刷と同じもの)
+    const x=(col,off)=>{let t=0;for(let i=0;i<col;i++)t+=estColPxP(tp.cw[i],true);return t+off/9525;};
+    const y=(row,off)=>{let t=0;for(let i=0;i<row;i++)t+=estRowPxP(tp.rh[i],true);return t+off/9525;};
+    const x0=x(im.from[0],im.from[2]),y0=y(im.from[1],im.from[3]);
+    return {x:x0,y:y0,w:x(im.to[0],im.to[2])-x0,h:y(im.to[1],im.to[3])-y0};
+  };
   sh.stamps=[];
-  sh.stamps.push({kind:'chk',name:EST_CHECKER,pos:sq(tp.imgs[1])});
-  if(d.tanto)sh.stamps.push({kind:'tan',name:d.tanto,pos:sq(tp.imgs[0])});
-  if(d.kakuin)sh.stamps.push({kind:'kak',url:d.kakuin,pos:sq(tp.imgs[2])});
+  sh.stamps.push({kind:'chk',name:EST_CHECKER,pos:sq(tp.imgs[1]),posP:sqP(tp.imgs[1])});
+  if(d.tanto)sh.stamps.push({kind:'tan',name:d.tanto,pos:sq(tp.imgs[0]),posP:sqP(tp.imgs[0])});
+  if(d.kakuin)sh.stamps.push({kind:'kak',url:d.kakuin,pos:sq(tp.imgs[2]),posP:sqP(tp.imgs[2])});
   return sh;
 }
 
@@ -1323,19 +1333,24 @@ function estBorderCss(st){
   return m[st]||'1px solid #000';
 }
 // rows r1..r2 を1つの表にする。戻り値: {html, w, h}(自然な大きさ px)
+// 罫線: 隣り合うセルの境の線は、強いほうを1回だけ引く(画像にする部品は、線が重なる指定(border-collapse)を理解せず、2重に太く引いてしまうため)
+const EST_BRK={double:5,thick:4,medium:3,thin:2,dashed:1,dotted:1,hair:1};
+const estEdge=(a,b)=>((EST_BRK[b]||0)>(EST_BRK[a]||0)?b:a);
 function estSheetHtml(sh,r1,r2){
   const tp=sh.tp,C=sh.C;
-  const cwp=tp.cw.map(estColPx);
+  const isCover=tp===(window.EST_TPL&&window.EST_TPL.cover);
+  const cwp=tp.cw.map(w=>estColPxP(w,isCover));
   const W=cwp.reduce((a,b)=>a+b,0);
-  const mg={},skip={};
+  const mg={},skip={},own={};
+  for(let r=r1;r<=r2;r++)for(let c=1;c<=C;c++)own[r+','+c]=[r,c]; // 各マス → そのマスを持つセル(結合なら左上)
   sh.merges.forEach(([a,b,c,e])=>{
     if(a<r1||c>r2)return;
     mg[a+','+b]=[c-a+1,e-b+1];
-    for(let r=a;r<=c;r++)for(let k=b;k<=e;k++)if(r!==a||k!==b)skip[r+','+k]=1;
+    for(let r=a;r<=c;r++)for(let k=b;k<=e;k++){own[r+','+k]=[a,b];if(r!==a||k!==b)skip[r+','+k]=1;}
   });
-  let H=0,html=`<table style="border-collapse:collapse;table-layout:fixed;width:${W}px"><colgroup>${cwp.map(w=>`<col style="width:${w}px">`).join('')}</colgroup>`;
+  let H=0,html=`<table style="border-collapse:separate;border-spacing:0;table-layout:fixed;width:${W}px"><colgroup>${cwp.map(w=>`<col style="width:${w}px">`).join('')}</colgroup>`;
   for(let r=r1;r<=r2;r++){
-    const hp=estRowPx(sh.rh(r));H+=hp;
+    const hp=estRowPxP(sh.rh(r),isCover);H+=hp;
     html+=`<tr style="height:${hp}px">`;
     for(let c=1;c<=C;c++){
       if(skip[r+','+c])continue;
@@ -1348,11 +1363,23 @@ function estSheetHtml(sh,r1,r2){
       const fam=EST_FF[s.f]||EST_FF['ＭＳ 明朝'];
       let size=s.z||11;
       if(s.sh&&txt){const tw=estTextW(txt,size,fam);if(tw>cw-4)size=size*(cw-4)/tw;}
-      let ta=s.h&&s.h!=='general'?s.h:((o&&typeof (o.v&&o.v.r!==undefined?o.v.r:o.v)==='number')?'right':'left');
-      let st=`border-left:${estBorderCss(s.l)};border-top:${estBorderCss(s.t)};border-right:${estBorderCss(sR.r)};border-bottom:${estBorderCss(sB.bt)};`;
+      // 4辺の罫線: 上・左は、表のいちばん外のときだけ。中の境は、上・左のセルの、下・右の辺として、強いほうを引く
+      let bR=sR.r,bB=sB.bt;
+      if(c+cs<=C)for(let k=0;k<rs;k++){const w=own[(r+k)+','+(c+cs)];if(w)bR=estEdge(bR,sh.style(w[0],w[1]).l);}
+      if(r+rs<=r2)for(let k=0;k<cs;k++){const w=own[(r+rs)+','+(c+k)];if(w)bB=estEdge(bB,sh.style(w[0],w[1]).t);}
+      const isNum=!!(o&&typeof (o.v&&o.v.r!==undefined?o.v.r:o.v)==='number');
+      let ta=s.h&&s.h!=='general'?s.h:(isNum?'right':'left');
+      let st=`border-left:${c===1?estBorderCss(s.l):'none'};border-top:${r===r1?estBorderCss(s.t):'none'};border-right:${estBorderCss(bR)};border-bottom:${estBorderCss(bB)};`;
       st+=`font-family:${fam};font-size:${size}pt;${s.b?'font-weight:bold;':''}`;
-      if(ta==='distributed'||ta==='justify')st+='text-align:justify;text-align-last:justify;'+(s.in?`padding-left:${s.in*8}px;padding-right:${s.in*8}px;`:'');
+      if((ta==='distributed'||ta==='justify')&&!s.wr&&!isNum){ // (数字は、Excelでも均等割り付けにならない)
+        // 均等割り付け: 文字と文字のあきを、文字数で割って入れる(画像にする部品は、text-align-last:justify を理解しないため、自分で計算する)
+        const pad=s.in?s.in*8:2,n=[...txt].length,tw=txt?estTextW(txt,size,fam):0,avail=cw-pad*2;
+        st+=`text-align:left;padding-left:${pad}px;padding-right:${pad}px;`;
+        if(n>1&&avail>tw){const g=(avail-tw)/n;st+=`letter-spacing:${g}px;text-indent:${g/2}px;`;}
+      }else if(ta==='distributed'||ta==='justify')st+=`text-align:${isNum?'left':'justify'};`+(s.in?`padding-left:${s.in*8}px;padding-right:${s.in*8}px;`:'');
       else st+=`text-align:${ta};`+(s.in&&ta==='left'?`padding-left:${s.in*8}px;`:'')+(s.in&&ta==='right'?`padding-right:${s.in*8}px;`:'');
+      // 数字の右の空き: Excelの表示形式「_)」「_ 」は、右に、かっこ・空白1つ分(全角の半分)の空きを入れる。これがないと、数字が罫線にくっつく
+      if(isNum&&((/_\)/.test(s.n||'')&&!(o&&o.red))||/_ /.test(s.n||'')))st+='padding-right:calc(0.5em + 2px);';
       st+=`vertical-align:${s.v==='center'?'middle':(s.v||'bottom')};`;
       st+=(s.wr?'white-space:normal;word-break:break-all;':'white-space:nowrap;')+(s.wr||s.sh?'overflow:hidden;':'overflow:visible;');
       if(s.w)st+='color:#fff;';else if(o&&o.red)st+='color:#e00;';
@@ -1363,15 +1390,17 @@ function estSheetHtml(sh,r1,r2){
   return {html:html+'</table>',w:W,h:H};
 }
 // 1枚(A4横)に入れる。拡大縮小して余白の中に収め、中央(または上)に置く
-function estPageHtml(inner,w,h,mar,center,stamps,stampFn,maxScale){
+// fix={k,left,top}: 倍率と、紙の左上からの位置(px)。虎生のExcelで印刷したPDFで測った値(Excelは、紙に合わせるときの倍率の出し方が、単純な計算と少し違うため)
+function estPageHtml(inner,w,h,mar,center,stamps,stampFn,maxScale,fix){
   const PW=297/25.4*96,PH=210/25.4*96;
   const ml=mar[0]*96,mr=mar[1]*96,mt=mar[2]*96,mb=Math.max(mar[3],0.3)*96;
   const aw=PW-ml-mr,ah=PH-mt-mb;
-  const k=Math.min(aw/w,ah/h,maxScale||9);
-  const left=ml+(aw-w*k)/2,top=center?mt+(ah-h*k)/2:mt;
-  const imgs=(stamps||[]).map(s=>`<img src="${s.url||stampFn(s.name)}" style="position:absolute;left:${s.pos.x}px;top:${s.pos.y}px;width:${s.pos.w}px;height:${s.pos.h}px">`).join('');
+  const k=fix?fix.k:Math.min(aw/w,ah/h,maxScale||9);
+  const left=fix&&fix.left!=null?fix.left:ml+(aw-w*k)/2,top=fix&&fix.top!=null?fix.top:(center?mt+(ah-h*k)/2:mt);
+  const imgs=(stamps||[]).map(s=>{const q=s.posP||s.pos;return `<img src="${s.url||stampFn(s.name)}" style="position:absolute;left:${q.x}px;top:${q.y}px;width:${q.w}px;height:${q.h}px">`;}).join('');
   return `<section class="pg"><div class="sheet" style="left:0;top:0;width:${w}px;height:${h}px;transform:translate(${left}px,${top}px) scale(${k})">${inner}${imgs}</div></section>`;
 }
+const EST_PDF_FIX={cover:{k:0.903,left:105.6,top:87}}; // 表紙の倍率と位置は、虎生のExcelで印刷したPDFで測った値
 function buildEstPrintHtml(d,stampFn,plain){
   const body=estBuildBody(d);
   const bm=EST_TPL.body.margins;
@@ -1379,12 +1408,12 @@ function buildEstPrintHtml(d,stampFn,plain){
   if(!d.noCover){ // 表紙なしのときは、表紙のページを出さない
     const cover=estBuildCover(d,body),cm=EST_TPL.cover.margins;
     const c=estSheetHtml(cover,1,cover.R);
-    out+=estPageHtml(c.html,c.w,c.h,cm,true,cover.stamps,stampFn,1.1);
+    out+=estPageHtml(c.html,c.w,c.h,cm,true,cover.stamps,stampFn,1,EST_PDF_FIX.cover);
   }
   const PR=EST_TPL.body.pageRows;
   for(let p=0;p<body.pages;p++){
     const b=estSheetHtml(body,p*PR+1,(p+1)*PR);
-    out+=estPageHtml(b.html,b.w,b.h,bm,false,null,stampFn,1);
+    out+=estPageHtml(b.html,b.w,b.h,bm,false,null,stampFn,1); // 内訳は、Excelと同じ「幅を紙に合わせる」計算(縮めるだけ)
   }
   const css=`@page{size:A4 landscape;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;color:#000}
   .pg{position:relative;width:297mm;height:210mm;overflow:hidden;page-break-after:always;break-after:page}.pg:last-child{page-break-after:auto;break-after:auto}
