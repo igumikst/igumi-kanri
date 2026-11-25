@@ -276,9 +276,9 @@ body.ext-mode .ext-hide{display:none!important}
     <div class="field">
       <label>ファイル名</label>
       <input type="text" id="filename" placeholder="">
-      <!-- ファイル名の例文（全タイプ共通） -->
+      <!-- ファイル名の例文（選んだ報告書タイプに合わせて切り替わる） -->
       <div class="filename-note">
-        <span class="example">例）報告書　〇〇マンション101・201　〇月〇日漏水調査</span>
+        <span class="example" id="filename-example">例）報告書　ビューパレー新宿新都心102　11月12日漏水調査</span>
         <span class="caution">⚠ スペースは全て全角、号室の間は全角の【・】で記載してください</span>
       </div>
     </div>
@@ -410,6 +410,11 @@ function setType(type) {
   document.getElementById('union-card').style.display = type==='union' ? 'block' : 'none';
   document.getElementById('basic-card').style.display = type==='union' ? 'none' : 'block';
   document.getElementById('content-field').style.display = type==='tama' ? 'block' : 'none';
+  // ファイル名の例文を、選んだタイプの形に合わせて切り替える
+  const fnExample = type==='tama' ? '例）20261112　ビューパレー新宿新都心　102号室漏水調査　報告書'
+    : type==='union' ? '例）若葉台パークヒルズB棟303号室給湯管復旧工事'
+    : '例）報告書　ビューパレー新宿新都心102　11月12日漏水調査';
+  document.getElementById('filename-example').textContent = fnExample;
 }
 
 function setQ(q,btn) { quality=q; document.querySelectorAll('.q-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); }
