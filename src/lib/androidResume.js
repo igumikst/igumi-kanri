@@ -4,6 +4,30 @@ const TEL_FLAG = "igumi_left_for_tel";
 const PAGE_KEY = "igumi_resume_page";
 const CALL_KEY = "igumi_resume_call_id";
 
+const CUR_KEY = "igumi_cur_page";
+// 再読み込みされても、そのまま続けられる画面(ほかの状態に頼らず、画面だけで完結するもの)。
+// iPhoneで、見積書作成からExcel・PDFを出して「戻る」を押すと、自動の再読み込みでホームに戻されていたため、
+// こうした画面は、再読み込みのあとも、同じ画面を開く(入力途中の内容は、画面側が下書きで残す)
+const KEEP_PAGES = ["estimate"];
+
+/** いま開いている画面を覚えておく(App から、画面が変わるたびに呼ぶ) */
+export function rememberCurrentPage(page) {
+  try {
+    sessionStorage.setItem(CUR_KEY, page);
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function keepCurrentPageForReload() {
+  try {
+    const cur = sessionStorage.getItem(CUR_KEY);
+    if (cur && KEEP_PAGES.includes(cur) && !sessionStorage.getItem(PAGE_KEY)) sessionStorage.setItem(PAGE_KEY, cur);
+  } catch {
+    /* ignore */
+  }
+}
+
 // StrictMode の二重初期化でも値が消えないようにメモリキャッシュ
 let cachedResumePage;
 let cachedResumeCallId;
@@ -91,6 +115,7 @@ export function installAndroidResumeGuard() {
       /* continue */
     }
     console.warn("[androidResume] reloading:", reason);
+    keepCurrentPageForReload();
     window.location.reload();
   };
 

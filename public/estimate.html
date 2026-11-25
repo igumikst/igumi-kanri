@@ -344,7 +344,7 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;background:#f0f
   <div class="actions">
     <button class="btn-rst" onclick="resetForm()">🔄 リセット</button>
     <button class="btn-ex" id="btnExcel" onclick="genExcel()">📥 Excel出力（表紙＋内訳書）</button>
-    <button class="btn-ex" id="btnPdf" style="margin-top:8px;background:#fff;color:#1A237E;border:2px solid #1A237E" onclick="genPdf()">📄 PDF出力（印刷画面から「PDFで保存」）</button>
+    <button class="btn-ex" id="btnPdf" style="margin-top:8px;background:#fff;color:#1A237E;border:2px solid #1A237E" onclick="genPdf()">📄 PDF出力（A4横）</button>
   </div>
   <div id="stampBox" style="margin-top:14px;padding-top:12px;border-top:1px dashed #c5cae9;font-size:13px;color:#555;line-height:2">
     <div style="font-weight:700;color:#1a237e">🔴 印鑑</div>
@@ -472,6 +472,44 @@ window.onload=()=>{
   estBasicSum();
 };
 
+// ===== 入力途中の下書き =====
+// 理由: スマホで、Excel・PDFを出して「戻る」を押すと、アプリが自動で再読み込みされ、入力が消えていたため。
+// 入力のたびに、ブラウザの一時保存(sessionStorage)に下書きを置き、再読み込みのあと、続きから使えるようにする。
+// ほかの端末・タブ・ブラウザを閉じたあとには、残らない。見積書作成の画面から自分で出ると、親の画面(Estimate.jsx)が消す。リセットでも消す
+const EST_DRAFT_KEY='igumi_est_draft';
+const EST_DRAFT_IDS=['estNo','issueDate','validUntil','clientName','workName','propName','payment','miscRate','miscRate2','discount','taxRate','notes'];
+const EST_DRAFT_CHK=['sfxSama','sfxOnchu','noCover'];
+let estDraftReady=false,estDraftTimer=null; // 起動直後(まだ復元する前)の空の状態で、下書きを上書きしないように、準備ができるまでは保存しない
+function estDraftSoon(){clearTimeout(estDraftTimer);estDraftTimer=setTimeout(estDraftSave,400);}
+function estDraftSave(){
+  if(!estDraftReady)return;
+  try{
+    const g=id=>document.getElementById(id),v={},c={};
+    EST_DRAFT_IDS.forEach(id=>{if(g(id))v[id]=g(id).value;});
+    EST_DRAFT_CHK.forEach(id=>{if(g(id))c[id]=!!g(id).checked;});
+    sessionStorage.setItem(EST_DRAFT_KEY,JSON.stringify({t:Date.now(),v,c,tanto:selTanto,tree:EST_TREE,uid:estUid}));
+  }catch(e){}
+}
+function estDraftClear(){clearTimeout(estDraftTimer);try{sessionStorage.removeItem(EST_DRAFT_KEY);}catch(e){}}
+const estTreeOk=(list,depth)=>Array.isArray(list)&&depth<12&&list.every(n=>n&&Number.isFinite(n.id)&&(n.kind==='item'||(n.kind==='grp'&&estTreeOk(n.kids,depth+1))));
+const estMaxId=list=>list.reduce((m,n)=>Math.max(m,n.id,n.kind==='grp'?estMaxId(n.kids):0),0);
+function estDraftRestore(){
+  let o=null;try{o=JSON.parse(sessionStorage.getItem(EST_DRAFT_KEY)||'null');}catch(e){}
+  if(!o||!o.v||!estTreeOk(o.tree,0))return;
+  const g=id=>document.getElementById(id);
+  EST_DRAFT_IDS.forEach(id=>{if(g(id)&&typeof o.v[id]==='string')g(id).value=o.v[id];});
+  EST_DRAFT_CHK.forEach(id=>{if(g(id)&&o.c&&typeof o.c[id]==='boolean')g(id).checked=o.c[id];});
+  if(typeof o.tanto==='string'){selTanto=o.tanto;document.querySelectorAll('.tanto-badge').forEach(b=>b.classList.toggle('sel',b.textContent===selTanto));}
+  EST_TREE=o.tree;estUid=Math.max(estUid,o.uid||1,estMaxId(EST_TREE)+1);
+  estCoverUi();estBasicSum();estRender();
+  if(EST_TREE.length||(o.v.clientName||'').trim()||(o.v.workName||'').trim())estToast('✏️ 入力途中の内容を戻しました');
+}
+document.addEventListener('input',estDraftSoon,true);
+document.addEventListener('change',estDraftSoon,true);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')estDraftSave();}); // 別の画面(ファイルの確認など)へ移るときは、すぐ保存
+window.addEventListener('pagehide',estDraftSave);
+window.addEventListener('load',()=>{estDraftRestore();estDraftReady=true;}); // window.onload(初期値を入れる)のあとに動く
+
 // ===== 見積りベース(EST)と、見積の明細(段の木) =====
 // 見積りベース: estimate-base.js の EST_BASE(ESTの「見積りベース」と同じ段の木。最大4段)。単価は「100%」の値で持つ。
 // 見積の明細: EST_TREE(大項目 > まとまり > 項目 …。段の数に決まりは無い)。出力(Excel・PDF)は、まとまりごとに1ページ。
@@ -544,7 +582,7 @@ function estRenderNode(n,depth,idx,len){
 function estRender(){
   const area=document.getElementById('meisaiArea');
   area.innerHTML=EST_TREE.length?EST_TREE.map((g,i)=>estRenderNode(g,0,i,EST_TREE.length)).join(''):'<div class="tg-empty big">まだ大項目がありません。下のボタンから追加してね</div>';
-  calcAll();
+  calcAll();estDraftSoon();
 }
 document.getElementById('meisaiArea').addEventListener('click',e=>{
   const t=e.target.closest('[data-act]');if(!t)return;
@@ -808,7 +846,7 @@ function resetForm(){
   EST_TREE=[];estUid=1;
   selTanto=EST_DEFAULT_TANTO;document.querySelectorAll('.tanto-badge').forEach(b=>b.classList.toggle('sel',b.textContent===selTanto));
   $('noCover').checked=false;estCoverUi();
-  window.onload();estRender();
+  window.onload();estRender();estDraftClear();
 }
 estRender();
 
@@ -1248,7 +1286,7 @@ const estNoCover=()=>{const e=document.getElementById('noCover');return !!(e&&e.
 function estCoverUi(){
   const nc=estNoCover();
   document.getElementById('btnExcel').textContent=nc?'📥 Excel出力（内訳書のみ）':'📥 Excel出力（表紙＋内訳書）';
-  document.getElementById('btnPdf').textContent=nc?'📄 PDF出力（内訳書のみ・印刷画面から保存）':'📄 PDF出力（印刷画面から「PDFで保存」）';
+  document.getElementById('btnPdf').textContent=nc?'📄 PDF出力（内訳書のみ・A4横）':'📄 PDF出力（A4横）';
   const sb=document.getElementById('stampBox');if(sb)sb.style.opacity=nc?'.45':'';
   const mo=document.getElementById('miscOutRow');if(mo)mo.style.display=nc?'none':''; // 諸経費は表紙にしか出ないので、表紙なしのときは隠す
 }
@@ -1260,11 +1298,17 @@ async function genExcel(){
   const wb=buildEstWorkbook(d,estStampPng);
   const fn=`${nc?'見積内訳書':'見積書'}_${(d.issueDate||'').replace(/-/g,'')}_${d.clientName||d.workName}.xlsx`;
   const buf=await estFixDrawings(await wb.xlsx.writeBuffer(),wb.estImgLog);
-  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=fn;a.click();URL.revokeObjectURL(url);
+  estSaveBlob(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),fn);
+}
+// 作ったファイルを、この端末に保存する(Excel・PDF共通)。別の画面(タブ)は開かず、この画面のまま保存する
+function estSaveBlob(blob,fn){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=fn;a.rel='noopener';
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),10000); // すぐ解放すると、スマホで保存に失敗することがあるため、少し待つ
 }
 
-// ---------- PDF(同じ型を、HTMLの表にして、印刷の画面からPDFで保存) ----------
+// ---------- PDF用のページ(同じ型を、HTMLの表にして、A4横の1ページずつに並べる) ----------
 function escH(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 const EST_FF={'ＭＳ 明朝':"'MS Mincho','ＭＳ 明朝','Hiragino Mincho ProN','Yu Mincho',serif",
   'ＭＳ Ｐゴシック':"'MS PGothic','ＭＳ Ｐゴシック','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif"};
@@ -1328,7 +1372,7 @@ function estPageHtml(inner,w,h,mar,center,stamps,stampFn,maxScale){
   const imgs=(stamps||[]).map(s=>`<img src="${s.url||stampFn(s.name)}" style="position:absolute;left:${s.pos.x}px;top:${s.pos.y}px;width:${s.pos.w}px;height:${s.pos.h}px">`).join('');
   return `<section class="pg"><div class="sheet" style="left:0;top:0;width:${w}px;height:${h}px;transform:translate(${left}px,${top}px) scale(${k})">${inner}${imgs}</div></section>`;
 }
-function buildEstPrintHtml(d,stampFn){
+function buildEstPrintHtml(d,stampFn,plain){
   const body=estBuildBody(d);
   const bm=EST_TPL.body.margins;
   let out='';
@@ -1345,22 +1389,64 @@ function buildEstPrintHtml(d,stampFn){
   const css=`@page{size:A4 landscape;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;color:#000}
   .pg{position:relative;width:297mm;height:210mm;overflow:hidden;page-break-after:always;break-after:page}.pg:last-child{page-break-after:auto;break-after:auto}
   .sheet{position:absolute;transform-origin:0 0}table td{padding:0 2px;line-height:1.15;color:inherit}
-  @media screen{body{background:#888}.pg{background:#fff;margin:8px auto}}`;
+  ${plain?'.pg{background:#fff}':'@media screen{body{background:#888}.pg{background:#fff;margin:8px auto}}'}`;
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>${d.noCover?'見積内訳書':'見積書'}_${escH(d.clientName||d.workName)}</title><style>${css}</style></head><body>${out}</body></html>`;
 }
 
 window.addEventListener('load',()=>{estKakuinLabel();if(EST_IN_APP&&!estKakuinSettled)try{window.parent.postMessage({type:'est-need-kakuin'},location.origin);}catch(e){}}); // 念のため、読み込みが終わったときにも、角印を頼む
+// ---------- PDF(A4横のファイルを、この画面で直接作る) ----------
+// 理由: スマホ(iPhoneのSafari)の「印刷→PDFで保存」は、A4横の指定を無視して縦向きになり、表紙が見切れるため。
+// 1ページずつ画像にして、A4横のPDFにまとめ、Excelと同じように、ファイルとして保存する(印刷の画面は、使わない)
+function estLoadScript(src){return new Promise((ok,ng)=>{const e=document.createElement('script');e.src=src;e.onload=ok;e.onerror=()=>ng(new Error('部品を読み込めませんでした。通信を確認して、もう一度押してください'));document.head.appendChild(e);});}
+async function estLoadPdfLibs(){ // PDFを作るときだけ読み込む(ふだんの画面は、軽いまま)
+  if(!window.html2canvas)await estLoadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+  if(!(window.jspdf&&window.jspdf.jsPDF))await estLoadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+}
+function estWaitImgs(doc,ms){ // 角印などの画像が表示されるのを待つ(最長ms)
+  return Promise.all([...doc.images].map(im=>new Promise(ok=>{
+    if(im.complete){ok();return;}
+    im.onload=im.onerror=()=>ok();setTimeout(ok,ms);
+  })));
+}
+const estSleep=ms=>new Promise(r=>setTimeout(r,ms));
+let estPdfBusy=false;
 async function genPdf(){
-  let w=null;
-  const open=()=>{const x=window.open('','_blank');if(!x)alert('ポップアップがブロックされました。許可してからもう一度押してください');return x;}; // 確認の画面を出す前に開く(あとで開くと、スマホで、ポップアップとして止められることがあるため)
+  if(estPdfBusy)return;
   const nc=estNoCover();
-  if(!nc&&!estKakuinSettled){w=open();if(!w)return;await estKakuinReady;} // 角印が届く前は、先に開いてから待つ(表紙なしのときは、角印を使わないので、待たない)
-  const d=collectEst();if(!d){if(w)w.close();return;}
-  if(!w){w=open();if(!w)return;}
-  if(!nc&&!estConfirmKakuin()){w.close();return;}
-  const html=buildEstPrintHtml(d,estStampPng);
-  w.document.open();w.document.write(html);w.document.close();
-  w.onload=()=>setTimeout(()=>w.print(),400);
+  if(!nc)await estKakuinReady; // 会社共通の角印が届くのを待つ(届いたあとは、すぐ進む)
+  const d=collectEst();if(!d)return;
+  if(!nc&&!estConfirmKakuin())return;
+  estPdfBusy=true;
+  const btn=document.getElementById('btnPdf');btn.disabled=true;
+  let fr=null;
+  try{
+    btn.textContent='⏳ PDFを作っています…';
+    await estLoadPdfLibs();
+    // 画面とは別の、見えない枠の中に、ページを並べる(この画面の見た目に、影響されないように)
+    fr=document.createElement('iframe');
+    fr.style.cssText='position:fixed;left:-20000px;top:0;width:1200px;height:900px;border:0';
+    document.body.appendChild(fr);
+    const doc=fr.contentDocument;doc.open();doc.write(buildEstPrintHtml(d,estStampPng,true));doc.close();
+    await estSleep(80);await estWaitImgs(doc,3000);
+    const pages=[...doc.querySelectorAll('.pg')];
+    const pdf=new window.jspdf.jsPDF({orientation:'landscape',unit:'mm',format:'a4',compress:true});
+    for(let i=0;i<pages.length;i++){
+      btn.textContent=`⏳ PDFを作っています… ${i+1}/${pages.length}`;
+      pages.forEach((p,k)=>{p.style.display=k===i?'block':'none';}); // 1ページずつ、画面の一番上に出して、画像にする
+      await estSleep(40);
+      const cv=await window.html2canvas(pages[i],{scale:2,backgroundColor:'#ffffff',logging:false,useCORS:false});
+      if(i>0)pdf.addPage('a4','landscape');
+      pdf.addImage(cv.toDataURL('image/jpeg',0.92),'JPEG',0,0,297,210,undefined,'FAST');
+      cv.width=0;cv.height=0; // メモリを早めに空ける
+    }
+    const fn=`${nc?'見積内訳書':'見積書'}_${(d.issueDate||'').replace(/-/g,'')}_${d.clientName||d.workName}.pdf`;
+    estSaveBlob(pdf.output('blob'),fn);
+  }catch(e){
+    alert('PDFを作れませんでした。もう一度押してください。\n('+((e&&e.message)||e)+')');
+  }finally{
+    if(fr)fr.remove();
+    btn.disabled=false;estCoverUi();estPdfBusy=false;
+  }
 }
 
 </script>
