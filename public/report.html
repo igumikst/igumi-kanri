@@ -129,6 +129,13 @@ html,body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background
 .wt-fields input[type="time"]{flex:1;min-width:0;min-height:44px}
 .wt-sep{font-size:15px;color:var(--text);flex-shrink:0}
 .wt-msg{font-size:11px;color:var(--red);font-weight:700;margin-top:6px}
+/* 作業日を複数入れる欄(2つ目以降の日付と、追加ボタン) */
+.date-row{display:flex;align-items:center;gap:8px;margin-top:8px}
+.date-row input[type="date"]{flex:1;min-width:0}
+.date-del{flex-shrink:0;width:44px;height:44px;border-radius:10px;border:1.5px solid var(--border);background:#F3F4F6;color:#374151;font-size:16px;cursor:pointer;font-family:inherit}
+.date-add{display:block;width:100%;margin-top:8px;padding:10px 12px;border-radius:10px;border:1.5px dashed var(--border);background:#fff;color:var(--navy);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+.date-hint{font-size:11px;color:var(--muted);font-weight:600;margin-top:6px;line-height:1.5}
+.date-hint b{color:var(--navy)}
 .export-note{font-size:11px;color:var(--muted);line-height:1.7;margin:-4px 0 10px;padding:10px 12px;background:#F8FAFC;border-radius:10px;border:1px solid var(--border)}
 .export-note strong{color:var(--navy)}
 .btn-orange{background:var(--orange);color:#fff;font-size:16px;padding:15px}
@@ -201,7 +208,11 @@ body.ext-mode .ext-hide{display:none!important}
     <div class="field"><label>建築物名称 *（表紙・報告書にリンク）</label><input type="text" id="u-building" placeholder="例: 若葉台パークヒルズB棟"></div>
     <div class="field"><label>住所</label><input type="text" id="u-address" placeholder="例: 東京都〇〇市〇〇町１丁目２３－４"></div>
     <div class="field"><label>工事名称 *（表紙・報告書にリンク）</label><input type="text" id="u-workname" placeholder="例: 303号室給湯管復旧工事"></div>
-    <div class="field"><label>作業実施日</label><input type="date" id="u-date"></div>
+    <div class="field"><label>作業実施日</label><input type="date" id="u-date" oninput="onDateChange()">
+      <div id="u-date-extra"></div>
+      <button type="button" class="date-add" onclick="addDateField('union')">＋ 日付を追加</button>
+      <div class="date-hint" id="u-date-hint" style="display:none"></div>
+    </div>
     <div class="field">
       <label class="check-row">
         <input type="checkbox" id="u-wt-on" onchange="onWorkTimeChange()">
@@ -231,7 +242,11 @@ body.ext-mode .ext-hide{display:none!important}
     <div class="field"><label>物件名 *</label><input type="text" id="prop-name" placeholder="例: ビューパレー新宿新都心" oninput="refreshPreview()"></div>
     <div class="field"><label>住所</label><input type="text" id="prop-address" placeholder="例: 東京都〇〇市〇〇町１丁目２３－４"></div>
     <div class="field"><label>件名 *</label><input type="text" id="work-name" placeholder="例: 102号室漏水調査" oninput="refreshPreview()"></div>
-    <div class="field"><label>作業日 *</label><input type="date" id="work-date" oninput="refreshPreview()"></div>
+    <div class="field"><label>作業日 *</label><input type="date" id="work-date" oninput="onDateChange()">
+      <div id="work-date-extra"></div>
+      <button type="button" class="date-add" onclick="addDateField('normal')">＋ 日付を追加</button>
+      <div class="date-hint" id="work-date-hint" style="display:none"></div>
+    </div>
     <div class="field">
       <label class="check-row">
         <input type="checkbox" id="wt-on" onchange="onWorkTimeChange()">
@@ -595,10 +610,10 @@ function refreshPreview(){
   const filled=photos.filter(p=>p.dataUrl);
   badge.textContent=filled.length>0?`${filled.length}枚 / ${Math.ceil(filled.length/3)}ページ`:'';
   if(photos.length===0){body.innerHTML=`<div style="text-align:center;padding:24px;color:var(--muted)"><div style="font-size:36px;margin-bottom:8px">📂</div><div style="font-size:13px">写真を追加するとここに表示されます</div></div>`;return;}
-  let propName='',workName='',workDate='',worker='';
-  if(reportType==='union'){propName=document.getElementById('u-building').value;workName=document.getElementById('u-workname').value;workDate=document.getElementById('u-date').value;worker=document.getElementById('u-worker').value;}
-  else{propName=document.getElementById('prop-name').value;workName=document.getElementById('work-name').value;workDate=document.getElementById('work-date').value;worker=document.getElementById('worker').value;}
-  let dateStr='';if(workDate){const d=new Date(workDate);dateStr=`${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;}
+  let propName='',workName='',worker='';
+  if(reportType==='union'){propName=document.getElementById('u-building').value;workName=document.getElementById('u-workname').value;worker=document.getElementById('u-worker').value;}
+  else{propName=document.getElementById('prop-name').value;workName=document.getElementById('work-name').value;worker=document.getElementById('worker').value;}
+  const dateStr=formatDatesJa(getDates());
   const workTimeRange=currentWorkTime().range;
   const pvRows=[['物件名',propName],['件名',workName],['作業日',dateStr]];
   if(workTimeRange)pvRows.push(['対応時間',workTimeRange]);
@@ -709,11 +724,96 @@ function validateReportForExport(){
   return true;
 }
 
+// ============================================================
+// 作業日(複数日に対応)
+// 入力欄は、1つ目(#work-date / #u-date)と、「＋日付を追加」で増やした欄。
+// 表示のルール(虎生の指示 2026-11-26): 月をまたぐときは、その月も書く。またがないときは、日だけを「，」で区切る
+//   例) 2026年11月12日，13日，15日 / 2026年11月30日，12月1日，2日(年がかわるときは、年も書く)
+// ============================================================
+const DATE_SEP='，';
+const P2=n=>String(n).padStart(2,'0');
+
+function dateFieldIds(kind){return kind==='union'?{first:'u-date',box:'u-date-extra',hint:'u-date-hint'}:{first:'work-date',box:'work-date-extra',hint:'work-date-hint'};}
+function currentDateKind(){return reportType==='union'?'union':'normal';}
+function splitYmd(s){const p=String(s).split('-');return{y:Number(p[0]),m:Number(p[1]),d:Number(p[2])};}
+
+/** 入力された日付(YYYY-MM-DD)を、古い順・同じ日は1つにして返す。空の欄は無視する */
+function getDates(kind){
+  const ids=dateFieldIds(kind||currentDateKind());
+  const vals=[document.getElementById(ids.first).value];
+  document.querySelectorAll('#'+ids.box+' input[type="date"]').forEach(i=>vals.push(i.value));
+  return [...new Set(vals.filter(v=>/^\d{4}-\d{2}-\d{2}$/.test(v)))].sort();
+}
+
+/** 日付の並びを、年・月がかわるところだけ書き足して、「，」でつなぐ。fmt(c,level): level 0=最初/年がかわる 1=月がかわる 2=日だけ */
+function joinDates(dates,fmt){
+  let prev=null;
+  return dates.map(s=>{
+    const c=splitYmd(s);
+    const level=!prev||c.y!==prev.y?0:c.m!==prev.m?1:2;
+    prev=c;
+    return fmt(c,level);
+  }).join(DATE_SEP);
+}
+/** 2026年11月12日，13日，12月1日(spaced=true は、PDFの表紙用の「2026年 11月12日」) */
+function formatDatesJa(dates,spaced=false){
+  return joinDates(dates,(c,lv)=>lv===0?(spaced?`${c.y}年 ${c.m}月${c.d}日`:`${c.y}年${c.m}月${c.d}日`):lv===1?`${c.m}月${c.d}日`:`${c.d}日`);
+}
+/** 2026-11-12，13，12-01(ユニオンの書式。1日だけのときは、これまでと同じ 2026-11-12) */
+function formatDatesIso(dates){
+  return joinDates(dates,(c,lv)=>lv===0?`${c.y}-${P2(c.m)}-${P2(c.d)}`:lv===1?`${P2(c.m)}-${P2(c.d)}`:P2(c.d));
+}
+/** ファイル名(通常)用: 11月12日，13日(年がかわるときだけ年を付ける) */
+function formatDatesFileJa(dates){
+  let first=true;
+  return joinDates(dates,(c,lv)=>{const t=lv===0&&!first?`${c.y}年${c.m}月${c.d}日`:lv===2?`${c.d}日`:`${c.m}月${c.d}日`;first=false;return t;});
+}
+/** ファイル名(多摩)用: 20261112，13(月がかわると 1201、年がかわると 20270101) */
+function formatDatesFileCompact(dates){
+  return joinDates(dates,(c,lv)=>lv===0?`${c.y}${P2(c.m)}${P2(c.d)}`:lv===1?`${P2(c.m)}${P2(c.d)}`:P2(c.d));
+}
 function formatDateJa(dateStr,spaced=true){
-  if(!dateStr)return'';
-  const d=new Date(dateStr);
-  const y=d.getFullYear(),m=d.getMonth()+1,day=d.getDate();
-  return spaced?`${y}年 ${m}月${day}日`:`${y}年${m}月${day}日`;
+  return dateStr?formatDatesJa([dateStr],spaced):'';
+}
+
+/** 日付の欄を、画面に1つ足す(すでにある最後の日の、次の日を入れておく) */
+function addDateField(kind,value){
+  const ids=dateFieldIds(kind);
+  if(value==null){
+    const ds=getDates(kind);
+    if(ds.length){const c=splitYmd(ds[ds.length-1]);value=new Date(Date.UTC(c.y,c.m-1,c.d+1)).toISOString().slice(0,10);}
+    else value=new Date().toISOString().split('T')[0];
+  }
+  const row=document.createElement('div');row.className='date-row';
+  const inp=document.createElement('input');inp.type='date';inp.value=value;inp.setAttribute('aria-label','追加する日付');inp.oninput=onDateChange;
+  const del=document.createElement('button');del.type='button';del.className='date-del';del.textContent='✕';del.setAttribute('aria-label','この日付を消す');
+  del.onclick=()=>{row.remove();onDateChange();};
+  row.append(inp,del);
+  document.getElementById(ids.box).appendChild(row);
+  onDateChange();
+}
+/** 日付の欄を、渡された日付の並びにそろえる(読み込み・リセット・サンプル用) */
+function setDates(kind,dates){
+  const ids=dateFieldIds(kind);
+  const list=(dates||[]).filter(Boolean);
+  document.getElementById(ids.first).value=list[0]||'';
+  document.getElementById(ids.box).innerHTML='';
+  list.slice(1).forEach(v=>addDateField(kind,v));
+  onDateChange();
+}
+/** 日付を変えたとき: 「出力のようす」の1行を更新して、プレビューも更新する */
+function onDateChange(){
+  ['normal','union'].forEach(kind=>{
+    const ids=dateFieldIds(kind);
+    const ds=getDates(kind);
+    const el=document.getElementById(ids.hint);
+    if(!el)return;
+    if(ds.length>1){
+      el.style.display='block';
+      el.innerHTML='表紙の表示: <b>'+esc(kind==='union'?formatDatesIso(ds):formatDatesJa(ds))+'</b>（'+ds.length+'日・古い順に自動で並びます）';
+    }else{el.style.display='none';el.innerHTML='';}
+  });
+  refreshPreview();
 }
 
 const COVER_LOGO_URL='/igumi-logo.jpg';
@@ -777,8 +877,8 @@ function getExportFilename(ext){
   const safe=s=>s.replace(/[\\/:*?"<>|]/g,'').substring(0,20);
   const propName=reportType==='union'?document.getElementById('u-building').value.trim():document.getElementById('prop-name').value.trim();
   const workName=reportType==='union'?document.getElementById('u-workname').value.trim():document.getElementById('work-name').value.trim();
-  const workDate=reportType==='union'?document.getElementById('u-date').value:document.getElementById('work-date').value;
-  const datePart=workDate?workDate.replace(/-/g,''):'';
+  const fileDates=getDates();
+  const datePart=formatDatesFileCompact(fileDates);
   let fileName;
   if(reportType==='tama'){
     // 多摩仕様のファイル名は「20261116　物件名　何号室漏水調査　報告書」の形(虎生の指示 2026-11-25)
@@ -790,8 +890,7 @@ function getExportFilename(ext){
   }else{
     // 通常は「報告書　ビューパレー新宿新都心102　11月12日漏水調査」の形(虎生の指示 2026-11-25)
     // 件名の頭の号室は、数字だけ(「号室」の文字なし)を建物名の後ろに付ける。日付は作業日をM月D日にして件名の前へ
-    let dateJp='';
-    if(workDate){const dp=workDate.split('-');dateJp=`${Number(dp[1])}月${Number(dp[2])}日`;}
+    const dateJp=formatDatesFileJa(fileDates);
     const wn=safe(workName).trim();
     const roomMatch=wn.match(/^([0-9０-９]+(?:[・、,][0-9０-９]+)*)号室[ 　]*/);
     const room=roomMatch?roomMatch[1]:'';
@@ -825,10 +924,8 @@ function buildPdfPagesHtml(logoSrc){
   if(reportType==='union'){
     const building=document.getElementById('u-building').value.trim();
     const workname=document.getElementById('u-workname').value.trim();
-    const uDate=document.getElementById('u-date').value;
     const company=document.getElementById('u-company').value.trim();
-    let uDateStr='';
-    if(uDate){const d=new Date(uDate);uDateStr=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+    const uDateStr=formatDatesIso(getDates('union'));
     const uDateHtml=buildDateWithWorkTimeHtml(uDateStr,getWorkTime('union').range);
     pages.push(`<div class="pdf-page" style="padding:0;border:1px solid #333;box-sizing:border-box;display:flex;flex-direction:column;width:794px;height:1123px;position:relative;">
       ${logoHtml}
@@ -855,10 +952,9 @@ function buildPdfPagesHtml(logoSrc){
     const propName=document.getElementById('prop-name').value.trim();
     const address=document.getElementById('prop-address').value.trim();
     const workName=document.getElementById('work-name').value.trim();
-    const workDate=document.getElementById('work-date').value;
     const worker=document.getElementById('worker').value.trim();
     const workContent=document.getElementById('work-content').value.trim();
-    const dateStr=formatDateJa(workDate);
+    const dateStr=formatDatesJa(getDates('normal'),true);
     const dateHtml=buildDateWithWorkTimeHtml(dateStr,getWorkTime('normal').range);
     let rows=[['物　件　名',propName],['住　　　所',address],['件　　　名',workName],['作　業　日',dateStr,dateHtml],['施　工　者',worker]];
     if(reportType==='tama'&&workContent.trim())rows.push(['内　　　容',workContent]);
@@ -1095,11 +1191,8 @@ function setupNormalCoverSheet(cws,minchoFont,double){
   titleCell.alignment={horizontal:'center',vertical:'middle'};
 }
 
-function formatNormalCoverDate(workDate){
-  if(!workDate)return'';
-  const d=new Date(workDate);
-  if(Number.isNaN(d.getTime()))return'';
-  return`${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
+function formatNormalCoverDate(dates){
+  return formatDatesJa(dates,false);
 }
 
 function fillNormalCoverItemRow(cws,row,label,value,minchoFont,thin,nextRowTop=true){
@@ -1111,7 +1204,8 @@ function fillNormalCoverItemRow(cws,row,label,value,minchoFont,thin,nextRowTop=t
   const valueCell=cws.getCell(`D${row}`);
   valueCell.value=value?safeCellStr(value):'';
   valueCell.font=minchoFont(14);
-  valueCell.alignment=row===18?{horizontal:'left',vertical:'middle'}
+  // 作業日が複数あるときだけ、長くなっても枠に収まるよう「縮小して全体を表示」にする(1日だけのときは、これまでと同じ)
+  valueCell.alignment=row===18?(getDates('normal').length>1?{horizontal:'left',vertical:'middle',shrinkToFit:true}:{horizontal:'left',vertical:'middle'})
     :NORMAL_COVER_SHRINK_ROWS.includes(row)?{vertical:'middle',shrinkToFit:true}:{vertical:'middle'};
   for(let ci='D'.charCodeAt(0);ci<='K'.charCodeAt(0);ci++){
     cws.getCell(String.fromCharCode(ci)+row).border={bottom:thin};
@@ -1163,7 +1257,7 @@ async function buildNormalWorkbook(wb, minchoFont, thin, double) {
     propName:document.getElementById('prop-name').value.trim(),
     address:document.getElementById('prop-address').value.trim(),
     workName:document.getElementById('work-name').value.trim(),
-    workDate:joinDateAndWorkTime(formatNormalCoverDate(document.getElementById('work-date').value),getWorkTime('normal').range),
+    workDate:joinDateAndWorkTime(formatNormalCoverDate(getDates('normal')),getWorkTime('normal').range),
     worker:document.getElementById('worker').value.trim(),
     workContent:document.getElementById('work-content').value.trim(),
   };
@@ -1207,13 +1301,14 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   const uBuilding=document.getElementById('u-building').value.trim();
   const uAddress=document.getElementById('u-address').value.trim();
   const uWorkname=document.getElementById('u-workname').value.trim();
-  const uDate=document.getElementById('u-date').value;
   const uWorker=document.getElementById('u-worker').value.trim();
   const uCompany=document.getElementById('u-company').value.trim();
   const uContent=document.getElementById('u-content').value;
 
-  let uDateStr='';
-  if(uDate){const d=new Date(uDate);uDateStr=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+  const uDates=getDates('union');
+  const uDateStr=formatDatesIso(uDates);
+  // 作業日が複数あるときだけ、長くなっても枠に収まるよう「縮小して全体を表示」にする(1日だけのときは、これまでと同じ)
+  const uMulti=uDates.length>1;
 
   const mincho=(size,bold=false)=>({name:'ＭＳ Ｐ明朝',size,bold});
   const gothicC=(size,bold=false)=>({name:'ＭＳ Ｐゴシック',size,bold});
@@ -1253,7 +1348,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
   const dateCell=cws.getCell('F32');
   dateCell.value=safeCellStr(uDateStr);
   dateCell.font=mincho(20,true);
-  dateCell.alignment={horizontal:'center',vertical:'bottom'};
+  dateCell.alignment=uMulti?{horizontal:'center',vertical:'bottom',shrinkToFit:true}:{horizontal:'center',vertical:'bottom'};
 
   // 会社名 F40:O42（ゴシック20pt太字・中央）
   cws.mergeCells('F40:O42');
@@ -1373,7 +1468,7 @@ async function buildUnionWorkbook(wb, minchoFont, thin) {
     if(label==='住所'||label==='作業者')vc.font={...vc.font,bold:false};
     // 建築物名称・住所・工事名称は、長いとはみ出すため「縮小して全体を表示」(作業実施日・作業者は付けない)
     const shrink=label==='建築物名称'||label==='住所'||label==='工事名称';
-    vc.alignment=shrink?{horizontal:'left',vertical:'middle',shrinkToFit:true}:{horizontal:'left',vertical:'middle'};
+    vc.alignment=(shrink||(label==='作業実施日'&&uMulti))?{horizontal:'left',vertical:'middle',shrinkToFit:true}:{horizontal:'left',vertical:'middle'};
   });
 
   // 【作業内容】C21:G22
@@ -1678,8 +1773,8 @@ function ensureThumb(p){
 
 function saveData(){
   const data={reportType,
-    cover:{propName:document.getElementById('prop-name').value,address:document.getElementById('prop-address').value,workName:document.getElementById('work-name').value,workDate:document.getElementById('work-date').value,worker:document.getElementById('worker').value,content:document.getElementById('work-content').value,filename:document.getElementById('filename').value,coverLogo:isCoverLogoEnabled(),workTimeOn:document.getElementById('wt-on').checked,workTimeStart:document.getElementById('wt-start').value,workTimeEnd:document.getElementById('wt-end').value},
-    union:{building:document.getElementById('u-building').value,address:document.getElementById('u-address').value,workname:document.getElementById('u-workname').value,date:document.getElementById('u-date').value,worker:document.getElementById('u-worker').value,company:document.getElementById('u-company').value,content:document.getElementById('u-content').value,workTimeOn:document.getElementById('u-wt-on').checked,workTimeStart:document.getElementById('u-wt-start').value,workTimeEnd:document.getElementById('u-wt-end').value},
+    cover:{propName:document.getElementById('prop-name').value,address:document.getElementById('prop-address').value,workName:document.getElementById('work-name').value,workDate:document.getElementById('work-date').value,workDates:getDates('normal'),worker:document.getElementById('worker').value,content:document.getElementById('work-content').value,filename:document.getElementById('filename').value,coverLogo:isCoverLogoEnabled(),workTimeOn:document.getElementById('wt-on').checked,workTimeStart:document.getElementById('wt-start').value,workTimeEnd:document.getElementById('wt-end').value},
+    union:{building:document.getElementById('u-building').value,address:document.getElementById('u-address').value,workname:document.getElementById('u-workname').value,date:document.getElementById('u-date').value,dates:getDates('union'),worker:document.getElementById('u-worker').value,company:document.getElementById('u-company').value,content:document.getElementById('u-content').value,workTimeOn:document.getElementById('u-wt-on').checked,workTimeStart:document.getElementById('u-wt-start').value,workTimeEnd:document.getElementById('u-wt-end').value},
     quality,photos:photos.map(p=>({id:p.id,dataUrl:p.dataUrl,thumbUrl:p.thumbUrl||null,caption:p.caption})),nextId};
   const blob=new Blob([JSON.stringify(data)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
@@ -1700,7 +1795,8 @@ function loadData(e){
         document.getElementById('prop-name').value=data.cover.propName||'';
         document.getElementById('prop-address').value=data.cover.address||'';
         document.getElementById('work-name').value=data.cover.workName||'';
-        document.getElementById('work-date').value=data.cover.workDate||'';
+        // 日付は、複数日(workDates)に対応。古い保存データには workDates が無いので、1日だけ(workDate)で読む
+        setDates('normal',Array.isArray(data.cover.workDates)&&data.cover.workDates.length?data.cover.workDates:[data.cover.workDate||'']);
         document.getElementById('worker').value=data.cover.worker||'';
         document.getElementById('work-content').value=data.cover.content||'';
         document.getElementById('filename').value=data.cover.filename||'';
@@ -1713,7 +1809,7 @@ function loadData(e){
         document.getElementById('u-building').value=data.union.building||'';
         document.getElementById('u-address').value=data.union.address||'';
         document.getElementById('u-workname').value=data.union.workname||'';
-        document.getElementById('u-date').value=data.union.date||'';
+        setDates('union',Array.isArray(data.union.dates)&&data.union.dates.length?data.union.dates:[data.union.date||'']);
         document.getElementById('u-worker').value=data.union.worker||'';
         document.getElementById('u-company').value=data.union.company||'';
         document.getElementById('u-content').value=data.union.content||'';
@@ -2039,7 +2135,7 @@ function gatherReportText(){
     lines.push(`【建築物名称】${document.getElementById('u-building').value.trim()}`);
     lines.push(`【住所】${document.getElementById('u-address').value.trim()}`);
     lines.push(`【工事名称】${document.getElementById('u-workname').value.trim()}`);
-    lines.push(`【作業実施日】${document.getElementById('u-date').value}`);
+    lines.push(`【作業実施日】${formatDatesIso(getDates('union'))}`);
     const wt=getWorkTime('union');
     if(wt.range)lines.push(`【対応時間】${wt.range}`);
     lines.push(`【作業者】${document.getElementById('u-worker').value.trim()}`);
@@ -2049,7 +2145,7 @@ function gatherReportText(){
     lines.push(`【物件名】${document.getElementById('prop-name').value.trim()}`);
     lines.push(`【住所】${document.getElementById('prop-address').value.trim()}`);
     lines.push(`【件名】${document.getElementById('work-name').value.trim()}`);
-    lines.push(`【作業日】${document.getElementById('work-date').value}`);
+    lines.push(`【作業日】${formatDatesIso(getDates('normal'))}`);
     const wt=getWorkTime('normal');
     if(wt.range)lines.push(`【対応時間】${wt.range}`);
     lines.push(`【施工者】${document.getElementById('worker').value.trim()}`);
@@ -2141,8 +2237,8 @@ function confirmReset(){
   document.getElementById('modal-ok').onclick=()=>{
     photos=[];nextId=1;rebuildGrid();refreshPreview();
     ['prop-name','prop-address','work-name','worker','work-content','u-building','u-address','u-workname','u-worker','u-company','u-content'].forEach(id=>document.getElementById(id).value='');
-    document.getElementById('work-date').value=new Date().toISOString().split('T')[0];
-    document.getElementById('u-date').value=new Date().toISOString().split('T')[0];
+    setDates('normal',[new Date().toISOString().split('T')[0]]);
+    setDates('union',[new Date().toISOString().split('T')[0]]);
     document.getElementById('cover-logo').checked=false;
     setWorkTimeFields('normal',false,'','');
     setWorkTimeFields('union',false,'','');
@@ -2182,7 +2278,7 @@ function loadSampleData(){
     document.getElementById('u-building').value='サンプルマンション';
     document.getElementById('u-address').value='東京都八王子市上柚木428';
     document.getElementById('u-workname').value='402号室・501号室　漏水調査';
-    document.getElementById('u-date').value=today;
+    setDates('union',[today]);
     document.getElementById('u-worker').value='崎岡';
     document.getElementById('u-company').value='株式会社IGUMI';
     document.getElementById('u-content').value='402号室天井裏の給水管を調査\n501号室浴室配管の通水試験を実施';
@@ -2191,7 +2287,7 @@ function loadSampleData(){
     document.getElementById('prop-name').value='サンプルマンション';
     document.getElementById('prop-address').value='東京都八王子市上柚木428';
     document.getElementById('work-name').value='漏水調査に伴う復旧工事';
-    document.getElementById('work-date').value=today;
+    setDates('normal',[today]);
     document.getElementById('worker').value='株式会社IGUMI';
     document.getElementById('work-content').value=reportType==='tama'?'3階天井給水管ピンホール補修':'';
     setWorkTimeFields('normal',true,'09:00','17:00');
